@@ -38,6 +38,7 @@ class IqtreeBuilder(TreeBuilder):
 
         cmd: list[str | Path] = [
             "iqtree", "-T", "auto", "--threads-max", str(params.threads), "-s", work_msa,
+            "-redo",  # overwrite checkpoints from a previous run at this path
         ]
         if params.outgroup:
             cmd += ["-o", params.outgroup]

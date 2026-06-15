@@ -22,7 +22,7 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 | Tool | Unit | Live | Notes |
 |------|------|------|-------|
 | progressivemauve | yes (converter) | no | `mauve`/`mauvealigner` not packaged for macOS on bioconda; `xmfa_to_fasta` unit-tested |
-| sibeliaz | yes (converter) | partial | adapter runs; SibeliaZ 1.2.7 wrote an empty MAF on test inputs (found blocks, no MAF) — tool/parameter issue; `maf_to_fasta` name-map fix applied |
+| sibeliaz | yes (converter) | yes | end-to-end on closely-related genomes → MAF → MSA → tree. Required a macOS fix: SibeliaZ's wrapper uses Linux-only `free`/`find -printf`/`stat -c`/`mktemp --suffix`; the adapter passes `-f` and runs a BSD-patched wrapper, and `maf_to_fasta` takes a seqid→genome name-map |
 | cactus | — | no | Minigraph-Cactus is heavy (Toil); distributed separately |
 
 ## SNP typers
