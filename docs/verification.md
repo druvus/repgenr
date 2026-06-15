@@ -52,7 +52,7 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 | metadata (GTDB) | yes | downloaded + parsed r207 bac120 (62,291 rep accessions) |
 | genome (NCBI datasets) | yes | downloaded 8 Francisella genomes + outgroup |
 | tree2tax | yes | FlexTaxD relations + genome map |
-| vmetadata / vgenome (viral) | no | network-bound (BV-BRC FTP + NCBI Entrez); offline-parsing unit-tested |
+| vmetadata / vgenome (viral) | yes | live Hepeviridae run: BV-BRC FTPS download + NCBI Entrez -> 1256 genomes -> skder 799 reps -> mashtree -> tree2tax. Required an FTPS/TLS-session-reuse fix (BV-BRC dropped plain FTP) |
 
 ## Platform notes (macOS / Apple Silicon)
 
