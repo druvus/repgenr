@@ -106,7 +106,8 @@ def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
     if not source.exists():
         return []
     return sorted(
-        p for p in source.iterdir() if any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
+        p for p in source.iterdir()
+        if not p.name.startswith(".") and any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
     )
 
 

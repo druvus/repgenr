@@ -109,7 +109,7 @@ def _list_genomes(genomes_dir: Path) -> list[Path]:
         return []
     return sorted(
         p for p in genomes_dir.iterdir()
-        if any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
+        if not p.name.startswith(".") and any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
     )
 
 

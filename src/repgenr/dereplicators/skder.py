@@ -21,7 +21,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run, write_fofn
+from ..core.process import run
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -52,19 +52,18 @@ class SkderDereplicator(Dereplicator):
         logger: logging.Logger,
     ) -> DerepResult:
         out_dir.mkdir(parents=True, exist_ok=True)
-        fofn = write_fofn(genomes, out_dir / "genomes.fofn")
         result_dir = out_dir / "skder_out"
 
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
+        # skDER takes genome paths directly via -g (files or directories).
         cmd = [
             "skder",
-            "-l", fofn,                       # genome list file
+            "-g", *[str(g) for g in genomes],
             "-o", result_dir,
             "-i", _as_percent(params.secondary_ani),
             "-f", _as_percent(params.aligned_fraction),
             "-c", params.threads,
             "-d", mode,
-            "-n",                              # emit cluster membership
         ]
         run(cmd, logger=logger, log_prefix="skder")
 

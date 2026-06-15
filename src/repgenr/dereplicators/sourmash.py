@@ -65,7 +65,11 @@ class SourmashDereplicator(Dereplicator):
         )
 
         matrix_csv = out_dir / "compare.csv"
-        sig_files = sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz"))
+        # Skip macOS AppleDouble companions ("._*") that appear on exFAT/NTFS volumes.
+        sig_files = [
+            p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
+            if not p.name.startswith("._")
+        ]
         if not sig_files:
             raise WorkdirError(f"sourmash produced no signatures under {sig_dir}")
         run(

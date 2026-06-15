@@ -117,16 +117,18 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
 def _open_metadata(path: Path, workdir: Path):
     if path.name.endswith(".tar.gz"):
         tsv_gz = workdir / path.name.replace(".tar.gz", ".tsv.gz")
+        # Stream the member straight out of the tarball into a gzipped TSV.
+        # Avoid extract-to-directory + rmtree, which fails on exFAT/NTFS volumes
+        # (shutil.rmtree's dir_fd traversal is unsupported there).
         with tarfile.open(path) as tar:
             member = next((m for m in tar.getmembers() if m.name.endswith(".tsv")), None)
             if member is None:
                 raise WorkdirError("No .tsv inside GTDB tarball")
-            tmp = workdir / "tmp.metadata"
-            tar.extract(member, path=tmp)
-            extracted = next(tmp.rglob("*.tsv"))
-            with open(extracted, "rb") as fi, gzip.open(tsv_gz, "wb") as fo:
-                shutil.copyfileobj(fi, fo)
-            shutil.rmtree(tmp)
+            source = tar.extractfile(member)
+            if source is None:
+                raise WorkdirError("Could not read .tsv from GTDB tarball")
+            with source, gzip.open(tsv_gz, "wb") as fo:
+                shutil.copyfileobj(source, fo)
         path = tsv_gz
     return gzip.open(path, "rt")
 
