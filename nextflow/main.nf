@@ -10,10 +10,16 @@
 nextflow.enable.dsl = 2
 
 include { BACTERIAL } from './subworkflows/local/bacterial'
+include { VIRAL } from './subworkflows/local/viral'
 
 workflow {
     if (!params.workdir) {
         error "Provide --workdir <path> (the shared RepGenR working directory)."
     }
-    BACTERIAL()
+    if (params.mode == 'viral') {
+        VIRAL()
+    }
+    else {
+        BACTERIAL()
+    }
 }
