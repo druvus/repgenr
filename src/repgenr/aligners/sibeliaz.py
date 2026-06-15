@@ -8,6 +8,8 @@ reference coordinates by :mod:`repgenr.converters.maf_to_fasta`.
 from __future__ import annotations
 
 import logging
+import shutil
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -17,6 +19,27 @@ from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import run
 from .base import Aligner, AlignParams, AlignResult
+
+# SibeliaZ's bash wrapper uses GNU/Linux-only constructs in its alignment step
+# (`free`, GNU `find -printf`, `stat -c`, `mktemp --suffix`). On macOS/BSD these
+# fail silently, so blocks are found but no MAF is written. We run a patched copy
+# of the wrapper on those platforms.
+_BSD_PATCHES: tuple[tuple[str, str], ...] = (
+    (
+        "free -g -w | head -2 | tail -1 | awk '{print $2}'",
+        "echo $(( $(sysctl -n hw.memsize) / 1073741824 ))",
+    ),
+    (
+        "free -k -w | head -2 | tail -1 | awk '{print $2}'",
+        "echo $(( $(sysctl -n hw.memsize) / 1024 ))",
+    ),
+    ('find $outdir -name "*.tmp" -printf "%p\\n"', 'find $outdir -name "*.tmp"'),
+    ('stat -c "%s" $i', "stat -f%z $i"),
+    # BSD mktemp has no --suffix; append .fa after the call (spoa needs a known
+    # FASTA extension). Patch the whole $(...) so the result still ends in .fa.
+    ("$(mktemp --suffix=.fa $outdir/block.XXXXX)", "$(mktemp $outdir/block.XXXXX).fa"),
+    ("ulimit $memory_min", ":"),
+)
 
 
 class SibeliazAligner(Aligner):
@@ -42,9 +65,14 @@ class SibeliazAligner(Aligner):
 
         # Default mode runs the block alignment step, producing alignment.maf.
         # (The -n flag would emit only block coordinates, no MAF.)
+        sibeliaz_cmd = _sibeliaz_invocation(out_dir, logger)
+        # Pass -f (twopaco bloom-filter memory, GB) explicitly so the wrapper
+        # skips its system-memory probe, which uses Linux-only `free`/`stat`.
+        filtermemory = params.extra.get("filtermemory", 8)
         run(
             [
-                "sibeliaz",
+                *sibeliaz_cmd,
+                "-f", str(filtermemory),
                 "-t", str(params.threads),
                 "-o", out_dir,
                 *[str(g.resolve()) for g in genomes],
@@ -66,6 +94,32 @@ class SibeliazAligner(Aligner):
         msa = out_dir / "msa.fasta"
         maf_to_fasta(maf, reference.stem, msa, name_map=name_map)
         return AlignResult(msa_fasta=msa, native_format=maf)
+
+
+def _sibeliaz_invocation(out_dir: Path, logger: logging.Logger) -> list[str]:
+    """Return the command prefix to run SibeliaZ.
+
+    On non-macOS, just ``["sibeliaz"]``. On macOS, write a BSD-compatible copy of
+    the wrapper (its alignment step otherwise fails silently) and run it via bash.
+    """
+    if sys.platform != "darwin":
+        return ["sibeliaz"]
+
+    real = shutil.which("sibeliaz")
+    if real is None:
+        return ["sibeliaz"]
+    script = Path(real).read_text()
+    if "-printf" not in script:  # already BSD-friendly / unexpected layout
+        return ["sibeliaz"]
+
+    patched = script
+    for old, new in _BSD_PATCHES:
+        if old in patched:
+            patched = patched.replace(old, new)
+    patched_path = out_dir / "sibeliaz_bsd.sh"
+    patched_path.write_text(patched)
+    logger.info("Using BSD-compatible SibeliaZ wrapper on macOS: %s", patched_path)
+    return ["bash", str(patched_path)]
 
 
 def _build_seqid_map(genomes) -> dict[str, str]:
