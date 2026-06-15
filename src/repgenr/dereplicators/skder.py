@@ -5,16 +5,26 @@ estimates pairwise ANI/AF with skani and picks representatives in one round.
 
 CLI used::
 
-    skder -g <fofn or files> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
+    skder -g <files> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
           -d dynamic|greedy|low_mem_greedy
 
-With ``-n`` skDER also assigns non-representatives to their closest
-representative, which we parse into cluster membership.
+Two robustness notes:
+
+* skDER is run in a local scratch directory and the results are copied into the
+  working directory afterwards. skDER's ``determineN50`` does
+  ``os.listdir(N50/)`` and parses every file as a result row, which breaks on
+  exFAT/NTFS volumes where macOS leaves ``._*`` AppleDouble companions. Keeping
+  skDER's output on the local (APFS/ext4) temp filesystem avoids that.
+* Plain skDER reports representatives only (membership is a CiDDER feature), so
+  non-representatives are assigned to their closest representative using skDER's
+  ``Skani_Triangle_Edge_Output.txt`` pairwise ANI/AF table.
 """
 
 from __future__ import annotations
 
 import logging
+import shutil
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -29,6 +39,8 @@ from .base import (
     DerepParams,
     DerepResult,
 )
+
+_FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 
 
 class SkderDereplicator(Dereplicator):
@@ -52,22 +64,33 @@ class SkderDereplicator(Dereplicator):
         logger: logging.Logger,
     ) -> DerepResult:
         out_dir.mkdir(parents=True, exist_ok=True)
-        result_dir = out_dir / "skder_out"
 
+        # Run skDER on a local temp filesystem to avoid exFAT/NTFS ._* breakage,
+        # then copy its results back next to the working directory.
+        local_tmp = Path(tempfile.mkdtemp(prefix="repgenr_skder_"))
+        result_dir = local_tmp / "skder_out"
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
-        # skDER takes genome paths directly via -g (files or directories).
+        ani_pct = _as_percent(params.secondary_ani)
+        af_pct = _as_percent(params.aligned_fraction)
         cmd = [
             "skder",
             "-g", *[str(g) for g in genomes],
             "-o", result_dir,
-            "-i", _as_percent(params.secondary_ani),
-            "-f", _as_percent(params.aligned_fraction),
+            "-i", ani_pct,
+            "-f", af_pct,
             "-c", params.threads,
             "-d", mode,
         ]
-        run(cmd, logger=logger, log_prefix="skder")
+        try:
+            run(cmd, logger=logger, log_prefix="skder")
+            staged = out_dir / "skder_out"
+            if staged.exists():
+                shutil.rmtree(staged)
+            shutil.copytree(result_dir, staged)
+        finally:
+            shutil.rmtree(local_tmp, ignore_errors=True)
 
-        return _parse_skder_output(result_dir, genomes, logger)
+        return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
 
 
 def _as_percent(value: float) -> str:
@@ -77,7 +100,11 @@ def _as_percent(value: float) -> str:
 
 
 def _parse_skder_output(
-    result_dir: Path, genomes: Sequence[Path], logger: logging.Logger
+    result_dir: Path,
+    genomes: Sequence[Path],
+    ani_cutoff: float,
+    af_cutoff: float,
+    logger: logging.Logger,
 ) -> DerepResult:
     rep_dir = _find_representatives_dir(result_dir)
     if rep_dir is None:
@@ -86,32 +113,32 @@ def _parse_skder_output(
             "Confirm skDER ran successfully."
         )
     representatives = sorted(
-        p for p in rep_dir.iterdir() if p.suffix in (".fasta", ".fa", ".fna", ".fas")
+        p for p in rep_dir.iterdir()
+        if not p.name.startswith(".") and p.suffix in _FASTA_SUFFIXES
     )
     if not representatives:
         raise ToolExecutionError(["skder"], 1, "skDER produced no representative genomes")
 
-    by_basename = {p.name: p.name for p in genomes}
-
+    rep_names = {p.name for p in representatives}
     clusters: dict[str, list[str]] = {p.name: [] for p in representatives}
     status: dict[str, str] = {p.name: STATUS_REPRESENTATIVE for p in representatives}
 
-    cluster_file = _find_clustering_file(result_dir)
-    if cluster_file is not None:
-        for member, rep in _read_membership(cluster_file):
-            member_name = by_basename.get(member, member)
-            rep_name = by_basename.get(rep, rep)
-            if rep_name not in clusters:
-                clusters[rep_name] = []
-            if member_name != rep_name:
-                clusters[rep_name].append(member_name)
-                status[member_name] = STATUS_CONTAINED
-    else:
-        logger.warning(
-            "skDER clustering file not found; cluster membership will be representatives only"
-        )
+    # Assign each non-representative to its closest representative via the skani
+    # edge table (best ANI above the cutoffs).
+    edges = _read_edges(result_dir)
+    best: dict[str, tuple[str, float]] = {}  # member -> (rep, ani)
+    for a, b, ani, af in edges:
+        if ani < ani_cutoff or af < af_cutoff:
+            continue
+        for member, rep in ((a, b), (b, a)):
+            if rep in rep_names and member not in rep_names:
+                if member not in best or ani > best[member][1]:
+                    best[member] = (rep, ani)
+    for member, (rep, _ani) in best.items():
+        clusters[rep].append(member)
+        status[member] = STATUS_CONTAINED
 
-    # any input genome not seen is contained-but-unassigned; mark contained
+    # any remaining input genome that is neither a representative nor assigned
     for g in genomes:
         status.setdefault(g.name, STATUS_CONTAINED)
 
@@ -130,41 +157,34 @@ def _find_representatives_dir(result_dir: Path) -> Path | None:
     for cand in candidates:
         if cand.is_dir():
             return cand
-    # fall back: a single subdir that looks like it holds FASTAs
     for sub in result_dir.rglob("*"):
-        if sub.is_dir() and any(
-            c.suffix in (".fasta", ".fa", ".fna", ".fas") for c in sub.iterdir()
-        ):
-            if "epresentative" in sub.name or "Dereplicated" in sub.name:
+        if sub.is_dir() and ("epresentative" in sub.name or "Dereplicated" in sub.name):
+            if any(c.suffix in _FASTA_SUFFIXES for c in sub.iterdir()):
                 return sub
     return None
 
 
-def _find_clustering_file(result_dir: Path) -> Path | None:
-    for pattern in ("*Clustering*.txt", "*Clustering*.tsv", "*clustering*.txt"):
-        matches = sorted(result_dir.rglob(pattern))
-        if matches:
-            return matches[0]
-    return None
+def _read_edges(result_dir: Path) -> list[tuple[str, str, float, float]]:
+    """Parse skDER's skani edge table into (a, b, ANI, min_AF) basename tuples."""
+    edge_file = result_dir / "Skani_Triangle_Edge_Output.txt"
+    if not edge_file.exists():
+        matches = sorted(result_dir.rglob("*Edge_Output*.txt"))
+        if not matches:
+            return []
+        edge_file = matches[0]
 
-
-def _read_membership(path: Path) -> list[tuple[str, str]]:
-    """Return (member_basename, representative_basename) pairs.
-
-    skDER clustering rows pair a genome path with its representative path; we key
-    on basenames so they match the genome file inventory.
-    """
-    pairs: list[tuple[str, str]] = []
-    with open(path) as fo:
+    edges: list[tuple[str, str, float, float]] = []
+    with open(edge_file) as fo:
         for ln, line in enumerate(fo):
-            line = line.strip()
-            if not line:
-                continue
-            fields = line.split("\t")
-            if ln == 0 and not fields[0].endswith((".fasta", ".fa", ".fna", ".fas")):
+            if ln == 0:
                 continue  # header
-            if len(fields) >= 2:
-                member = Path(fields[0]).name
-                rep = Path(fields[1]).name
-                pairs.append((member, rep))
-    return pairs
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 5:
+                continue
+            try:
+                ani = float(fields[2])
+                af = min(float(fields[3]), float(fields[4]))
+            except ValueError:
+                continue
+            edges.append((Path(fields[0]).name, Path(fields[1]).name, ani, af))
+    return edges
