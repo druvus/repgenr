@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from ftplib import FTP
+from ftplib import FTP, FTP_TLS
 from pathlib import Path
 from statistics import mean, median
 
@@ -24,6 +24,31 @@ from ..viral.entrez import TAXNAMES_ORDERED, get_taxon_data_from_entrez
 
 BVBRC_FTP = "ftp.bvbrc.org"
 BVBRC_FTP_DIR = "viruses"
+
+
+class _ReuseFTP_TLS(FTP_TLS):
+    """FTPS client that reuses the control channel's TLS session for data.
+
+    BV-BRC now requires SSL/TLS on the control channel and TLS session reuse on
+    the data channel (a common vsftpd ``require_ssl_reuse`` setup); plain FTP and
+    a vanilla FTP_TLS both fail ("550 SSL/TLS required" / "425 Unable to build
+    data connection").
+    """
+
+    def ntransfercmd(self, cmd, rest=None):
+        conn, size = FTP.ntransfercmd(self, cmd, rest)
+        if self._prot_p:
+            conn = self.context.wrap_socket(
+                conn, server_hostname=self.host, session=self.sock.session
+            )
+        return conn, size
+
+
+def _bvbrc_connect(timeout: int = 120) -> _ReuseFTP_TLS:
+    ftp = _ReuseFTP_TLS(BVBRC_FTP, timeout=timeout)
+    ftp.login(user="anonymous", passwd="anonymous")
+    ftp.prot_p()
+    return ftp
 
 
 @dataclass
@@ -81,8 +106,7 @@ def run(ctx: WorkdirContext, params: VmetadataParams) -> int:
 
 
 def _list_targets(logger) -> None:
-    with FTP(BVBRC_FTP) as ftp:
-        ftp.login(user="anonymous", passwd="")
+    with _bvbrc_connect() as ftp:
         ftp.cwd(BVBRC_FTP_DIR)
         targets = sorted(f.replace(".fna", "") for f in ftp.nlst() if f.endswith(".fna"))
     logger.info("Available targets:\n%s", "\n".join(targets))
@@ -90,9 +114,8 @@ def _list_targets(logger) -> None:
 
 def _download_group(target: str, dest: Path, logger) -> None:
     capitalized = target[0].upper() + target[1:]
-    logger.info("Downloading %s from BV-BRC FTP", capitalized)
-    with FTP(BVBRC_FTP) as ftp:
-        ftp.login(user="anonymous", passwd="")
+    logger.info("Downloading %s from BV-BRC (FTPS)", capitalized)
+    with _bvbrc_connect() as ftp:
         remote = f"{BVBRC_FTP_DIR}/{capitalized}.fna"
         ftp.sendcmd("TYPE I")
         try:
