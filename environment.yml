@@ -1,0 +1,40 @@
+name: repgenr
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.12
+  - pip
+  # Python libraries
+  - matplotlib
+  - requests
+  - biopython
+  - ete3
+  - pyyaml
+  # Dereplication tools
+  - drep
+  - checkm-genome
+  - skder
+  - galah
+  - sourmash
+  # Genome download
+  - ncbi-datasets-cli
+  # Aligners
+  - progressivemauve
+  - sibeliaz
+  # cactus is distributed separately (containers/binaries); see docs
+  # SNP typers
+  - minimap2
+  - samtools
+  - bcftools
+  - snippy
+  - parsnp
+  - harvesttools
+  - gubbins
+  # Tree builders
+  - iqtree
+  - fasttree
+  - mashtree
+  - raxml-ng
+  - pip:
+      - -e .
