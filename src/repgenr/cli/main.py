@@ -161,6 +161,9 @@ def dereplicate(
     process_size: int | None = typer.Option(
         None, "-s", "--process-size", help="Chunk size for tools that don't scale natively."
     ),
+    num_processes: int = typer.Option(
+        1, "-p", "--num-processes", help="Parallel stage-1 chunk workers (threads split across)."
+    ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
@@ -174,6 +177,7 @@ def dereplicate(
             aligned_fraction=aligned_fraction,
             threads=threads,
             process_size=process_size,
+            num_processes=num_processes,
             extra={"virus": virus} if virus else {},
         )
 

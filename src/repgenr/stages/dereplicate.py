@@ -10,7 +10,7 @@ manifest derep status is updated.
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +22,7 @@ from ..core.contracts import (
     write_genome_status,
 )
 from ..core.errors import WorkdirError
+from ..core.executors import parallel_map
 from ..dereplicators.base import DerepParams, DerepResult, registry
 
 _FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
@@ -35,6 +36,7 @@ class DereplicateParams:
     aligned_fraction: float = 0.50
     threads: int = 16
     process_size: int | None = None  # chunk size for non-native-scaling tools
+    num_processes: int = 1  # parallel stage-1 chunk workers (threads split across them)
     extra: dict | None = None
 
 
@@ -75,7 +77,8 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             params.tool, len(genomes), params.process_size,
         )
         result = _dereplicate_chunked(
-            adapter, genomes, scratch, derep_params, params.process_size, logger
+            adapter, genomes, scratch, derep_params, params.process_size,
+            params.num_processes, logger,
         )
     else:
         result = adapter.dereplicate(genomes, scratch, derep_params, logger)
@@ -119,11 +122,13 @@ def _dereplicate_chunked(
     scratch: Path,
     params: DerepParams,
     process_size: int,
+    num_processes: int,
     logger,
 ) -> DerepResult:
     """Two-stage chunked dereplication for tools that don't scale natively.
 
-    Stage 1: dereplicate each chunk independently. Stage 2: dereplicate the
+    Stage 1: dereplicate each chunk independently (up to ``num_processes`` chunks
+    in parallel, the thread budget split across them). Stage 2: dereplicate the
     union of stage-1 representatives. Membership is composed so each original
     genome maps to a final representative.
     """
@@ -132,11 +137,21 @@ def _dereplicate_chunked(
         chunks[-2].extend(chunks[-1])
         chunks.pop()
 
-    stage1_results: list[DerepResult] = []
-    for idx, chunk in enumerate(chunks):
+    workers = max(1, min(num_processes, len(chunks)))
+    threads_per_worker = max(1, params.threads // workers)
+    chunk_params = replace(params, threads=threads_per_worker)
+    logger.info(
+        "Stage 1: %d chunks, %d parallel worker(s) at %d threads each",
+        len(chunks), workers, threads_per_worker,
+    )
+
+    def run_chunk(indexed: tuple[int, list[Path]]) -> DerepResult:
+        idx, chunk = indexed
         chunk_dir = scratch / "intra_chunks" / f"chunk{idx}"
         logger.info("Stage 1 chunk %d/%d (%d genomes)", idx + 1, len(chunks), len(chunk))
-        stage1_results.append(adapter.dereplicate(chunk, chunk_dir, params, logger))
+        return adapter.dereplicate(chunk, chunk_dir, chunk_params, logger)
+
+    stage1_results = parallel_map(run_chunk, list(enumerate(chunks)), workers, logger=logger)
 
     if len(stage1_results) == 1:
         return stage1_results[0]
