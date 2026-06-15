@@ -64,6 +64,12 @@ native vs wrapped) and was validated **live on macOS + Docker + Wave**:
 - `snptype --tool simple` in a Wave-built **multi-tool** image (minimap2 +
   samtools + bcftools) → 2413 core SNP sites.
 
+Singularity/Apptainer is Linux-only (no macOS build), so it can't run natively on
+the macOS dev box. The exact command forms the backend emits were validated
+against real **apptainer 1.4.4** in a Linux container: `apptainer pull <sif>
+docker://<image>` (the `--container-cache` `.sif` behavior) and `apptainer exec
+--bind <dir> --pwd <wd> <sif> <argv>`. On HPC/Linux this is the production engine.
+
 Notes: macOS firmlinked temp/home paths must be bind-mounted un-resolved (handled
 in the backend). The bioconda `mauve` (progressiveMauve) image is broken upstream
 (boost ABI `undefined symbol`), so that tool stays unvalidated regardless of
