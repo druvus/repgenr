@@ -56,6 +56,11 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     _validate(params)
 
     if params.source == "api":
+        if params.release or params.version:
+            logger.warning(
+                "--source api serves the current GTDB release; --release/--version are "
+                "ignored. Use --source tsv to pin a specific release."
+            )
         selected, outgroup = _select_via_api(params, logger)
     else:
         selected, outgroup = _select_via_tsv(ctx, params, logger)
