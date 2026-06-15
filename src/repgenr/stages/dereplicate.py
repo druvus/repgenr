@@ -23,6 +23,7 @@ from ..core.contracts import (
 )
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
+from ..core.plugins import auto_select, scale_warning
 from ..dereplicators.base import DerepParams, DerepResult, registry
 
 _FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
@@ -48,9 +49,22 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             f"No genome FASTAs found under {ctx.genomes_dir}. Run the genome stage first."
         )
 
-    adapter = registry.create(params.tool)
+    tool = params.tool
+    if tool == "auto":
+        tool = auto_select(registry, len(genomes)) or "skder"
+        logger.info("Auto-selected dereplicator '%s' for %d genomes", tool, len(genomes))
+    else:
+        warn = scale_warning(registry, tool, len(genomes))
+        if warn:
+            limit, alts = warn
+            logger.warning(
+                "Dereplicator '%s' is tuned for <=%d genomes but you have %d; consider: %s",
+                tool, limit, len(genomes), ", ".join(alts) or "none",
+            )
+
+    adapter = registry.create(tool)
     versions = adapter.preflight()
-    logger.info("Dereplicating %d genomes with %s", len(genomes), params.tool)
+    logger.info("Dereplicating %d genomes with %s", len(genomes), tool)
 
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
@@ -88,8 +102,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     ctx.config.record_stage(
         "dereplicate",
-        tool=params.tool,
+        tool=tool,
         params={
+            "requested_tool": params.tool,
             "primary_ani": params.primary_ani,
             "secondary_ani": params.secondary_ani,
             "aligned_fraction": params.aligned_fraction,

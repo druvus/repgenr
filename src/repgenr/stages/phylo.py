@@ -21,6 +21,7 @@ from ..aligners.base import registry as aligner_registry
 from ..core.context import WorkdirContext
 from ..core.contracts import TREE_NWK
 from ..core.errors import UserInputError, WorkdirError
+from ..core.plugins import auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
@@ -51,7 +52,20 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
 
     outgroup_file, outgroup_leaf = _resolve_outgroup(ctx, params.no_outgroup, logger)
 
-    builder = treebuilder_registry.create(params.treebuilder)
+    treebuilder = params.treebuilder
+    if treebuilder == "auto":
+        treebuilder = auto_select(treebuilder_registry, len(genomes)) or "iqtree"
+        logger.info("Auto-selected tree builder '%s' for %d genomes", treebuilder, len(genomes))
+    else:
+        warn = scale_warning(treebuilder_registry, treebuilder, len(genomes))
+        if warn:
+            limit, alts = warn
+            logger.warning(
+                "Tree builder '%s' is tuned for <=%d genomes but you have %d; consider: %s",
+                treebuilder, limit, len(genomes), ", ".join(alts) or "none",
+            )
+
+    builder = treebuilder_registry.create(treebuilder)
     versions = builder.preflight()
 
     tree_params = TreeParams(
@@ -68,14 +82,14 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
             inputs.append(outgroup_file)
         logger.info(
             "Building tree with %s (alignment-free) over %d genomes",
-            params.treebuilder, len(inputs),
+            treebuilder, len(inputs),
         )
         tree = builder.build(inputs, ctx.tree_dir, tree_params, logger)
         source_tool = None
     else:
         msa, source_tool, source_versions = _build_msa(ctx, params, genomes, outgroup_file, logger)
         versions = {**versions, **source_versions}
-        logger.info("Building tree with %s from MSA %s", params.treebuilder, msa)
+        logger.info("Building tree with %s from MSA %s", treebuilder, msa)
         tree = builder.build(msa, ctx.tree_dir, tree_params, logger)
 
     final = ctx.tree_dir / TREE_NWK
@@ -84,8 +98,9 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
 
     ctx.config.record_stage(
         "phylo",
-        tool=params.treebuilder,
+        tool=treebuilder,
         params={
+            "requested_treebuilder": params.treebuilder,
             "msa_source": params.msa_source if builder.input_kind == InputKind.MSA_FASTA else None,
             "aligner": params.aligner if params.msa_source == "aligner" else None,
             "snptyper": params.snptyper if params.msa_source == "snptype" else None,

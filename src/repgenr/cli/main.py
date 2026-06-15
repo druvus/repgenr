@@ -153,7 +153,7 @@ def genome(
 @app.command()
 def dereplicate(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    tool: str = typer.Option("skder", "--tool", help="Dereplicator: skder, drep, galah, sourmash."),
+    tool: str = typer.Option("skder", "--tool", help="auto/skder/drep/galah/sourmash."),
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
@@ -212,7 +212,7 @@ def snptype(
 def phylo(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     treebuilder: str = typer.Option(
-        "iqtree", "--treebuilder", help="iqtree, fasttree, raxmlng, mashtree, sourmash."
+        "iqtree", "--treebuilder", help="auto/iqtree/fasttree/raxmlng/mashtree/sourmash."
     ),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
     aligner: str = typer.Option(

@@ -9,6 +9,7 @@ and external tools need no core edits.
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 
@@ -83,3 +84,66 @@ class _BrokenPlugin:
 def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
     """Check the adapter's required binaries; return resolved versions."""
     return check_binaries(capabilities.required_binaries)
+
+
+AUTO = "auto"
+
+
+def _capabilities_of(registry: Registry, name: str) -> ToolCapabilities | None:
+    try:
+        return registry.get(name).capabilities  # type: ignore[attr-defined]
+    except PluginError:
+        return None
+
+
+def _binaries_available(cap: ToolCapabilities) -> bool:
+    return all(shutil.which(spec.name) is not None for spec in cap.required_binaries)
+
+
+def auto_select(registry: Registry, n_items: int) -> str | None:
+    """Pick the best-scaling *available* registered tool for ``n_items`` inputs.
+
+    Preference order: required binaries present, then fits the recommended scale,
+    then natively-scaling, then the largest (or unbounded) recommended limit,
+    then alphabetical for determinism. Preferring installed tools avoids
+    auto-selecting an adapter whose binary is missing.
+    """
+    best: tuple[tuple[int, int, int, float], str] | None = None
+    for name in registry.names():
+        cap = _capabilities_of(registry, name)
+        if cap is None:
+            continue
+        limit = cap.recommended_max_genomes
+        available = 1 if _binaries_available(cap) else 0
+        fits = 1 if (limit is None or limit >= n_items) else 0
+        native = 1 if cap.supports_native_scaling else 0
+        headroom = float("inf") if limit is None else float(limit)
+        score = (available, fits, native, headroom)
+        if best is None or score > best[0] or (score == best[0] and name < best[1]):
+            best = (score, name)
+    return best[1] if best else None
+
+
+def scale_warning(
+    registry: Registry, tool: str, n_items: int
+) -> tuple[int, list[str]] | None:
+    """If ``tool`` is over its recommended scale, return (limit, alternatives).
+
+    Alternatives are registered tools whose recommended scale accommodates
+    ``n_items``. Returns None when the tool is within its recommended scale.
+    """
+    cap = _capabilities_of(registry, tool)
+    if cap is None or cap.recommended_max_genomes is None:
+        return None
+    if n_items <= cap.recommended_max_genomes:
+        return None
+    alternatives = []
+    for name in registry.names():
+        if name == tool:
+            continue
+        other = _capabilities_of(registry, name)
+        if other is None:
+            continue
+        if other.recommended_max_genomes is None or other.recommended_max_genomes >= n_items:
+            alternatives.append(name)
+    return cap.recommended_max_genomes, sorted(alternatives)
