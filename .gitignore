@@ -1,6 +1,13 @@
 # user-added exclusions
 wiki/
 
+# Nextflow run artifacts
+.nextflow/
+.nextflow.log*
+nextflow/work/
+nextflow/.nextflow/
+nextflow/.nextflow.log*
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
