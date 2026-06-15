@@ -37,8 +37,11 @@ class RaxmlNgBuilder(TreeBuilder):
             "raxml-ng", "--all",
             "--msa", msa,
             "--model", params.extra.get("model", "GTR+G"),
-            "--threads", str(params.threads),
+            # auto{N}: let RAxML-NG pick an efficient thread count up to the
+            # budget, avoiding its core-oversubscription guard on small alignments.
+            "--threads", f"auto{{{params.threads}}}",
             "--prefix", prefix,
+            "--redo",  # overwrite any outputs from a previous run at this prefix
         ]
         if params.bootstrap > 0:
             cmd += ["--bs-trees", str(params.bootstrap)]

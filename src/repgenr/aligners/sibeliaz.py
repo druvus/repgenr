@@ -40,10 +40,11 @@ class SibeliazAligner(Aligner):
             reference = genomes[0]
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        # Default mode runs the block alignment step, producing alignment.maf.
+        # (The -n flag would emit only block coordinates, no MAF.)
         run(
             [
                 "sibeliaz",
-                "-n",  # no alignment graph output beyond blocks
                 "-t", str(params.threads),
                 "-o", out_dir,
                 *[str(g.resolve()) for g in genomes],
@@ -53,12 +54,28 @@ class SibeliazAligner(Aligner):
         )
         maf = out_dir / "alignment.maf"
         if not maf.exists():
-            # SibeliaZ writes blocks.gff + alignment.maf; locate the MAF
+            # SibeliaZ writes blocks_coords.gff + alignment.maf; locate the MAF
             candidates = sorted(out_dir.rglob("*.maf"))
             if not candidates:
                 raise WorkdirError("SibeliaZ did not produce a MAF file")
             maf = candidates[0]
 
+        # SibeliaZ's MAF uses sequence/contig IDs (FASTA header first token), not
+        # genome filenames; build the seqid -> genome-stem map for the converter.
+        name_map = _build_seqid_map(genomes)
         msa = out_dir / "msa.fasta"
-        maf_to_fasta(maf, reference.stem, msa)
+        maf_to_fasta(maf, reference.stem, msa, name_map=name_map)
         return AlignResult(msa_fasta=msa, native_format=maf)
+
+
+def _build_seqid_map(genomes) -> dict[str, str]:
+    """Map each FASTA sequence ID (header first token) to its genome stem."""
+    name_map: dict[str, str] = {}
+    for genome in genomes:
+        stem = genome.stem
+        with open(genome) as fo:
+            for line in fo:
+                if line.startswith(">"):
+                    seqid = line[1:].split()[0]
+                    name_map[seqid] = stem
+    return name_map
