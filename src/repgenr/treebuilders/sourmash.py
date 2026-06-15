@@ -50,7 +50,11 @@ class SourmashBuilder(TreeBuilder):
             logger=logger,
             log_prefix="sourmash",
         )
-        sigs = sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz"))
+        # Skip macOS AppleDouble companions ("._*") that appear on exFAT/NTFS volumes.
+        sigs = [
+            p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
+            if not p.name.startswith("._")
+        ]
         if not sigs:
             raise WorkdirError("sourmash produced no signatures")
 
