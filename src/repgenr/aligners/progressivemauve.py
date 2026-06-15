@@ -16,6 +16,7 @@ from pathlib import Path
 from ..converters.xmfa_to_fasta import xmfa_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.errors import UserInputError
+from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
 from ..core.process import run
 from .base import Aligner, AlignParams, AlignResult
@@ -52,20 +53,23 @@ class ProgressiveMauveAligner(Aligner):
         xmfa_dir.mkdir(exist_ok=True)
         ref_arg = str(reference.resolve())
 
-        per_query_fastas: list[Path] = []
-        for query in genomes:
-            if query == reference:
-                continue
+        queries = [g for g in genomes if g != reference]
+
+        # progressiveMauve is single-threaded per alignment; run one process per
+        # thread budget, each aligning an independent query to the reference.
+        def align_query(query: Path) -> Path:
             stem = query.stem
             xmfa = xmfa_dir / f"{stem}.xmfa"
             fa = xmfa_dir / f"{stem}.fa"
             run(
                 ["progressiveMauve", "--output", xmfa, ref_arg, str(query.resolve())],
                 logger=logger,
-                log_prefix="progressivemauve",
+                log_prefix=f"progressivemauve:{stem}",
             )
             xmfa_to_fasta(xmfa, ref_arg, 0, fa)
-            per_query_fastas.append(fa)
+            return fa
+
+        per_query_fastas = parallel_map(align_query, queries, params.threads, logger=logger)
 
         msa = out_dir / "msa.fasta"
         _concatenate(per_query_fastas, reference, msa)
