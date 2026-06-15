@@ -15,9 +15,9 @@ from pathlib import Path
 
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
+from ..core.containers import get_config, run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import Aligner, AlignParams, AlignResult
 
 # SibeliaZ's bash wrapper uses GNU/Linux-only constructs in its alignment step
@@ -45,6 +45,7 @@ _BSD_PATCHES: tuple[tuple[str, str], ...] = (
 class SibeliazAligner(Aligner):
     capabilities = ToolCapabilities(
         name="sibeliaz",
+        conda=("bioconda::sibeliaz",),
         required_binaries=(BinarySpec("sibeliaz", version_args=("-v",)),),
         recommended_max_genomes=2000,
         threads_param="-t",
@@ -69,7 +70,7 @@ class SibeliazAligner(Aligner):
         # Pass -f (twopaco bloom-filter memory, GB) explicitly so the wrapper
         # skips its system-memory probe, which uses Linux-only `free`/`stat`.
         filtermemory = params.extra.get("filtermemory", 8)
-        run(
+        run_tool(self.capabilities, 
             [
                 *sibeliaz_cmd,
                 "-f", str(filtermemory),
@@ -99,10 +100,11 @@ class SibeliazAligner(Aligner):
 def _sibeliaz_invocation(out_dir: Path, logger: logging.Logger) -> list[str]:
     """Return the command prefix to run SibeliaZ.
 
-    On non-macOS, just ``["sibeliaz"]``. On macOS, write a BSD-compatible copy of
-    the wrapper (its alignment step otherwise fails silently) and run it via bash.
+    On non-macOS, or when running in a (Linux) container, just ``["sibeliaz"]``.
+    On native macOS, write a BSD-compatible copy of the wrapper (its alignment
+    step otherwise fails silently) and run it via bash.
     """
-    if sys.platform != "darwin":
+    if sys.platform != "darwin" or get_config().active:
         return ["sibeliaz"]
 
     real = shutil.which("sibeliaz")

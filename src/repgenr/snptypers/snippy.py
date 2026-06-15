@@ -7,15 +7,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import SnpParams, SnpResult, SnpTyper
 
 
 class SnippyTyper(SnpTyper):
     capabilities = ToolCapabilities(
         name="snippy",
+        conda=("bioconda::snippy",),
         required_binaries=(
             BinarySpec("snippy", version_args=("--version",)),
             BinarySpec("snippy-core", version_args=("--version",)),
@@ -43,7 +44,7 @@ class SnippyTyper(SnpTyper):
             if genome.resolve() == reference.resolve():
                 continue
             sdir = out_dir / genome.stem
-            run(
+            run_tool(self.capabilities, 
                 [
                     "snippy", "--cpus", str(params.threads),
                     "--outdir", sdir, "--ref", reference.resolve(),
@@ -55,7 +56,7 @@ class SnippyTyper(SnpTyper):
             sample_dirs.append(sdir)
 
         core_prefix = out_dir / "core"
-        run(
+        run_tool(self.capabilities, 
             ["snippy-core", "--ref", reference.resolve(), "--prefix", core_prefix, *sample_dirs],
             logger=logger,
             log_prefix="snippy-core",

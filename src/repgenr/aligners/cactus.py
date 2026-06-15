@@ -16,15 +16,16 @@ from pathlib import Path
 from ..converters.hal_to_maf import hal_to_maf
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import Aligner, AlignParams, AlignResult
 
 
 class CactusAligner(Aligner):
     capabilities = ToolCapabilities(
         name="cactus",
+        container="quay.io/comparative-genomics-toolkit/cactus:v2.9.3",
         required_binaries=(
             BinarySpec("cactus-pangenome", version_args=("--version",)),
             BinarySpec("hal2maf", version_args=()),
@@ -54,7 +55,7 @@ class CactusAligner(Aligner):
         job_store = out_dir / "jobstore"
         results = out_dir / "cactus_out"
         ref_name = _sample_name(reference)
-        run(
+        run_tool(self.capabilities, 
             [
                 "cactus-pangenome",
                 job_store,
@@ -72,7 +73,7 @@ class CactusAligner(Aligner):
             raise WorkdirError(f"cactus-pangenome produced no HAL under {results}")
 
         maf = out_dir / "pangenome.maf"
-        hal_to_maf(hal, ref_name, maf, logger)
+        hal_to_maf(hal, ref_name, maf, logger, caps=self.capabilities)
         msa = out_dir / "msa.fasta"
         maf_to_fasta(maf, ref_name, msa)
         return AlignResult(msa_fasta=msa, native_format=hal)

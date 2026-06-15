@@ -12,6 +12,6 @@ process TREE2TAX {
 
     script:
     """
-    repgenr tree2tax -wd ${params.workdir} ${params.tree2tax_args}
+    repgenr ${params.repgenr_opts} tree2tax -wd ${params.workdir} ${params.tree2tax_args}
     """
 }

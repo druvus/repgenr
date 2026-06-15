@@ -37,8 +37,34 @@ def main(
         False, "--version", callback=_version_callback, is_eager=True,
         help="Show version and exit.",
     ),
+    container: str = typer.Option(
+        "none", "--container", envvar="REPGENR_CONTAINER",
+        help="Run external tools in containers: none, docker, or singularity.",
+    ),
+    container_engine: str | None = typer.Option(
+        None, "--container-engine", envvar="REPGENR_CONTAINER_ENGINE",
+        help="Engine binary override (e.g. apptainer, podman).",
+    ),
+    container_cache: str | None = typer.Option(
+        None, "--container-cache", envvar="REPGENR_CONTAINER_CACHE",
+        help="Directory for Singularity .sif images / Wave cache (large; can be external).",
+    ),
+    platform: str | None = typer.Option(
+        None, "--platform", envvar="REPGENR_CONTAINER_PLATFORM",
+        help="Container platform, e.g. linux/amd64 for emulated BioContainers on arm64.",
+    ),
+    wave: bool = typer.Option(
+        False, "--wave/--no-wave", envvar="REPGENR_WAVE",
+        help="Resolve images for multi-tool adapters via the Seqera Wave CLI.",
+    ),
 ) -> None:
     """RepGenR top-level entry point."""
+    from ..core.containers import configure_container
+
+    configure_container(
+        backend=container, engine=container_engine, platform=platform,
+        cache_dir=container_cache, wave_enabled=wave,
+    )
 
 
 def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) -> None:

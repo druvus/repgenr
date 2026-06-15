@@ -54,6 +54,21 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 | tree2tax | yes | FlexTaxD relations + genome map |
 | vmetadata / vgenome (viral) | yes | live Hepeviridae run: BV-BRC FTPS download + NCBI Entrez -> 1256 genomes -> skder 799 reps -> mashtree -> tree2tax. Required an FTPS/TLS-session-reuse fix (BV-BRC dropped plain FTP) |
 
+## Containers
+
+RepGenR can run any tool in a pinned container (`--container docker|singularity`;
+see `docs/containers.md`), pinning versions and unblocking tools that don't
+install on the host. The backend has unit tests (argv construction, mounts, UID,
+native vs wrapped) and was validated **live on macOS + Docker + Wave**:
+- `dereplicate --tool skder` in a Wave-built single-tool image → 8 reps.
+- `snptype --tool simple` in a Wave-built **multi-tool** image (minimap2 +
+  samtools + bcftools) → 2413 core SNP sites.
+
+Notes: macOS firmlinked temp/home paths must be bind-mounted un-resolved (handled
+in the backend). The bioconda `mauve` (progressiveMauve) image is broken upstream
+(boost ABI `undefined symbol`), so that tool stays unvalidated regardless of
+container; the container mechanism itself ran it.
+
 ## Platform notes (macOS / Apple Silicon)
 
 - Several tools lack osx-arm64 builds; some run via an osx-64 (Rosetta) conda env

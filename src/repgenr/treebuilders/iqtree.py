@@ -8,15 +8,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 
 
 class IqtreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="iqtree",
+        conda=("bioconda::iqtree",),
         required_binaries=(BinarySpec("iqtree", version_args=("--version",)),),
         recommended_max_genomes=500,
         threads_param="-T",
@@ -44,7 +45,7 @@ class IqtreeBuilder(TreeBuilder):
             cmd += ["-o", params.outgroup]
         if params.bootstrap > 0:
             cmd += ["-B", str(params.bootstrap)]
-        run(cmd, logger=logger, log_prefix="iqtree")
+        run_tool(self.capabilities, cmd, logger=logger, log_prefix="iqtree")
 
         treefile = work_msa.with_suffix(".fasta.treefile")
         if not treefile.exists():

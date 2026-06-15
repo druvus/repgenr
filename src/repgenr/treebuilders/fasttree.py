@@ -8,8 +8,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 
 
@@ -17,6 +17,7 @@ class FasttreeBuilder(TreeBuilder):
     # FastTree / VeryFastTree are both accepted; prefer FastTree on PATH.
     capabilities = ToolCapabilities(
         name="fasttree",
+        conda=("bioconda::fasttree",),
         required_binaries=(BinarySpec("FastTree", version_args=()),),
         recommended_max_genomes=5000,
         threads_param=None,
@@ -34,7 +35,7 @@ class FasttreeBuilder(TreeBuilder):
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
         binary = "FastTree" if shutil.which("FastTree") else "fasttree"
-        run(
+        run_tool(self.capabilities, 
             [binary, "-nt", "-gtr", msa],
             logger=logger,
             log_prefix="fasttree",

@@ -32,6 +32,11 @@ class ToolCapabilities:
     recommended_max_genomes: int | None = None
     supports_native_scaling: bool = False
     threads_param: str | None = None
+    # Container execution: a pinned image URI (BioContainer or Wave-minted) for
+    # single-tool adapters, or a conda spec resolved to an image via Wave when no
+    # explicit image is set and Wave is enabled.
+    container: str | None = None
+    conda: tuple[str, ...] = ()
 
 
 class Registry[T]:
@@ -82,7 +87,20 @@ class _BrokenPlugin:
 
 
 def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
-    """Check the adapter's required binaries; return resolved versions."""
+    """Check the adapter's required binaries; return resolved versions.
+
+    When a container backend is active and an image resolves for this tool, the
+    tool lives in the image (not on the host): check the engine binary instead
+    and record the image reference in place of host tool versions.
+    """
+    from .containers import get_config, resolve_image  # deferred: avoids import cycle
+
+    config = get_config()
+    if config.active:
+        image = resolve_image(capabilities, config)
+        if image:
+            check_binaries((BinarySpec(config.engine_binary(), version_args=("--version",)),))
+            return {capabilities.name: image}
     return check_binaries(capabilities.required_binaries)
 
 

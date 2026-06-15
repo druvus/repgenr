@@ -12,6 +12,6 @@ process DEREPLICATE {
 
     script:
     """
-    repgenr dereplicate -wd ${params.workdir} ${params.dereplicate_args}
+    repgenr ${params.repgenr_opts} dereplicate -wd ${params.workdir} ${params.dereplicate_args}
     """
 }

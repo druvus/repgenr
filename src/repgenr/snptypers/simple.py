@@ -14,23 +14,27 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import SnpParams, SnpResult, SnpTyper
+
+_CAPABILITIES = ToolCapabilities(
+    name="simple",
+    required_binaries=(
+        BinarySpec("minimap2", version_args=("--version",)),
+        BinarySpec("samtools", version_args=("--version",)),
+        BinarySpec("bcftools", version_args=("--version",)),
+    ),
+    recommended_max_genomes=2000,
+    threads_param=None,
+    # multi-tool: resolved to one image via Wave (or pin an explicit container)
+    conda=("bioconda::minimap2", "bioconda::samtools", "bioconda::bcftools"),
+)
 
 
 class SimpleSnpTyper(SnpTyper):
-    capabilities = ToolCapabilities(
-        name="simple",
-        required_binaries=(
-            BinarySpec("minimap2", version_args=("--version",)),
-            BinarySpec("samtools", version_args=("--version",)),
-            BinarySpec("bcftools", version_args=("--version",)),
-        ),
-        recommended_max_genomes=2000,
-        threads_param=None,
-    )
+    capabilities = _CAPABILITIES
     requires_reference = True
 
     def call(
@@ -48,7 +52,7 @@ class SimpleSnpTyper(SnpTyper):
 
         ref = out_dir / "reference.fasta"
         ref.write_text(reference.read_text())
-        run(["samtools", "faidx", ref], logger=logger, log_prefix="samtools")
+        run_tool(_CAPABILITIES, ["samtools", "faidx", ref], logger=logger, log_prefix="samtools")
 
         consensuses: dict[str, str] = {reference.stem: _concat_fasta(ref)}
         per_genome_dir = out_dir / "per_genome"
@@ -85,20 +89,19 @@ def _call_one(genome: Path, ref: Path, work: Path, params: SnpParams, logger) ->
 
     pileup = work / f"{stem}.pileup.vcf"
     log = "bcftools"
-    run(
-        ["minimap2", "-a", ref, genome.resolve()],
-        logger=logger, log_prefix="minimap2", stdout_path=sam,
-    )
-    run(["samtools", "sort", "-o", bam, sam], logger=logger, log_prefix="samtools")
-    run(["samtools", "index", bam], logger=logger, log_prefix="samtools")
-    run(["bcftools", "mpileup", "-f", ref, "-o", pileup, bam], logger=logger, log_prefix=log)
-    run(["bcftools", "call", "-mv", "-Ov", "-o", calls, pileup], logger=logger, log_prefix=log)
-    run(
-        ["bcftools", "view", "-v", "snps", "-Oz", "-o", snps, calls],
-        logger=logger, log_prefix=log,
-    )
-    run(["bcftools", "index", snps], logger=logger, log_prefix=log)
-    run(["bcftools", "consensus", "-f", ref, "-o", cons, snps], logger=logger, log_prefix=log)
+    caps = _CAPABILITIES
+
+    def tool(cmd, **kw):
+        run_tool(caps, cmd, logger=logger, **kw)
+
+    tool(["minimap2", "-a", ref, genome.resolve()], log_prefix="minimap2", stdout_path=sam)
+    tool(["samtools", "sort", "-o", bam, sam], log_prefix="samtools")
+    tool(["samtools", "index", bam], log_prefix="samtools")
+    tool(["bcftools", "mpileup", "-f", ref, "-o", pileup, bam], log_prefix=log)
+    tool(["bcftools", "call", "-mv", "-Ov", "-o", calls, pileup], log_prefix=log)
+    tool(["bcftools", "view", "-v", "snps", "-Oz", "-o", snps, calls], log_prefix=log)
+    tool(["bcftools", "index", snps], log_prefix=log)
+    tool(["bcftools", "consensus", "-f", ref, "-o", cons, snps], log_prefix=log)
     return _concat_fasta(cons)
 
 

@@ -8,15 +8,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import SnpParams, SnpResult, SnpTyper
 
 
 class ParsnpTyper(SnpTyper):
     capabilities = ToolCapabilities(
         name="parsnp",
+        conda=("bioconda::parsnp", "bioconda::harvesttools"),
         required_binaries=(
             BinarySpec("parsnp", version_args=("--version",)),
             BinarySpec("harvesttools", version_args=("--version",)),
@@ -52,7 +53,7 @@ class ParsnpTyper(SnpTyper):
             "parsnp", "-r", reference.resolve(), "-d", gdir,
             "-o", results, "-p", str(params.threads),
         ]
-        run(
+        run_tool(self.capabilities, 
             cmd,
             logger=logger,
             log_prefix="parsnp",
@@ -62,7 +63,7 @@ class ParsnpTyper(SnpTyper):
             raise WorkdirError("ParSNP did not produce parsnp.ggr")
 
         core_fasta = out_dir / "core_snp.fasta"
-        run(
+        run_tool(self.capabilities, 
             ["harvesttools", "-i", ggr, "-S", core_fasta],
             logger=logger,
             log_prefix="harvesttools",

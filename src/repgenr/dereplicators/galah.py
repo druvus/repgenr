@@ -17,8 +17,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -33,6 +33,7 @@ _FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 class GalahDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="galah",
+        conda=("bioconda::galah",),
         required_binaries=(BinarySpec("galah", version_args=("--version",)),),
         recommended_max_genomes=None,
         supports_native_scaling=True,
@@ -58,7 +59,7 @@ class GalahDereplicator(Dereplicator):
             "--threads", str(params.threads),
             "--output-cluster-definition", clusters_file,
         ]
-        run(cmd, logger=logger, log_prefix="galah")
+        run_tool(self.capabilities, cmd, logger=logger, log_prefix="galah")
 
         clusters: dict[str, list[str]] = {}
         status: dict[str, str] = {}

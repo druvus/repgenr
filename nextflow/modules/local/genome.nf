@@ -12,6 +12,6 @@ process GENOME {
 
     script:
     """
-    repgenr genome -wd ${params.workdir} ${params.genome_args}
+    repgenr ${params.repgenr_opts} genome -wd ${params.workdir} ${params.genome_args}
     """
 }

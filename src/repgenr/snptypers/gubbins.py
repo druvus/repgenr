@@ -5,19 +5,26 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from ..core.binaries import BinarySpec, check_binaries
+from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
-from ..core.process import run
+from ..core.plugins import ToolCapabilities, preflight
 
 GUBBINS_BINARY = BinarySpec("run_gubbins.py", version_args=("--version",))
+_CAPABILITIES = ToolCapabilities(
+    name="gubbins",
+    required_binaries=(GUBBINS_BINARY,),
+    conda=("bioconda::gubbins",),
+)
 
 
 def mask_recombination(core_snp_fasta: Path, out_dir: Path, logger: logging.Logger) -> Path:
     """Run Gubbins; return the recombination-filtered polymorphic-sites FASTA."""
-    check_binaries((GUBBINS_BINARY,))
+    preflight(_CAPABILITIES)  # checks host binary, or engine when containerized
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = out_dir / "gubbins"
-    run(
+    run_tool(
+        _CAPABILITIES,
         ["run_gubbins.py", "--prefix", prefix, core_snp_fasta],
         logger=logger,
         cwd=out_dir,

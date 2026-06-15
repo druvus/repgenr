@@ -8,9 +8,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run, write_fofn
+from ..core.process import write_fofn
 from ..tree.newick import neighbor_joining
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
@@ -18,6 +19,7 @@ from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 class SourmashBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="sourmash",
+        conda=("bioconda::sourmash",),
         required_binaries=(BinarySpec("sourmash", version_args=("--version",)),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=10000,
@@ -40,7 +42,7 @@ class SourmashBuilder(TreeBuilder):
         sig_dir = out_dir / "signatures"
         sig_dir.mkdir(exist_ok=True)
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
-        run(
+        run_tool(self.capabilities, 
             [
                 "sourmash", "sketch", "dna",
                 "-p", f"k={ksize},scaled={scaled}",
@@ -59,7 +61,7 @@ class SourmashBuilder(TreeBuilder):
             raise WorkdirError("sourmash produced no signatures")
 
         matrix_csv = out_dir / "compare.csv"
-        run(
+        run_tool(self.capabilities, 
             ["sourmash", "compare", "-k", str(ksize), "--csv", matrix_csv, *sigs],
             logger=logger,
             log_prefix="sourmash",

@@ -9,6 +9,6 @@ process METADATA {
 
     script:
     """
-    repgenr metadata -wd ${params.workdir} ${params.metadata_args}
+    repgenr ${params.repgenr_opts} metadata -wd ${params.workdir} ${params.metadata_args}
     """
 }

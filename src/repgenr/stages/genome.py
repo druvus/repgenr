@@ -14,12 +14,23 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ..core.binaries import BinarySpec, check_binaries
+from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.errors import WorkdirError
-from ..core.process import run as run_cmd
+from ..core.plugins import ToolCapabilities, preflight
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
+_DATASETS_CAPS = ToolCapabilities(
+    name="datasets",
+    required_binaries=(_DATASETS,),
+    conda=("conda-forge::ncbi-datasets-cli",),
+)
+
+
+def _run_cmd(cmd, **kwargs):
+    """Run the datasets CLI, containerized when a backend is active."""
+    return run_tool(_DATASETS_CAPS, cmd, **kwargs)
 
 
 @dataclass
@@ -30,7 +41,7 @@ class GenomeParams:
 
 def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     logger = ctx.logger
-    versions = check_binaries((_DATASETS,))
+    versions = preflight(_DATASETS_CAPS)
 
     manifest = ctx.manifest
     selected = [g for g in manifest.all_genomes(include_outgroup=False)]
@@ -97,7 +108,7 @@ def _download_batch(ctx, acc_list, filenames, logger, keep_files) -> None:
     if extract.exists():
         shutil.rmtree(extract)
 
-    run_cmd(
+    _run_cmd(
         [
             "datasets", "download", "genome", "accession",
             "--dehydrated", "--inputfile", acc_list, "--filename", zip_path,
@@ -106,7 +117,10 @@ def _download_batch(ctx, acc_list, filenames, logger, keep_files) -> None:
     )
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(extract)
-    run_cmd(["datasets", "rehydrate", "--directory", extract], logger=logger, log_prefix="datasets")
+    _run_cmd(
+        ["datasets", "rehydrate", "--directory", extract],
+        logger=logger, log_prefix="datasets",
+    )
 
     accession_to_name = filenames
     for fna in extract.rglob("*.fna"):
@@ -123,7 +137,7 @@ def _download_batch(ctx, acc_list, filenames, logger, keep_files) -> None:
 def _download_outgroup(ctx, outgroup, logger) -> None:
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
     zip_path = ctx.workdir / "ncbi_download_outgroup.zip"
-    run_cmd(
+    _run_cmd(
         [
             "datasets", "download", "genome", "accession", outgroup.accession,
             "--filename", zip_path,
