@@ -52,7 +52,11 @@ Cactus is distributed separately (containers/binaries); see its documentation.
 ```bash
 WD=./francisella
 
+# Full GTDB table (release-pinned):
 repgenr metadata -wd $WD -r 207.0 -v bac120 -d rep -l genus -tg francisella
+# Or query just the target taxon via the GTDB API (no full-table download):
+repgenr metadata -wd $WD --source api -d rep -l genus -tg francisella
+
 repgenr genome -wd $WD
 repgenr dereplicate -wd $WD --tool skder -t 16
 repgenr phylo -wd $WD --aligner progressivemauve --treebuilder iqtree
