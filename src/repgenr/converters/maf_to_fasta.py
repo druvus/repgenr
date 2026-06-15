@@ -30,17 +30,30 @@ def maf_to_fasta(
     maf_path: str | Path,
     reference: str,
     out_path: str | Path,
+    name_map: dict[str, str] | None = None,
 ) -> Path:
+    """Project a MAF onto ``reference`` coordinates as an MSA-FASTA.
+
+    ``name_map`` maps a MAF source name (often a contig/sequence ID) to a genome
+    label. When given, sequences are grouped by genome (needed for tools like
+    SibeliaZ whose MAF uses raw sequence IDs); otherwise the ``genome.contig``
+    convention is assumed (Cactus via hal2maf).
+    """
     maf_path = Path(maf_path)
     out_path = Path(out_path)
 
+    def genome_of(src: str) -> str:
+        if name_map is not None:
+            return name_map.get(src, name_map.get(src.split(".")[0], _species(src)))
+        return _species(src)
+
     blocks = list(_iter_blocks(maf_path))
-    ref_key = _species(reference)
+    ref_key = genome_of(reference) if name_map else _species(reference)
 
     species: set[str] = set()
     for block in blocks:
         for row in block:
-            species.add(_species(row.name))
+            species.add(genome_of(row.name))
     species.discard(ref_key)
     ordered_species = [ref_key, *sorted(species)]
 
@@ -49,7 +62,7 @@ def maf_to_fasta(
 
     placed_blocks: list[tuple[int, dict[str, str]]] = []
     for block in blocks:
-        ref_row = next((r for r in block if _species(r.name) == ref_key), None)
+        ref_row = next((r for r in block if genome_of(r.name) == ref_key), None)
         if ref_row is None:
             continue
         keep = [i for i, ch in enumerate(ref_row.text) if ch != "-"]
@@ -58,7 +71,7 @@ def maf_to_fasta(
         width = len(keep)
         block_cols: dict[str, str] = {}
         for s in ordered_species:
-            row = next((r for r in block if _species(r.name) == s), None)
+            row = next((r for r in block if genome_of(r.name) == s), None)
             if row is None:
                 block_cols[s] = "-" * width
             else:
