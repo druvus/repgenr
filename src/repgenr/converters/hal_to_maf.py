@@ -10,7 +10,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from ..core.process import run
+from ..core.containers import run_tool
+from ..core.plugins import ToolCapabilities
 
 
 def hal_to_maf(
@@ -18,10 +19,18 @@ def hal_to_maf(
     reference: str,
     out_path: str | Path,
     logger: logging.Logger,
+    caps: ToolCapabilities | None = None,
 ) -> Path:
+    """Project a HAL to MAF with ``hal2maf``.
+
+    ``caps`` carries the container image when the caller (Cactus) runs
+    containerized; ``hal2maf`` ships in the Cactus image.
+    """
     hal_path = Path(hal_path)
     out_path = Path(out_path)
-    run(
+    caps = caps or ToolCapabilities(name="hal2maf")
+    run_tool(
+        caps,
         ["hal2maf", "--refGenome", reference, "--noAncestors", hal_path, out_path],
         logger=logger,
         log_prefix="hal2maf",

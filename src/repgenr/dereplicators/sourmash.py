@@ -15,9 +15,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run, write_fofn
+from ..core.process import write_fofn
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -30,6 +31,7 @@ from .base import (
 class SourmashDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="sourmash",
+        conda=("bioconda::sourmash",),
         required_binaries=(BinarySpec("sourmash", version_args=("--version",)),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=None,
@@ -53,7 +55,7 @@ class SourmashDereplicator(Dereplicator):
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
 
         # one signature file per genome, named by genome basename
-        run(
+        run_tool(self.capabilities, 
             [
                 "sourmash", "sketch", "dna",
                 "-p", f"k={ksize},scaled={scaled}",
@@ -72,7 +74,7 @@ class SourmashDereplicator(Dereplicator):
         ]
         if not sig_files:
             raise WorkdirError(f"sourmash produced no signatures under {sig_dir}")
-        run(
+        run_tool(self.capabilities, 
             [
                 "sourmash", "compare",
                 "-k", str(ksize),

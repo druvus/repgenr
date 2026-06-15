@@ -8,15 +8,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 
 
 class RaxmlNgBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="raxmlng",
+        conda=("bioconda::raxml-ng",),
         required_binaries=(BinarySpec("raxml-ng", version_args=("--version",)),),
         recommended_max_genomes=1000,
         threads_param="--threads",
@@ -47,7 +48,7 @@ class RaxmlNgBuilder(TreeBuilder):
             cmd += ["--bs-trees", str(params.bootstrap)]
         if params.outgroup:
             cmd += ["--outgroup", params.outgroup]
-        run(cmd, logger=logger, log_prefix="raxml-ng")
+        run_tool(self.capabilities, cmd, logger=logger, log_prefix="raxml-ng")
 
         best = Path(str(prefix) + ".raxml.bestTree")
         if not best.exists():

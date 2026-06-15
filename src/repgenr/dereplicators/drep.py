@@ -18,9 +18,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import (
     STATUS_CONTAINED,
     STATUS_FAIL_QC,
@@ -36,6 +36,7 @@ _FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 class DrepDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="drep",
+        conda=("bioconda::drep",),
         required_binaries=(BinarySpec("dRep", version_args=("--version",)),),
         default_params={"S_algorithm": "fastANI"},
         recommended_max_genomes=2000,
@@ -78,7 +79,7 @@ class DrepDereplicator(Dereplicator):
                 "--ignoreGenomeQuality",
                 "--clusterAlg", "single",
             ]
-        run(cmd, logger=logger, log_prefix="drep")
+        run_tool(self.capabilities, cmd, logger=logger, log_prefix="drep")
 
         if not drep_wd.exists():
             raise WorkdirError(

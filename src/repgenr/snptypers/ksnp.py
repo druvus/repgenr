@@ -7,15 +7,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import SnpParams, SnpResult, SnpTyper
 
 
 class Ksnp4Typer(SnpTyper):
     capabilities = ToolCapabilities(
         name="ksnp",
+        conda=("bioconda::ksnp4",),
         required_binaries=(BinarySpec("kSNP4", version_args=()),),
         recommended_max_genomes=2000,
         threads_param="-CPU",
@@ -41,7 +42,7 @@ class Ksnp4Typer(SnpTyper):
 
         results = out_dir / "ksnp_out"
         kmer = str(params.extra.get("kmer", 21))
-        run(
+        run_tool(self.capabilities, 
             ["kSNP4", "-in", in_list, "-outdir", results, "-k", kmer, "-CPU", str(params.threads)],
             logger=logger,
             log_prefix="ksnp",

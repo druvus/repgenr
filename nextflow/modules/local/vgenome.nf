@@ -12,6 +12,6 @@ process VGENOME {
 
     script:
     """
-    repgenr vgenome -wd ${params.workdir} ${params.vgenome_args}
+    repgenr ${params.repgenr_opts} vgenome -wd ${params.workdir} ${params.vgenome_args}
     """
 }

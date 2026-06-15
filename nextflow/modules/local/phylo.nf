@@ -13,6 +13,6 @@ process PHYLO {
 
     script:
     """
-    repgenr phylo -wd ${params.workdir} ${params.phylo_args}
+    repgenr ${params.repgenr_opts} phylo -wd ${params.workdir} ${params.phylo_args}
     """
 }

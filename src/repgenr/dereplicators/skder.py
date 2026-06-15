@@ -29,9 +29,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -54,6 +54,7 @@ class SkderDereplicator(Dereplicator):
         recommended_max_genomes=None,  # scales natively
         supports_native_scaling=True,
         threads_param="-c",
+        conda=("bioconda::skder",),
     )
 
     def dereplicate(
@@ -82,7 +83,7 @@ class SkderDereplicator(Dereplicator):
             "-d", mode,
         ]
         try:
-            run(cmd, logger=logger, log_prefix="skder")
+            run_tool(self.capabilities, cmd, logger=logger, log_prefix="skder")
             staged = out_dir / "skder_out"
             if staged.exists():
                 shutil.rmtree(staged)

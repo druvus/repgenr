@@ -9,6 +9,6 @@ process VMETADATA {
 
     script:
     """
-    repgenr vmetadata -wd ${params.workdir} ${params.vmetadata_args}
+    repgenr ${params.repgenr_opts} vmetadata -wd ${params.workdir} ${params.vmetadata_args}
     """
 }

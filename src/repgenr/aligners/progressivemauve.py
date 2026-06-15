@@ -15,16 +15,17 @@ from pathlib import Path
 
 from ..converters.xmfa_to_fasta import xmfa_to_fasta
 from ..core.binaries import BinarySpec
+from ..core.containers import run_tool
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
-from ..core.process import run
 from .base import Aligner, AlignParams, AlignResult
 
 
 class ProgressiveMauveAligner(Aligner):
     capabilities = ToolCapabilities(
         name="progressivemauve",
+        conda=("bioconda::mauve",),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
         recommended_max_genomes=500,
         threads_param=None,  # progressiveMauve is single-threaded per alignment
@@ -61,7 +62,7 @@ class ProgressiveMauveAligner(Aligner):
             stem = query.stem
             xmfa = xmfa_dir / f"{stem}.xmfa"
             fa = xmfa_dir / f"{stem}.fa"
-            run(
+            run_tool(self.capabilities, 
                 ["progressiveMauve", "--output", xmfa, ref_arg, str(query.resolve())],
                 logger=logger,
                 log_prefix=f"progressivemauve:{stem}",
