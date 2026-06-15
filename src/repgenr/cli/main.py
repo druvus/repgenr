@@ -56,10 +56,13 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
 @app.command()
 def metadata(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
-    release: str = typer.Option(..., "-r", "--release", help="GTDB release, e.g. 207.0."),
-    version: str = typer.Option(..., "-v", "--version", help="bac120 or ar53."),
     dataset: str = typer.Option(..., "-d", "--dataset", help="all or rep."),
     level: str = typer.Option(..., "-l", "--level", help="family, genus or species."),
+    source: str = typer.Option(
+        "tsv", "--source", help="tsv (download full table) or api (GTDB API, target only)."
+    ),
+    release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
+    version: str | None = typer.Option(None, "-v", "--version", help="bac120/ar53 (tsv source)."),
     target_family: str | None = typer.Option(None, "-tf", "--target-family"),
     target_genus: str | None = typer.Option(None, "-tg", "--target-genus"),
     target_species: str | None = typer.Option(None, "-ts", "--target-species"),
@@ -68,12 +71,13 @@ def metadata(
     nodownload: bool = typer.Option(False, "--nodownload"),
     limit: int | None = typer.Option(None, "--limit"),
 ) -> None:
-    """Select a taxon's genomes from GTDB metadata."""
+    """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
     from ..stages.metadata import MetadataParams
 
     def build() -> MetadataParams:
         return MetadataParams(
-            release=release, version=version, dataset=dataset, level=level,
+            dataset=dataset, level=level, source=source,
+            release=release, version=version,
             target_family=target_family, target_genus=target_genus,
             target_species=target_species, outgroup_accession=outgroup_accession,
             metadata_path=metadata_path, nodownload=nodownload, limit=limit,
