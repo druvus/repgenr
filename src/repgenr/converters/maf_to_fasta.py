@@ -31,6 +31,7 @@ def maf_to_fasta(
     reference: str,
     out_path: str | Path,
     name_map: dict[str, str] | None = None,
+    exclude: set[str] | None = None,
 ) -> Path:
     """Project a MAF onto ``reference`` coordinates as an MSA-FASTA.
 
@@ -38,9 +39,13 @@ def maf_to_fasta(
     label. When given, sequences are grouped by genome (needed for tools like
     SibeliaZ whose MAF uses raw sequence IDs); otherwise the ``genome.contig``
     convention is assumed (Cactus via hal2maf).
+
+    ``exclude`` drops genomes by label, e.g. ``{"_MINIGRAPH_"}`` to remove the
+    Minigraph-Cactus backbone pseudo-genome so it is not emitted as a taxon.
     """
     maf_path = Path(maf_path)
     out_path = Path(out_path)
+    exclude = exclude or set()
 
     def genome_of(src: str) -> str:
         if name_map is not None:
@@ -61,6 +66,7 @@ def maf_to_fasta(
     for block in blocks:
         for row in block:
             species.add(genome_of(row.name))
+    species -= exclude
     species.discard(ref_key)
     ordered_species = [ref_key, *sorted(species)]
 

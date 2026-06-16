@@ -66,6 +66,22 @@ def test_name_map_reference_with_version_dot(tmp_path: Path) -> None:
     assert records["H_GCF_2.1"] == "ACGAACGT"
 
 
+def test_exclude_drops_pseudo_genome(tmp_path: Path) -> None:
+    # Minigraph-Cactus adds a _MINIGRAPH_ backbone; exclude must drop it as a taxon.
+    maf = tmp_path / "a.maf"
+    maf.write_text(
+        "a\n"
+        "s ref.chr1 0 4 + 4 ACGT\n"
+        "s qry.chr1 0 4 + 4 ACGA\n"
+        "s _MINIGRAPH_.chr1 0 4 + 4 ACGT\n"
+    )
+    out = tmp_path / "out.fasta"
+    maf_to_fasta(maf, "ref", out, exclude={"_MINIGRAPH_"})
+    records = _read_fasta(out)
+    assert set(records) == {"ref", "qry"}
+    assert "_MINIGRAPH_" not in records
+
+
 def test_empty_projection_raises(tmp_path: Path) -> None:
     # Reference label that matches no row must fail loudly, not write an empty MSA.
     maf = tmp_path / "a.maf"
