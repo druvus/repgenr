@@ -25,7 +25,17 @@ from .base import Aligner, AlignParams, AlignResult
 class ProgressiveMauveAligner(Aligner):
     capabilities = ToolCapabilities(
         name="progressivemauve",
-        conda=("bioconda::mauve",),
+        # progressiveMauve (libMems) is linked against boost-cpp 1.74; current
+        # conda-forge boost dropped the symbol it needs
+        # (undefined symbol _ZNK5boost10filesystem4path8filenameEv), so a naive
+        # `bioconda::mauve` Wave build fails at runtime. Both image paths are
+        # fixed and verified:
+        #   * container (default): a pre-built BioContainer with boost-cpp 1.74.
+        #   * conda/Wave (--wave): boost-cpp is pinned to 1.74 below so the minted
+        #     image matches. resolve_image() prefers `container`, so the
+        #     BioContainer wins unless that pin is removed.
+        container="quay.io/biocontainers/mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4",
+        conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
         recommended_max_genomes=500,
         threads_param=None,  # progressiveMauve is single-threaded per alignment

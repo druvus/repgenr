@@ -47,6 +47,20 @@ def test_docker_wrap_command() -> None:
     assert cmd[i + 1 :] == argv
     # workdir is bind-mounted
     assert any(c == "/wd:/wd" for c in cmd)
+    # HOME points at the (mounted, writable) workdir, not the unwritable "/"
+    assert any(c == "HOME=/wd" for c in cmd)
+
+
+def test_docker_extra_mounts(tmp_path) -> None:
+    # A directory referenced indirectly (not in argv) is mounted when declared.
+    genomes = tmp_path / "reps"
+    genomes.mkdir()
+    cfg = ContainerConfig(backend="docker")
+    cmd = wrap_command(
+        "img:1", ["cactus", "seqfile.txt"], config=cfg, cwd="/wd",
+        logger=_LOG, extra_mounts=[str(genomes)],
+    )
+    assert any(c == f"{genomes}:{genomes}" for c in cmd)
 
 
 def test_singularity_wrap_command_no_cache() -> None:

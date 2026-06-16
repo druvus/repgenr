@@ -1,4 +1,4 @@
-"""Pluggable SNP typers / variant callers (simple, Snippy, ParSNP, kSNP, ...)."""
+"""Pluggable SNP typers / variant callers (simple, Snippy, ParSNP, ...)."""
 
 from .base import SnpParams, SnpResult, SnpTyper, registry
 

@@ -138,6 +138,7 @@ def _default_mounts(
     config: ContainerConfig,
     cwd: str | os.PathLike[str] | None,
     argv: Sequence[str] = (),
+    extra_mounts: Sequence[str | os.PathLike[str]] = (),
 ) -> list[Path]:
     # Use absolute (NOT symlink-resolved) paths: tools are given paths like
     # macOS /var/folders/... and /Users/...; resolving to /private/var or
@@ -151,6 +152,13 @@ def _default_mounts(
         mounts.append(absp(cwd))
     mounts.append(absp(tempfile.gettempdir()))
     mounts.extend(absp(m) for m in config.extra_mounts)
+    # Per-call mounts for inputs referenced indirectly (e.g. genome paths listed
+    # inside a manifest file rather than passed as argv tokens).
+    for m in extra_mounts:
+        d = Path(m)
+        d = d if d.is_dir() else d.parent
+        if d.exists():
+            mounts.append(absp(d))
     # Bind the directories referenced by absolute-path arguments (genome inputs,
     # output dirs, references), so the tool sees its files at identical paths.
     for token in argv:
@@ -211,14 +219,19 @@ def wrap_command(
     config: ContainerConfig,
     cwd: str | os.PathLike[str] | None,
     logger: logging.Logger,
+    extra_mounts: Sequence[str | os.PathLike[str]] = (),
 ) -> list[str]:
     """Build the engine command that runs ``argv`` inside ``image``."""
-    mounts = _default_mounts(config, cwd, argv)
+    mounts = _default_mounts(config, cwd, argv, extra_mounts)
     workdir = str(Path(os.path.abspath(cwd))) if cwd is not None else str(mounts[0])
 
     if config.backend == DOCKER:
         cmd = [config.engine_binary(), "run", "--rm", "--entrypoint", ""]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
+        # Run as an arbitrary host UID with no passwd entry, so HOME defaults to
+        # "/" and is not writable. Point it at the mounted, writable workdir so
+        # tools that touch HOME (e.g. Toil/Cactus creating its config dir) work.
+        cmd += ["-e", f"HOME={workdir}"]
         if config.platform:
             cmd += ["--platform", config.platform]
         for m in mounts:
@@ -245,6 +258,7 @@ def run_tool(
     check: bool = True,
     stdout_path: str | os.PathLike[str] | None = None,
     log_prefix: str | None = None,
+    extra_mounts: Sequence[str | os.PathLike[str]] = (),
 ) -> int:
     """Run an adapter's tool command, containerized when a backend is active."""
     config = _CONFIG
@@ -256,7 +270,9 @@ def run_tool(
         )
 
     argv = [str(part) for part in command]
-    wrapped = wrap_command(image, argv, config=config, cwd=cwd, logger=logger)
+    wrapped = wrap_command(
+        image, argv, config=config, cwd=cwd, logger=logger, extra_mounts=extra_mounts
+    )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
     return process.run(
         wrapped, logger=logger, cwd=cwd, env=merged_env, check=check,
