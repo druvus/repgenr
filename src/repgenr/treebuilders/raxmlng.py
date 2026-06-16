@@ -44,8 +44,15 @@ class RaxmlNgBuilder(TreeBuilder):
             "--prefix", prefix,
             "--redo",  # overwrite any outputs from a previous run at this prefix
         ]
+        # Bound the bootstrap. With `--all` and no `--bs-trees`, RAxML-NG defaults
+        # to autoMRE{1000}; on large or divergent alignments that may never reach
+        # the MRE convergence criterion and runs for hours past the (already
+        # computed) ML tree. Cap the adaptive default at 200 replicates; an
+        # explicit `bootstrap` still wins.
         if params.bootstrap > 0:
             cmd += ["--bs-trees", str(params.bootstrap)]
+        else:
+            cmd += ["--bs-trees", "autoMRE{200}"]
         if params.outgroup:
             cmd += ["--outgroup", params.outgroup]
         run_tool(self.capabilities, cmd, logger=logger, log_prefix="raxml-ng")
