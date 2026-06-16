@@ -53,6 +53,25 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 | tree2tax | yes | FlexTaxD relations + genome map |
 | vmetadata / vgenome (viral) | yes | live Hepeviridae run: BV-BRC FTPS download + NCBI Entrez -> 1256 genomes -> skder 799 reps -> mashtree -> tree2tax. Required an FTPS/TLS-session-reuse fix (BV-BRC dropped plain FTP) |
 
+## End-to-end (genus Francisella, GTDB representatives)
+
+Live full-pipeline run starting from GTDB **representative** genomes
+(`metadata -d rep -l genus -tg Francisella --source api` -> 26 reps + outgroup
+`GCF_003574425.1`; `genome` via NCBI datasets). The same downloaded genomes were
+then re-run through different tool combinations to confirm tool-swappability; all
+three produced a consistent 27-leaf tree (26 reps + outgroup) and a 52-edge
+FlexTaxD `tree2tax.tsv` + 26-row `genomes_map.tsv`:
+
+| Run | Dereplicate | Phylo | Result |
+|-----|-------------|-------|--------|
+| 1 | skder | mashtree (alignment-free) | 27-leaf tree |
+| 2 | galah | sourmash (alignment-free) | 27-leaf tree |
+| 3 | sourmash | sibeliaz aligner + raxml-ng (ML) | 27-leaf ML tree from an 80-col SibeliaZ MSA; outgroup-rooted, recovers expected Francisella clades (tularensis/hispaniensis, orientalis/sciaenopsi/noatunensis/philomiragia, etc.) |
+
+Run 3 also exercised the bounded RAxML-NG bootstrap: the whole phylo (SibeliaZ
+MSA + ML search + `autoMRE{200}` bootstrap) finished in ~47 min, where the
+previous uncapped `autoMRE{1000}` default was still bootstrapping past 2 h.
+
 ## Containers
 
 RepGenR can run any tool in a pinned container (`--container docker|singularity`;
