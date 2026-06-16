@@ -23,7 +23,7 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 |------|------|------|-------|
 | progressivemauve | yes (converter) | yes | container; full XMFA -> MSA -> tree on the synthetic set. progressiveMauve (libMems) needs boost-cpp 1.74; a naive `bioconda::mauve` Wave build solves against current conda-forge boost and fails at runtime (`undefined symbol _ZNK5boost...path8filenameEv`). **Both image paths are fixed and verified:** the adapter pins a **BioContainer** (`mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4`, ships boost-cpp 1.74) as the default, and the `conda` spec pins `conda-forge::boost-cpp=1.74.0` so the **Wave** build also works. `container` wins over `conda`, so the BioContainer is used unless that pin is removed |
 | sibeliaz | yes (converter) | yes | native end-to-end on closely-related genomes → MAF → MSA → tree. Required a macOS fix: SibeliaZ's wrapper uses Linux-only `free`/`find -printf`/`stat -c`/`mktemp --suffix`; the adapter passes `-f` and runs a BSD-patched wrapper, and `maf_to_fasta` takes a seqid→genome name-map |
-| cactus | — | partial | container (`cactus:v2.9.3`, amd64). The backend now runs the full Minigraph-Cactus pipeline after two fixes: a writable `HOME` for Toil's config dir, and per-call bind mounts for genome paths listed inside `seqfile.txt`. On Apple Silicon it then fails inside `vg` with a QEMU amd64-emulation segfault; expected to run on a native amd64/Linux host |
+| cactus | — | yes | container (`cactus:v2.9.3`, amd64); full Minigraph-Cactus run -> HAL -> MAF -> MSA -> tree on the synthetic set. Needed two backend fixes (writable `HOME` for Toil's config dir; per-call bind mounts for the genome paths inside `seqfile.txt`) **and** Rosetta emulation. The bundled `vg` cannot run under Docker's QEMU emulation (even `vg version` hangs); on Apple Silicon, Docker Desktop must use the **Apple Virtualization framework with "Use Rosetta for x86/amd64"** enabled. With Rosetta, `vg` runs cleanly. On native amd64/Linux (HPC, the Singularity target) no emulation is involved |
 
 ## SNP typers
 
@@ -84,9 +84,12 @@ docker://<image>` (the `--container-cache` `.sif` behavior) and `apptainer exec
 --bind <dir> --pwd <wd> <sif> <argv>`. On HPC/Linux this is the production engine.
 
 Notes: macOS firmlinked temp/home paths must be bind-mounted un-resolved (handled
-in the backend). The bioconda `mauve` (progressiveMauve) image is broken upstream
-(boost ABI `undefined symbol`), so that tool stays unvalidated regardless of
-container; the container mechanism itself ran it.
+in the backend). Containers run as the host UID with no passwd entry, so the
+backend sets a writable `HOME` (the mounted workdir); adapters whose inputs are
+listed inside a manifest file declare those directories via `extra_mounts`. The
+freshly Wave-built `mauve` image is broken (boost ABI mismatch); the adapter pins
+a working BioContainer and a boost-pinned conda spec instead (see the aligners
+table).
 
 ## Platform notes (macOS / Apple Silicon)
 
@@ -97,3 +100,8 @@ container; the container mechanism itself ran it.
   are placed ahead on PATH.
 - On exFAT/NTFS volumes, macOS `._*` AppleDouble files must be ignored (handled
   in the adapters/stages) and skDER must run on a local filesystem.
+- amd64-only container tools run under emulation. Docker's QEMU emulation cannot
+  run some SIMD-heavy binaries (e.g. Cactus's bundled `vg` hangs even on
+  `vg version`). Set Docker Desktop to the **Apple Virtualization framework** with
+  **"Use Rosetta for x86/amd64 emulation"** enabled; Rosetta runs these binaries
+  correctly. On native amd64/Linux hosts no emulation is involved.
