@@ -1,6 +1,6 @@
 """SNP typing stage.
 
-Selects a SNP typer, runs it against a reference (or reference-free for kSNP),
+Selects a SNP typer, runs it against a reference (or reference-free),
 optionally masks recombination with Gubbins, and writes the canonical SNP
 outputs: ``snp/core_snp.fasta`` (+ optional VCF and SNP distance matrix). The
 core-SNP alignment is both a standalone typing deliverable and an MSA source for

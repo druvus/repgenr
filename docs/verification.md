@@ -12,28 +12,27 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 
 | Tool | Unit | Live | Notes |
 |------|------|------|-------|
-| skder | yes | yes | run in a local scratch dir (exFAT-safe); membership from skani edges |
-| sourmash | yes | yes | k-mer compare + greedy clustering |
-| galah | yes | yes | cluster-definition parsed to representatives + members |
-| drep | — | no | needs CheckM + its reference DB (heavy); not installed |
+| skder | yes | yes | native + container (Wave); local scratch dir (exFAT-safe); membership from skani edges |
+| sourmash | yes | yes | native; k-mer compare + greedy clustering |
+| galah | yes | yes | native; cluster-definition parsed to representatives + members |
+| drep | — | yes | container (Wave, amd64); a full run needs CheckM + its DB, so verified with `--virus` (sets `--ignoreGenomeQuality`, skipping CheckM) -> 8 reps |
 
 ## Aligners
 
 | Tool | Unit | Live | Notes |
 |------|------|------|-------|
-| progressivemauve | yes (converter) | no | `mauve`/`mauvealigner` not packaged for macOS on bioconda; `xmfa_to_fasta` unit-tested |
-| sibeliaz | yes (converter) | yes | end-to-end on closely-related genomes → MAF → MSA → tree. Required a macOS fix: SibeliaZ's wrapper uses Linux-only `free`/`find -printf`/`stat -c`/`mktemp --suffix`; the adapter passes `-f` and runs a BSD-patched wrapper, and `maf_to_fasta` takes a seqid→genome name-map |
-| cactus | — | no | Minigraph-Cactus is heavy (Toil); distributed separately |
+| progressivemauve | yes (converter) | yes | container; full XMFA -> MSA -> tree on the synthetic set. progressiveMauve (libMems) needs boost-cpp 1.74; a naive `bioconda::mauve` Wave build solves against current conda-forge boost and fails at runtime (`undefined symbol _ZNK5boost...path8filenameEv`). **Both image paths are fixed and verified:** the adapter pins a **BioContainer** (`mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4`, ships boost-cpp 1.74) as the default, and the `conda` spec pins `conda-forge::boost-cpp=1.74.0` so the **Wave** build also works. `container` wins over `conda`, so the BioContainer is used unless that pin is removed |
+| sibeliaz | yes (converter) | yes | native end-to-end on closely-related genomes → MAF → MSA → tree. Required a macOS fix: SibeliaZ's wrapper uses Linux-only `free`/`find -printf`/`stat -c`/`mktemp --suffix`; the adapter passes `-f` and runs a BSD-patched wrapper, and `maf_to_fasta` takes a seqid→genome name-map |
+| cactus | — | yes | container (`cactus:v2.9.3`, amd64); full Minigraph-Cactus run -> HAL -> MAF -> MSA -> tree on the synthetic set. Needed two backend fixes (writable `HOME` for Toil's config dir; per-call bind mounts for the genome paths inside `seqfile.txt`) **and** Rosetta emulation. The bundled `vg` cannot run under Docker's QEMU emulation (even `vg version` hangs); on Apple Silicon, Docker Desktop must use the **Apple Virtualization framework with "Use Rosetta for x86/amd64"** enabled. With Rosetta, `vg` runs cleanly. On native amd64/Linux (HPC, the Singularity target) no emulation is involved |
 
 ## SNP typers
 
 | Tool | Unit | Live | Notes |
 |------|------|------|-------|
-| simple | yes | yes | minimap2 + samtools/bcftools 1.23 → core-SNP alignment + SNP distance matrix |
-| parsnp | — | yes | parsnp 2.1.5 + harvesttools → core-SNP FASTA |
-| snippy | — | no | heavy dependency stack; not installed |
-| ksnp | — | no | not installed |
-| gubbins (mask) | — | yes | `--mask gubbins`; runs in its own Python 3.10 env, converged and filtered |
+| simple | yes | yes | native (samtools/bcftools 1.23 from a dedicated env ahead on PATH) + container (Wave multi-tool image); minimap2 + samtools/bcftools → core-SNP alignment + distance matrix |
+| parsnp | — | yes | native (parsnp 2.1.5 + harvesttools env) → core-SNP FASTA |
+| snippy | — | yes | container (Wave, amd64); per-genome calling + snippy-core → 2406 core SNP sites |
+| gubbins (mask) | — | yes | native; `--mask gubbins` in its own Python 3.10 env, converged and filtered |
 
 ## Tree builders
 
@@ -59,10 +58,24 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 RepGenR can run any tool in a pinned container (`--container docker|singularity`;
 see `docs/containers.md`), pinning versions and unblocking tools that don't
 install on the host. The backend has unit tests (argv construction, mounts, UID,
-native vs wrapped) and was validated **live on macOS + Docker + Wave**:
+native vs wrapped) and was validated **live on macOS + Docker + Wave** across
+every tool family:
 - `dereplicate --tool skder` in a Wave-built single-tool image → 8 reps.
+- `dereplicate --tool drep` in a Wave image (amd64) → 8 reps (`--virus` skips CheckM).
 - `snptype --tool simple` in a Wave-built **multi-tool** image (minimap2 +
   samtools + bcftools) → 2413 core SNP sites.
+- `snptype --tool snippy` in a Wave image (amd64) → 2406 core SNP sites.
+- `phylo --treebuilder mashtree` in a Wave image → tree with all leaves.
+
+Two backend fixes came out of this sweep:
+- **Writable HOME.** Containers run as the host UID with no passwd entry, so HOME
+  defaults to `/` and is not writable. The Docker wrapper now sets
+  `-e HOME=<workdir>` (the mounted, writable working dir), which unblocks tools
+  that touch HOME — e.g. Toil/Cactus creating its config dir.
+- **Per-call extra mounts.** `run_tool(..., extra_mounts=[...])` lets an adapter
+  declare input directories that are referenced indirectly (paths listed inside a
+  manifest file rather than passed as argv tokens). Cactus uses this for the
+  genome paths in `seqfile.txt`.
 
 Singularity/Apptainer is Linux-only (no macOS build), so it can't run natively on
 the macOS dev box. The exact command forms the backend emits were validated
@@ -71,9 +84,12 @@ docker://<image>` (the `--container-cache` `.sif` behavior) and `apptainer exec
 --bind <dir> --pwd <wd> <sif> <argv>`. On HPC/Linux this is the production engine.
 
 Notes: macOS firmlinked temp/home paths must be bind-mounted un-resolved (handled
-in the backend). The bioconda `mauve` (progressiveMauve) image is broken upstream
-(boost ABI `undefined symbol`), so that tool stays unvalidated regardless of
-container; the container mechanism itself ran it.
+in the backend). Containers run as the host UID with no passwd entry, so the
+backend sets a writable `HOME` (the mounted workdir); adapters whose inputs are
+listed inside a manifest file declare those directories via `extra_mounts`. The
+freshly Wave-built `mauve` image is broken (boost ABI mismatch); the adapter pins
+a working BioContainer and a boost-pinned conda spec instead (see the aligners
+table).
 
 ## Platform notes (macOS / Apple Silicon)
 
@@ -84,3 +100,8 @@ container; the container mechanism itself ran it.
   are placed ahead on PATH.
 - On exFAT/NTFS volumes, macOS `._*` AppleDouble files must be ignored (handled
   in the adapters/stages) and skDER must run on a local filesystem.
+- amd64-only container tools run under emulation. Docker's QEMU emulation cannot
+  run some SIMD-heavy binaries (e.g. Cactus's bundled `vg` hangs even on
+  `vg version`). Set Docker Desktop to the **Apple Virtualization framework** with
+  **"Use Rosetta for x86/amd64 emulation"** enabled; Rosetta runs these binaries
+  correctly. On native amd64/Linux hosts no emulation is involved.

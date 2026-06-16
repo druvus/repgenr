@@ -51,7 +51,6 @@ sibeliaz = "repgenr.aligners.sibeliaz:SibeliazAligner"
 simple = "repgenr.snptypers.simple:SimpleSnpTyper"
 snippy = "repgenr.snptypers.snippy:SnippyTyper"
 parsnp = "repgenr.snptypers.parsnp:ParsnpTyper"
-ksnp = "repgenr.snptypers.ksnp:Ksnp4Typer"
 
 [project.entry-points."repgenr.treebuilders"]
 iqtree = "repgenr.treebuilders.iqtree:IqtreeBuilder"

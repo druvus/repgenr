@@ -10,6 +10,7 @@ resource label.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -47,15 +48,22 @@ class CactusAligner(Aligner):
             reference = genomes[0]
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        # Use absolute (not symlink-resolved) paths so they match how the
+        # container backend bind-mounts inputs (macOS firmlinks otherwise
+        # diverge between /Users and /System/Volumes/Data).
+        genome_paths = [os.path.abspath(g) for g in genomes]
         seqfile = out_dir / "seqfile.txt"
         with open(seqfile, "w") as fo:
-            for g in genomes:
-                fo.write(f"{_sample_name(g)}\t{g.resolve()}\n")
+            for g, p in zip(genomes, genome_paths, strict=True):
+                fo.write(f"{_sample_name(g)}\t{p}\n")
 
         job_store = out_dir / "jobstore"
         results = out_dir / "cactus_out"
         ref_name = _sample_name(reference)
-        run_tool(self.capabilities, 
+        # Genome paths live inside seqfile.txt, not in argv, so the backend
+        # cannot infer their mounts; declare their directories explicitly.
+        genome_dirs = sorted({os.path.dirname(p) for p in genome_paths})
+        run_tool(self.capabilities,
             [
                 "cactus-pangenome",
                 job_store,
@@ -66,6 +74,7 @@ class CactusAligner(Aligner):
             ],
             logger=logger,
             log_prefix="cactus",
+            extra_mounts=genome_dirs,
         )
 
         hal = _find_hal(results)

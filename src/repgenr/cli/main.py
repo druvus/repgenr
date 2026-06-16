@@ -217,7 +217,7 @@ def dereplicate(
 @app.command()
 def snptype(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    tool: str = typer.Option("simple", "--tool", help="SNP typer: simple/snippy/parsnp/ksnp."),
+    tool: str = typer.Option("simple", "--tool", help="SNP typer: simple/snippy/parsnp."),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),

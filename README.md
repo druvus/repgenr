@@ -29,7 +29,7 @@ the core (see `docs/adding-tools.md`).
 |--------|-------------------|
 | Dereplicators | `drep`, `skder`, `galah`, `sourmash` |
 | Aligners | `progressivemauve`, `sibeliaz`, `cactus` |
-| SNP typers | `simple` (samtools/bcftools), `snippy`, `parsnp`, `ksnp` (optional Gubbins masking) |
+| SNP typers | `simple` (samtools/bcftools), `snippy`, `parsnp` (optional Gubbins masking) |
 | Tree builders | `iqtree`, `fasttree`, `raxmlng` (MSA), `mashtree`, `sourmash` (alignment-free) |
 
 `repgenr list-tools` prints what is available in your environment.

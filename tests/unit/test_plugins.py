@@ -16,7 +16,7 @@ from repgenr.treebuilders.base import registry as treebuilders
 def test_entry_points_discovered() -> None:
     assert {"drep", "skder", "galah", "sourmash"} <= set(dereplicators.names())
     assert {"progressivemauve", "cactus", "sibeliaz"} <= set(aligners.names())
-    assert {"simple", "snippy", "parsnp", "ksnp"} <= set(snptypers.names())
+    assert {"simple", "snippy", "parsnp"} <= set(snptypers.names())
     assert {"iqtree", "fasttree", "raxmlng", "mashtree", "sourmash"} <= set(treebuilders.names())
 
 
