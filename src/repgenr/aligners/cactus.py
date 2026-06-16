@@ -84,7 +84,8 @@ class CactusAligner(Aligner):
         maf = out_dir / "pangenome.maf"
         hal_to_maf(hal, ref_name, maf, logger, caps=self.capabilities)
         msa = out_dir / "msa.fasta"
-        maf_to_fasta(maf, ref_name, msa)
+        # Drop the Minigraph-Cactus backbone pseudo-genome so it is not a taxon.
+        maf_to_fasta(maf, ref_name, msa, exclude={"_MINIGRAPH_"})
         return AlignResult(msa_fasta=msa, native_format=hal)
 
 
@@ -95,4 +96,13 @@ def _sample_name(genome: Path) -> str:
 
 def _find_hal(results: Path) -> Path | None:
     candidates = sorted(results.rglob("*.hal"))
-    return candidates[0] if candidates else None
+    if not candidates:
+        return None
+    # Prefer the combined pangenome HAL (``*.full.hal``) over per-chromosome HALs
+    # under ``chrom-alignments/`` -- the latter contain only the genomes mapped
+    # to that chromosome, so projecting one drops genomes from the MSA.
+    full = [c for c in candidates if c.name.endswith(".full.hal")]
+    if full:
+        return full[0]
+    toplevel = [c for c in candidates if c.parent == results]
+    return (toplevel or candidates)[0]

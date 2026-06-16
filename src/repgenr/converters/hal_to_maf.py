@@ -24,7 +24,11 @@ def hal_to_maf(
     """Project a HAL to MAF with ``hal2maf``.
 
     ``caps`` carries the container image when the caller (Cactus) runs
-    containerized; ``hal2maf`` ships in the Cactus image.
+    containerized; ``hal2maf`` ships in the Cactus image. ``--noAncestors`` drops
+    ancestral nodes; the Minigraph-Cactus ``_MINIGRAPH_`` backbone pseudo-genome
+    is filtered downstream in :func:`maf_to_fasta` (excluding it here via
+    ``--targetGenomes`` is brittle: hal2maf errors if any listed genome was
+    dropped from the graph).
     """
     hal_path = Path(hal_path)
     out_path = Path(out_path)

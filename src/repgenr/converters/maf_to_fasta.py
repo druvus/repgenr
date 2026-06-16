@@ -31,6 +31,7 @@ def maf_to_fasta(
     reference: str,
     out_path: str | Path,
     name_map: dict[str, str] | None = None,
+    exclude: set[str] | None = None,
 ) -> Path:
     """Project a MAF onto ``reference`` coordinates as an MSA-FASTA.
 
@@ -38,9 +39,13 @@ def maf_to_fasta(
     label. When given, sequences are grouped by genome (needed for tools like
     SibeliaZ whose MAF uses raw sequence IDs); otherwise the ``genome.contig``
     convention is assumed (Cactus via hal2maf).
+
+    ``exclude`` drops genomes by label, e.g. ``{"_MINIGRAPH_"}`` to remove the
+    Minigraph-Cactus backbone pseudo-genome so it is not emitted as a taxon.
     """
     maf_path = Path(maf_path)
     out_path = Path(out_path)
+    exclude = exclude or set()
 
     def genome_of(src: str) -> str:
         if name_map is not None:
@@ -48,12 +53,20 @@ def maf_to_fasta(
         return _species(src)
 
     blocks = list(_iter_blocks(maf_path))
-    ref_key = genome_of(reference) if name_map else _species(reference)
+    # The reference is passed as a genome label (e.g. a filename stem), which may
+    # itself contain dots (NCBI/GTDB version suffixes like ``..._GCF_0003.1``).
+    # With a name_map the row names are contig IDs that map to those same labels,
+    # so resolve the reference to a label WITHOUT version-stripping: map it only
+    # if it is itself a contig key, otherwise use it verbatim. (Using genome_of
+    # here would split on "." and strip the version, yielding a ref_key that
+    # matches no row -> every block skipped -> empty MSA.)
+    ref_key = name_map.get(reference, reference) if name_map else _species(reference)
 
     species: set[str] = set()
     for block in blocks:
         for row in block:
             species.add(genome_of(row.name))
+    species -= exclude
     species.discard(ref_key)
     ordered_species = [ref_key, *sorted(species)]
 
@@ -81,6 +94,16 @@ def maf_to_fasta(
     for _, block_cols in sorted(placed_blocks, key=lambda x: x[0]):
         for s in ordered_species:
             pieces[s].append(block_cols[s])
+
+    width = sum(len(p) for p in pieces[ref_key]) if ref_key in pieces else 0
+    if width == 0:
+        raise ValueError(
+            f"MAF projection onto reference '{ref_key}' produced a zero-length "
+            f"alignment (no usable blocks). Check that the reference label matches "
+            f"the MAF/name_map sequence names, or that the genomes share alignable "
+            f"regions (whole-genome aligners need collinearity not present across "
+            f"highly divergent inputs)."
+        )
 
     with open(out_path, "w") as fo:
         for s in ordered_species:

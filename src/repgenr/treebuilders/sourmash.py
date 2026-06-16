@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -42,7 +43,10 @@ class SourmashBuilder(TreeBuilder):
         sig_dir = out_dir / "signatures"
         sig_dir.mkdir(exist_ok=True)
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
-        run_tool(self.capabilities, 
+        # Genome paths live inside the fofn (not argv); declare their dirs so the
+        # container backend binds them (un-resolved abspaths, matching write_fofn).
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+        run_tool(self.capabilities,
             [
                 "sourmash", "sketch", "dna",
                 "-p", f"k={ksize},scaled={scaled}",
@@ -51,6 +55,7 @@ class SourmashBuilder(TreeBuilder):
             ],
             logger=logger,
             log_prefix="sourmash",
+            extra_mounts=genome_dirs,
         )
         # Skip macOS AppleDouble companions ("._*") that appear on exFAT/NTFS volumes.
         sigs = [
