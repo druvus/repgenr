@@ -51,8 +51,13 @@ def test_docker_wrap_command() -> None:
     assert any(c == "HOME=/wd" for c in cmd)
 
 
-def test_docker_extra_mounts(tmp_path) -> None:
+def test_docker_extra_mounts(tmp_path, monkeypatch) -> None:
     # A directory referenced indirectly (not in argv) is mounted when declared.
+    # Isolate the temp dir so `genomes` is not nested under the default tempdir
+    # mount (which would correctly dedup it away and mask what we're testing).
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(containers.tempfile, "gettempdir", lambda: str(sys_tmp))
     genomes = tmp_path / "reps"
     genomes.mkdir()
     cfg = ContainerConfig(backend="docker")
