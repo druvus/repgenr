@@ -82,10 +82,15 @@ def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[
     """Write a file-of-filenames (one absolute path per line) and return its path.
 
     Use this instead of shell globs when handing a large genome set to a tool.
+
+    Paths are absolute but NOT symlink-resolved: the container backend binds
+    un-resolved abspaths (macOS firmlinks resolve /Users -> /System/Volumes/Data,
+    which is outside Docker's shared directories), so a tool reading this fofn
+    inside a container must see the same un-resolved paths.
     """
     dest_path = Path(dest)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(dest_path, "w") as fo:
         for p in paths:
-            fo.write(f"{os.fspath(Path(p).resolve())}\n")
+            fo.write(f"{os.path.abspath(os.fspath(p))}\n")
     return dest_path

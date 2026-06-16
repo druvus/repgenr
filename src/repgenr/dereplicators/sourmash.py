@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -54,8 +55,13 @@ class SourmashDereplicator(Dereplicator):
         sig_dir.mkdir(exist_ok=True)
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
 
+        # The genome paths live inside the fofn, not in argv, so the container
+        # backend cannot infer their mounts; declare their directories (using
+        # un-resolved abspaths to match write_fofn and the backend's bind logic).
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+
         # one signature file per genome, named by genome basename
-        run_tool(self.capabilities, 
+        run_tool(self.capabilities,
             [
                 "sourmash", "sketch", "dna",
                 "-p", f"k={ksize},scaled={scaled}",
@@ -64,6 +70,7 @@ class SourmashDereplicator(Dereplicator):
             ],
             logger=logger,
             log_prefix="sourmash",
+            extra_mounts=genome_dirs,
         )
 
         matrix_csv = out_dir / "compare.csv"
