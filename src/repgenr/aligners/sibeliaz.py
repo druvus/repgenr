@@ -89,6 +89,20 @@ class SibeliazAligner(Aligner):
                 raise WorkdirError("SibeliaZ did not produce a MAF file")
             maf = candidates[0]
 
+        # SibeliaZ may find blocks (blocks_coords.gff) yet write a MAF with no
+        # alignment rows: its wrapper runs spoa per block with stderr suppressed,
+        # so an OOM-killed spoa (global alignment of a very large collinear block
+        # in a memory-limited container) is silent and yields an empty MAF.
+        if not any(line.startswith("s") for line in maf.read_text().splitlines()):
+            raise WorkdirError(
+                f"SibeliaZ wrote an empty MAF (no alignment rows) at {maf}. Its "
+                "blocks were found but the per-block spoa alignment produced "
+                "nothing -- most often spoa was OOM-killed on a large collinear "
+                "block (its global alignment is O(n^2) memory). Give the container "
+                "engine more memory (e.g. raise Docker Desktop's VM RAM) or run "
+                "this aligner natively."
+            )
+
         # SibeliaZ's MAF uses sequence/contig IDs (FASTA header first token), not
         # genome filenames; build the seqid -> genome-stem map for the converter.
         name_map = _build_seqid_map(genomes)
