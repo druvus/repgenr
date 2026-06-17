@@ -15,6 +15,9 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
+import numpy.typing as npt
+
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
@@ -107,11 +110,13 @@ class SourmashDereplicator(Dereplicator):
         )
 
 
-def _read_compare_csv(path: Path) -> tuple[list[str], list[list[float]]]:
+def _read_compare_csv(path: Path) -> tuple[list[str], npt.NDArray[np.float64]]:
     with open(path, newline="") as fo:
-        reader = csv.reader(fo)
-        labels = next(reader)
-        matrix = [[float(x) for x in row] for row in reader]
+        labels = next(csv.reader(fo))
+        # Parse the N x N body straight into a contiguous float array. At 1000s of
+        # genomes this is far smaller and faster than a Python list-of-lists
+        # (a 10k x 10k matrix is ~0.8 GB as float64 vs several GB of Python floats).
+        matrix = np.loadtxt(fo, delimiter=",", ndmin=2)
     return labels, matrix
 
 
@@ -137,27 +142,29 @@ def _match_labels_to_genomes(labels: Sequence[str], genomes: Sequence[Path]) -> 
 
 def _greedy_cluster(
     labels: list[str],
-    sim: list[list[float]],
+    sim: npt.NDArray[np.float64] | list[list[float]],
     name_by_label: dict[str, str],
     threshold: float,
 ) -> tuple[dict[str, list[str]], dict[str, str]]:
     n = len(labels)
-    # connectivity = count of neighbours above threshold (prefer well-connected reps)
-    connectivity = [
-        sum(1 for j in range(n) if j != i and sim[i][j] >= threshold) for i in range(n)
-    ]
-    order = sorted(range(n), key=lambda i: connectivity[i], reverse=True)
+    # Boolean adjacency (>= threshold); the per-row vectorized ops below replace
+    # the previous pure-Python O(n^2) double loops (much faster at 1000s genomes).
+    adj = np.asarray(sim, dtype=float) >= threshold
+    np.fill_diagonal(adj, False)
+    connectivity = adj.sum(axis=1)
+    # prefer well-connected genomes as representatives (stable: -connectivity, idx)
+    order = np.lexsort((np.arange(n), -connectivity))
 
-    assigned: dict[int, int] = {}  # member idx -> representative idx
+    assigned = np.full(n, -1, dtype=np.int64)  # member idx -> representative idx (-1 = free)
     reps: list[int] = []
     for i in order:
-        if i in assigned:
+        if assigned[i] != -1:
             continue
-        reps.append(i)
+        reps.append(int(i))
         assigned[i] = i
-        for j in range(n):
-            if j not in assigned and sim[i][j] >= threshold:
-                assigned[j] = i
+        # claim every still-free neighbour of i in one vectorized step
+        claim = adj[i] & (assigned == -1)
+        assigned[claim] = i
 
     clusters: dict[str, list[str]] = {}
     status: dict[str, str] = {}
@@ -165,7 +172,8 @@ def _greedy_cluster(
         rep_name = name_by_label[labels[rep_idx]]
         clusters[rep_name] = []
         status[rep_name] = STATUS_REPRESENTATIVE
-    for member_idx, rep_idx in assigned.items():
+    for member_idx in range(n):
+        rep_idx = int(assigned[member_idx])
         if member_idx == rep_idx:
             continue
         rep_name = name_by_label[labels[rep_idx]]

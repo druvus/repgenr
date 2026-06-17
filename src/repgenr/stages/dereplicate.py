@@ -213,32 +213,32 @@ def _dereplicate_chunked(
 
 
 def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepResult:
-    # member -> stage1 representative
-    member_to_s1rep: dict[str, str] = {}
+    from ..dereplicators.base import STATUS_CONTAINED, STATUS_REPRESENTATIVE
+
+    # Each stage-1 representative -> every original genome in its cluster (the rep
+    # itself plus its members). Built once; lets composition run in O(N) instead
+    # of scanning all members for every final rep (which was O(reps * N)).
+    s1rep_to_members: dict[str, list[str]] = {}
     for r in stage1:
         for rep, members in r.clusters.items():
-            member_to_s1rep[rep] = rep
-            for m in members:
-                member_to_s1rep[m] = rep
+            s1rep_to_members[rep] = [rep, *members]
 
     final_clusters: dict[str, list[str]] = {}
     status: dict[str, str] = {}
-    from ..dereplicators.base import STATUS_CONTAINED, STATUS_REPRESENTATIVE
 
     for final_rep, s1reps_contained in stage2.clusters.items():
-        final_clusters[final_rep] = []
         status[final_rep] = STATUS_REPRESENTATIVE
-        # absorb everything that pointed at final_rep in stage 1
-        for member, s1rep in member_to_s1rep.items():
-            if s1rep == final_rep and member != final_rep:
-                final_clusters[final_rep].append(member)
-                status[member] = STATUS_CONTAINED
-        # absorb members of the other stage-1 reps that stage 2 folded in
-        for s1rep in s1reps_contained:
-            for member, mapped in member_to_s1rep.items():
-                if mapped == s1rep:
-                    final_clusters[final_rep].append(member)
-                    status[member] = STATUS_CONTAINED
+        contained: list[str] = []
+        # final_rep's own stage-1 cluster, plus every stage-1 rep stage 2 folded
+        # into it. Each original genome belongs to exactly one stage-1 cluster, so
+        # these groups are disjoint -- no double counting.
+        for s1rep in (final_rep, *s1reps_contained):
+            for genome in s1rep_to_members.get(s1rep, [s1rep]):
+                if genome == final_rep:
+                    continue
+                contained.append(genome)
+                status[genome] = STATUS_CONTAINED
+        final_clusters[final_rep] = contained
 
     return DerepResult(
         representatives=stage2.representatives,
