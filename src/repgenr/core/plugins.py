@@ -22,8 +22,9 @@ class ToolCapabilities:
     """Declarative metadata for one tool adapter.
 
     ``recommended_max_genomes`` drives auto-selection and scale warnings.
-    ``supports_native_scaling`` lets a dereplicator opt out of the chunking
-    wrapper (e.g. skDER scales natively).
+    ``supports_native_scaling`` marks a dereplicator that scales to large sets in
+    one pass (e.g. skDER), so it is single-pass by default; it no longer gates
+    chunking -- ``--process-size`` opts any tool into the two-stage chunked path.
     """
 
     name: str

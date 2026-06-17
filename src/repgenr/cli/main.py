@@ -189,10 +189,19 @@ def dereplicate(
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(16, "-t", "--threads"),
     process_size: int | None = typer.Option(
-        None, "-s", "--process-size", help="Chunk size for tools that don't scale natively."
+        None, "-s", "--process-size",
+        help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",
     ),
     num_processes: int = typer.Option(
         1, "-p", "--num-processes", help="Parallel stage-1 chunk workers (threads split across)."
+    ),
+    pre_primary_ani: float | None = typer.Option(
+        None, "--pre-primary-ani",
+        help="Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani.",
+    ),
+    pre_secondary_ani: float | None = typer.Option(
+        None, "--pre-secondary-ani",
+        help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
     ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
@@ -208,6 +217,8 @@ def dereplicate(
             threads=threads,
             process_size=process_size,
             num_processes=num_processes,
+            pre_primary_ani=pre_primary_ani,
+            pre_secondary_ani=pre_secondary_ani,
             extra={"virus": virus} if virus else {},
         )
 

@@ -1,7 +1,7 @@
 """Dereplication stage.
 
-Selects a dereplicator adapter, runs it (chunking large sets when the adapter
-does not scale natively), then normalizes the result into the canonical
+Selects a dereplicator adapter, runs it (two-stage chunking when ``--process-size``
+is set and exceeded, for any tool), then normalizes the result into the canonical
 contract: ``derep/representatives/`` + ``clusters.tsv`` + ``genome_status.tsv``.
 Provenance (tool, params, versions) is recorded in ``repgenr.yaml`` and the
 manifest derep status is updated.
@@ -36,8 +36,15 @@ class DereplicateParams:
     secondary_ani: float = 0.99
     aligned_fraction: float = 0.50
     threads: int = 16
-    process_size: int | None = None  # chunk size for non-native-scaling tools
+    # Chunk size. When set and exceeded, the two-stage chunked path runs for ANY
+    # tool (native-scaling tools are single-pass by default but can be chunked
+    # explicitly, e.g. to bound memory/open-file counts at 1000s-10000s genomes).
+    process_size: int | None = None
     num_processes: int = 1  # parallel stage-1 chunk workers (threads split across them)
+    # Stage-1 (intra-chunk) ANI thresholds. Default to the main thresholds; set
+    # them looser to avoid over-collapsing within a chunk before the stage-2 pass.
+    pre_primary_ani: float | None = None
+    pre_secondary_ani: float | None = None
     extra: dict | None = None
 
 
@@ -79,20 +86,37 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
 
+    # Chunk whenever a process size is set and exceeded -- for ANY tool, not just
+    # non-native-scaling ones. ``supports_native_scaling`` only informs the
+    # default (single-pass) and the auto-select/scale warnings; ``--process-size``
+    # is an explicit opt-in escape hatch for very large sets.
     needs_chunking = (
-        params.process_size
-        and not adapter.capabilities.supports_native_scaling
+        params.process_size is not None
+        and params.process_size > 0
         and len(genomes) > params.process_size
     )
     if needs_chunking:
         assert params.process_size is not None
+        pre_primary = (
+            params.pre_primary_ani if params.pre_primary_ani is not None else params.primary_ani
+        )
+        pre_secondary = (
+            params.pre_secondary_ani
+            if params.pre_secondary_ani is not None
+            else params.secondary_ani
+        )
+        native = adapter.capabilities.supports_native_scaling
         logger.info(
-            "Tool %s does not scale natively; chunking %d genomes at size %d",
-            params.tool, len(genomes), params.process_size,
+            "Chunking %d genomes at size %d (%s)%s",
+            len(genomes), params.process_size,
+            "native-scaling tool, explicit chunking" if native else "non-native-scaling tool",
+            ""
+            if (pre_primary, pre_secondary) == (params.primary_ani, params.secondary_ani)
+            else f"; stage-1 ANI pri={pre_primary} sec={pre_secondary}",
         )
         result = _dereplicate_chunked(
             adapter, genomes, scratch, derep_params, params.process_size,
-            params.num_processes, logger,
+            params.num_processes, pre_primary, pre_secondary, logger,
         )
     else:
         result = adapter.dereplicate(genomes, scratch, derep_params, logger)
@@ -109,6 +133,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "secondary_ani": params.secondary_ani,
             "aligned_fraction": params.aligned_fraction,
             "process_size": params.process_size,
+            "num_processes": params.num_processes,
+            "pre_primary_ani": params.pre_primary_ani,
+            "pre_secondary_ani": params.pre_secondary_ani,
             **(params.extra or {}),
         },
         tool_versions=versions,
@@ -138,14 +165,17 @@ def _dereplicate_chunked(
     params: DerepParams,
     process_size: int,
     num_processes: int,
+    pre_primary_ani: float,
+    pre_secondary_ani: float,
     logger,
 ) -> DerepResult:
-    """Two-stage chunked dereplication for tools that don't scale natively.
+    """Two-stage chunked dereplication, usable for any tool.
 
     Stage 1: dereplicate each chunk independently (up to ``num_processes`` chunks
-    in parallel, the thread budget split across them). Stage 2: dereplicate the
-    union of stage-1 representatives. Membership is composed so each original
-    genome maps to a final representative.
+    in parallel, the thread budget split across them), using the stage-1 ANI
+    thresholds. Stage 2: dereplicate the union of stage-1 representatives with the
+    final thresholds (``params``). Membership is composed so each original genome
+    maps to a final representative.
     """
     chunks = [genomes[i : i + process_size] for i in range(0, len(genomes), process_size)]
     if len(chunks) > 1 and len(chunks[-1]) == 1:
@@ -154,7 +184,12 @@ def _dereplicate_chunked(
 
     workers = max(1, min(num_processes, len(chunks)))
     threads_per_worker = max(1, params.threads // workers)
-    chunk_params = replace(params, threads=threads_per_worker)
+    chunk_params = replace(
+        params,
+        threads=threads_per_worker,
+        primary_ani=pre_primary_ani,
+        secondary_ani=pre_secondary_ani,
+    )
     logger.info(
         "Stage 1: %d chunks, %d parallel worker(s) at %d threads each",
         len(chunks), workers, threads_per_worker,
