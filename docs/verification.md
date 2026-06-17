@@ -59,7 +59,7 @@ Live full-pipeline run starting from GTDB **representative** genomes
 (`metadata -d rep -l genus -tg Francisella --source api` -> 26 reps + outgroup
 `GCF_003574425.1`; `genome` via NCBI datasets). The same downloaded genomes were
 then re-run through different tool combinations to confirm tool-swappability; all
-three produced a consistent 27-leaf tree (26 reps + outgroup) and a 52-edge
+four produced a consistent 27-leaf tree (26 reps + outgroup) and a 52-edge
 FlexTaxD `tree2tax.tsv` + 26-row `genomes_map.tsv`:
 
 | Run | Dereplicate | Phylo | Result |
@@ -67,10 +67,33 @@ FlexTaxD `tree2tax.tsv` + 26-row `genomes_map.tsv`:
 | 1 | skder | mashtree (alignment-free) | 27-leaf tree |
 | 2 | galah | sourmash (alignment-free) | 27-leaf tree |
 | 3 | sourmash | sibeliaz aligner + raxml-ng (ML) | 27-leaf ML tree from an 80-col SibeliaZ MSA; outgroup-rooted, recovers expected Francisella clades (tularensis/hispaniensis, orientalis/sciaenopsi/noatunensis/philomiragia, etc.) |
+| 4 | drep (container, `--virus`) | sibeliaz aligner + iqtree (ML) | 27-leaf ML tree from the SibeliaZ MSA; iqtree's ultrafast bootstrap finished quickly (no long bootstrap tail) |
+
+All four dereplicators returned 26/26 representatives (the GTDB reps are one per
+species, so divergent at genus level); see also the within-species threshold
+sweep below.
 
 Run 3 also exercised the bounded RAxML-NG bootstrap: the whole phylo (SibeliaZ
 MSA + ML search + `autoMRE{200}` bootstrap) finished in ~47 min, where the
 previous uncapped `autoMRE{1000}` default was still bootstrapping past 2 h.
+
+### Dereplicator ANI thresholds and chunking
+
+`--secondary-ani` is the shared clustering knob, honored by all four
+dereplicators (skder `-i`, galah `--ani`, sourmash similarity, drep `-sa`);
+`--primary-ani` only affects drep's two-stage algorithm. On the genus reps the
+threshold is a no-op (always 26 reps, one genome per species), but a
+within-species sweep on 5 *F. tularensis* strains shows it bite: the ANI tools
+(skder/galah/drep) collapse all 5 to 1 representative at <=99% ANI and split to 5
+at >=99.9% (so the strains sit at ~99-99.9% ANI), while sourmash's k-mer
+similarity is a different, faster-saturating metric (4 at 0.90, 5 at >=0.99).
+
+For 1000s-10000s genomes, `--process-size` runs a two-stage chunked
+dereplication for **any** tool (split -> per-chunk pass -> dereplicate the union
+of chunk reps), with `--num-processes` parallel chunk workers and optional looser
+stage-1 thresholds via `--pre-primary-ani`/`--pre-secondary-ani`. Verified live:
+`dereplicate --tool skder -s 10 -p 3 --pre-secondary-ani 0.95` on the 26 genus
+reps -> 3 stage-1 chunks at `skder -i 95`, stage-2 at `-i 99`, 26/26 reps.
 
 ## Containers
 
