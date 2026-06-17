@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 from collections import deque
 from collections.abc import Mapping, Sequence
@@ -94,3 +95,19 @@ def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[
         for p in paths:
             fo.write(f"{os.path.abspath(os.fspath(p))}\n")
     return dest_path
+
+
+def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+    """Stage ``src`` at ``dst`` cheaply: hardlink it, copying only as a fallback.
+
+    Staging genomes into representatives/cluster dirs copies tens of GB at 1000s
+    of genomes. A hardlink is instant and uses no extra disk; it shares the inode
+    with the source, which is safe because these staged files are only read by
+    downstream stages, never modified in place. Falls back to a real copy when
+    the filesystem can't hardlink (cross-device, or exFAT/NTFS on the dev box).
+    """
+    src_s, dst_s = os.fspath(src), os.fspath(dst)
+    try:
+        os.link(src_s, dst_s)
+    except OSError:
+        shutil.copy2(src_s, dst_s)
