@@ -76,10 +76,10 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     if outgroup:
         _download_outgroup(ctx, outgroup[0], logger)
 
-    # record filenames back into the manifest
+    # record filenames back into the manifest (one batched transaction)
     for g in selected:
         g.filename = filenames[g.accession]
-        manifest.upsert(g)
+    manifest.upsert_many(list(selected))
 
     ctx.config.record_stage(
         "genome",

@@ -269,6 +269,7 @@ def _update_manifest(ctx: WorkdirContext, result: DerepResult) -> None:
     for rep, members in result.clusters.items():
         for m in members:
             rep_by_member[m] = rep
+    updates: list[tuple[str, str, str | None]] = []
     for genome, status in result.genome_status.items():
         accession = _accession_from_filename(genome)
         if accession is None:
@@ -277,10 +278,12 @@ def _update_manifest(ctx: WorkdirContext, result: DerepResult) -> None:
         if status == "contained":
             rep_file = rep_by_member.get(genome)
             representative = _accession_from_filename(rep_file) if rep_file else None
-        try:
-            manifest.set_derep_status(accession, status, representative)
-        except Exception:  # genome may not be in manifest (e.g. tests) -- non-fatal
-            pass
+        updates.append((accession, status, representative))
+    # one batched transaction instead of a commit per genome
+    try:
+        manifest.set_derep_status_many(updates)
+    except Exception:  # genomes may not be in manifest (e.g. tests) -- non-fatal
+        pass
 
 
 def _accession_from_filename(filename: str | None) -> str | None:
