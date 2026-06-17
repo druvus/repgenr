@@ -11,6 +11,13 @@ def _rec(i: int) -> GenomeRecord:
     return GenomeRecord(accession=f"GCF_{i:06d}.1", filename=f"f_{i}.fasta", source="gtdb")
 
 
+def test_wal_mode_enabled(tmp_path: Path) -> None:
+    m = Manifest(tmp_path / "manifest.sqlite")
+    mode = m._conn.execute("PRAGMA journal_mode").fetchone()[0]
+    assert mode.lower() == "wal"
+    m.close()
+
+
 def test_upsert_many_batches_and_persists(tmp_path: Path) -> None:
     m = Manifest(tmp_path / "manifest.sqlite")
     m.upsert_many([_rec(i) for i in range(50)])

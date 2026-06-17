@@ -73,6 +73,12 @@ class Manifest:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
+        # WAL + synchronous=NORMAL: commits no longer pay a full fsync each, which
+        # is the dominant cost for many small writes. The manifest is a workdir
+        # artifact (regenerable from the stages), so the NORMAL durability
+        # trade-off -- a power loss can lose only the last transaction -- is fine.
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 

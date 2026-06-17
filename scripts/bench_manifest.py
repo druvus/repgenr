@@ -70,8 +70,11 @@ def bench_set_derep_status_many(n: int) -> float:
 
 
 if __name__ == "__main__":
-    print("manifest writes (on-disk SQLite):")
+    print("manifest writes (on-disk SQLite, WAL + synchronous=NORMAL):")
     for n in (1000, 2000, 5000):
         bench_upsert_many(n)
     for n in (1000, 2000, 5000):
         bench_set_derep_status_many(n)
+    print("single-call path (still one commit per call, but cheap under WAL):")
+    for n in (1000, 5000):
+        bench_set_derep_status(n)
