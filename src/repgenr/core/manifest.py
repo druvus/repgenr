@@ -10,12 +10,30 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 MANIFEST_FILENAME = "manifest.sqlite"
+
+_UPSERT_SQL = """
+    INSERT INTO genomes (accession, filename, source, family, genus,
+                         species, is_outgroup, derep_status, representative)
+    VALUES (:accession, :filename, :source, :family, :genus,
+            :species, :is_outgroup, :derep_status, :representative)
+    ON CONFLICT(accession) DO UPDATE SET
+        filename=excluded.filename,
+        source=excluded.source,
+        family=excluded.family,
+        genus=excluded.genus,
+        species=excluded.species,
+        is_outgroup=excluded.is_outgroup,
+        derep_status=excluded.derep_status,
+        representative=excluded.representative
+"""
+
+_SET_DEREP_SQL = "UPDATE genomes SET derep_status=?, representative=? WHERE accession=?"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS genomes (
@@ -82,47 +100,28 @@ class Manifest:
 
     def upsert(self, record: GenomeRecord) -> None:
         with self.transaction() as conn:
-            conn.execute(
-                """
-                INSERT INTO genomes (accession, filename, source, family, genus,
-                                     species, is_outgroup, derep_status, representative)
-                VALUES (:accession, :filename, :source, :family, :genus,
-                        :species, :is_outgroup, :derep_status, :representative)
-                ON CONFLICT(accession) DO UPDATE SET
-                    filename=excluded.filename,
-                    source=excluded.source,
-                    family=excluded.family,
-                    genus=excluded.genus,
-                    species=excluded.species,
-                    is_outgroup=excluded.is_outgroup,
-                    derep_status=excluded.derep_status,
-                    representative=excluded.representative
-                """,
-                {
-                    "accession": record.accession,
-                    "filename": record.filename,
-                    "source": record.source,
-                    "family": record.family,
-                    "genus": record.genus,
-                    "species": record.species,
-                    "is_outgroup": int(record.is_outgroup),
-                    "derep_status": record.derep_status,
-                    "representative": record.representative,
-                },
-            )
+            conn.execute(_UPSERT_SQL, _record_params(record))
 
     def upsert_many(self, records: list[GenomeRecord]) -> None:
-        for record in records:
-            self.upsert(record)
+        # One transaction (one commit/fsync) for the whole batch -- committing per
+        # record is ~0.5 ms each, i.e. seconds of fsync overhead at 1000s genomes.
+        with self.transaction() as conn:
+            conn.executemany(_UPSERT_SQL, [_record_params(r) for r in records])
 
     def set_derep_status(
         self, accession: str, status: str, representative: str | None = None
     ) -> None:
         with self.transaction() as conn:
-            conn.execute(
-                "UPDATE genomes SET derep_status=?, representative=? WHERE accession=?",
-                (status, representative, accession),
-            )
+            conn.execute(_SET_DEREP_SQL, (status, representative, accession))
+
+    def set_derep_status_many(
+        self, updates: Sequence[tuple[str, str, str | None]]
+    ) -> None:
+        """Batch derep-status updates (accession, status, representative) in one
+        transaction; avoids one commit per genome on large sets."""
+        rows = [(status, rep, accession) for accession, status, rep in updates]
+        with self.transaction() as conn:
+            conn.executemany(_SET_DEREP_SQL, rows)
 
     def count(self) -> int:
         cur = self._conn.execute("SELECT COUNT(*) AS n FROM genomes WHERE is_outgroup=0")
@@ -140,6 +139,20 @@ class Manifest:
             query += " WHERE is_outgroup=0"
         cur = self._conn.execute(query)
         return [_row_to_record(row) for row in cur.fetchall()]
+
+
+def _record_params(record: GenomeRecord) -> dict:
+    return {
+        "accession": record.accession,
+        "filename": record.filename,
+        "source": record.source,
+        "family": record.family,
+        "genus": record.genus,
+        "species": record.species,
+        "is_outgroup": int(record.is_outgroup),
+        "derep_status": record.derep_status,
+        "representative": record.representative,
+    }
 
 
 def _row_to_record(row: sqlite3.Row) -> GenomeRecord:
