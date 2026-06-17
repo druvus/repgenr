@@ -13,6 +13,7 @@ from pathlib import Path
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, read_clusters
 from ..core.errors import WorkdirError
+from ..core.process import link_or_copy
 
 
 @dataclass
@@ -45,7 +46,7 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
         for genome in targets:
             source = ctx.genomes_dir / genome
             if source.exists():
-                shutil.copy2(source, cluster_dir / genome)
+                link_or_copy(source, cluster_dir / genome)
     if empty:
         logger.info("%d clusters had only a representative and were skipped", empty)
     logger.info("Unpacked %d clusters into %s", len(clusters), unpack_dir)

@@ -24,6 +24,7 @@ from ..core.contracts import (
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
 from ..core.plugins import auto_select, scale_warning
+from ..core.process import link_or_copy
 from ..dereplicators.base import DerepParams, DerepResult, registry
 
 _FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
@@ -257,7 +258,7 @@ def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
         source = rep if rep.exists() else ctx.genomes_dir / rep.name
         if not source.exists():
             raise WorkdirError(f"Representative genome file missing: {rep.name}")
-        shutil.copy2(source, rep_dir / rep.name)
+        link_or_copy(source, rep_dir / rep.name)
 
     write_clusters(ctx.derep_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(ctx.derep_dir / GENOME_STATUS_TSV, result.genome_status)
