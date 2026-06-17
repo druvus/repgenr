@@ -12,7 +12,8 @@ process PHYLO {
     val true, emit: done
 
     script:
+    // Match threads to the reserved CPUs; a -t in phylo_args (last) overrides.
     """
-    repgenr ${params.repgenr_opts} phylo -wd ${params.workdir} ${params.phylo_args}
+    repgenr ${params.repgenr_opts} phylo -wd ${params.workdir} -t ${task.cpus} ${params.phylo_args}
     """
 }
