@@ -172,6 +172,9 @@ def _list_genomes(genomes_dir: Path) -> list[Path]:
     )
 
 
+_MAX_REDUCE_DEPTH = 50  # termination backstop; the shrink-guard normally stops sooner
+
+
 def _dereplicate_chunked(
     adapter,
     genomes: list[Path],
@@ -182,19 +185,27 @@ def _dereplicate_chunked(
     pre_primary_ani: float,
     pre_secondary_ani: float,
     logger,
+    depth: int = 0,
 ) -> DerepResult:
-    """Two-stage chunked dereplication, usable for any tool.
+    """Hierarchical (recursive) chunked dereplication, usable for any tool.
 
-    Stage 1: dereplicate each chunk independently (up to ``num_processes`` chunks
-    in parallel, the thread budget split across them), using the stage-1 ANI
-    thresholds. Stage 2: dereplicate the union of stage-1 representatives with the
-    final thresholds (``params``). Membership is composed so each original genome
-    maps to a final representative.
+    Leaf chunks of <= ``process_size`` are dereplicated independently (in
+    parallel, with the stage-1 ANI thresholds). The union of their
+    representatives is then dereplicated with the final thresholds -- and if that
+    union still exceeds ``process_size`` it is reduced recursively, so no single
+    dereplication call ever sees many more than ``process_size`` genomes (the key
+    to 100k-scale). Recursion stops when the union fits, when it stops shrinking
+    (recursing would not help), or at ``_MAX_REDUCE_DEPTH``. Membership is
+    composed so every original genome maps to a final representative.
     """
     chunks = [genomes[i : i + process_size] for i in range(0, len(genomes), process_size)]
     if len(chunks) > 1 and len(chunks[-1]) == 1:
         chunks[-2].extend(chunks[-1])
         chunks.pop()
+
+    if len(chunks) == 1:
+        # Fits in a single pass: dereplicate directly with the final thresholds.
+        return adapter.dereplicate(chunks[0], scratch / f"level{depth}", params, logger)
 
     workers = max(1, min(num_processes, len(chunks)))
     threads_per_worker = max(1, params.threads // workers)
@@ -205,23 +216,31 @@ def _dereplicate_chunked(
         secondary_ani=pre_secondary_ani,
     )
     logger.info(
-        "Stage 1: %d chunks, %d parallel worker(s) at %d threads each",
-        len(chunks), workers, threads_per_worker,
+        "Level %d: %d chunks, %d parallel worker(s) at %d threads each",
+        depth, len(chunks), workers, threads_per_worker,
     )
 
     def run_chunk(indexed: tuple[int, list[Path]]) -> DerepResult:
         idx, chunk = indexed
-        chunk_dir = scratch / "intra_chunks" / f"chunk{idx}"
-        logger.info("Stage 1 chunk %d/%d (%d genomes)", idx + 1, len(chunks), len(chunk))
+        chunk_dir = scratch / f"level{depth}" / f"chunk{idx}"
+        logger.info("Level %d chunk %d/%d (%d genomes)", depth, idx + 1, len(chunks), len(chunk))
         return adapter.dereplicate(chunk, chunk_dir, chunk_params, logger)
 
     stage1_results = parallel_map(run_chunk, list(enumerate(chunks)), workers, logger=logger)
+    union = [rep for r in stage1_results for rep in r.representatives]
+    merge_dir = scratch / f"level{depth}" / "merge"
 
-    if len(stage1_results) == 1:
-        return stage1_results[0]
-
-    stage1_reps = [rep for r in stage1_results for rep in r.representatives]
-    stage2 = adapter.dereplicate(stage1_reps, scratch / "inter_chunks", params, logger)
+    # Reduce the union: recurse only if it is still oversized AND actually shrank
+    # (else recursing re-chunks the same set forever); otherwise one final pass.
+    if len(union) > process_size and len(union) < len(genomes) and depth < _MAX_REDUCE_DEPTH:
+        logger.info("Level %d: union of %d reps still > %d; reducing recursively",
+                    depth, len(union), process_size)
+        stage2 = _dereplicate_chunked(
+            adapter, union, merge_dir, params, process_size, num_processes,
+            pre_primary_ani, pre_secondary_ani, logger, depth + 1,
+        )
+    else:
+        stage2 = adapter.dereplicate(union, merge_dir, params, logger)
 
     return _compose_two_stage(stage1_results, stage2)
 
