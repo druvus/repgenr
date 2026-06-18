@@ -24,6 +24,9 @@ dependencies:
   - skani>=0.2
   - galah
   - sourmash>=4.0
+  # Optional: enables the sparse (edge-list) sourmash dereplication back-end at
+  # scale. Absent, the dereplicator falls back to dense `sourmash compare`.
+  - sourmash_plugin_branchwater>=0.9
   # Genome download
   - ncbi-datasets-cli
   # Aligners

@@ -13,7 +13,7 @@ divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 | Tool | Unit | Live | Notes |
 |------|------|------|-------|
 | skder | yes | yes | native + container (Wave); local scratch dir (exFAT-safe); membership from skani edges |
-| sourmash | yes | yes | native; k-mer compare + greedy clustering |
+| sourmash | yes | yes | native; k-mer + greedy clustering. Two back-ends: dense `sourmash compare` (default) and a **sparse** `manysketch` + `pairwise` path via the optional `sourmash_plugin_branchwater` plugin (auto-selected when present, dense fallback otherwise). On 1256 hepatitis E genomes (Jaccard 0.90) both back-ends gave the **same 1034 representatives and identical cluster partition**, sparse ~2x faster (2.5 s vs 5.6 s); the sparse path emits only above-threshold edges instead of the dense N x N matrix |
 | galah | yes | yes | native; cluster-definition parsed to representatives + members |
 | drep | — | yes | container (Wave, amd64); a full run needs CheckM + its DB, so verified with `--virus` (sets `--ignoreGenomeQuality`, skipping CheckM) -> 8 reps |
 
