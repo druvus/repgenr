@@ -104,6 +104,37 @@
                     "minimum": 1,
                     "description": "Number of parallel chunk workers for two-stage dereplication.",
                     "fa_icon": "fas fa-microchip"
+                },
+                "derep_tool": {
+                    "type": "string",
+                    "default": "skder",
+                    "enum": ["skder", "drep", "galah", "sourmash"],
+                    "description": "Dereplicator used by the scatter-gather subworkflow.",
+                    "fa_icon": "fas fa-compress-arrows-alt"
+                },
+                "derep_primary_ani": {
+                    "type": "number",
+                    "default": 0.90,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Primary ANI threshold for the scatter-gather subworkflow.",
+                    "fa_icon": "fas fa-percent"
+                },
+                "derep_secondary_ani": {
+                    "type": "number",
+                    "default": 0.99,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Secondary ANI threshold for the scatter-gather subworkflow.",
+                    "fa_icon": "fas fa-percent"
+                },
+                "derep_aligned_fraction": {
+                    "type": "number",
+                    "default": 0.50,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Aligned-fraction threshold for the scatter-gather subworkflow.",
+                    "fa_icon": "fas fa-percent"
                 }
             }
         },

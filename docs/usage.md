@@ -69,3 +69,23 @@ nextflow run nextflow/main.nf --workdir <DIR> \
 Resource labels (`process_low/medium/high`) scale memory and time with the retry
 attempt, so a task killed for memory or time is resubmitted with more headroom.
 Tune the label values per environment in `nextflow.config`.
+
+### Scatter-gather dereplication
+
+For horizontal scaling, the `DEREPLICATE_SCATTER` subworkflow groups genomes into
+chunks of `--derep_process_size`, dereplicates each chunk as a separate task (one
+per node on HPC), and dereplicates the union of the chunk representatives once
+more (the two-stage reduce-tree expressed as typed data channels). It wraps the
+`repgenr dereplicate-chunk` / `dereplicate-merge` CLI steps and is driven by
+`--derep_tool` and the `--derep_*_ani` / `--derep_aligned_fraction` thresholds.
+
+A standalone harness runs it on a directory of genome FASTAs (no GTDB/NCBI
+front-end), useful for testing and for dereplicating a local collection:
+
+```bash
+nextflow run nextflow/tests/dereplicate_scatter.nf -c nextflow/nextflow.config \
+    --genomes_dir <DIR> --derep_tool sourmash --derep_process_size 2000 \
+    --outdir results -profile standard
+```
+
+Add `-stub` to exercise the wiring without running the tools.
