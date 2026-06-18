@@ -420,6 +420,11 @@ def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
         source = rep if rep.exists() else ctx.genomes_dir / rep.name
         if not source.exists():
             raise WorkdirError(f"Representative genome file missing: {rep.name}")
+        if source.stat().st_size == 0:
+            raise WorkdirError(
+                f"Representative genome is empty: {rep.name} ({source}). An "
+                "upstream download or staging step produced a zero-length genome."
+            )
         link_or_copy(source, rep_dir / rep.name)
 
     write_clusters(ctx.derep_dir / CLUSTERS_TSV, result.clusters)
