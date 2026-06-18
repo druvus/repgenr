@@ -8,6 +8,9 @@ calls the matching ``stages.<name>.run(ctx, params)``. Errors of type
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -23,6 +26,24 @@ app = typer.Typer(
     no_args_is_help=True,
     help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
 )
+
+# Top-level run options shared by every subcommand (set in the callback).
+_RUN_STATE: dict[str, bool] = {"force": False}
+
+
+def _stage_fingerprint(stage_name: str, params: object) -> str:
+    """Stable hash of a stage invocation, used to skip already-completed work.
+
+    Built from the stage name plus the parameter object (a dataclass), so the
+    same invocation produces the same fingerprint across runs. Paths and other
+    non-JSON values are stringified.
+    """
+    if dataclasses.is_dataclass(params) and not isinstance(params, type):
+        payload: object = dataclasses.asdict(params)
+    else:
+        payload = vars(params)
+    blob = json.dumps({"stage": stage_name, "params": payload}, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def _version_callback(value: bool) -> None:
@@ -57,10 +78,15 @@ def main(
         False, "--wave/--no-wave", envvar="REPGENR_WAVE",
         help="Resolve images for multi-tool adapters via the Seqera Wave CLI.",
     ),
+    force: bool = typer.Option(
+        False, "--force/--no-force", "-f", envvar="REPGENR_FORCE",
+        help="Re-run a stage even if it already completed with the same parameters.",
+    ),
 ) -> None:
     """RepGenR top-level entry point."""
     from ..core.containers import configure_container
 
+    _RUN_STATE["force"] = force
     configure_container(
         backend=container, engine=container_engine, platform=platform,
         cache_dir=container_cache, wave_enabled=wave,
@@ -68,12 +94,37 @@ def main(
 
 
 def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) -> None:
-    """Common harness: context, dispatch, clean error handling."""
+    """Common harness: context, dispatch, clean error handling.
+
+    Resume: a stage that already completed with the same parameters is skipped
+    (fingerprint match), unless ``--force`` is set. A stage that crashed before
+    recording completion has no ``completed`` stamp and so always re-runs.
+    """
     logger = configure_logging(workdir if (create or workdir.exists()) else None)
     try:
         ctx = WorkdirContext(workdir, logger=logger, create=create)
+        params = build_params()
+        fingerprint = _stage_fingerprint(stage_name, params)
+        prior = ctx.config.stages.get(stage_name)
+        if (
+            not _RUN_STATE["force"]
+            and prior is not None
+            and prior.completed
+            and prior.fingerprint == fingerprint
+        ):
+            logger.info(
+                "Stage '%s' already completed with the same parameters; skipping "
+                "(use --force to re-run).", stage_name,
+            )
+            return
         module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
-        module.run(ctx, build_params())
+        module.run(ctx, params)
+        # Stamp the fingerprint on the record the stage just wrote, so the next
+        # invocation with identical params can skip.
+        record = ctx.config.stages.get(stage_name)
+        if record is not None:
+            record.fingerprint = fingerprint
+            ctx.save_config()
     except RepGenRError as exc:
         logger.error("%s", exc)
         raise typer.Exit(code=1) from exc
