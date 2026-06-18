@@ -15,7 +15,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from .errors import WorkdirError
+
 MANIFEST_FILENAME = "manifest.sqlite"
+SCHEMA_VERSION = 1  # bump + add a migration step when the table layout changes
+BUSY_TIMEOUT_MS = 30000  # wait up to 30s for a competing writer before erroring
 
 _UPSERT_SQL = """
     INSERT INTO genomes (accession, filename, source, family, genus,
@@ -79,8 +83,31 @@ class Manifest:
         # trade-off -- a power loss can lose only the last transaction -- is fine.
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
+        # Concurrent writers (parallel stages, two invocations on one workdir)
+        # wait for the lock instead of failing immediately with "database is
+        # locked".
+        self._conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Apply schema migrations keyed on ``PRAGMA user_version``.
+
+        Existing pre-versioning databases report user_version=0; their layout
+        already matches v1, so they are adopted as v1. Future schema changes add
+        a numbered migration step and bump SCHEMA_VERSION.
+        """
+        version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
+        if version > SCHEMA_VERSION:
+            raise WorkdirError(
+                f"Manifest at {self.path} has schema version {version}, newer than this "
+                f"RepGenR supports ({SCHEMA_VERSION}). Upgrade RepGenR or use a new workdir."
+            )
+        # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
+        # Future: while version < SCHEMA_VERSION: apply step; version += 1
+        if version != SCHEMA_VERSION:
+            self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @classmethod
     def open(cls, workdir: str | os.PathLike[str]) -> Manifest:
