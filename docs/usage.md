@@ -46,6 +46,19 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 
 Parameters are validated against `nextflow/nextflow_schema.json` at launch.
 
+### Passing parameters
+
+Either pass them on the command line (`--name value`) or, for a reusable and
+typed configuration, supply a params file:
+
+```bash
+nextflow run nextflow/main.nf -profile standard -params-file params.json
+```
+
+A starting point is in `nextflow/assets/params_example.json`. A params file keeps
+numeric values typed (e.g. `"derep_process_size": 2000`); on the command line
+they arrive as strings, which the schema also accepts for the numeric options.
+
 ## Profiles
 
 Combine an executor profile with an optional container profile, e.g.
