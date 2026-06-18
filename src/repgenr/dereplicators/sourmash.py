@@ -86,12 +86,14 @@ class SourmashDereplicator(Dereplicator):
         ]
         if not sig_files:
             raise WorkdirError(f"sourmash produced no signatures under {sig_dir}")
-        run_tool(self.capabilities, 
+        # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
+        compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
+        run_tool(self.capabilities,
             [
                 "sourmash", "compare",
                 "-k", str(ksize),
                 "--csv", matrix_csv,
-                *sig_files,
+                "--from-file", compare_fofn,
             ],
             logger=logger,
             log_prefix="sourmash",

@@ -12,6 +12,7 @@ The cluster-definition file is ``representative<TAB>member`` rows.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -19,6 +20,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
+from ..core.process import write_fofn
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -52,14 +54,20 @@ class GalahDereplicator(Dereplicator):
         sani = params.secondary_ani
         ani_pct = sani * 100 if sani <= 1.0 else sani
 
+        # Pass the genome list via a file (--genome-fasta-list), never on argv:
+        # 1000s-10000s of paths would exceed ARG_MAX.
+        fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         cmd: list[str | Path] = [
             "galah", "cluster",
-            "--genome-fasta-files", *genomes,
+            "--genome-fasta-list", fofn,
             "--ani", f"{ani_pct:g}",
             "--threads", str(params.threads),
             "--output-cluster-definition", clusters_file,
         ]
-        run_tool(self.capabilities, cmd, logger=logger, log_prefix="galah")
+        run_tool(
+            self.capabilities, cmd, logger=logger, log_prefix="galah", extra_mounts=genome_dirs
+        )
 
         clusters: dict[str, list[str]] = {}
         status: dict[str, str] = {}

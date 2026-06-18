@@ -68,8 +68,10 @@ class SourmashBuilder(TreeBuilder):
             raise WorkdirError("sourmash produced no signatures")
 
         matrix_csv = out_dir / "compare.csv"
-        run_tool(self.capabilities, 
-            ["sourmash", "compare", "-k", str(ksize), "--csv", matrix_csv, *sigs],
+        compare_fofn = write_fofn(sigs, out_dir / "signatures.fofn")
+        run_tool(self.capabilities,
+            ["sourmash", "compare", "-k", str(ksize), "--csv", matrix_csv,
+             "--from-file", compare_fofn],
             logger=logger,
             log_prefix="sourmash",
         )
