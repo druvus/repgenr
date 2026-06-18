@@ -1,28 +1,27 @@
-// Bacterial pipeline, data-channel form:
-//   ACQUIRE (metadata -> genome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+// Viral pipeline, data-channel form:
+//   VACQUIRE (vmetadata -> vgenome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
 //
-// Genomes, representatives, the tree and the taxonomy flow between processes as
-// staged channel files; there is no shared working directory. This is the
-// data-channel replacement for the legacy done-signal BACTERIAL subworkflow.
+// Reuses the same data-channel dereplication, phylo and tree2tax as the bacterial
+// path; only the acquisition front differs (BV-BRC instead of GTDB/NCBI).
 
-include { ACQUIRE             } from './acquire'
+include { VACQUIRE            } from '../../modules/local/dataflow/vacquire'
 include { DEREPLICATE_SCATTER } from './dereplicate_scatter'
 include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
-workflow BACTERIAL_DATAFLOW {
+workflow VIRAL_DATAFLOW {
     main:
     ch_versions = Channel.empty()
 
-    ACQUIRE()
-    ch_versions = ch_versions.mix(ACQUIRE.out.versions)
+    VACQUIRE()
+    ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes)
+    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten())
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = ACQUIRE.out.outgroup.collect().ifEmpty([])
-    ch_og_acc   = ACQUIRE.out.outgroup_accession
+    ch_outgroup = VACQUIRE.out.outgroup.collect().ifEmpty([])
+    ch_og_acc   = VACQUIRE.out.outgroup_accession
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     ch_versions = ch_versions.mix(PHYLO.out.versions)
