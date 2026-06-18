@@ -1,0 +1,139 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/druvus/repgenr/main/nextflow/nextflow_schema.json",
+    "title": "repgenr pipeline parameters",
+    "description": "Representative-Genome Repositories pipeline",
+    "type": "object",
+    "$defs": {
+        "input_output_options": {
+            "title": "Input/output options",
+            "type": "object",
+            "fa_icon": "fas fa-terminal",
+            "description": "Working directory, results location and pipeline mode.",
+            "required": ["workdir"],
+            "properties": {
+                "workdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Shared RepGenR working directory that every stage reads and writes.",
+                    "help_text": "RepGenR keeps the genome manifest (SQLite), provenance (repgenr.yaml) and per-stage outputs here. Create it with the metadata stage before running downstream stages.",
+                    "fa_icon": "fas fa-folder-open"
+                },
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "default": "results",
+                    "description": "Directory for pipeline_info execution reports (and, in later increments, published results).",
+                    "fa_icon": "fas fa-folder"
+                },
+                "mode": {
+                    "type": "string",
+                    "default": "bacterial",
+                    "enum": ["bacterial", "viral"],
+                    "description": "Which lineage pipeline to run: 'bacterial' (GTDB) or 'viral' (BV-BRC).",
+                    "fa_icon": "fas fa-bacteria"
+                }
+            }
+        },
+        "stage_options": {
+            "title": "Per-stage arguments",
+            "type": "object",
+            "fa_icon": "fas fa-sliders-h",
+            "description": "Argument strings passed through to each repgenr CLI stage.",
+            "properties": {
+                "metadata_args": {
+                    "type": "string",
+                    "default": "-r 207.0 -v bac120 -d rep -l genus -tg francisella",
+                    "description": "Arguments for the bacterial metadata stage (GTDB selection).",
+                    "fa_icon": "fas fa-table"
+                },
+                "genome_args": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Arguments for the genome download stage.",
+                    "fa_icon": "fas fa-download"
+                },
+                "vmetadata_args": {
+                    "type": "string",
+                    "default": "-t adenoviridae",
+                    "description": "Arguments for the viral metadata stage (BV-BRC selection).",
+                    "fa_icon": "fas fa-table"
+                },
+                "vgenome_args": {
+                    "type": "string",
+                    "default": "-tg mastadenovirus",
+                    "description": "Arguments for the viral genome selection stage.",
+                    "fa_icon": "fas fa-download"
+                },
+                "dereplicate_args": {
+                    "type": "string",
+                    "default": "--tool skder",
+                    "description": "Arguments for the dereplication stage (tool and ANI thresholds).",
+                    "fa_icon": "fas fa-compress-arrows-alt"
+                },
+                "phylo_args": {
+                    "type": "string",
+                    "default": "--treebuilder mashtree",
+                    "description": "Arguments for the phylogeny stage (aligner or tree builder).",
+                    "fa_icon": "fas fa-tree"
+                },
+                "tree2tax_args": {
+                    "type": "string",
+                    "default": "--include-dereplicated",
+                    "description": "Arguments for the tree-to-taxonomy (FlexTaxD) stage.",
+                    "fa_icon": "fas fa-sitemap"
+                }
+            }
+        },
+        "scaling_options": {
+            "title": "Dereplication scaling",
+            "type": "object",
+            "fa_icon": "fas fa-expand-arrows-alt",
+            "description": "Two-stage chunking knobs for large dereplication inputs.",
+            "properties": {
+                "derep_process_size": {
+                    "type": ["integer", "null"],
+                    "default": null,
+                    "minimum": 1,
+                    "description": "Genomes per chunk for two-stage dereplication. Leave unset for a single pass.",
+                    "fa_icon": "fas fa-th"
+                },
+                "derep_num_processes": {
+                    "type": ["integer", "null"],
+                    "default": null,
+                    "minimum": 1,
+                    "description": "Number of parallel chunk workers for two-stage dereplication.",
+                    "fa_icon": "fas fa-microchip"
+                }
+            }
+        },
+        "generic_options": {
+            "title": "Generic options",
+            "type": "object",
+            "fa_icon": "fas fa-cog",
+            "description": "Options common to all pipelines.",
+            "properties": {
+                "repgenr_opts": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Top-level options prepended to every repgenr call (set by container profiles).",
+                    "hidden": true,
+                    "fa_icon": "fas fa-cubes"
+                },
+                "help": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Print a usage message and exit.",
+                    "hidden": true,
+                    "fa_icon": "fas fa-question-circle"
+                }
+            }
+        }
+    },
+    "allOf": [
+        { "$ref": "#/$defs/input_output_options" },
+        { "$ref": "#/$defs/stage_options" },
+        { "$ref": "#/$defs/scaling_options" },
+        { "$ref": "#/$defs/generic_options" }
+    ]
+}
