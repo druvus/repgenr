@@ -476,6 +476,28 @@ def _read_path_fofn(path: Path) -> list[Path]:
     return [Path(line.strip()) for line in path.read_text().splitlines() if line.strip()]
 
 
+@app.command(name="genome-fetch")
+def genome_fetch_cmd(
+    selection: Path = typer.Option(
+        ..., "--selection", help="selection.tsv from the metadata stage."
+    ),
+    out_dir: Path = typer.Option(..., "-o", "--out", help="Output dir for downloaded genomes."),
+    keep_files: bool = typer.Option(False, "--keep-files", help="Keep download intermediates."),
+) -> None:
+    """Download genomes listed in a selection.tsv (stateless data-channel step)."""
+    from ..stages.genome_steps import GenomeFetchParams, genome_fetch
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    try:
+        genome_fetch(
+            GenomeFetchParams(selection_tsv=selection, out_dir=out_dir, keep_files=keep_files),
+            logger,
+        )
+    except RepGenRError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+
+
 @app.command(name="dereplicate-chunk")
 def dereplicate_chunk_cmd(
     genomes_fofn: Path = typer.Option(

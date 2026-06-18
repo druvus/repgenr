@@ -21,15 +21,71 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 CLUSTERS_TSV = "clusters.tsv"
 GENOME_STATUS_TSV = "genome_status.tsv"
+SELECTION_TSV = "selection.tsv"
 MSA_FASTA = "msa.fasta"
 CORE_SNP_FASTA = "core_snp.fasta"
 TREE_NWK = "tree.nwk"
 TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
+
+
+def genome_filename(family: str, genus: str, species: str, accession: str) -> str:
+    """Canonical genome FASTA filename. One definition so the metadata selection,
+    the genome download and every downstream stage agree on the same names."""
+    return f"{family}_{genus}_{species}_{accession}.fasta"
+
+
+@dataclass
+class SelectionRow:
+    """One selected genome: the portable hand-off from metadata to genome.
+
+    Carries the taxonomy (so downstream taxonomy-aware stages need not re-read the
+    SQLite manifest) and the canonical output filename used by the downloader.
+    """
+
+    accession: str
+    family: str
+    genus: str
+    species: str
+    is_outgroup: bool
+    filename: str
+
+
+def write_selection(path: Path, rows: list[SelectionRow]) -> None:
+    """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as fo:
+        writer = csv.writer(fo, delimiter="\t")
+        writer.writerow(["accession", "family", "genus", "species", "is_outgroup", "filename"])
+        for r in rows:
+            writer.writerow([
+                r.accession, r.family, r.genus, r.species,
+                "1" if r.is_outgroup else "0", r.filename,
+            ])
+
+
+def read_selection(path: Path) -> list[SelectionRow]:
+    """Read a selection.tsv back into SelectionRow records."""
+    rows: list[SelectionRow] = []
+    with open(path, newline="") as fo:
+        reader = csv.DictReader(fo, delimiter="\t")
+        for row in reader:
+            rows.append(
+                SelectionRow(
+                    accession=row["accession"],
+                    family=row.get("family", ""),
+                    genus=row.get("genus", ""),
+                    species=row.get("species", ""),
+                    is_outgroup=row.get("is_outgroup", "0") == "1",
+                    filename=row["filename"],
+                )
+            )
+    return rows
 
 
 def write_clusters(path: Path, clusters: dict[str, list[str]]) -> None:

@@ -17,6 +17,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.context import WorkdirContext
+from ..core.contracts import genome_filename
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, preflight
 
@@ -72,7 +73,9 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
         return 0
 
     if to_download:
-        _download_batch(ctx, to_download, filenames, logger, params.keep_files)
+        download_accessions(
+            to_download, filenames, ctx.genomes_dir, ctx.workdir, logger, params.keep_files
+        )
 
     if outgroup:
         _download_outgroup(ctx, outgroup[0], logger)
@@ -93,7 +96,7 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
 
 
 def _output_name(g) -> str:
-    return f"{g.family}_{g.genus}_{g.species}_{g.accession}.fasta"
+    return genome_filename(g.family, g.genus, g.species, g.accession)
 
 
 def _prune(genomes_dir: Path, keep: set[str], logger) -> None:
@@ -103,27 +106,42 @@ def _prune(genomes_dir: Path, keep: set[str], logger) -> None:
             logger.info("Removed %s (no longer selected)", f.name)
 
 
-def _download_batch(ctx, accessions: list[str], filenames, logger, keep_files) -> None:
-    """Download genomes in fixed-size sub-batches.
+def download_accessions(
+    accessions: list[str],
+    filenames: dict[str, str],
+    dest_dir: Path,
+    scratch_dir: Path,
+    logger,
+    keep_files: bool = False,
+) -> None:
+    """Download genomes in fixed-size sub-batches into ``dest_dir``.
 
-    Each sub-batch is downloaded, rehydrated, and moved into ``genomes/``
+    Each sub-batch is downloaded, rehydrated, and moved into ``dest_dir``
     independently, so a failure loses only one batch and a re-run resumes (the
-    stage recomputes the still-missing accessions). This also bounds the size of
+    caller recomputes the still-missing accessions). This also bounds the size of
     any single dehydrated zip / rehydrate at 1000s-100000s of accessions.
+    ``filenames`` maps accession -> output filename; scratch (zips, extracts)
+    lives under ``scratch_dir``. ctx-free so both the genome stage and the
+    stateless ``genome-fetch`` step reuse it.
     """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    scratch_dir.mkdir(parents=True, exist_ok=True)
     total = len(accessions)
     n_batches = (total + _DOWNLOAD_BATCH_SIZE - 1) // _DOWNLOAD_BATCH_SIZE
     for bi, start in enumerate(range(0, total, _DOWNLOAD_BATCH_SIZE)):
         batch = accessions[start : start + _DOWNLOAD_BATCH_SIZE]
         logger.info("Download batch %d/%d (%d accessions)", bi + 1, n_batches, len(batch))
-        _download_one_batch(ctx, batch, filenames, logger, keep_files, bi)
+        _download_one_batch(batch, filenames, dest_dir, scratch_dir, logger, keep_files, bi)
 
 
-def _download_one_batch(ctx, batch: list[str], filenames, logger, keep_files, bi: int) -> None:
-    acc_file = ctx.workdir / f"ncbi_acc_batch{bi}.txt"
+def _download_one_batch(
+    batch: list[str], filenames: dict[str, str], dest_dir: Path, scratch_dir: Path,
+    logger, keep_files: bool, bi: int,
+) -> None:
+    acc_file = scratch_dir / f"ncbi_acc_batch{bi}.txt"
     acc_file.write_text("\n".join(batch))
-    zip_path = ctx.workdir / f"ncbi_download_{bi}.zip"
-    extract = ctx.workdir / f"ncbi_extract_{bi}"
+    zip_path = scratch_dir / f"ncbi_download_{bi}.zip"
+    extract = scratch_dir / f"ncbi_extract_{bi}"
     if extract.exists():
         shutil.rmtree(extract)
 
@@ -144,7 +162,7 @@ def _download_one_batch(ctx, batch: list[str], filenames, logger, keep_files, bi
     for fna in extract.rglob("*.fna"):
         name = filenames.get(fna.parent.name)
         if name:
-            shutil.move(str(fna), str(ctx.genomes_dir / name))
+            shutil.move(str(fna), str(dest_dir / name))
 
     if not keep_files:
         zip_path.unlink(missing_ok=True)
