@@ -9,7 +9,8 @@
 process VACQUIRE {
     label 'process_medium'
     tag "vacquire"
-    publishDir "${params.outdir}/genomes", mode: 'copy'
+    // Raw genomes are large intermediates (they flow on to dereplication); they
+    // are not published. The selected representatives are published downstream.
 
     output:
     path "out/genomes/*"         , emit: genomes

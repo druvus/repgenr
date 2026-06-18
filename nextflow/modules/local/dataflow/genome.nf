@@ -8,7 +8,8 @@
 process GENOME {
     label 'process_medium'
     tag "genome"
-    publishDir "${params.outdir}/genomes", mode: 'copy'
+    // Raw genomes are large intermediates (they flow on to dereplication); they
+    // are not published. The selected representatives are published downstream.
 
     input:
     path selection
