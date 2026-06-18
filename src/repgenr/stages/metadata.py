@@ -26,6 +26,12 @@ from pathlib import Path
 import requests
 
 from ..core.context import WorkdirContext
+from ..core.contracts import (
+    SELECTION_TSV,
+    SelectionRow,
+    genome_filename,
+    write_selection,
+)
 from ..core.errors import UserInputError, WorkdirError
 from ..core.manifest import GenomeRecord
 
@@ -68,6 +74,7 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     logger.info("Selected %d genomes; outgroup: %s", len(selected), outgroup.accession)
     _populate_manifest(ctx, selected, outgroup)
     _write_outgroup_file(ctx, outgroup.accession)
+    _write_selection(ctx, selected, outgroup)
 
     ctx.config.record_stage(
         "metadata",
@@ -277,6 +284,21 @@ def _populate_manifest(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord
 
 def _write_outgroup_file(ctx, outgroup_acc) -> None:
     (ctx.workdir / "outgroup_accession.txt").write_text(outgroup_acc + "\n")
+
+
+def _write_selection(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) -> None:
+    """Publish the portable selection.tsv (the metadata -> genome data-channel hand-off)."""
+    rows = []
+    for r in (*selected, outgroup):
+        family, genus, species = r.family or "", r.genus or "", r.species or ""
+        rows.append(
+            SelectionRow(
+                accession=r.accession, family=family, genus=genus, species=species,
+                is_outgroup=r.is_outgroup,
+                filename=genome_filename(family, genus, species, r.accession),
+            )
+        )
+    write_selection(ctx.workdir / SELECTION_TSV, rows)
 
 
 # --- GTDB API source --------------------------------------------------------
