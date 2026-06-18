@@ -43,7 +43,7 @@
             "properties": {
                 "metadata_args": {
                     "type": "string",
-                    "default": "-r 207.0 -v bac120 -d rep -l genus -tg francisella",
+                    "default": "-r 232.0 -v bac120 -d rep -l genus -tg francisella",
                     "description": "Arguments for the bacterial metadata stage (GTDB selection).",
                     "fa_icon": "fas fa-table"
                 },

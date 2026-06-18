@@ -100,7 +100,7 @@ two:
 
 ```bash
 nextflow run nextflow/tests/acquire_scatter.nf -c nextflow/nextflow.config \
-    --metadata_args '-r 207.0 -v bac120 -d rep -l genus -tg francisella' \
+    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
     --derep_tool sourmash --outdir results -profile standard
 ```
 
