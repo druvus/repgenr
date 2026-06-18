@@ -2,6 +2,7 @@ nextflow_pipeline {
 
     name "ACQUIRE -> DEREPLICATE_SCATTER (stub)"
     script "../tests/acquire_scatter.nf"
+    options "-stub"
 
     test("the genome channel from ACQUIRE feeds the scatter-gather dereplication") {
         when {
