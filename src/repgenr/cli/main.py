@@ -281,6 +281,11 @@ def dereplicate(
         None, "--pre-secondary-ani",
         help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
     ),
+    reduce: str = typer.Option(
+        "none", "--reduce",
+        help="Taxonomy-aware reduction after ANI: none, species, or genus "
+        "(one representative per taxon).",
+    ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
@@ -289,6 +294,7 @@ def dereplicate(
 
     def build() -> DereplicateParams:
         _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
+        _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
@@ -304,6 +310,7 @@ def dereplicate(
             num_processes=num_processes,
             pre_primary_ani=pre_primary_ani,
             pre_secondary_ani=pre_secondary_ani,
+            reduce=reduce,
             extra={"virus": virus} if virus else {},
         )
 
