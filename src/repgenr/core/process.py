@@ -106,7 +106,12 @@ def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> No
     downstream stages, never modified in place. Falls back to a real copy when
     the filesystem can't hardlink (cross-device, or exFAT/NTFS on the dev box).
     """
-    src_s, dst_s = os.fspath(src), os.fspath(dst)
+    # Resolve symlinks to the real file first. Tools such as skDER emit their
+    # representative genomes as symlinks (often into a Nextflow-/container-staged
+    # input tree); hardlinking the symlink itself -- which os.link does on macOS --
+    # produces a broken, 0-byte staged file. Linking the real target instead keeps
+    # the content and still shares the inode (no extra disk).
+    src_s, dst_s = os.path.realpath(os.fspath(src)), os.fspath(dst)
     try:
         os.link(src_s, dst_s)
     except OSError:

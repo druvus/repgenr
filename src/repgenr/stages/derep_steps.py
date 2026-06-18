@@ -23,6 +23,7 @@ output back through another chunk/merge round.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,6 +161,12 @@ def _write_step_contract(
         source = rep if rep.exists() else _find(fallback_dirs, rep.name)
         if source is None:
             raise WorkdirError(f"Representative genome file missing: {rep.name}")
+        if os.path.getsize(os.path.realpath(source)) == 0:
+            raise WorkdirError(
+                f"Representative genome is empty: {rep.name}. The source file "
+                f"({source}) has zero length -- an upstream download or staging "
+                "step produced an empty genome."
+            )
         link_or_copy(source, rep_dir / rep.name)
     write_clusters(out_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(out_dir / GENOME_STATUS_TSV, result.genome_status)
