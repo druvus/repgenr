@@ -286,6 +286,11 @@ def dereplicate(
         help="Taxonomy-aware reduction after ANI: none, species, or genus "
         "(one representative per taxon).",
     ),
+    target_reps: int = typer.Option(
+        0, "--target-reps",
+        help="Target representative count: search --secondary-ani to land near it "
+        "(0 = off; re-runs dereplication per search step).",
+    ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
@@ -295,6 +300,8 @@ def dereplicate(
     def build() -> DereplicateParams:
         _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
         _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
+        if target_reps < 0:
+            raise UserInputError(f"--target-reps must be >= 0, got {target_reps}.")
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
@@ -311,6 +318,7 @@ def dereplicate(
             pre_primary_ani=pre_primary_ani,
             pre_secondary_ani=pre_secondary_ani,
             reduce=reduce,
+            target_reps=target_reps,
             extra={"virus": virus} if virus else {},
         )
 

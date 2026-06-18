@@ -50,6 +50,9 @@ class DereplicateParams:
     # representatives to one per taxon ("species" or "genus") using the manifest
     # taxonomy. "none" keeps the ANI result as-is.
     reduce: str = "none"
+    # Target number of representatives: when > 0, search --secondary-ani to land
+    # near this count (re-runs dereplication per search step).
+    target_reps: int = 0
     extra: dict | None = None
 
 
@@ -91,40 +94,12 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
 
-    # Chunk whenever a process size is set and exceeded -- for ANY tool, not just
-    # non-native-scaling ones. ``supports_native_scaling`` only informs the
-    # default (single-pass) and the auto-select/scale warnings; ``--process-size``
-    # is an explicit opt-in escape hatch for very large sets.
-    needs_chunking = (
-        params.process_size is not None
-        and params.process_size > 0
-        and len(genomes) > params.process_size
-    )
-    if needs_chunking:
-        assert params.process_size is not None
-        pre_primary = (
-            params.pre_primary_ani if params.pre_primary_ani is not None else params.primary_ani
-        )
-        pre_secondary = (
-            params.pre_secondary_ani
-            if params.pre_secondary_ani is not None
-            else params.secondary_ani
-        )
-        native = adapter.capabilities.supports_native_scaling
-        logger.info(
-            "Chunking %d genomes at size %d (%s)%s",
-            len(genomes), params.process_size,
-            "native-scaling tool, explicit chunking" if native else "non-native-scaling tool",
-            ""
-            if (pre_primary, pre_secondary) == (params.primary_ani, params.secondary_ani)
-            else f"; stage-1 ANI pri={pre_primary} sec={pre_secondary}",
-        )
-        result = _dereplicate_chunked(
-            adapter, genomes, scratch, derep_params, params.process_size,
-            params.num_processes, pre_primary, pre_secondary, logger,
+    if params.target_reps and params.target_reps > 0:
+        result = _search_target_reps(
+            adapter, genomes, scratch, derep_params, params, params.target_reps, logger
         )
     else:
-        result = adapter.dereplicate(genomes, scratch, derep_params, logger)
+        result = _dereplicate_to_result(adapter, genomes, scratch, derep_params, params, logger)
 
     if params.reduce != "none":
         before = len(result.representatives)
@@ -150,6 +125,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "pre_primary_ani": params.pre_primary_ani,
             "pre_secondary_ani": params.pre_secondary_ani,
             "reduce": params.reduce,
+            "target_reps": params.target_reps,
             **(params.extra or {}),
         },
         tool_versions=versions,
@@ -173,6 +149,95 @@ def _list_genomes(genomes_dir: Path) -> list[Path]:
 
 
 _MAX_REDUCE_DEPTH = 50  # termination backstop; the shrink-guard normally stops sooner
+_MAX_TARGET_ITERS = 12  # binary-search steps for --target-reps
+
+
+def _resolve_pre_thresholds(params: DereplicateParams, secondary: float) -> tuple[float, float]:
+    """Stage-1 (intra-chunk) ANI: explicit --pre-* if set, else the effective values."""
+    pre_primary = (
+        params.pre_primary_ani if params.pre_primary_ani is not None else params.primary_ani
+    )
+    pre_secondary = (
+        params.pre_secondary_ani if params.pre_secondary_ani is not None else secondary
+    )
+    return pre_primary, pre_secondary
+
+
+def _dereplicate_to_result(
+    adapter, genomes: list[Path], scratch: Path, derep_params: DerepParams,
+    params: DereplicateParams, logger,
+) -> DerepResult:
+    """Produce a DerepResult: chunked (when --process-size is set and exceeded) or
+    a single pass. The chunk decision is independent of the search/reduce layers."""
+    needs_chunking = (
+        params.process_size is not None
+        and params.process_size > 0
+        and len(genomes) > params.process_size
+    )
+    if not needs_chunking:
+        return adapter.dereplicate(genomes, scratch, derep_params, logger)
+    assert params.process_size is not None  # guaranteed by needs_chunking
+
+    pre_primary, pre_secondary = _resolve_pre_thresholds(params, derep_params.secondary_ani)
+    native = adapter.capabilities.supports_native_scaling
+    logger.info(
+        "Chunking %d genomes at size %d (%s)%s",
+        len(genomes), params.process_size,
+        "native-scaling tool, explicit chunking" if native else "non-native-scaling tool",
+        ""
+        if (pre_primary, pre_secondary) == (derep_params.primary_ani, derep_params.secondary_ani)
+        else f"; stage-1 ANI pri={pre_primary} sec={pre_secondary}",
+    )
+    return _dereplicate_chunked(
+        adapter, genomes, scratch, derep_params, params.process_size,
+        params.num_processes, pre_primary, pre_secondary, logger,
+    )
+
+
+def _search_target_reps(
+    adapter, genomes: list[Path], scratch: Path, derep_params: DerepParams,
+    params: DereplicateParams, target: int, logger,
+) -> DerepResult:
+    """Binary-search --secondary-ani to land near ``target`` representatives.
+
+    Representative count is monotonic non-decreasing in the ANI threshold (a
+    stricter threshold keeps more reps), so we bisect: too few reps -> raise the
+    threshold, too many -> lower it. Each step re-runs dereplication; capped at
+    ``_MAX_TARGET_ITERS``. Returns the result whose count is closest to target.
+    """
+    lo, hi = 0.80, 0.9999
+    best: DerepResult | None = None
+    best_diff = None
+    best_ani = None
+    seen: set[float] = set()
+    for i in range(_MAX_TARGET_ITERS):
+        mid = round((lo + hi) / 2, 5)
+        if mid in seen:
+            break
+        seen.add(mid)
+        dp = replace(derep_params, secondary_ani=mid)
+        iter_dir = scratch / "target" / f"iter{i}"
+        res = _dereplicate_to_result(adapter, genomes, iter_dir, dp, params, logger)
+        n = len(res.representatives)
+        diff = abs(n - target)
+        logger.info(
+            "target-reps search [%d]: secondary-ani=%.5f -> %d reps (target %d)",
+            i + 1, mid, n, target,
+        )
+        if best_diff is None or diff < best_diff:
+            best, best_diff, best_ani = res, diff, mid
+        if n == target:
+            break
+        if n < target:
+            lo = mid  # too few reps -> stricter threshold
+        else:
+            hi = mid  # too many reps -> looser threshold
+    assert best is not None
+    logger.info(
+        "target-reps: chose secondary-ani=%.5f -> %d representatives (target %d)",
+        best_ani, len(best.representatives), target,
+    )
+    return best
 
 
 def _dereplicate_chunked(
