@@ -53,7 +53,7 @@ Cactus is distributed separately (containers/binaries); see its documentation.
 WD=./francisella
 
 # Full GTDB table (release-pinned):
-repgenr metadata -wd $WD -r 207.0 -v bac120 -d rep -l genus -tg francisella
+repgenr metadata -wd $WD -r 232.0 -v bac120 -d rep -l genus -tg francisella
 # Or query just the target taxon via the GTDB API (no full-table download):
 repgenr metadata -wd $WD --source api -d rep -l genus -tg francisella
 
@@ -79,7 +79,7 @@ repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
 
 ```bash
 nextflow run nextflow/main.nf -profile standard --workdir $WD \
-    --metadata_args "-r 207.0 -v bac120 -d rep -l genus -tg francisella"
+    --metadata_args "-r 232.0 -v bac120 -d rep -l genus -tg francisella"
 ```
 
 Profiles: `standard` (local), `slurm`, `cloud`, `test`. Resource labels

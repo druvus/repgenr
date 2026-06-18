@@ -96,7 +96,7 @@ def _validate(params: MetadataParams) -> None:
         raise UserInputError("--source must be 'tsv' or 'api'.")
     if params.source == "tsv":
         if not params.release or "." not in params.release:
-            raise UserInputError("tsv source needs --release like '207.0' (major.minor).")
+            raise UserInputError("tsv source needs --release like '232.0' (major.minor).")
         if not params.version:
             raise UserInputError("tsv source needs --version (bac120 or ar53).")
     if not (params.target_genus or params.target_family):
@@ -148,7 +148,10 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
         f"https://data.gtdb.ecogenomic.org/releases/release{major}/"
         f"{params.release}/{params.version}_metadata_r{major}"
     )
-    for ext in (".tar.gz", ".tsv.gz"):
+    # Newer GTDB releases (>= r220) ship the metadata as a plain ``.tsv.gz``;
+    # older ones (<= r214) as a ``.tar.gz``. Try the modern layout first, then
+    # fall back, so current releases resolve on the first request.
+    for ext in (".tsv.gz", ".tar.gz"):
         url = base + ext
         dest = ctx.workdir / Path(url).name
         if params.nodownload and dest.exists():
