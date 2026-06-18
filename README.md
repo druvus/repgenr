@@ -77,14 +77,20 @@ repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
 
 ## Nextflow
 
+The Nextflow layer runs the pipeline as typed data channels (no shared working
+directory); results are published under `--outdir`.
+
 ```bash
-nextflow run nextflow/main.nf -profile standard --workdir $WD \
-    --metadata_args "-r 232.0 -v bac120 -d rep -l genus -tg francisella"
+nextflow run nextflow/main.nf -profile standard --outdir results \
+    --metadata_args "-r 232.0 -v bac120 -d rep -l genus -tg francisella" \
+    --derep_tool sourmash --phylo_args "--treebuilder mashtree"
 ```
 
-Profiles: `standard` (local), `slurm`, `cloud`, `test`. Resource labels
-(`process_low/medium/high`) are tuned per profile; heavy aligners such as Cactus
-use `process_high`.
+`--mode viral` runs the BV-BRC path instead. Profiles: `standard` (local),
+`slurm`, `cloud`, `test` (add a container profile such as `singularity` to run
+the tools in pinned images). Resource labels (`process_low/medium/high`) are
+tuned per profile; heavy aligners such as Cactus use `process_high`. Set
+`--derep_process_size` to scatter dereplication across tasks for large inputs.
 
 ## Development
 

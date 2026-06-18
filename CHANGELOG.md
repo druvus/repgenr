@@ -7,13 +7,16 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- **Nextflow nf-core rewrite (Phase 4, in progress)**: parameter schema
-  (`nextflow_schema.json`) with nf-schema validation, execution reports, and
-  nf-core template files (4a); discrete `repgenr dereplicate-chunk` /
-  `dereplicate-merge` CLI steps (4b); a data-channel scatter-gather dereplication
-  subworkflow with `stub:` blocks (4c); and stub-based nf-test plus a CI job
-  running them on Nextflow 26.04 (4d). The per-stage conversion of the remaining
-  stages to data channels is ongoing.
+- **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
+  data-channel workflow with no shared working directory. Parameter schema
+  (`nextflow_schema.json`) with nf-schema validation, execution reports and
+  nf-core template files; stateless `repgenr dereplicate-chunk` /
+  `dereplicate-merge` / `genome-fetch` CLI steps and a portable `selection.tsv`
+  hand-off; a scatter-gather dereplication subworkflow; data-channel
+  `BACTERIAL_DATAFLOW` (metadata -> genome -> derep -> phylo -> tree2tax) and
+  `VIRAL_DATAFLOW` pipelines selected by `--mode`; results published under
+  `--outdir`. Stub-based nf-test and a CI job run them on Nextflow 26.04. The
+  legacy shared-workdir orchestrator and done-signal modules are removed.
 - **Sparse sourmash dereplication back-end**: when the optional
   `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
   uses `manysketch` + `pairwise` to compute only above-threshold edges instead of

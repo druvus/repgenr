@@ -9,21 +9,13 @@
             "title": "Input/output options",
             "type": "object",
             "fa_icon": "fas fa-terminal",
-            "description": "Working directory, results location and pipeline mode.",
-            "required": ["workdir"],
+            "description": "Results location and pipeline mode.",
             "properties": {
-                "workdir": {
-                    "type": "string",
-                    "format": "directory-path",
-                    "description": "Shared RepGenR working directory that every stage reads and writes.",
-                    "help_text": "RepGenR keeps the genome manifest (SQLite), provenance (repgenr.yaml) and per-stage outputs here. Create it with the metadata stage before running downstream stages.",
-                    "fa_icon": "fas fa-folder-open"
-                },
                 "outdir": {
                     "type": "string",
                     "format": "directory-path",
                     "default": "results",
-                    "description": "Directory for pipeline_info execution reports (and, in later increments, published results).",
+                    "description": "Directory for execution reports and published results.",
                     "fa_icon": "fas fa-folder"
                 },
                 "mode": {

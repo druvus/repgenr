@@ -12,16 +12,19 @@ matching FlexTaxD taxonomy. The pipeline runs five stages in order:
 4. **phylo** -- build a phylogeny from the representatives.
 5. **tree2tax** -- emit a FlexTaxD-compatible taxonomy from the tree.
 
-The current Nextflow layer orders these stages and assigns resource labels and
-profiles; the data flows through a single shared working directory
-(`--workdir`). A later Phase 4 increment replaces this with typed data channels.
+The Nextflow layer runs these stages as typed data channels: each stage emits its
+outputs (the metadata selection, genome FASTAs, per-chunk and merged
+representatives, the tree, the taxonomy) as staged files that the next stage
+consumes. There is no shared working directory; results are published under
+`--outdir`. Nextflow owns the fan-out (scatter-gather dereplication).
 
 ## Quick start
 
 ```bash
 nextflow run nextflow/main.nf \
-    --workdir /path/to/workdir \
     --mode bacterial \
+    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
+    --outdir results \
     -profile standard
 ```
 
@@ -31,17 +34,15 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--workdir` | (required) | Shared RepGenR working directory. |
-| `--outdir` | `results` | Location for execution reports (and, later, published results). |
+| `--outdir` | `results` | Published results and execution reports. |
 | `--mode` | `bacterial` | `bacterial` (GTDB) or `viral` (BV-BRC). |
 | `--metadata_args` | see config | Arguments for the bacterial metadata stage. |
-| `--genome_args` | `''` | Arguments for the genome download stage. |
 | `--vmetadata_args` / `--vgenome_args` | see config | Viral metadata / genome selection arguments. |
-| `--dereplicate_args` | `--tool skder` | Dereplication tool and ANI thresholds. |
+| `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
+| `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
+| `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
 | `--tree2tax_args` | `--include-dereplicated` | tree-to-taxonomy (FlexTaxD) arguments. |
-| `--derep_process_size` | `null` | Genomes per chunk for two-stage dereplication. |
-| `--derep_num_processes` | `null` | Parallel chunk workers for two-stage dereplication. |
 
 Parameters are validated against `nextflow/nextflow_schema.json` at launch.
 
@@ -59,11 +60,12 @@ Combine an executor profile with an optional container profile, e.g.
 
 ## Scaling
 
-For large dereplication inputs (10k+ genomes), enable two-stage chunking:
+For large dereplication inputs (10k+ genomes), set a chunk size so the
+dereplication scatters across tasks (one per chunk):
 
 ```bash
-nextflow run nextflow/main.nf --workdir <DIR> \
-    --derep_process_size 2000 --derep_num_processes 4
+nextflow run nextflow/main.nf --outdir results \
+    --derep_tool sourmash --derep_process_size 2000 -profile slurm
 ```
 
 Resource labels (`process_low/medium/high`) scale memory and time with the retry
@@ -90,28 +92,18 @@ nextflow run nextflow/tests/dereplicate_scatter.nf -c nextflow/nextflow.config \
 
 Add `-stub` to exercise the wiring without running the tools.
 
-### Data-channel pipeline (in progress)
+### Pipeline structure
 
-The pipeline is being rebuilt on typed data channels (no shared workdir). The
-full bacterial path now runs end to end as the `BACTERIAL_DATAFLOW` subworkflow:
+`nextflow/main.nf` dispatches by `--mode` to one of two data-channel subworkflows
+that share the dereplication, phylo and tree2tax modules:
 
 ```
-ACQUIRE (metadata -> genome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+bacterial: ACQUIRE  (metadata -> genome)  -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+viral:     VACQUIRE (vmetadata -> vgenome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
 ```
 
 `metadata` emits a portable `selection.tsv`; `genome-fetch` downloads the genomes
 and emits them as a channel feeding the scatter-gather dereplication; `phylo` and
 `tree2tax` run in task-local working directories and emit `tree.nwk`,
-`tree2tax.tsv` and `genomes_map.tsv`. A standalone harness runs the whole thing:
-
-```bash
-nextflow run nextflow/tests/bacterial_dataflow.nf -c nextflow/nextflow.config \
-    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
-    --derep_tool sourmash --phylo_args '--treebuilder mashtree' \
-    --outdir results -profile standard
-```
-
-Add `-stub` for a quick wiring check. The legacy shared-workdir orchestrator
-(`nextflow/main.nf`) is still the default entry; a later increment switches the
-entry point to this data-channel pipeline and removes the legacy modules. The
-viral path is converted after that.
+`tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
+quick wiring check without external tools.
