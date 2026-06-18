@@ -81,3 +81,9 @@ testpaths = ["tests"]
 markers = [
     "requires_binary: test needs an external bioinformatics binary present on PATH",
 ]
+
+[tool.coverage.run]
+source = ["repgenr"]
+
+[tool.coverage.report]
+show_missing = true
