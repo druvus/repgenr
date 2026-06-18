@@ -1,0 +1,19 @@
+nextflow_pipeline {
+
+    name "Pipeline entry (main.nf)"
+    script "../main.nf"
+
+    test("--help prints usage and exits cleanly") {
+        // Compiles main.nf and all included subworkflows/modules, loads the
+        // nf-schema plugin, and exercises the early-exit help path (no stages,
+        // no workdir required).
+        when {
+            params {
+                help = true
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+}
