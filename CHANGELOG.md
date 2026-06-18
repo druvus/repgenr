@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Nextflow nf-core rewrite (Phase 4, in progress)**: parameter schema
+  (`nextflow_schema.json`) with nf-schema validation, execution reports, and
+  nf-core template files (4a); discrete `repgenr dereplicate-chunk` /
+  `dereplicate-merge` CLI steps (4b); a data-channel scatter-gather dereplication
+  subworkflow with `stub:` blocks (4c); and stub-based nf-test plus a CI job
+  running them on Nextflow 24.10 (4d). The per-stage conversion of the remaining
+  stages to data channels is ongoing.
 - **Sparse sourmash dereplication back-end**: when the optional
   `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
   uses `manysketch` + `pairwise` to compute only above-threshold edges instead of

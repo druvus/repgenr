@@ -34,3 +34,30 @@ jobs:
 
       - name: Pytest
         run: pytest -q --cov=repgenr --cov-report=term-missing --cov-fail-under=50
+
+  nf-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "24.10.5"
+
+      - name: Install nf-test
+        run: |
+          wget -qO- https://get.nf-test.com | bash -s 0.9.5
+          sudo mv nf-test /usr/local/bin/
+
+      # Stub-based tests: they exercise channel wiring and the file contracts
+      # without external tools or network, so no repgenr/bioinformatics stack is
+      # needed here (the per-stage tools are covered by the Python test suite).
+      - name: Run nf-test
+        run: nf-test test --verbose

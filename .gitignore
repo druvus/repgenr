@@ -174,3 +174,7 @@ cython_debug/
 # Nextflow run artifacts launched from repo root
 results/
 work/
+
+# nf-test
+.nf-test/
+.nf-test.log

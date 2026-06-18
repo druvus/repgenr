@@ -1,0 +1,36 @@
+nextflow_process {
+
+    name "DEREP_CHUNK (stub)"
+    script "../modules/local/derep_chunk.nf"
+    process "DEREP_CHUNK"
+    options "-stub"
+
+    test("dereplicates a chunk and emits a contract directory") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'chunk_0'],
+                    [
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta")
+                    ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            // a chunk result directory plus a versions file are emitted
+            assert process.out.chunk
+            assert process.out.versions
+            with(process.out.chunk.get(0)) {
+                assert get(0).id == 'chunk_0'
+                def dir = get(1)
+                assert path("${dir}/clusters.tsv").exists()
+                assert path("${dir}/genome_status.tsv").exists()
+                assert path("${dir}/representatives").exists()
+            }
+        }
+    }
+}
