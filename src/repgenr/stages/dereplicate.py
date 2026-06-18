@@ -46,6 +46,10 @@ class DereplicateParams:
     # them looser to avoid over-collapsing within a chunk before the stage-2 pass.
     pre_primary_ani: float | None = None
     pre_secondary_ani: float | None = None
+    # Taxonomy-aware reduction applied after ANI dereplication: collapse the
+    # representatives to one per taxon ("species" or "genus") using the manifest
+    # taxonomy. "none" keeps the ANI result as-is.
+    reduce: str = "none"
     extra: dict | None = None
 
 
@@ -122,6 +126,14 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     else:
         result = adapter.dereplicate(genomes, scratch, derep_params, logger)
 
+    if params.reduce != "none":
+        before = len(result.representatives)
+        result = _reduce_by_taxonomy(ctx, result, params.reduce, logger)
+        logger.info(
+            "Taxonomy reduction (one per %s): %d -> %d representatives",
+            params.reduce, before, len(result.representatives),
+        )
+
     _write_contract(ctx, result)
     _update_manifest(ctx, result)
 
@@ -137,6 +149,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "num_processes": params.num_processes,
             "pre_primary_ani": params.pre_primary_ani,
             "pre_secondary_ani": params.pre_secondary_ani,
+            "reduce": params.reduce,
             **(params.extra or {}),
         },
         tool_versions=versions,
@@ -246,6 +259,71 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
         clusters=final_clusters,
         genome_status=status,
     )
+
+
+def _reduce_by_taxonomy(
+    ctx: WorkdirContext, result: DerepResult, level: str, logger
+) -> DerepResult:
+    """Collapse the ANI representatives to one per taxon (species|genus).
+
+    Representatives sharing a manifest taxon are merged into a single keeper (the
+    one with the largest existing cluster, then lexical), and the others -- plus
+    their cluster members -- become contained under it. Representatives whose
+    taxon is unknown/empty are kept as-is (each its own group), so reduction never
+    silently drops an un-annotated genome.
+    """
+    from ..dereplicators.base import STATUS_CONTAINED, STATUS_REPRESENTATIVE
+
+    taxon_of = _taxon_lookup(ctx, level)
+
+    # group rep filename -> taxon key; unknown taxon -> unique per-rep key (kept)
+    groups: dict[str, list[str]] = {}
+    rep_names = [rep.name for rep in result.representatives]
+    for name in rep_names:
+        taxon = taxon_of.get(name, "")
+        key = taxon if taxon else f"\x00{name}"  # sentinel: unknown taxa stay singletons
+        groups.setdefault(key, []).append(name)
+
+    rep_by_name = {rep.name: rep for rep in result.representatives}
+    new_reps: list = []
+    new_clusters: dict[str, list[str]] = {}
+    status: dict[str, str] = {}
+
+    for members in groups.values():
+        # keeper: largest existing cluster, tie-break by name (deterministic)
+        keeper = max(members, key=lambda n: (len(result.clusters.get(n, [])), n))
+        new_reps.append(rep_by_name[keeper])
+        status[keeper] = STATUS_REPRESENTATIVE
+        contained: list[str] = []
+        for rep_name in members:
+            # the keeper's own members, plus each folded rep and its members
+            own = result.clusters.get(rep_name, [])
+            folded = [] if rep_name == keeper else [rep_name]
+            for g in (*folded, *own):
+                contained.append(g)
+                status[g] = STATUS_CONTAINED
+        new_clusters[keeper] = contained
+
+    return DerepResult(
+        representatives=sorted(new_reps),
+        clusters=new_clusters,
+        genome_status=status,
+    )
+
+
+def _taxon_lookup(ctx: WorkdirContext, level: str) -> dict[str, str]:
+    """Map each genome filename to its taxon string at ``level`` from the manifest."""
+    lookup: dict[str, str] = {}
+    try:
+        records = ctx.manifest.all_genomes(include_outgroup=True)
+    except Exception:  # no manifest (e.g. tests) -> empty taxonomy, everything stays a singleton
+        return lookup
+    for rec in records:
+        if not rec.filename:
+            continue
+        taxon = rec.species if level == "species" else rec.genus
+        lookup[rec.filename] = taxon or ""
+    return lookup
 
 
 def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
