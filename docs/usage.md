@@ -93,16 +93,25 @@ Add `-stub` to exercise the wiring without running the tools.
 ### Data-channel pipeline (in progress)
 
 The pipeline is being rebuilt on typed data channels (no shared workdir). The
-front is in place: the `ACQUIRE` subworkflow runs `metadata` and emits a portable
-`selection.tsv`, then `genome-fetch` downloads the genomes and emits them as a
-channel that feeds `DEREPLICATE_SCATTER` directly. A standalone harness chains the
-two:
+full bacterial path now runs end to end as the `BACTERIAL_DATAFLOW` subworkflow:
 
-```bash
-nextflow run nextflow/tests/acquire_scatter.nf -c nextflow/nextflow.config \
-    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
-    --derep_tool sourmash --outdir results -profile standard
+```
+ACQUIRE (metadata -> genome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
 ```
 
-The remaining stages (phylo, tree2tax) are still served by the shared-workdir
-orchestrator (`nextflow/main.nf`) and move to data channels in later increments.
+`metadata` emits a portable `selection.tsv`; `genome-fetch` downloads the genomes
+and emits them as a channel feeding the scatter-gather dereplication; `phylo` and
+`tree2tax` run in task-local working directories and emit `tree.nwk`,
+`tree2tax.tsv` and `genomes_map.tsv`. A standalone harness runs the whole thing:
+
+```bash
+nextflow run nextflow/tests/bacterial_dataflow.nf -c nextflow/nextflow.config \
+    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
+    --derep_tool sourmash --phylo_args '--treebuilder mashtree' \
+    --outdir results -profile standard
+```
+
+Add `-stub` for a quick wiring check. The legacy shared-workdir orchestrator
+(`nextflow/main.nf`) is still the default entry; a later increment switches the
+entry point to this data-channel pipeline and removes the legacy modules. The
+viral path is converted after that.

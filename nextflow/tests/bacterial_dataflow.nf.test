@@ -1,0 +1,23 @@
+nextflow_pipeline {
+
+    name "BACTERIAL_DATAFLOW (stub)"
+    script "../tests/bacterial_dataflow.nf"
+    options "-stub"
+
+    test("the full data-channel pipeline wires metadata -> genome -> derep -> phylo -> tree2tax") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            // tree2tax + genomes_map + tree are published to outdir
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/genomes_map.tsv").exists()
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+        }
+    }
+}
