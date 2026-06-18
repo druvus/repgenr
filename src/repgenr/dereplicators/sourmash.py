@@ -1,10 +1,21 @@
 """sourmash dereplication adapter (k-mer / MinHash ANI clustering).
 
-Sketches each genome, runs an all-vs-all ``sourmash compare`` to get a
-containment/similarity matrix, then greedily picks representatives: walk genomes
-ordered by connectivity, and absorb any genome whose similarity to a chosen
-representative is above the threshold. Fast and low-memory, useful as a
-scalable alternative to alignment-based ANI.
+Sketches each genome and greedily picks representatives: walk genomes ordered by
+connectivity, and absorb any genome whose Jaccard similarity to a chosen
+representative is above the threshold. Fast and low-memory, useful as a scalable
+alternative to alignment-based ANI.
+
+Two back-ends compute the pairwise similarities, picked automatically:
+
+* **Sparse (preferred at scale)**: when the ``sourmash_plugin_branchwater``
+  plugin is installed, ``sourmash scripts manysketch`` + ``sourmash scripts
+  pairwise`` produce only the above-threshold edges (an edge list), never the
+  dense N x N matrix. This keeps memory roughly linear in the number of close
+  pairs rather than quadratic in the number of genomes, which matters at 10k+.
+* **Dense (fallback)**: plain ``sourmash sketch`` + ``sourmash compare`` build
+  the full N x N similarity matrix. Used when the plugin is absent (e.g. inside a
+  stock BioContainer). For the same threshold both back-ends pick the same
+  representatives on well-separated inputs.
 """
 
 from __future__ import annotations
@@ -12,7 +23,7 @@ from __future__ import annotations
 import csv
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +31,7 @@ import numpy.typing as npt
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.errors import WorkdirError
+from ..core.errors import MissingBinaryError, ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import write_fofn
 from .base import (
@@ -55,7 +66,45 @@ class SourmashDereplicator(Dereplicator):
         out_dir.mkdir(parents=True, exist_ok=True)
         ksize = int(params.extra.get("ksize", self.capabilities.default_params["ksize"]))
         scaled = int(params.extra.get("scaled", self.capabilities.default_params["scaled"]))
+        sani = params.secondary_ani
+        threshold = sani if sani <= 1.0 else sani / 100
 
+        if _branchwater_available(self.capabilities, logger):
+            try:
+                clusters, status = self._sparse_dereplicate(
+                    genomes, out_dir, ksize, scaled, threshold, params, logger
+                )
+            except (ToolExecutionError, WorkdirError) as exc:
+                logger.warning(
+                    "sourmash branchwater sparse path failed (%s); "
+                    "falling back to dense compare",
+                    exc,
+                )
+                clusters, status = self._dense_dereplicate(
+                    genomes, out_dir, ksize, scaled, threshold, logger
+                )
+        else:
+            clusters, status = self._dense_dereplicate(
+                genomes, out_dir, ksize, scaled, threshold, logger
+            )
+
+        rep_paths = [p for p in genomes if p.name in clusters]
+        return DerepResult(
+            representatives=sorted(rep_paths),
+            clusters=clusters,
+            genome_status=status,
+        )
+
+    def _dense_dereplicate(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        threshold: float,
+        logger: logging.Logger,
+    ) -> tuple[dict[str, list[str]], dict[str, str]]:
+        """Stock sourmash sketch + N x N compare (no plugin needed)."""
         sig_dir = out_dir / "signatures"
         sig_dir.mkdir(exist_ok=True)
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
@@ -101,17 +150,162 @@ class SourmashDereplicator(Dereplicator):
 
         labels, sim = _read_compare_csv(matrix_csv)
         name_by_label = _match_labels_to_genomes(labels, genomes)
-        sani = params.secondary_ani
-        threshold = sani if sani <= 1.0 else sani / 100
+        return _greedy_cluster(labels, sim, name_by_label, threshold)
 
-        clusters, status = _greedy_cluster(labels, sim, name_by_label, threshold)
+    def _sparse_dereplicate(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        threshold: float,
+        params: DerepParams,
+        logger: logging.Logger,
+    ) -> tuple[dict[str, list[str]], dict[str, str]]:
+        """Branchwater manysketch + pairwise: emit only above-threshold edges.
 
-        rep_paths = [p for p in genomes if p.name in clusters]
-        return DerepResult(
-            representatives=sorted(rep_paths),
-            clusters=clusters,
-            genome_status=status,
+        ``pairwise -t`` is a *containment* threshold for which pairs to report.
+        Containment is always >= Jaccard, so reporting at the Jaccard ``threshold``
+        yields a superset of the edges we want; we then keep only pairs whose
+        Jaccard column is >= ``threshold``, matching the dense ``compare`` graph.
+        """
+        # manysketch reads a CSV of (name, genome_filename, protein_filename). The
+        # name becomes the signature name, which is what pairwise reports -- plain
+        # sketch leaves the name empty, so the edge list would be unlabelled.
+        sketch_csv = out_dir / "manysketch.csv"
+        lines = ["name,genome_filename,protein_filename"]
+        for g in genomes:
+            lines.append(f"{g.stem},{os.path.abspath(g)},")
+        sketch_csv.write_text("\n".join(lines) + "\n")
+
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+        threads = str(params.threads)
+        sigs_zip = out_dir / "signatures.zip"
+        run_tool(self.capabilities,
+            [
+                "sourmash", "scripts", "manysketch", sketch_csv,
+                "-o", sigs_zip,
+                "-p", f"dna,k={ksize},scaled={scaled}",
+                "-c", threads,
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            extra_mounts=[*genome_dirs, str(sketch_csv)],
         )
+        if not sigs_zip.exists():
+            raise WorkdirError(f"sourmash manysketch produced no signatures at {sigs_zip}")
+
+        pairwise_csv = out_dir / "pairwise.csv"
+        run_tool(self.capabilities,
+            [
+                "sourmash", "scripts", "pairwise", sigs_zip,
+                "-o", pairwise_csv,
+                "-t", f"{threshold:g}",
+                "-k", str(ksize),
+                "-c", threads,
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+        )
+
+        name_by_label = {g.stem: g.name for g in genomes}
+        # Iterate in genome-basename order so the greedy tie-break (which member of
+        # a mutually-similar group becomes the representative) matches the dense
+        # ``compare`` path, whose label order is the sorted signature-file glob.
+        labels = [g.stem for g in sorted(genomes, key=lambda g: g.name)]
+        neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels))
+        return _sparse_greedy_cluster(labels, neighbors, name_by_label)
+
+
+def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bool:
+    """True when the branchwater plugin (``sourmash scripts pairwise``) is usable.
+
+    Probed through ``run_tool`` so the answer reflects where the tool actually
+    runs: native (plugin pip-installed) vs a container image that may not bundle
+    it. Any failure (missing subcommand, missing image, missing binary) means the
+    dense fallback is used instead.
+    """
+    try:
+        rc = run_tool(
+            caps,
+            ["sourmash", "scripts", "pairwise", "--help"],
+            logger=logger,
+            check=False,
+            stdout_path=os.devnull,
+            log_prefix="sourmash",
+        )
+    except (ToolExecutionError, MissingBinaryError, FileNotFoundError, OSError):
+        return False
+    return rc == 0
+
+
+def _parse_pairwise_csv(
+    path: Path, threshold: float, known: set[str]
+) -> dict[str, set[str]]:
+    """Parse a branchwater ``pairwise`` edge list into a symmetric neighbour map.
+
+    Keeps pairs whose Jaccard is >= ``threshold`` (mirroring the dense graph) and
+    drops self-edges. Only labels in ``known`` are kept, so a stray name cannot
+    introduce a phantom node.
+    """
+    neighbors: dict[str, set[str]] = {}
+    with open(path, newline="") as fo:
+        reader = csv.DictReader(fo)
+        for row in reader:
+            q = row.get("query_name", "")
+            m = row.get("match_name", "")
+            if q == m or q not in known or m not in known:
+                continue
+            try:
+                jaccard = float(row.get("jaccard", "") or "nan")
+            except ValueError:
+                continue
+            if jaccard < threshold:
+                continue
+            neighbors.setdefault(q, set()).add(m)
+            neighbors.setdefault(m, set()).add(q)
+    return neighbors
+
+
+def _sparse_greedy_cluster(
+    labels: Sequence[str],
+    neighbors: Mapping[str, Iterable[str]],
+    name_by_label: Mapping[str, str],
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Greedy representative pick over a sparse adjacency map.
+
+    Mirrors :func:`_greedy_cluster`: prefer the most-connected genome (ties broken
+    by input order) as the representative, then claim its still-free neighbours.
+    Genomes with no above-threshold neighbour become their own representatives.
+    """
+    order = sorted(
+        range(len(labels)),
+        key=lambda i: (-len(set(neighbors.get(labels[i], ()))), i),
+    )
+    assigned: dict[str, str] = {}  # label -> representative label
+    reps: list[str] = []
+    for i in order:
+        lab = labels[i]
+        if lab in assigned:
+            continue
+        reps.append(lab)
+        assigned[lab] = lab
+        for nb in neighbors.get(lab, ()):
+            if nb not in assigned:
+                assigned[nb] = lab
+
+    clusters: dict[str, list[str]] = {}
+    status: dict[str, str] = {}
+    for rep in reps:
+        clusters[name_by_label[rep]] = []
+        status[name_by_label[rep]] = STATUS_REPRESENTATIVE
+    for lab in labels:
+        rep = assigned[lab]
+        if lab == rep:
+            continue
+        clusters[name_by_label[rep]].append(name_by_label[lab])
+        status[name_by_label[lab]] = STATUS_CONTAINED
+    return clusters, status
 
 
 def _read_compare_csv(path: Path) -> tuple[list[str], npt.NDArray[np.float64]]:

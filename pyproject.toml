@@ -23,6 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Sparse sourmash dereplication back-end (manysketch + pairwise). Optional: the
+# sourmash adapter falls back to dense `sourmash compare` when it is absent.
+sparse = [
+    "sourmash_plugin_branchwater>=0.9",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

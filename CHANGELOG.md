@@ -4,6 +4,18 @@ All notable changes to RepGenR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Sparse sourmash dereplication back-end**: when the optional
+  `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
+  uses `manysketch` + `pairwise` to compute only above-threshold edges instead of
+  the dense N x N `compare` matrix, keeping memory roughly linear in the number of
+  close pairs (relevant at 10k+ genomes). Selected automatically; falls back to
+  the dense `compare` path when the plugin is absent. Both paths yield the same
+  cluster partition and representative count for a given threshold. Install via
+  the `sparse` extra or the `sourmash_plugin_branchwater` conda package.
+
 ## [2.0.0] - 2026-06-18
 
 First stable release of the v2 rewrite: a modular `repgenr` Python package
