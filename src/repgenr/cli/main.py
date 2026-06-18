@@ -11,14 +11,17 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import logging
+import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from .. import __version__
 from ..core.context import WorkdirContext
-from ..core.errors import RepGenRError
+from ..core.errors import RepGenRError, UserInputError
 from ..core.logging import configure_logging
 
 app = typer.Typer(
@@ -28,7 +31,19 @@ app = typer.Typer(
 )
 
 # Top-level run options shared by every subcommand (set in the callback).
-_RUN_STATE: dict[str, bool] = {"force": False}
+_RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
+
+
+def _require_choice(value: str, choices: set[str], label: str) -> None:
+    if value not in choices:
+        raise UserInputError(
+            f"Invalid {label} {value!r}. Choose from: {', '.join(sorted(choices))}."
+        )
+
+
+def _require_unit_interval(value: float | None, label: str) -> None:
+    if value is not None and not (0.0 < value <= 1.0):
+        raise UserInputError(f"{label} must be in (0, 1], got {value}.")
 
 
 def _stage_fingerprint(stage_name: str, params: object) -> str:
@@ -82,11 +97,21 @@ def main(
         False, "--force/--no-force", "-f", envvar="REPGENR_FORCE",
         help="Re-run a stage even if it already completed with the same parameters.",
     ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose (DEBUG) logging."),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Only warnings and errors."),
 ) -> None:
     """RepGenR top-level entry point."""
     from ..core.containers import configure_container
 
     _RUN_STATE["force"] = force
+    if quiet:
+        level = logging.WARNING
+    elif verbose:
+        level = logging.DEBUG
+    else:
+        env = os.environ.get("REPGENR_LOG_LEVEL")
+        level = getattr(logging, env.upper(), logging.INFO) if env else logging.INFO
+    _RUN_STATE["log_level"] = level
     configure_container(
         backend=container, engine=container_engine, platform=platform,
         cache_dir=container_cache, wave_enabled=wave,
@@ -100,7 +125,9 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
     (fingerprint match), unless ``--force`` is set. A stage that crashed before
     recording completion has no ``completed`` stamp and so always re-runs.
     """
-    logger = configure_logging(workdir if (create or workdir.exists()) else None)
+    logger = configure_logging(
+        workdir if (create or workdir.exists()) else None, level=_RUN_STATE["log_level"]
+    )
     try:
         ctx = WorkdirContext(workdir, logger=logger, create=create)
         params = build_params()
@@ -257,9 +284,16 @@ def dereplicate(
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
+    from ..dereplicators.base import registry as _derep_registry
     from ..stages.dereplicate import DereplicateParams
 
     def build() -> DereplicateParams:
+        _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
+        _require_unit_interval(primary_ani, "--primary-ani")
+        _require_unit_interval(secondary_ani, "--secondary-ani")
+        _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        _require_unit_interval(pre_primary_ani, "--pre-primary-ani")
+        _require_unit_interval(pre_secondary_ani, "--pre-secondary-ani")
         return DereplicateParams(
             tool=tool,
             primary_ani=primary_ani,
@@ -286,9 +320,12 @@ def snptype(
     threads: int = typer.Option(16, "-t", "--threads"),
 ) -> None:
     """Call SNPs and build a core-SNP alignment."""
+    from ..snptypers.base import registry as _snp_registry
     from ..stages.snptype import SnptypeParams
 
     def build() -> SnptypeParams:
+        _require_choice(tool, set(_snp_registry.names()), "--tool")
+        _require_choice(mask, {"none", "gubbins"}, "--mask")
         return SnptypeParams(
             tool=tool,
             threads=threads,
@@ -318,9 +355,18 @@ def phylo(
     threads: int = typer.Option(16, "-t", "--threads"),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
+    from ..aligners.base import registry as _aln_registry
+    from ..snptypers.base import registry as _snp_registry
     from ..stages.phylo import PhyloParams
+    from ..treebuilders.base import registry as _tb_registry
 
     def build() -> PhyloParams:
+        _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
+        _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
+        if msa_source == "aligner":
+            _require_choice(aligner, set(_aln_registry.names()), "--aligner")
+        else:
+            _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
         return PhyloParams(
             treebuilder=treebuilder,
             msa_source=msa_source,
