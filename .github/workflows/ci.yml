@@ -49,7 +49,7 @@ jobs:
       - name: Install Nextflow
         uses: nf-core/setup-nextflow@v2
         with:
-          version: "24.10.5"
+          version: "26.04.3"
 
       - name: Install nf-test
         run: |

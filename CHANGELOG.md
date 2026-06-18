@@ -12,7 +12,7 @@ All notable changes to RepGenR are documented here. The format follows
   nf-core template files (4a); discrete `repgenr dereplicate-chunk` /
   `dereplicate-merge` CLI steps (4b); a data-channel scatter-gather dereplication
   subworkflow with `stub:` blocks (4c); and stub-based nf-test plus a CI job
-  running them on Nextflow 24.10 (4d). The per-stage conversion of the remaining
+  running them on Nextflow 26.04 (4d). The per-stage conversion of the remaining
   stages to data channels is ongoing.
 - **Sparse sourmash dereplication back-end**: when the optional
   `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
