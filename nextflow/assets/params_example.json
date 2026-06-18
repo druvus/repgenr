@@ -1,0 +1,10 @@
+{
+  "mode": "bacterial",
+  "metadata_args": "-r 232.0 -v bac120 -d rep -l genus -tg francisella",
+  "derep_tool": "sourmash",
+  "derep_secondary_ani": 0.95,
+  "derep_process_size": 2000,
+  "phylo_args": "--treebuilder mashtree",
+  "tree2tax_args": "--include-dereplicated",
+  "outdir": "results"
+}

@@ -39,12 +39,6 @@
                     "description": "Arguments for the bacterial metadata stage (GTDB selection).",
                     "fa_icon": "fas fa-table"
                 },
-                "genome_args": {
-                    "type": "string",
-                    "default": "",
-                    "description": "Arguments for the genome download stage.",
-                    "fa_icon": "fas fa-download"
-                },
                 "vmetadata_args": {
                     "type": "string",
                     "default": "-t adenoviridae",
@@ -56,12 +50,6 @@
                     "default": "-tg mastadenovirus",
                     "description": "Arguments for the viral genome selection stage.",
                     "fa_icon": "fas fa-download"
-                },
-                "dereplicate_args": {
-                    "type": "string",
-                    "default": "--tool skder",
-                    "description": "Arguments for the dereplication stage (tool and ANI thresholds).",
-                    "fa_icon": "fas fa-compress-arrows-alt"
                 },
                 "phylo_args": {
                     "type": "string",
@@ -84,18 +72,10 @@
             "description": "Two-stage chunking knobs for large dereplication inputs.",
             "properties": {
                 "derep_process_size": {
-                    "type": ["integer", "null"],
+                    "type": ["integer", "string", "null"],
                     "default": null,
-                    "minimum": 1,
-                    "description": "Genomes per chunk for two-stage dereplication. Leave unset for a single pass.",
+                    "description": "Genomes per chunk for the scatter-gather dereplication. Leave unset for a single chunk. (string accepted so command-line overrides validate.)",
                     "fa_icon": "fas fa-th"
-                },
-                "derep_num_processes": {
-                    "type": ["integer", "null"],
-                    "default": null,
-                    "minimum": 1,
-                    "description": "Number of parallel chunk workers for two-stage dereplication.",
-                    "fa_icon": "fas fa-microchip"
                 },
                 "derep_tool": {
                     "type": "string",
@@ -105,27 +85,21 @@
                     "fa_icon": "fas fa-compress-arrows-alt"
                 },
                 "derep_primary_ani": {
-                    "type": "number",
+                    "type": ["number", "string"],
                     "default": 0.90,
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Primary ANI threshold for the scatter-gather subworkflow.",
+                    "description": "Primary ANI threshold for the scatter-gather subworkflow (0-1).",
                     "fa_icon": "fas fa-percent"
                 },
                 "derep_secondary_ani": {
-                    "type": "number",
+                    "type": ["number", "string"],
                     "default": 0.99,
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Secondary ANI threshold for the scatter-gather subworkflow.",
+                    "description": "Secondary ANI threshold for the scatter-gather subworkflow (0-1).",
                     "fa_icon": "fas fa-percent"
                 },
                 "derep_aligned_fraction": {
-                    "type": "number",
+                    "type": ["number", "string"],
                     "default": 0.50,
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Aligned-fraction threshold for the scatter-gather subworkflow.",
+                    "description": "Aligned-fraction threshold for the scatter-gather subworkflow (0-1).",
                     "fa_icon": "fas fa-percent"
                 }
             }
