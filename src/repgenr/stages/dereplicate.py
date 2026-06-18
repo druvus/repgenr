@@ -280,11 +280,11 @@ def _update_manifest(ctx: WorkdirContext, result: DerepResult) -> None:
             rep_file = rep_by_member.get(genome)
             representative = _accession_from_filename(rep_file) if rep_file else None
         updates.append((accession, status, representative))
-    # one batched transaction instead of a commit per genome
-    try:
-        manifest.set_derep_status_many(updates)
-    except Exception:  # genomes may not be in manifest (e.g. tests) -- non-fatal
-        pass
+    # One batched transaction instead of a commit per genome. Accessions absent
+    # from the manifest are no-op UPDATEs (not errors), so we no longer swallow
+    # exceptions -- a real database error should surface, not corrupt the manifest
+    # silently.
+    manifest.set_derep_status_many(updates)
 
 
 def _accession_from_filename(filename: str | None) -> str | None:

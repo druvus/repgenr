@@ -4,11 +4,50 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repgenr.core.manifest import GenomeRecord, Manifest
+import pytest
+
+from repgenr.core.errors import WorkdirError
+from repgenr.core.manifest import (
+    BUSY_TIMEOUT_MS,
+    SCHEMA_VERSION,
+    GenomeRecord,
+    Manifest,
+)
 
 
 def _rec(i: int) -> GenomeRecord:
     return GenomeRecord(accession=f"GCF_{i:06d}.1", filename=f"f_{i}.fasta", source="gtdb")
+
+
+def test_schema_version_and_busy_timeout(tmp_path: Path) -> None:
+    m = Manifest(tmp_path / "manifest.sqlite")
+    assert int(m._conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION
+    assert int(m._conn.execute("PRAGMA busy_timeout").fetchone()[0]) == BUSY_TIMEOUT_MS
+    m.close()
+
+
+def test_adopts_pre_versioning_db(tmp_path: Path) -> None:
+    # A pre-versioning DB reports user_version=0; opening it adopts v1 and keeps data.
+    p = tmp_path / "manifest.sqlite"
+    m = Manifest(p)
+    m.upsert_many([_rec(1)])
+    m._conn.execute("PRAGMA user_version=0")  # simulate an old, unversioned DB
+    m._conn.commit()
+    m.close()
+    m2 = Manifest(p)
+    assert int(m2._conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION
+    assert m2.count() == 1
+    m2.close()
+
+
+def test_rejects_newer_schema(tmp_path: Path) -> None:
+    p = tmp_path / "manifest.sqlite"
+    m = Manifest(p)
+    m._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION + 1}")
+    m._conn.commit()
+    m.close()
+    with pytest.raises(WorkdirError, match="newer than this"):
+        Manifest(p)
 
 
 def test_wal_mode_enabled(tmp_path: Path) -> None:
