@@ -23,7 +23,7 @@ from ..core.errors import UserInputError, WorkdirError
 from ..core.process import run as run_cmd
 from ..viral.entrez import TAXNAMES_ORDERED
 
-_MASHTREE = BinarySpec("mashtree", version_args=("--version",))
+_MASHTREE = BinarySpec("mashtree", version_args=("--version",), min_version="1.2")
 
 
 @dataclass

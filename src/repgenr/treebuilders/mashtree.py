@@ -16,7 +16,9 @@ class MashtreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="mashtree",
         conda=("bioconda::mashtree",),
-        required_binaries=(BinarySpec("mashtree", version_args=("--version",)),),
+        required_binaries=(
+            BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),
+        ),
         recommended_max_genomes=10000,
         threads_param="--numcpus",
     )

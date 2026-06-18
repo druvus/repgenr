@@ -18,7 +18,9 @@ class RaxmlNgBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="raxmlng",
         conda=("bioconda::raxml-ng",),
-        required_binaries=(BinarySpec("raxml-ng", version_args=("--version",)),),
+        required_binaries=(
+            BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),
+        ),
         recommended_max_genomes=1000,
         threads_param="--threads",
     )

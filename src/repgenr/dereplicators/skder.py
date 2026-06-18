@@ -47,8 +47,8 @@ class SkderDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="skder",
         required_binaries=(
-            BinarySpec("skder", version_args=("-v",)),
-            BinarySpec("skani", version_args=("-V",)),
+            BinarySpec("skder", version_args=("-v",), min_version="1.0"),
+            BinarySpec("skani", version_args=("-V",), min_version="0.2"),
         ),
         default_params={"mode": "greedy"},
         recommended_max_genomes=None,  # scales natively

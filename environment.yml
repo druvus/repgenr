@@ -1,4 +1,9 @@
 name: repgenr
+# Lower bounds match the min_version floors enforced at preflight (BinarySpec
+# min_version). For a fully reproducible environment, generate a pinned lock from
+# a solved env (e.g. `conda env export --no-builds > environment.lock.yml`, or
+# conda-lock) per platform; these floors only guard against known-incompatible
+# old tools, not exact reproducibility.
 channels:
   - conda-forge
   - bioconda
@@ -11,22 +16,24 @@ dependencies:
   - biopython
   - ete3
   - pyyaml
+  - numpy>=1.26
   # Dereplication tools
   - drep
   - checkm-genome
-  - skder
+  - skder>=1.0
+  - skani>=0.2
   - galah
-  - sourmash
+  - sourmash>=4.0
   # Genome download
   - ncbi-datasets-cli
   # Aligners
   - progressivemauve
   - sibeliaz
   # cactus is distributed separately (containers/binaries); see docs
-  # SNP typers
-  - minimap2
-  - samtools
-  - bcftools
+  # SNP typers (samtools/bcftools >= 1.10: an ancient 0.1.x breaks bcftools mpileup)
+  - minimap2>=2.17
+  - samtools>=1.10
+  - bcftools>=1.10
   - snippy
   - parsnp
   - harvesttools
@@ -34,7 +41,7 @@ dependencies:
   # Tree builders
   - iqtree
   - fasttree
-  - mashtree
-  - raxml-ng
+  - mashtree>=1.2
+  - raxml-ng>=1.0
   - pip:
       - -e .

@@ -36,7 +36,9 @@ class SourmashDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="sourmash",
         conda=("bioconda::sourmash",),
-        required_binaries=(BinarySpec("sourmash", version_args=("--version",)),),
+        required_binaries=(
+            BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
+        ),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=None,
         supports_native_scaling=True,

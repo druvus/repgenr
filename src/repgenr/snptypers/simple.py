@@ -22,9 +22,11 @@ from .base import SnpParams, SnpResult, SnpTyper
 _CAPABILITIES = ToolCapabilities(
     name="simple",
     required_binaries=(
-        BinarySpec("minimap2", version_args=("--version",)),
-        BinarySpec("samtools", version_args=("--version",)),
-        BinarySpec("bcftools", version_args=("--version",)),
+        BinarySpec("minimap2", version_args=("--version",), min_version="2.17"),
+        # samtools/bcftools >= 1.10: an ancient 0.1.x (pulled in by some perl
+        # deps) lacks `bcftools mpileup` and breaks the SNP pipeline.
+        BinarySpec("samtools", version_args=("--version",), min_version="1.10"),
+        BinarySpec("bcftools", version_args=("--version",), min_version="1.10"),
     ),
     recommended_max_genomes=2000,
     threads_param=None,
