@@ -10,13 +10,15 @@ process METADATA {
     publishDir "${params.outdir}/metadata", mode: 'copy'
 
     output:
-    path "selection.tsv", emit: selection
-    path "versions.yml" , emit: versions
+    path "selection.tsv"        , emit: selection
+    path "outgroup_accession.txt", emit: outgroup_accession
+    path "versions.yml"         , emit: versions
 
     script:
     """
     repgenr ${params.repgenr_opts} metadata -wd metadata_wd ${params.metadata_args}
     cp metadata_wd/selection.tsv selection.tsv
+    cp metadata_wd/outgroup_accession.txt outgroup_accession.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -30,6 +32,7 @@ process METADATA {
     printf 'GCF_000001.1\\tFam\\tGen\\tsp1\\t0\\tFam_Gen_sp1_GCF_000001.1.fasta\\n' >> selection.tsv
     printf 'GCF_000002.1\\tFam\\tGen\\tsp2\\t0\\tFam_Gen_sp2_GCF_000002.1.fasta\\n' >> selection.tsv
     printf 'GCF_000009.1\\tFam\\tOut\\tgrp\\t1\\tFam_Out_grp_GCF_000009.1.fasta\\n' >> selection.tsv
+    printf 'GCF_000009.1\\n' > outgroup_accession.txt
     touch versions.yml
     """
 }

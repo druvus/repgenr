@@ -1,0 +1,22 @@
+nextflow_pipeline {
+
+    name "VIRAL_DATAFLOW (stub)"
+    script "../tests/viral_dataflow.nf"
+    options "-stub"
+
+    test("the viral data-channel pipeline wires vacquire -> derep -> phylo -> tree2tax") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 1
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/genomes_map.tsv").exists()
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+        }
+    }
+}

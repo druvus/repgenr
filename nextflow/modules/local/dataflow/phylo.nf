@@ -14,7 +14,7 @@ process PHYLO {
     input:
     path reps_dir
     path outgroup
-    path selection
+    path outgroup_accession
 
     output:
     path "tree/tree.nwk", emit: tree
@@ -29,7 +29,7 @@ process PHYLO {
     for f in ${outgroup}; do
         [ -e "\$f" ] && cp "\$f" wd/outgroup/
     done
-    awk -F'\\t' 'NR>1 && \$5==1 {print \$1}' ${selection} | head -1 > wd/outgroup_accession.txt
+    [ -s "${outgroup_accession}" ] && cp ${outgroup_accession} wd/outgroup_accession.txt
 
     repgenr ${params.repgenr_opts} phylo -wd wd -t ${task.cpus} ${params.phylo_args}
     mkdir -p tree

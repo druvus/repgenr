@@ -13,7 +13,7 @@ process TREE2TAX {
     path tree
     path reps_dir
     path outgroup
-    path selection
+    path outgroup_accession
 
     output:
     path "tree2tax.tsv"   , emit: tree2tax
@@ -29,7 +29,7 @@ process TREE2TAX {
     for f in ${outgroup}; do
         [ -e "\$f" ] && cp "\$f" wd/outgroup/
     done
-    awk -F'\\t' 'NR>1 && \$5==1 {print \$1}' ${selection} | head -1 > wd/outgroup_accession.txt
+    [ -s "${outgroup_accession}" ] && cp ${outgroup_accession} wd/outgroup_accession.txt
 
     repgenr ${params.repgenr_opts} tree2tax -wd wd ${params.tree2tax_args}
     cp wd/tree2tax.tsv .

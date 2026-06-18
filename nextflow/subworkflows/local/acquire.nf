@@ -19,8 +19,9 @@ workflow ACQUIRE {
     ch_versions = ch_versions.mix(GENOME.out.versions)
 
     emit:
-    genomes   = GENOME.out.genomes.flatten()   // individual genome FASTA paths
-    outgroup  = GENOME.out.outgroup.flatten()
-    selection = METADATA.out.selection
-    versions  = ch_versions
+    genomes            = GENOME.out.genomes.flatten()   // individual genome FASTA paths
+    outgroup           = GENOME.out.outgroup.flatten()
+    selection          = METADATA.out.selection
+    outgroup_accession = METADATA.out.outgroup_accession
+    versions           = ch_versions
 }
