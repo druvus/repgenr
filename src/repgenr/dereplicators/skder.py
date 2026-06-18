@@ -25,13 +25,14 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import link_or_copy
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -87,7 +88,10 @@ class SkderDereplicator(Dereplicator):
             staged = out_dir / "skder_out"
             if staged.exists():
                 shutil.rmtree(staged)
-            shutil.copytree(result_dir, staged)
+            # Hardlink the result files when possible (no extra disk; the temp dir
+            # is removed below, but hardlinks keep the data alive). Falls back to a
+            # copy across filesystems (temp vs workdir) or on exFAT.
+            shutil.copytree(result_dir, staged, copy_function=link_or_copy)
         finally:
             shutil.rmtree(local_tmp, ignore_errors=True)
 
@@ -125,10 +129,10 @@ def _parse_skder_output(
     status: dict[str, str] = {p.name: STATUS_REPRESENTATIVE for p in representatives}
 
     # Assign each non-representative to its closest representative via the skani
-    # edge table (best ANI above the cutoffs).
-    edges = _read_edges(result_dir)
+    # edge table (best ANI above the cutoffs). Streamed, so the full edge list is
+    # never materialized -- the table can be large for big inputs.
     best: dict[str, tuple[str, float]] = {}  # member -> (rep, ani)
-    for a, b, ani, af in edges:
+    for a, b, ani, af in _iter_edges(result_dir):
         if ani < ani_cutoff or af < af_cutoff:
             continue
         for member, rep in ((a, b), (b, a)):
@@ -165,16 +169,15 @@ def _find_representatives_dir(result_dir: Path) -> Path | None:
     return None
 
 
-def _read_edges(result_dir: Path) -> list[tuple[str, str, float, float]]:
-    """Parse skDER's skani edge table into (a, b, ANI, min_AF) basename tuples."""
+def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float]]:
+    """Stream skDER's skani edge table as (a, b, ANI, min_AF) basename tuples."""
     edge_file = result_dir / "Skani_Triangle_Edge_Output.txt"
     if not edge_file.exists():
         matches = sorted(result_dir.rglob("*Edge_Output*.txt"))
         if not matches:
-            return []
+            return
         edge_file = matches[0]
 
-    edges: list[tuple[str, str, float, float]] = []
     with open(edge_file) as fo:
         for ln, line in enumerate(fo):
             if ln == 0:
@@ -187,5 +190,4 @@ def _read_edges(result_dir: Path) -> list[tuple[str, str, float, float]]:
                 af = min(float(fields[3]), float(fields[4]))
             except ValueError:
                 continue
-            edges.append((Path(fields[0]).name, Path(fields[1]).name, ani, af))
-    return edges
+            yield (Path(fields[0]).name, Path(fields[1]).name, ani, af)
