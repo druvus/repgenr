@@ -26,6 +26,7 @@ _DATASETS_CAPS = ToolCapabilities(
     required_binaries=(_DATASETS,),
     conda=("conda-forge::ncbi-datasets-cli",),
 )
+_DOWNLOAD_BATCH_SIZE = 5000  # accessions per datasets download/rehydrate call
 
 
 def _run_cmd(cmd, **kwargs):
@@ -71,7 +72,7 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
         return 0
 
     if to_download:
-        _download_batch(ctx, acc_list, filenames, logger, params.keep_files)
+        _download_batch(ctx, to_download, filenames, logger, params.keep_files)
 
     if outgroup:
         _download_outgroup(ctx, outgroup[0], logger)
@@ -102,16 +103,34 @@ def _prune(genomes_dir: Path, keep: set[str], logger) -> None:
             logger.info("Removed %s (no longer selected)", f.name)
 
 
-def _download_batch(ctx, acc_list, filenames, logger, keep_files) -> None:
-    zip_path = ctx.workdir / "ncbi_download.zip"
-    extract = ctx.workdir / "ncbi_extract"
+def _download_batch(ctx, accessions: list[str], filenames, logger, keep_files) -> None:
+    """Download genomes in fixed-size sub-batches.
+
+    Each sub-batch is downloaded, rehydrated, and moved into ``genomes/``
+    independently, so a failure loses only one batch and a re-run resumes (the
+    stage recomputes the still-missing accessions). This also bounds the size of
+    any single dehydrated zip / rehydrate at 1000s-100000s of accessions.
+    """
+    total = len(accessions)
+    n_batches = (total + _DOWNLOAD_BATCH_SIZE - 1) // _DOWNLOAD_BATCH_SIZE
+    for bi, start in enumerate(range(0, total, _DOWNLOAD_BATCH_SIZE)):
+        batch = accessions[start : start + _DOWNLOAD_BATCH_SIZE]
+        logger.info("Download batch %d/%d (%d accessions)", bi + 1, n_batches, len(batch))
+        _download_one_batch(ctx, batch, filenames, logger, keep_files, bi)
+
+
+def _download_one_batch(ctx, batch: list[str], filenames, logger, keep_files, bi: int) -> None:
+    acc_file = ctx.workdir / f"ncbi_acc_batch{bi}.txt"
+    acc_file.write_text("\n".join(batch))
+    zip_path = ctx.workdir / f"ncbi_download_{bi}.zip"
+    extract = ctx.workdir / f"ncbi_extract_{bi}"
     if extract.exists():
         shutil.rmtree(extract)
 
     _run_cmd(
         [
             "datasets", "download", "genome", "accession",
-            "--dehydrated", "--inputfile", acc_list, "--filename", zip_path,
+            "--dehydrated", "--inputfile", acc_file, "--filename", zip_path,
         ],
         logger=logger, log_prefix="datasets",
     )
@@ -122,15 +141,14 @@ def _download_batch(ctx, acc_list, filenames, logger, keep_files) -> None:
         logger=logger, log_prefix="datasets",
     )
 
-    accession_to_name = filenames
     for fna in extract.rglob("*.fna"):
-        accession = fna.parent.name
-        name = accession_to_name.get(accession)
+        name = filenames.get(fna.parent.name)
         if name:
             shutil.move(str(fna), str(ctx.genomes_dir / name))
 
     if not keep_files:
         zip_path.unlink(missing_ok=True)
+        acc_file.unlink(missing_ok=True)
         shutil.rmtree(extract, ignore_errors=True)
 
 
