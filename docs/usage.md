@@ -89,3 +89,20 @@ nextflow run nextflow/tests/dereplicate_scatter.nf -c nextflow/nextflow.config \
 ```
 
 Add `-stub` to exercise the wiring without running the tools.
+
+### Data-channel pipeline (in progress)
+
+The pipeline is being rebuilt on typed data channels (no shared workdir). The
+front is in place: the `ACQUIRE` subworkflow runs `metadata` and emits a portable
+`selection.tsv`, then `genome-fetch` downloads the genomes and emits them as a
+channel that feeds `DEREPLICATE_SCATTER` directly. A standalone harness chains the
+two:
+
+```bash
+nextflow run nextflow/tests/acquire_scatter.nf -c nextflow/nextflow.config \
+    --metadata_args '-r 207.0 -v bac120 -d rep -l genus -tg francisella' \
+    --derep_tool sourmash --outdir results -profile standard
+```
+
+The remaining stages (phylo, tree2tax) are still served by the shared-workdir
+orchestrator (`nextflow/main.nf`) and move to data channels in later increments.

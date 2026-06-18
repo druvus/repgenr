@@ -1,0 +1,18 @@
+nextflow_workflow {
+
+    name "ACQUIRE (stub)"
+    script "../subworkflows/local/acquire.nf"
+    workflow "ACQUIRE"
+    options "-stub"
+
+    test("metadata selection drives the genome download") {
+        // The metadata stub emits a selection.tsv with two selected genomes and
+        // one outgroup; the genome stub turns it into FASTAs.
+        then {
+            assert workflow.success
+            assert workflow.out.genomes.size() == 2
+            assert workflow.out.outgroup.size() == 1
+            assert workflow.out.selection
+        }
+    }
+}

@@ -1,0 +1,18 @@
+nextflow_pipeline {
+
+    name "ACQUIRE -> DEREPLICATE_SCATTER (stub)"
+    script "../tests/acquire_scatter.nf"
+    options "-stub"
+
+    test("the genome channel from ACQUIRE feeds the scatter-gather dereplication") {
+        when {
+            params {
+                derep_process_size = 1   // force several chunks from the stub genomes
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+}
