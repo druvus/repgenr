@@ -91,6 +91,7 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
 
     fallbacks = sorted({g.parent for g in params.genomes})
     _write_step_contract(params.out_dir, result, fallbacks)
+    shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-chunk: %d genomes -> %d representatives (%s)",
         len(params.genomes), len(result.representatives), params.tool,
@@ -124,6 +125,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     # chunk representatives/ directories; fall back to those when resolving files.
     fallbacks = [d / _REPRESENTATIVES_DIR for d in params.chunk_dirs]
     _write_step_contract(params.out_dir, final, fallbacks)
+    shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-merge: %d chunks, union of %d reps -> %d representatives (%s)",
         len(params.chunk_dirs), len(union), len(final.representatives), params.tool,
