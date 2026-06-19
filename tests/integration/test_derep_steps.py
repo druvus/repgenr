@@ -83,6 +83,9 @@ def test_chunk_writes_a_valid_contract(tmp_path: Path, reg) -> None:
     assert rep_files == {genomes[0].name, genomes[2].name}
     clusters = read_clusters(out / CLUSTERS_TSV)
     assert clusters[genomes[0].name] == [genomes[1].name]
+    # tool intermediates are trimmed; the staged representatives survive
+    assert not (out / "scratch").exists()
+    assert (out / "representatives" / genomes[0].name).read_text() == ">x\nACGT\n"
 
 
 def test_merge_composes_membership_over_chunks(tmp_path: Path, reg) -> None:
