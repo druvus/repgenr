@@ -18,6 +18,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import (
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    accession_from_filename,
     write_clusters,
     write_genome_status,
 )
@@ -455,15 +456,7 @@ def _update_manifest(ctx: WorkdirContext, result: DerepResult) -> None:
 
 
 def _accession_from_filename(filename: str | None) -> str | None:
-    """Genome files are named ``..._<GCx>_<digits>.fasta``; recover the accession."""
+    """Recover the accession from a canonical genome filename (None-safe)."""
     if not filename:
         return None
-    stem = filename
-    for suffix in _FASTA_SUFFIXES:
-        if stem.endswith(suffix):
-            stem = stem[: -len(suffix)]
-            break
-    parts = stem.split("_")
-    if len(parts) >= 2:
-        return f"{parts[-2]}_{parts[-1]}"
-    return None
+    return accession_from_filename(filename) or None

@@ -34,10 +34,45 @@ TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
 
 
+_FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
+
+
 def genome_filename(family: str, genus: str, species: str, accession: str) -> str:
     """Canonical genome FASTA filename. One definition so the metadata selection,
-    the genome download and every downstream stage agree on the same names."""
+    the genome download and every downstream stage agree on the same names.
+
+    ``family``/``genus``/``species`` must be single tokens (no ``_``) so the name
+    round-trips through :func:`parse_genome_filename`; the accession may contain
+    underscores (e.g. ``GCF_000001.1``, ``NC_001802.1``).
+    """
     return f"{family}_{genus}_{species}_{accession}.fasta"
+
+
+def _strip_fasta_suffix(name: str) -> str:
+    for suffix in _FASTA_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def parse_genome_filename(name: str) -> tuple[str, str, str, str]:
+    """Inverse of :func:`genome_filename`. Returns (family, genus, species,
+    accession). The first three ``_``-separated tokens are the taxonomy and
+    **everything after** is the accession, so accessions with underscores
+    (bacterial ``GCF_x.y``, viral ``NC_x.y``) and without (viral ``MN908947.3``)
+    all round-trip. A non-canonical name (< 4 tokens) yields empty taxonomy and
+    the whole stem as the accession.
+    """
+    stem = _strip_fasta_suffix(Path(name).name)
+    parts = stem.split("_")
+    if len(parts) < 4:
+        return "", "", "", stem
+    return parts[0], parts[1], parts[2], "_".join(parts[3:])
+
+
+def accession_from_filename(name: str) -> str:
+    """Recover the accession from a canonical genome filename or tree leaf."""
+    return parse_genome_filename(name)[3]
 
 
 @dataclass
