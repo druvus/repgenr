@@ -23,6 +23,7 @@ from ..core.contracts import (
     GENOMES_MAP_TSV,
     TREE2TAX_TSV,
     TREE_NWK,
+    accession_from_filename,
     read_clusters,
     write_genomes_map,
     write_tree2tax,
@@ -164,7 +165,4 @@ def _stem(filename: str) -> str:
 
 
 def _accession(leaf: str) -> str:
-    parts = leaf.split("_")
-    if len(parts) >= 2:
-        return f"{parts[-2]}_{parts[-1]}"
-    return leaf
+    return accession_from_filename(leaf) or leaf

@@ -20,7 +20,7 @@ from pathlib import Path
 from ..aligners.base import AlignParams
 from ..aligners.base import registry as aligner_registry
 from ..core.context import WorkdirContext
-from ..core.contracts import TREE_NWK
+from ..core.contracts import TREE_NWK, parse_genome_filename
 from ..core.errors import UserInputError, WorkdirError
 from ..core.plugins import auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
@@ -201,11 +201,10 @@ def _taxonomic_spread(genomes: Sequence[Path]) -> tuple[int, int]:
     genera: set[str] = set()
     species: set[tuple[str, str]] = set()
     for g in genomes:
-        parts = Path(g).name.split("_")
-        if len(parts) >= 3:
-            genus = parts[1].lower()
-            genera.add(genus)
-            species.add((genus, parts[2].lower()))
+        _family, genus, sp, _acc = parse_genome_filename(Path(g).name)
+        if genus:
+            genera.add(genus.lower())
+            species.add((genus.lower(), sp.lower()))
     return len(genera), len(species)
 
 
