@@ -193,15 +193,30 @@ def metadata(
 @app.command()
 def vmetadata(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
-    target: str | None = typer.Option(None, "-t", "--target", help="Virus group/family."),
-    filter: str = typer.Option("complete genome", "-f", "--filter", help="FASTA header tag."),
+    target: str | None = typer.Option(None, "-t", "--target", help="Virus taxon/group/family."),
+    source: str = typer.Option(
+        "ncbi_virus", "--source", help="ncbi_virus (NCBI Virus via datasets) or bvbrc."
+    ),
+    filter: str = typer.Option("complete genome", "-f", "--filter", help="BV-BRC header tag."),
+    host: str | None = typer.Option(None, "--host", help="ncbi_virus: restrict to a host species."),
+    complete_only: bool = typer.Option(
+        False, "--complete-only", help="ncbi_virus: only COMPLETE sequences."
+    ),
+    released_after: str | None = typer.Option(
+        None, "--released-after", help="ncbi_virus: MM/DD/YYYY."
+    ),
     list_targets: bool = typer.Option(False, "-l", "--list", help="List BV-BRC targets and exit."),
 ) -> None:
-    """Retrieve viral metadata from BV-BRC and NCBI (virus equivalent of metadata)."""
+    """Retrieve viral metadata from NCBI Virus (default) or BV-BRC."""
     from ..stages.vmetadata import VmetadataParams
 
     def build() -> VmetadataParams:
-        return VmetadataParams(target=target, filter=filter, list_targets=list_targets)
+        _require_choice(source, {"ncbi_virus", "bvbrc"}, "--source")
+        return VmetadataParams(
+            target=target, filter=filter, list_targets=list_targets,
+            source=source, host=host, complete_only=complete_only,
+            released_after=released_after,
+        )
 
     _run("vmetadata", workdir, build, create=True)
 

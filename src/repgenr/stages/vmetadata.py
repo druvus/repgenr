@@ -56,6 +56,10 @@ class VmetadataParams:
     target: str | None = None
     filter: str = "complete genome"
     list_targets: bool = False
+    source: str = "ncbi_virus"  # ncbi_virus | bvbrc
+    host: str | None = None  # ncbi_virus: restrict to a host species
+    complete_only: bool = False  # ncbi_virus: only COMPLETE sequences
+    released_after: str | None = None  # ncbi_virus: MM/DD/YYYY
 
 
 def run(ctx: WorkdirContext, params: VmetadataParams) -> int:
@@ -66,9 +70,67 @@ def run(ctx: WorkdirContext, params: VmetadataParams) -> int:
     if not params.target:
         raise UserInputError("Supply --target (e.g. adenoviridae) or --list.")
 
-    target = params.target.lower()
     download_wd = ctx.workdir / "virus_download_wd"
     download_wd.mkdir(parents=True, exist_ok=True)
+    if params.source == "ncbi_virus":
+        return _run_ncbi_virus(ctx, params, download_wd, logger)
+    return _run_bvbrc(ctx, params, download_wd, logger)
+
+
+def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
+    from ..viral import ncbi_virus
+
+    assert params.target is not None
+    records = ncbi_virus.fetch(
+        params.target, download_wd,
+        complete_only=params.complete_only, host=params.host,
+        released_after=params.released_after, logger=logger,
+    )
+    if not records:
+        raise WorkdirError(f"NCBI Virus returned no genomes for '{params.target}'.")
+    ncbi_virus.write_records(download_wd / "virus_records.json", records)
+    _write_base_from_records(download_wd / "metadata_base.tsv", records)
+    (ctx.workdir / "virus_metadata_base.tsv").write_text(
+        (download_wd / "metadata_base.tsv").read_text()
+    )
+
+    ctx.config.record_stage(
+        "vmetadata",
+        params={
+            "source": "ncbi_virus", "target": params.target,
+            "complete_only": params.complete_only, "host": params.host,
+            "sequences": len(records),
+        },
+        completed=datetime.now(UTC).isoformat(),
+    )
+    ctx.save_config()
+    logger.info("Viral metadata (NCBI Virus): %d sequences under %s", len(records), download_wd)
+    return len(records)
+
+
+def _write_base_from_records(path: Path, records) -> None:
+    """taxid-keyed length stats (human-readable), grouped from NCBI Virus records."""
+    from statistics import mean as _mean
+    from statistics import median as _median
+
+    by_taxid: dict[str, dict] = {}
+    for r in records:
+        g = by_taxid.setdefault(r.taxid, {"lens": [], "species": r.species, "organism": r.organism})
+        g["lens"].append(r.length)
+    header = ["taxid", "name", "num", "seq_min", "seq_max", "seq_med", "seq_mean", "description"]
+    with open(path, "w") as fo:
+        fo.write("\t".join(header) + "\n")
+        for taxid, g in sorted(by_taxid.items(), key=lambda x: len(x[1]["lens"]), reverse=True):
+            lens = g["lens"]
+            row = [
+                taxid, g["species"], len(lens), min(lens), max(lens),
+                int(_median(lens)), int(_mean(lens)), g["organism"],
+            ]
+            fo.write("\t".join(map(str, row)) + "\n")
+
+
+def _run_bvbrc(ctx, params, download_wd, logger) -> int:
+    target = params.target.lower()
     download_fa = download_wd / "download.fa"
 
     if not (download_fa.exists() and download_fa.stat().st_size > 0):
