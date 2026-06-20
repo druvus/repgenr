@@ -110,6 +110,41 @@ def test_vgenome_records_path_canonical_names_and_selection(workdir: Path) -> No
     assert all(not r.is_outgroup for r in rows)
 
 
+def test_vgenome_group_segments_per_isolate(workdir: Path) -> None:
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    # isolate A has 3 segments; isolate B has 1 (stays a singleton)
+    recs = [
+        VirusRecord("SEG1.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
+                    "Influenza-A", 2300, "COMPLETE", "1", "A/iso/A/2020"),
+        VirusRecord("SEG2.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
+                    "Influenza-A", 1700, "COMPLETE", "4", "A/iso/A/2020"),
+        VirusRecord("SEG3.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
+                    "Influenza-A", 1000, "COMPLETE", "7", "A/iso/A/2020"),
+        VirusRecord("SOLO.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
+                    "Influenza-A", 1500, "COMPLETE", "5", "A/iso/B/2020"),
+    ]
+    dl = workdir / "virus_download_wd"
+    dl.mkdir(parents=True)
+    seqs = {"SEG1.1": "A" * 2300, "SEG2.1": "C" * 1700, "SEG3.1": "G" * 1000, "SOLO.1": "T" * 1500}
+    (dl / "download.fa").write_text("".join(f">{a} d\n{s}\n" for a, s in seqs.items()))
+    write_records(dl / "virus_records.json", recs)
+
+    ctx = WorkdirContext(workdir, create=True)
+    params = VgenomeParams(
+        target_genus="alphainfluenzavirus", group_segments=True, no_outgroup=True
+    )
+    vgenome_run(ctx, params)
+    names = sorted(p.name for p in ctx.genomes_dir.iterdir())
+    # one combined isolate-A genome + the single-record isolate-B genome
+    assert len(names) == 2
+    combined = next(p for p in ctx.genomes_dir.iterdir() if "iso-" in p.name)
+    seq = "".join(ln for ln in combined.read_text().splitlines() if not ln.startswith(">"))
+    assert len(seq) == 2300 + 1700 + 1000  # all three segments concatenated
+    assert seq.startswith("A" * 10)  # longest segment first (length-desc order)
+
+
 def test_vgenome_records_no_taxonomy_match(workdir: Path) -> None:
     import pytest
 
