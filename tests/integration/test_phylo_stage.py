@@ -46,11 +46,13 @@ class _MsaTreeBuilder(TreeBuilder):
 
 class _FakeAligner(Aligner):
     capabilities = ToolCapabilities(name="fakealigner")
+    seen_extra: dict | None = None
 
     def preflight(self):
         return {"fakealigner": "1.0"}
 
     def align(self, genomes, reference, out_dir, params, logger) -> AlignResult:
+        type(self).seen_extra = dict(params.extra)
         out_dir.mkdir(parents=True, exist_ok=True)
         msa = out_dir / "msa.fasta"
         msa.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
@@ -100,3 +102,20 @@ def test_aligner_msa_path(workdir: Path, fake_phylo_tools) -> None:
     )
     assert tree.read_text().strip() == "(from_msa);"
     assert (ctx.align_dir / "msa.fasta").exists()
+
+
+def test_aligner_receives_extra(workdir: Path, fake_phylo_tools) -> None:
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    _FakeAligner.seen_extra = None
+    run(
+        ctx,
+        PhyloParams(
+            treebuilder="faketree_msa",
+            msa_source="aligner",
+            aligner="fakealigner",
+            no_outgroup=True,
+            extra={"kmer": "15"},
+        ),
+    )
+    assert _FakeAligner.seen_extra == {"kmer": "15"}

@@ -367,6 +367,11 @@ def phylo(
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", help="Bootstrap replicates (>=1000)."),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
+    aligner_arg: list[str] = typer.Option(
+        [], "--aligner-arg",
+        help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
+        "or seed_weight=11 (progressivemauve).",
+    ),
     threads: int = typer.Option(16, "-t", "--threads"),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
@@ -392,6 +397,7 @@ def phylo(
             bootstrap=bootstrap,
             reference=reference,
             threads=threads,
+            extra=_parse_key_values(aligner_arg, "--aligner-arg"),
         )
 
     _run("phylo", workdir, build)
@@ -467,6 +473,20 @@ def derep_stock(
         return DerepStockParams(action=action, name=name)
 
     _run("derep_stock", workdir, build)
+
+
+def _parse_key_values(items: list[str], label: str) -> dict[str, str]:
+    """Parse repeated ``key=value`` options into a dict (used for tool extras)."""
+    out: dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            raise UserInputError(f"{label} must be key=value, got '{item}'.")
+        key, value = item.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise UserInputError(f"{label} has an empty key in '{item}'.")
+        out[key] = value.strip()
+    return out
 
 
 def _read_path_fofn(path: Path) -> list[Path]:
