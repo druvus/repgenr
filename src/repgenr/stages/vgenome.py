@@ -9,6 +9,7 @@ work unchanged.
 
 from __future__ import annotations
 
+import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -40,6 +41,7 @@ class VgenomeParams:
     length_range: str | None = None
     discard: str | None = None
     no_outgroup: bool = False
+    group_segments: bool = False  # ncbi_virus: combine an isolate's segments into one genome
     outgroup_candidates_taxid_min_genomes: int = 5
     glance: bool = False
     print_fasta_headers: bool = False
@@ -166,6 +168,55 @@ def _passes_length(rec: VirusRecord, lo: int, hi: int, discard, seqs) -> bool:
     return True
 
 
+def _isolate_token(isolate: str) -> str:
+    """Make an isolate name a single safe accession-like token."""
+    token = re.sub(r"[^A-Za-z0-9.-]", "", isolate.replace(" ", "-").replace("_", "-"))
+    return f"iso-{token or 'NA'}"
+
+
+def _write_isolate_groups(genomes_dir, records, seqs, logger):
+    """Combine each isolate's segments into one genome; keep singletons as-is.
+
+    Records sharing an ``isolate`` name (segmented viruses) are concatenated in
+    descending length order (a deterministic, segment-number-free ordering) into a
+    single canonical genome; isolates with one sequence (and records without an
+    isolate) are written individually.
+    """
+    from ..core.contracts import SelectionRow, genome_filename
+
+    groups: dict[str, list] = {}
+    singletons: list = []
+    for r in records:
+        (groups.setdefault(r.isolate, []) if r.isolate else singletons).append(r)
+    for iso, recs in list(groups.items()):
+        if iso and len(recs) <= 1:
+            singletons.extend(recs)
+            del groups[iso]
+
+    rows: list[SelectionRow] = []
+    grouped = 0
+    for iso, recs in groups.items():
+        rep = recs[0]
+        acc = _isolate_token(iso)
+        name = genome_filename(rep.family, rep.genus, rep.species, acc)
+        ordered = sorted(recs, key=lambda r: -r.length)
+        seq = "".join(str(seqs[r.accession].seq) for r in ordered)
+        (genomes_dir / name).write_text(f">{acc} {iso} ({len(ordered)} segments)\n{seq}\n")
+        rows.append(SelectionRow(acc, rep.family, rep.genus, rep.species, False, name))
+        grouped += len(recs)
+    for r in singletons:
+        name = genome_filename(r.family, r.genus, r.species, r.accession)
+        (genomes_dir / name).write_text(
+            f">{seqs[r.accession].description}\n{seqs[r.accession].seq}\n"
+        )
+        rows.append(SelectionRow(r.accession, r.family, r.genus, r.species, False, name))
+    logger.info(
+        "Grouped %d segment sequences into %d isolate genomes (+ %d single-record genomes)",
+        grouped, len(groups), len(singletons),
+    )
+    return rows
+
+
 def _run_records(ctx, params, download_wd, fasta, records_json, logger) -> int:
     from ..core.contracts import SelectionRow, genome_filename, write_selection
     from ..viral.ncbi_virus import read_records
@@ -178,10 +229,16 @@ def _run_records(ctx, params, download_wd, fasta, records_json, logger) -> int:
     if not selected:
         raise UserInputError("No sequences matched the taxonomy selection.")
 
-    lo, hi = _length_range_records(selected, params, logger)
     discard = [x.strip() for x in params.discard.split(",")] if params.discard else None
     seqs = _seq_map(fasta)
-    kept = [r for r in selected if _passes_length(r, lo, hi, discard, seqs)]
+    lo, hi = 0, 0
+    if params.group_segments:
+        # Segmented viruses: skip the per-segment length filter (segments differ
+        # in length); group whole isolates instead.
+        kept = [r for r in selected if r.accession in seqs]
+    else:
+        lo, hi = _length_range_records(selected, params, logger)
+        kept = [r for r in selected if _passes_length(r, lo, hi, discard, seqs)]
     if not kept:
         raise UserInputError("No sequences passed length/discard filtering.")
 
@@ -196,16 +253,19 @@ def _run_records(ctx, params, download_wd, fasta, records_json, logger) -> int:
     if genomes_dir.exists():
         shutil.rmtree(genomes_dir)
     genomes_dir.mkdir(parents=True)
-    selection_rows: list[SelectionRow] = []
-    for r in kept:
-        name = genome_filename(r.family, r.genus, r.species, r.accession)
-        rec = seqs[r.accession]
-        (genomes_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
-        selection_rows.append(
-            SelectionRow(r.accession, r.family, r.genus, r.species, False, name)
-        )
+    if params.group_segments:
+        selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger)
+    else:
+        selection_rows = []
+        for r in kept:
+            name = genome_filename(r.family, r.genus, r.species, r.accession)
+            rec = seqs[r.accession]
+            (genomes_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
+            selection_rows.append(
+                SelectionRow(r.accession, r.family, r.genus, r.species, False, name)
+            )
 
-    if not params.no_outgroup:
+    if not params.no_outgroup and not params.group_segments:
         og = _determine_outgroup_records(ctx, records, kept, (lo, hi), params, seqs, logger)
         if og is not None:
             selection_rows.append(
@@ -214,14 +274,18 @@ def _run_records(ctx, params, download_wd, fasta, records_json, logger) -> int:
             )
 
     write_selection(ctx.workdir / "selection.tsv", selection_rows)
+    n_written = sum(1 for r in selection_rows if not r.is_outgroup)
     ctx.config.record_stage(
         "vgenome",
-        params={"source": "ncbi_virus", "selected": len(kept), "no_outgroup": params.no_outgroup},
+        params={
+            "source": "ncbi_virus", "selected": n_written,
+            "group_segments": params.group_segments, "no_outgroup": params.no_outgroup,
+        },
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
-    logger.info("Wrote %d viral genomes (NCBI Virus)", len(kept))
-    return len(kept)
+    logger.info("Wrote %d viral genomes (NCBI Virus)", n_written)
+    return n_written
 
 
 def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, logger):
