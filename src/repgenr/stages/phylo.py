@@ -12,6 +12,7 @@ Outgroup rooting is handled here once, regardless of the tools chosen.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -153,7 +154,10 @@ def _build_msa(ctx, params, genomes, outgroup_file, logger):
         aligner = aligner_registry.create(params.aligner)
         versions = aligner.preflight()
         reference = _reference_path(ctx, params.reference, genomes)
-        align_params = AlignParams(threads=params.threads, reference=reference)
+        _warn_divergence(params.aligner, inputs, logger)
+        align_params = AlignParams(
+            threads=params.threads, reference=reference, extra=dict(params.extra),
+        )
         result = aligner.align(inputs, reference, ctx.align_dir, align_params, logger)
         return result.msa_fasta, params.aligner, versions
 
@@ -187,3 +191,47 @@ def _reference_path(ctx, reference_name, genomes) -> Path:
             return cand
         raise UserInputError(f"Reference genome not found: {reference_name}")
     return genomes[0]
+
+
+def _taxonomic_spread(genomes: Sequence[Path]) -> tuple[int, int]:
+    """Distinct (genera, species) among the inputs, read from the canonical
+    ``Family_Genus_species_Accession.fasta`` filenames. Used to gauge divergence
+    without the manifest, so it works in the shared-workdir and data-channel paths.
+    """
+    genera: set[str] = set()
+    species: set[tuple[str, str]] = set()
+    for g in genomes:
+        parts = Path(g).name.split("_")
+        if len(parts) >= 3:
+            genus = parts[1].lower()
+            genera.add(genus)
+            species.add((genus, parts[2].lower()))
+    return len(genera), len(species)
+
+
+def _warn_divergence(aligner_name: str, genomes: Sequence[Path], logger) -> None:
+    """Warn when a whole-genome aligner is run on a divergent (genus/family-level)
+    set, where the shared collinear core shrinks and the alignment degrades.
+    """
+    n_genera, n_species = _taxonomic_spread(genomes)
+    if aligner_name == "cactus" and n_species > 1:
+        logger.warning(
+            "Aligner 'cactus' (Minigraph-Cactus) targets same-species genomes, but the input "
+            "spans %d species; it will likely drop divergent genomes from the graph. For "
+            "genus/family-level data use an alignment-free tree builder (mashtree/sourmash).",
+            n_species,
+        )
+    elif n_genera > 1:
+        logger.warning(
+            "Whole-genome aligner '%s' on a family-level set (%d genera): the shared collinear "
+            "core shrinks sharply with divergence, so the alignment may be small or fragmentary. "
+            "Consider an alignment-free tree builder (mashtree/sourmash), or loosen the aligner "
+            "seeds (e.g. --aligner-arg kmer=15 for sibeliaz).",
+            aligner_name, n_genera,
+        )
+    elif n_species > 1:
+        logger.info(
+            "Whole-genome aligner '%s' on a genus-level set (%d species): expect a reduced core "
+            "alignment as divergence increases; alignment-free builders scale better.",
+            aligner_name, n_species,
+        )

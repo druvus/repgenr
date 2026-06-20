@@ -66,14 +66,20 @@ class ProgressiveMauveAligner(Aligner):
 
         queries = [g for g in genomes if g != reference]
 
+        # A lower --seed-weight raises sensitivity for divergent genomes (more,
+        # shorter anchor seeds); unset keeps progressiveMauve's default.
+        seed_opt: list[str] = []
+        if "seed_weight" in params.extra:
+            seed_opt = ["--seed-weight", str(params.extra["seed_weight"])]
+
         # progressiveMauve is single-threaded per alignment; run one process per
         # thread budget, each aligning an independent query to the reference.
         def align_query(query: Path) -> Path:
             stem = query.stem
             xmfa = xmfa_dir / f"{stem}.xmfa"
             fa = xmfa_dir / f"{stem}.fa"
-            run_tool(self.capabilities, 
-                ["progressiveMauve", "--output", xmfa, ref_arg, str(query.resolve())],
+            run_tool(self.capabilities,
+                ["progressiveMauve", "--output", xmfa, *seed_opt, ref_arg, str(query.resolve())],
                 logger=logger,
                 log_prefix=f"progressivemauve:{stem}",
             )

@@ -70,9 +70,17 @@ class SibeliazAligner(Aligner):
         # Pass -f (twopaco bloom-filter memory, GB) explicitly so the wrapper
         # skips its system-memory probe, which uses Linux-only `free`/`stat`.
         filtermemory = params.extra.get("filtermemory", 8)
-        run_tool(self.capabilities, 
+        # Divergence/sensitivity tuning: a smaller -k (k-mer) finds more anchors
+        # across divergent genomes; -a (vertex abundance) and -b (max bubble size)
+        # trade sensitivity for speed/memory. Unset keys keep SibeliaZ's defaults.
+        tuning: list[str] = []
+        for key, flag in (("kmer", "-k"), ("abundance", "-a"), ("bubble", "-b")):
+            if key in params.extra:
+                tuning += [flag, str(params.extra[key])]
+        run_tool(self.capabilities,
             [
                 *sibeliaz_cmd,
+                *tuning,
                 "-f", str(filtermemory),
                 "-t", str(params.threads),
                 "-o", out_dir,
