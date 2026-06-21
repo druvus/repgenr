@@ -2,6 +2,7 @@ nextflow_pipeline {
 
     name "VIRAL_DATAFLOW (stub)"
     script "../tests/viral_dataflow.nf"
+    tag "stub"
     options "-stub"
 
     test("the viral data-channel pipeline wires vacquire -> derep -> phylo -> tree2tax") {

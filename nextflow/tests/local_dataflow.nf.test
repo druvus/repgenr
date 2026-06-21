@@ -1,0 +1,32 @@
+nextflow_pipeline {
+
+    name "Real end-to-end: DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX"
+    script "../tests/local_dataflow.nf"
+    tag "e2e"
+
+    test("dereplicates, builds a tree and a taxonomy with real tools (sourmash + mashtree)") {
+        when {
+            params {
+                outdir = "$outputDir"
+                genomes_dir = "$projectDir/nextflow/tests/data/e2e_genomes"
+                empty_accession = "$projectDir/nextflow/tests/data/empty.txt"
+                derep_tool = "sourmash"
+                derep_secondary_ani = 0.8
+                derep_process_size = 4
+                phylo_args = "--treebuilder mashtree"
+            }
+        }
+        then {
+            assert workflow.success
+            // 6 input genomes (2 clusters of identical + 1 singleton) -> 3 reps
+            def reps = new File("$outputDir/dereplicate/merged/representatives")
+                .listFiles().findAll { it.name.endsWith(".fasta") }
+            assert reps.size() == 3
+            // every original accession is accounted for in genomes_map
+            assert path("$outputDir/genomes_map.tsv").text.trim().split("\n").size() == 6
+            // a tree and a FlexTaxD taxonomy were produced
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+            assert path("$outputDir/tree2tax.tsv").text.contains("root")
+        }
+    }
+}

@@ -2,6 +2,7 @@ nextflow_pipeline {
 
     name "Pipeline entry (main.nf)"
     script "../main.nf"
+    tag "stub"
 
     test("--help prints usage and exits cleanly") {
         // Compiles main.nf and all included subworkflows/modules, loads the

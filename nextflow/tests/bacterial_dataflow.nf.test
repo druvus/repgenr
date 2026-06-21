@@ -2,6 +2,7 @@ nextflow_pipeline {
 
     name "BACTERIAL_DATAFLOW (stub)"
     script "../tests/bacterial_dataflow.nf"
+    tag "stub"
     options "-stub"
 
     test("the full data-channel pipeline wires metadata -> genome -> derep -> phylo -> tree2tax") {

@@ -2,6 +2,7 @@ nextflow_process {
 
     name "DEREP_CHUNK (stub)"
     script "../modules/local/derep_chunk.nf"
+    tag "stub"
     process "DEREP_CHUNK"
     options "-stub"
 

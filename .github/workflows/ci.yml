@@ -59,5 +59,48 @@ jobs:
       # Stub-based tests: they exercise channel wiring and the file contracts
       # without external tools or network, so no repgenr/bioinformatics stack is
       # needed here (the per-stage tools are covered by the Python test suite).
-      - name: Run nf-test
-        run: nf-test test --verbose
+      - name: Run stub nf-test
+        run: nf-test test --tag stub --verbose
+
+  nf-test-e2e:
+    # Real end-to-end run of the data-channel pipeline (DEREPLICATE_SCATTER ->
+    # PHYLO -> TREE2TAX) on a tiny bundled dataset with lightweight real tools.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}   # activate the conda env for every step
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up tools (sourmash + mashtree + ete3 + repgenr)
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: repgenr-e2e
+          create-args: >-
+            python=3.12 pip sourmash mashtree ete3
+          condarc: |
+            channels:
+              - conda-forge
+              - bioconda
+
+      - name: Install repgenr
+        run: pip install -e .
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+        with:
+          version: "26.04.3"
+
+      - name: Install nf-test
+        run: |
+          wget -qO- https://get.nf-test.com | bash -s 0.9.5
+          sudo mv nf-test /usr/local/bin/
+
+      - name: Run real end-to-end nf-test
+        run: nf-test test --tag e2e --verbose
