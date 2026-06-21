@@ -7,7 +7,7 @@ import types
 from dataclasses import dataclass
 from pathlib import Path
 
-from repgenr.cli import main as cli
+from repgenr.cli import base as cli
 
 
 @dataclass

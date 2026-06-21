@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from repgenr.cli.main import _parse_key_values
+from repgenr.cli.base import _parse_key_values
 from repgenr.core.errors import UserInputError
 from repgenr.stages.phylo import _taxonomic_spread, _warn_divergence
 
