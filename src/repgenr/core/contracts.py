@@ -34,7 +34,24 @@ TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
 
 
-_FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
+# Recognised genome FASTA extensions, longest-first so suffix stripping is
+# unambiguous (``.fasta.gz`` before ``.fasta``). One definition shared by every
+# stage and adapter that lists or names genome files.
+FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
+
+
+def list_fasta(source: Path) -> list[Path]:
+    """Sorted genome FASTA files directly under ``source``.
+
+    Skips dotfiles (e.g. macOS ``._`` AppleDouble) and returns an empty list when
+    ``source`` does not exist, so callers need no separate existence check.
+    """
+    if not source.exists():
+        return []
+    return sorted(
+        p for p in source.iterdir()
+        if not p.name.startswith(".") and p.name.endswith(FASTA_SUFFIXES)
+    )
 
 
 def genome_filename(family: str, genus: str, species: str, accession: str) -> str:
@@ -48,8 +65,8 @@ def genome_filename(family: str, genus: str, species: str, accession: str) -> st
     return f"{family}_{genus}_{species}_{accession}.fasta"
 
 
-def _strip_fasta_suffix(name: str) -> str:
-    for suffix in _FASTA_SUFFIXES:
+def strip_fasta_suffix(name: str) -> str:
+    for suffix in FASTA_SUFFIXES:
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return name
@@ -63,7 +80,7 @@ def parse_genome_filename(name: str) -> tuple[str, str, str, str]:
     all round-trip. A non-canonical name (< 4 tokens) yields empty taxonomy and
     the whole stem as the accession.
     """
-    stem = _strip_fasta_suffix(Path(name).name)
+    stem = strip_fasta_suffix(Path(name).name)
     parts = stem.split("_")
     if len(parts) < 4:
         return "", "", "", stem

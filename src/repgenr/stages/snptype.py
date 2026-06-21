@@ -21,12 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CORE_SNP_FASTA
+from ..core.contracts import CORE_SNP_FASTA, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
-
-_FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
 
 
 @dataclass
@@ -140,12 +138,7 @@ def run(ctx: WorkdirContext, params: SnptypeParams) -> SnpResult:
 
 def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
     source = ctx.genomes_dir if all_genomes else ctx.representatives_dir
-    if not source.exists():
-        return []
-    return sorted(
-        p for p in source.iterdir()
-        if not p.name.startswith(".") and any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
-    )
+    return list_fasta(source)
 
 
 def _reference_path(ctx, reference_name, genomes) -> Path:

@@ -29,8 +29,6 @@ from .base import (
     DerepResult,
 )
 
-_FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
-
 
 class GalahDereplicator(Dereplicator):
     capabilities = ToolCapabilities(

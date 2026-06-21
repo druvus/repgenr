@@ -30,6 +30,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import FASTA_SUFFIXES, list_fasta
 from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy
@@ -40,8 +41,6 @@ from .base import (
     DerepParams,
     DerepResult,
 )
-
-_FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 
 
 class SkderDereplicator(Dereplicator):
@@ -117,10 +116,7 @@ def _parse_skder_output(
             f"Could not locate skDER representative genomes under {result_dir}. "
             "Confirm skDER ran successfully."
         )
-    representatives = sorted(
-        p for p in rep_dir.iterdir()
-        if not p.name.startswith(".") and p.suffix in _FASTA_SUFFIXES
-    )
+    representatives = list_fasta(rep_dir)
     if not representatives:
         raise ToolExecutionError(["skder"], 1, "skDER produced no representative genomes")
 
@@ -164,7 +160,7 @@ def _find_representatives_dir(result_dir: Path) -> Path | None:
             return cand
     for sub in result_dir.rglob("*"):
         if sub.is_dir() and ("epresentative" in sub.name or "Dereplicated" in sub.name):
-            if any(c.suffix in _FASTA_SUFFIXES for c in sub.iterdir()):
+            if any(c.name.endswith(FASTA_SUFFIXES) for c in sub.iterdir()):
                 return sub
     return None
 
