@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from repgenr.cli.main import _require_choice, _require_unit_interval
+from repgenr.cli.base import _require_choice, _require_unit_interval
 from repgenr.core.errors import UserInputError
 
 
