@@ -5,12 +5,35 @@ from __future__ import annotations
 from pathlib import Path
 
 from repgenr.core.contracts import (
+    list_fasta,
     read_clusters,
+    strip_fasta_suffix,
     write_clusters,
     write_genome_status,
     write_genomes_map,
     write_tree2tax,
 )
+
+
+def test_list_fasta_includes_gz_and_skips_dotfiles(tmp_path: Path) -> None:
+    (tmp_path / "b.fasta").write_text(">b\nAC\n")
+    (tmp_path / "a.fasta.gz").write_bytes(b"\x1f\x8b")  # gzipped genome
+    (tmp_path / "c.fna").write_text(">c\nGT\n")
+    (tmp_path / "._a.fasta").write_text("appledouble")  # macOS metadata
+    (tmp_path / "notes.txt").write_text("ignore")
+    names = [p.name for p in list_fasta(tmp_path)]
+    # sorted, and the .fasta.gz genome is recognised (the bug the dedup fixed)
+    assert names == ["a.fasta.gz", "b.fasta", "c.fna"]
+
+
+def test_list_fasta_missing_dir(tmp_path: Path) -> None:
+    assert list_fasta(tmp_path / "nope") == []
+
+
+def test_strip_fasta_suffix() -> None:
+    assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta.gz") == "Fam_Gen_sp_GCA_1"
+    assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta") == "Fam_Gen_sp_GCA_1"
+    assert strip_fasta_suffix("noext") == "noext"
 
 
 def test_clusters_round_trip(tmp_path: Path) -> None:

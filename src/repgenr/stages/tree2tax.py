@@ -26,6 +26,7 @@ from ..core.contracts import (
     TREE_NWK,
     accession_from_filename,
     read_clusters,
+    strip_fasta_suffix,
     write_genomes_map,
     write_tree2tax,
 )
@@ -257,8 +258,8 @@ def _load_redundant_from(clusters_file: Path) -> dict[str, list[str]]:
     # map representative leaf-stem -> redundant leaf-stems
     out: dict[str, list[str]] = {}
     for rep, members in clusters.items():
-        rep_stem = _stem(rep)
-        redundant = [_stem(m) for m in members]
+        rep_stem = strip_fasta_suffix(rep)
+        redundant = [strip_fasta_suffix(m) for m in members]
         if redundant:
             out[rep_stem] = redundant
     return out
@@ -273,13 +274,6 @@ def _genome_map(
         for red in redundant.get(leaf, []):
             mapping.append((_accession(red), leaf))
     return mapping
-
-
-def _stem(filename: str) -> str:
-    for suffix in (".fasta.gz", ".fasta", ".fa", ".fna", ".fas"):
-        if filename.endswith(suffix):
-            return filename[: -len(suffix)]
-    return filename
 
 
 def _accession(leaf: str) -> str:

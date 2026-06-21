@@ -19,6 +19,7 @@ from ..core.contracts import (
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
     accession_from_filename,
+    list_fasta,
     write_clusters,
     write_genome_status,
 )
@@ -27,8 +28,6 @@ from ..core.executors import parallel_map
 from ..core.plugins import auto_select, scale_warning
 from ..core.process import link_or_copy
 from ..dereplicators.base import DerepParams, DerepResult, registry
-
-_FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
 
 
 @dataclass
@@ -141,12 +140,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
 
 def _list_genomes(genomes_dir: Path) -> list[Path]:
-    if not genomes_dir.exists():
-        return []
-    return sorted(
-        p for p in genomes_dir.iterdir()
-        if not p.name.startswith(".") and any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
-    )
+    return list_fasta(genomes_dir)
 
 
 _MAX_REDUCE_DEPTH = 50  # termination backstop; the shrink-guard normally stops sooner

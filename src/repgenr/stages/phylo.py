@@ -21,13 +21,14 @@ from pathlib import Path
 from ..aligners.base import AlignParams
 from ..aligners.base import registry as aligner_registry
 from ..core.context import WorkdirContext
-from ..core.contracts import TREE_NWK, parse_genome_filename
+from ..core.contracts import TREE_NWK, list_fasta, parse_genome_filename
 from ..core.errors import UserInputError, WorkdirError
 from ..core.plugins import auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
-_FASTA_SUFFIXES = (".fasta", ".fasta.gz", ".fa", ".fna", ".fas")
+# Re-exported so the data-channel step helpers stay importable from this module.
+__all__ = ["PhyloParams", "PhyloBuildParams", "build_tree", "phylo_build", "run", "list_fasta"]
 
 
 @dataclass
@@ -209,16 +210,6 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
 def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
     source = ctx.genomes_dir if all_genomes else ctx.representatives_dir
     return list_fasta(source)
-
-
-def list_fasta(source: Path) -> list[Path]:
-    """Sorted FASTA files directly under ``source`` (empty if it does not exist)."""
-    if not source.exists():
-        return []
-    return sorted(
-        p for p in source.iterdir()
-        if not p.name.startswith(".") and any(p.name.endswith(s) for s in _FASTA_SUFFIXES)
-    )
 
 
 def _resolve_outgroup(

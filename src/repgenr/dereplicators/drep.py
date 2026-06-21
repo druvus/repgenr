@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import (
@@ -29,8 +30,6 @@ from .base import (
     DerepParams,
     DerepResult,
 )
-
-_FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 
 
 class DrepDereplicator(Dereplicator):
@@ -105,9 +104,7 @@ def _stage_genome(src: Path, dest_dir: Path) -> Path:
 
 def _parse_drep_output(drep_wd: Path, logger: logging.Logger) -> DerepResult:
     derep_genomes = drep_wd / "dereplicated_genomes"
-    representatives = sorted(
-        p for p in derep_genomes.iterdir() if p.suffix in _FASTA_SUFFIXES
-    )
+    representatives = list_fasta(derep_genomes)
     rep_names = {p.name for p in representatives}
 
     # Cluster membership from Cdb.csv (genome, secondary_cluster).

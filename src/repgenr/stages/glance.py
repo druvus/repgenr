@@ -13,11 +13,11 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec, check_binaries
 from ..core.context import WorkdirContext
+from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
 from ..core.process import run as run_cmd
 
 _DREP = BinarySpec("dRep", version_args=("--version",))
-_FASTA_SUFFIXES = (".fasta", ".fa", ".fna", ".fas")
 
 
 @dataclass
@@ -31,7 +31,7 @@ class GlanceParams:
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
     check_binaries((_DREP,))
-    genomes = [p for p in ctx.genomes_dir.iterdir() if p.suffix in _FASTA_SUFFIXES]
+    genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
 
