@@ -34,8 +34,20 @@ def test_new_enough_version_passes(monkeypatch) -> None:
     assert out["samtools"] == "1.23"
 
 
-def test_unparseable_version_is_lenient(monkeypatch) -> None:
-    # if the version string can't be parsed, min_version is not enforced (no false reject)
+def test_unparseable_version_is_lenient_by_default(monkeypatch) -> None:
+    # if the version string can't be parsed, a non-strict min_version is not
+    # enforced (no false reject for tools with unusual version output)
     _fake_env(monkeypatch, present={"tool"}, versions={"tool": "weird-build-xyz"})
     out = check_binaries((BinarySpec("tool", min_version="2.0"),))
     assert out["tool"] == "weird-build-xyz"
+
+
+def test_strict_version_rejects_unparseable(monkeypatch) -> None:
+    # the real footgun: ancient samtools answers --version with an error (no
+    # digits); a strict_version spec must reject it, not silently pass.
+    _fake_env(
+        monkeypatch, present={"samtools"},
+        versions={"samtools": "[main] unrecognized command '--version'"},
+    )
+    with pytest.raises(MissingBinaryError, match="could not read a version"):
+        check_binaries((BinarySpec("samtools", min_version="1.10", strict_version=True),))
