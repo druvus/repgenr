@@ -1,6 +1,6 @@
 """tree2tax stage: turn a rooted tree into FlexTaxD-compatible relations.
 
-Ports the ete3 logic of the old ``tree2tax.py`` to the new contracts: read
+Turns a rooted tree into a FlexTaxD child->parent table (via dendropy): read
 ``tree/tree.nwk``, root by the outgroup, name internal nodes (a user basename or
 a leaf-derived hash), then emit ``tree2tax.tsv`` (child -> parent) and
 ``genomes_map.tsv`` (accession -> leaf). Optionally lists redundant
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-import ete3
+import dendropy
 
 from ..core.context import WorkdirContext
 from ..core.contracts import (
@@ -45,11 +45,15 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     tree_file = ctx.tree_dir / TREE_NWK
     if not tree_file.exists():
         raise WorkdirError(f"Tree not found: {tree_file}. Run the phylo stage first.")
-    tree = ete3.Tree(tree_file.read_text().strip())
+    # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
+    # and newick otherwise turns underscores into spaces.
+    tree = dendropy.Tree.get(
+        data=tree_file.read_text().strip(), schema="newick", preserve_underscores=True
+    )
 
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
     if outgroup_leaf is not None:
-        tree.set_outgroup(outgroup_leaf)
+        _set_outgroup(tree, outgroup_leaf, logger)
 
     leaves_nodes = _name_nodes(tree, params.node_basename)
     _build_paths(tree, leaves_nodes)
@@ -97,29 +101,56 @@ def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:
     return None
 
 
-def _name_nodes(tree: ete3.Tree, node_basename: str | None) -> dict[str, list[str]]:
+def _leaf_label(node) -> str:
+    return node.taxon.label if node.taxon is not None else ""
+
+
+def _set_outgroup(tree: dendropy.Tree, leaf_label: str, logger) -> None:
+    node = tree.find_node_with_taxon_label(leaf_label)
+    if node is None:
+        logger.warning("Outgroup leaf %s not in tree; leaving unrooted", leaf_label)
+        return
+    tree.to_outgroup_position(node, update_bipartitions=False)
+
+
+def _name_nodes(tree: dendropy.Tree, node_basename: str | None) -> dict[str, list[str]]:
+    """Record leaf names; give every internal (non-root) node a stable name.
+
+    Internal nodes are named by a hash of their (sorted) descendant leaf labels,
+    or ``<basename><n>`` if a basename is given -- so the tree topology becomes a
+    set of named clade nodes. Unlike the old ete3 code this keys on ``is_leaf``,
+    so an internal support-value label can no longer be mistaken for a taxon.
+    """
     leaves_nodes: dict[str, list[str]] = {}
     counter = 0
-    for node in tree.iter_descendants():
-        if not node.name:
-            if node_basename:
-                node.name = f"{node_basename}{counter}"
-                counter += 1
-            else:
-                leaf_names = [leaf.name for leaf in node.get_leaves()]
-                node.name = hashlib.md5(" ".join(leaf_names).encode("utf-8")).hexdigest()
+    for node in tree.preorder_node_iter():
+        if node is tree.seed_node:
+            continue
+        if node.is_leaf():
+            name = _leaf_label(node)
+            if name:
+                leaves_nodes[name] = []
+            continue
+        if node_basename:
+            node.label = f"{node_basename}{counter}"
+            counter += 1
         else:
-            leaves_nodes[node.name] = []
+            leaf_labels = sorted(_leaf_label(lf) for lf in node.leaf_iter())
+            node.label = hashlib.md5(" ".join(leaf_labels).encode("utf-8")).hexdigest()
     return leaves_nodes
 
 
-def _build_paths(tree: ete3.Tree, leaves_nodes: dict[str, list[str]]) -> None:
-    for node in tree.iter_descendants():
-        if node.name in leaves_nodes:
-            for ancestor in node.get_ancestors():
-                if ancestor.is_root():
-                    ancestor.name = "root"
-                leaves_nodes[node.name].append(ancestor.name)
+def _build_paths(tree: dendropy.Tree, leaves_nodes: dict[str, list[str]]) -> None:
+    for node in tree.leaf_node_iter():
+        name = _leaf_label(node)
+        if name not in leaves_nodes:
+            continue
+        for ancestor in node.ancestor_iter(inclusive=False):
+            if ancestor is tree.seed_node:
+                ancestor.label = "root"
+                leaves_nodes[name].append("root")
+            else:
+                leaves_nodes[name].append(ancestor.label or "")
 
 
 def _edges(leaves_nodes: dict[str, list[str]]) -> list[tuple[str, str]]:

@@ -14,7 +14,7 @@ dependencies:
   - matplotlib
   - requests
   - biopython
-  - ete3
+  - dendropy
   - pyyaml
   - numpy>=1.26
   # Dereplication tools
