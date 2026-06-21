@@ -13,7 +13,14 @@ import typer
 
 from ..core.errors import RepGenRError, UserInputError
 from ..core.logging import configure_logging
-from .base import _RUN_STATE, _read_path_fofn, _require_choice, _require_unit_interval, app
+from .base import (
+    _RUN_STATE,
+    _parse_key_values,
+    _read_path_fofn,
+    _require_choice,
+    _require_unit_interval,
+    app,
+)
 
 
 @app.command(name="genome-fetch")
@@ -70,6 +77,108 @@ def dereplicate_chunk_cmd(
                 primary_ani=primary_ani, secondary_ani=secondary_ani,
                 aligned_fraction=aligned_fraction, threads=threads,
                 extra={"virus": virus} if virus else {},
+            ),
+            logger,
+        )
+    except RepGenRError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+
+
+@app.command(name="phylo-build")
+def phylo_build_cmd(
+    genomes_dir: Path = typer.Option(
+        ..., "--genomes-dir", help="Directory of genome FASTA files to build the tree from."
+    ),
+    out_dir: Path = typer.Option(..., "-o", "--out", help="Output dir (writes tree/tree.nwk)."),
+    outgroup_dir: Path | None = typer.Option(
+        None, "--outgroup-dir", help="Directory holding the outgroup genome file(s)."
+    ),
+    outgroup_accession: Path | None = typer.Option(
+        None, "--outgroup-accession", help="File naming the outgroup accession."
+    ),
+    treebuilder: str = typer.Option(
+        "iqtree", "--treebuilder", help="auto/iqtree/fasttree/raxmlng/mashtree/sourmash."
+    ),
+    msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
+    aligner: str = typer.Option(
+        "progressivemauve", "--aligner", help="progressivemauve, cactus, sibeliaz."
+    ),
+    snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
+    bootstrap: int = typer.Option(0, "-B", "--bootstrap", help="Bootstrap replicates (>=1000)."),
+    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
+    aligner_arg: list[str] = typer.Option(
+        [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
+    ),
+    threads: int = typer.Option(16, "-t", "--threads"),
+) -> None:
+    """Build a phylogeny from a genomes directory (stateless data-channel step)."""
+    from ..aligners.base import registry as _aln_registry
+    from ..snptypers.base import registry as _snp_registry
+    from ..stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
+    from ..treebuilders.base import registry as _tb_registry
+
+    _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
+    _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
+    if msa_source == "aligner":
+        _require_choice(aligner, set(_aln_registry.names()), "--aligner")
+    else:
+        _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
+
+    phylo_params = PhyloParams(
+        treebuilder=treebuilder, msa_source=msa_source, aligner=aligner, snptyper=snptyper,
+        no_outgroup=no_outgroup, bootstrap=bootstrap, reference=reference, threads=threads,
+        extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+    )
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    try:
+        phylo_build(
+            PhyloBuildParams(
+                genomes_dir=genomes_dir, out_dir=out_dir,
+                outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
+                phylo=phylo_params,
+            ),
+            logger,
+        )
+    except RepGenRError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+
+
+@app.command(name="tree2tax-relations")
+def tree2tax_relations_cmd(
+    tree: Path = typer.Option(..., "--tree", help="Rooted/unrooted tree in Newick (tree.nwk)."),
+    out_dir: Path = typer.Option(
+        ..., "-o", "--out", help="Output dir (writes tree2tax.tsv + genomes_map.tsv)."
+    ),
+    clusters: Path | None = typer.Option(
+        None, "--clusters", help="derep clusters.tsv (for --include-dereplicated)."
+    ),
+    outgroup_dir: Path | None = typer.Option(
+        None, "--outgroup-dir", help="Directory holding the outgroup genome file(s)."
+    ),
+    outgroup_accession: Path | None = typer.Option(
+        None, "--outgroup-accession", help="File naming the outgroup accession."
+    ),
+    node_basename: str | None = typer.Option(None, "--node-basename", help="Prefix for nodes."),
+    root_name: str = typer.Option("root", "-r", "--root-name", help="Name for the root node."),
+    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
+    include_dereplicated: bool = typer.Option(
+        False, "--include-dereplicated", help="List redundant genomes under their representative."
+    ),
+) -> None:
+    """Emit FlexTaxD relations from a tree (stateless data-channel step)."""
+    from ..stages.tree2tax import Tree2taxStepParams, tree2tax_relations
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    try:
+        tree2tax_relations(
+            Tree2taxStepParams(
+                tree=tree, out_dir=out_dir, clusters=clusters,
+                outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
+                node_basename=node_basename, root_name=root_name,
+                remove_outgroup=remove_outgroup, include_dereplicated=include_dereplicated,
             ),
             logger,
         )

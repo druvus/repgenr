@@ -1,8 +1,9 @@
 // Turn the rooted tree into FlexTaxD relations (data-channel form).
 //
-// Bridges like PHYLO: stages the tree, the merged representatives (for
-// --include-dereplicated), the outgroup and selection into a task-local workdir,
-// runs the existing `repgenr tree2tax`, and emits tree2tax.tsv + genomes_map.tsv.
+// Calls the stateless `repgenr tree2tax-relations` step directly on the staged
+// channel files: the tree, the merged representatives' clusters.tsv (for
+// --include-dereplicated) and the outgroup directory. Emits tree2tax.tsv and
+// genomes_map.tsv as channel outputs; there is no shared working directory.
 
 process TREE2TAX {
     label 'process_low'
@@ -12,7 +13,7 @@ process TREE2TAX {
     input:
     path tree
     path reps_dir
-    path outgroup
+    path outgroup, stageAs: 'outgroup/*'
     path outgroup_accession
 
     output:
@@ -22,18 +23,12 @@ process TREE2TAX {
 
     script:
     """
-    mkdir -p wd/tree wd/derep wd/outgroup
-    cp ${tree} wd/tree/tree.nwk
-    [ -f ${reps_dir}/clusters.tsv ] && cp ${reps_dir}/clusters.tsv wd/derep/clusters.tsv
-
-    for f in ${outgroup}; do
-        [ -e "\$f" ] && cp "\$f" wd/outgroup/
-    done
-    [ -s "${outgroup_accession}" ] && cp ${outgroup_accession} wd/outgroup_accession.txt
-
-    repgenr ${params.repgenr_opts} tree2tax -wd wd ${params.tree2tax_args}
-    cp wd/tree2tax.tsv .
-    cp wd/genomes_map.tsv .
+    repgenr ${params.repgenr_opts} tree2tax-relations \\
+        --tree ${tree} \\
+        --clusters ${reps_dir}/clusters.tsv \\
+        --outgroup-dir outgroup \\
+        --outgroup-accession ${outgroup_accession} \\
+        -o . ${params.tree2tax_args}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
