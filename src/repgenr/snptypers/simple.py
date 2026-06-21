@@ -24,9 +24,12 @@ _CAPABILITIES = ToolCapabilities(
     required_binaries=(
         BinarySpec("minimap2", version_args=("--version",), min_version="2.17"),
         # samtools/bcftools >= 1.10: an ancient 0.1.x (pulled in by some perl
-        # deps) lacks `bcftools mpileup` and breaks the SNP pipeline.
-        BinarySpec("samtools", version_args=("--version",), min_version="1.10"),
-        BinarySpec("bcftools", version_args=("--version",), min_version="1.10"),
+        # deps) lacks `bcftools mpileup` and breaks the SNP pipeline. strict_version
+        # so an ancient build that does not answer --version is rejected, not skipped.
+        BinarySpec("samtools", version_args=("--version",), min_version="1.10",
+                   strict_version=True),
+        BinarySpec("bcftools", version_args=("--version",), min_version="1.10",
+                   strict_version=True),
     ),
     recommended_max_genomes=2000,
     threads_param=None,

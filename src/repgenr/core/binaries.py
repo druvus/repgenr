@@ -31,6 +31,10 @@ class BinarySpec:
     name: str
     version_args: tuple[str, ...] = field(default=("--version",))
     min_version: str | None = None
+    # When the version cannot be parsed, lenient specs pass (avoid false rejects);
+    # strict specs fail -- use this for tools where a legacy build that does not
+    # answer its version flag can shadow a modern one on PATH (samtools/bcftools).
+    strict_version: bool = False
 
 
 def _parse_version(text: str) -> tuple[int, int, int] | None:
@@ -77,7 +81,13 @@ def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
         if spec.min_version is not None:
             have = _parse_version(reported or "")
             want = _parse_version(spec.min_version)
-            if have is not None and want is not None and have < want:
+            if have is None and want is not None and spec.strict_version:
+                problems.append(
+                    f"{spec.name}: could not read a version (got {reported!r}); need "
+                    f">= {spec.min_version}. A legacy build that does not answer its "
+                    "version flag may be shadowing it on PATH -- use a modern environment."
+                )
+            elif have is not None and want is not None and have < want:
                 problems.append(
                     f"{spec.name}: version {reported} < required {spec.min_version}"
                 )
