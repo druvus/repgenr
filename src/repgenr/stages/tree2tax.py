@@ -11,6 +11,7 @@ a leaf-derived hash), then emit ``tree2tax.tsv`` (child -> parent) and
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,39 +41,111 @@ class Tree2taxParams:
     include_dereplicated: bool = False
 
 
+@dataclass
+class Tree2taxStepParams:
+    """Inputs for the stateless tree2tax step (explicit paths, no workdir)."""
+
+    tree: Path
+    out_dir: Path
+    clusters: Path | None = None
+    outgroup_dir: Path | None = None
+    outgroup_accession: Path | None = None
+    node_basename: str | None = None
+    root_name: str = "root"
+    remove_outgroup: bool = False
+    include_dereplicated: bool = False
+
+
+def _emit_relations(
+    tree_text: str,
+    outgroup_leaf: str | None,
+    redundant: dict[str, list[str]],
+    *,
+    node_basename: str | None,
+    root_name: str,
+    remove_outgroup: bool,
+    out_tree2tax: Path,
+    out_map: Path,
+    logger: logging.Logger,
+) -> tuple[Path, Path]:
+    """Build FlexTaxD relations from a tree and write the two output tables.
+
+    Stateless core shared by :func:`run` (workdir-bound) and
+    :func:`tree2tax_relations` (data-channel step): it roots, names nodes and
+    emits ``tree2tax.tsv`` + ``genomes_map.tsv`` to the given paths.
+    """
+    # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
+    # and newick otherwise turns underscores into spaces.
+    tree = dendropy.Tree.get(data=tree_text, schema="newick", preserve_underscores=True)
+
+    if outgroup_leaf is not None:
+        _set_outgroup(tree, outgroup_leaf, logger)
+
+    leaves_nodes = _name_nodes(tree, node_basename)
+    _build_paths(tree, leaves_nodes)
+
+    if remove_outgroup and outgroup_leaf in leaves_nodes:
+        del leaves_nodes[outgroup_leaf]
+        for nodes in leaves_nodes.values():
+            if nodes:
+                nodes[-1] = root_name
+
+    write_tree2tax(out_tree2tax, _edges(leaves_nodes))
+    write_genomes_map(out_map, _genome_map(leaves_nodes, redundant))
+    logger.info("Wrote %s and %s", out_tree2tax.name, out_map.name)
+    return out_tree2tax, out_map
+
+
+def tree2tax_relations(
+    params: Tree2taxStepParams, logger: logging.Logger
+) -> tuple[Path, Path]:
+    """Emit FlexTaxD relations from explicit inputs (stateless; no config)."""
+    if not params.tree.exists():
+        raise WorkdirError(f"Tree not found: {params.tree}. Run the phylo step first.")
+    outgroup_leaf = None
+    if params.outgroup_dir is not None and params.outgroup_accession is not None:
+        outgroup_leaf = _resolve_outgroup_leaf_from(
+            params.outgroup_dir, params.outgroup_accession, logger
+        )
+    redundant = (
+        _load_redundant_from(params.clusters)
+        if params.include_dereplicated and params.clusters is not None
+        else {}
+    )
+    params.out_dir.mkdir(parents=True, exist_ok=True)
+    return _emit_relations(
+        params.tree.read_text().strip(),
+        outgroup_leaf,
+        redundant,
+        node_basename=params.node_basename,
+        root_name=params.root_name,
+        remove_outgroup=params.remove_outgroup,
+        out_tree2tax=params.out_dir / TREE2TAX_TSV,
+        out_map=params.out_dir / GENOMES_MAP_TSV,
+        logger=logger,
+    )
+
+
 def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     logger = ctx.logger
     tree_file = ctx.tree_dir / TREE_NWK
     if not tree_file.exists():
         raise WorkdirError(f"Tree not found: {tree_file}. Run the phylo stage first.")
-    # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
-    # and newick otherwise turns underscores into spaces.
-    tree = dendropy.Tree.get(
-        data=tree_file.read_text().strip(), schema="newick", preserve_underscores=True
-    )
 
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
-    if outgroup_leaf is not None:
-        _set_outgroup(tree, outgroup_leaf, logger)
-
-    leaves_nodes = _name_nodes(tree, params.node_basename)
-    _build_paths(tree, leaves_nodes)
-
-    if params.remove_outgroup and outgroup_leaf in leaves_nodes:
-        del leaves_nodes[outgroup_leaf]
-        for nodes in leaves_nodes.values():
-            if nodes:
-                nodes[-1] = params.root_name
-
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}
 
-    edges = _edges(leaves_nodes)
-    out_tree2tax = ctx.workdir / TREE2TAX_TSV
-    write_tree2tax(out_tree2tax, edges)
-
-    mapping = _genome_map(leaves_nodes, redundant)
-    out_map = ctx.workdir / GENOMES_MAP_TSV
-    write_genomes_map(out_map, mapping)
+    out_tree2tax, out_map = _emit_relations(
+        tree_file.read_text().strip(),
+        outgroup_leaf,
+        redundant,
+        node_basename=params.node_basename,
+        root_name=params.root_name,
+        remove_outgroup=params.remove_outgroup,
+        out_tree2tax=ctx.workdir / TREE2TAX_TSV,
+        out_map=ctx.workdir / GENOMES_MAP_TSV,
+        logger=logger,
+    )
 
     ctx.config.record_stage(
         "tree2tax",
@@ -84,7 +157,6 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
-    logger.info("Wrote %s and %s", out_tree2tax.name, out_map.name)
     return out_tree2tax, out_map
 
 
@@ -93,8 +165,20 @@ def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:
     if not acc_file.exists() or not ctx.outgroup_dir.exists():
         logger.warning("No outgroup available; tree is left unrooted")
         return None
-    accession = acc_file.read_text().strip()
-    for f in ctx.outgroup_dir.iterdir():
+    return _resolve_outgroup_leaf_from(ctx.outgroup_dir, acc_file, logger)
+
+
+def _resolve_outgroup_leaf_from(
+    outgroup_dir: Path, accession_file: Path, logger: logging.Logger
+) -> str | None:
+    if not accession_file.exists() or not outgroup_dir.exists():
+        logger.warning("No outgroup available; tree is left unrooted")
+        return None
+    accession = accession_file.read_text().strip()
+    if not accession:
+        logger.warning("No outgroup accession recorded; tree is left unrooted")
+        return None
+    for f in sorted(outgroup_dir.iterdir()):
         if accession in f.name:
             return f.stem
     logger.warning("Outgroup accession %s not present among tree leaves", accession)
@@ -163,7 +247,10 @@ def _edges(leaves_nodes: dict[str, list[str]]) -> list[tuple[str, str]]:
 
 
 def _load_redundant(ctx: WorkdirContext) -> dict[str, list[str]]:
-    clusters_file = ctx.derep_dir / CLUSTERS_TSV
+    return _load_redundant_from(ctx.derep_dir / CLUSTERS_TSV)
+
+
+def _load_redundant_from(clusters_file: Path) -> dict[str, list[str]]:
     if not clusters_file.exists():
         return {}
     clusters = read_clusters(clusters_file)

@@ -1,10 +1,10 @@
 // Build the phylogeny (data-channel form).
 //
-// The phylo stage drives an aligner/SNP-typer/tree-builder matrix that is tied to
-// the RepGenR working-directory layout, so this module bridges: it stages the
-// channel inputs (merged representatives, outgroup, selection) into a task-local
-// workdir, runs the existing `repgenr phylo`, and emits tree.nwk as a channel
-// output. Data flows through channels; the workdir is task scratch.
+// Calls the stateless `repgenr phylo-build` step directly on the staged channel
+// files: the merged representatives directory provides the genome set, the
+// outgroup files are staged into an outgroup/ directory, and tree/tree.nwk is
+// emitted as a channel output. There is no shared working directory; align/SNP
+// intermediates stay in task scratch and are not published.
 
 process PHYLO {
     label 'process_high'
@@ -13,7 +13,7 @@ process PHYLO {
 
     input:
     path reps_dir
-    path outgroup
+    path outgroup, stageAs: 'outgroup/*'
     path outgroup_accession
 
     output:
@@ -22,18 +22,11 @@ process PHYLO {
 
     script:
     """
-    mkdir -p wd/derep/representatives wd/outgroup
-    cp ${reps_dir}/representatives/* wd/derep/representatives/ 2>/dev/null || true
-    [ -f ${reps_dir}/clusters.tsv ] && cp ${reps_dir}/clusters.tsv wd/derep/clusters.tsv
-
-    for f in ${outgroup}; do
-        [ -e "\$f" ] && cp "\$f" wd/outgroup/
-    done
-    [ -s "${outgroup_accession}" ] && cp ${outgroup_accession} wd/outgroup_accession.txt
-
-    repgenr ${params.repgenr_opts} phylo -wd wd -t ${task.cpus} ${params.phylo_args}
-    mkdir -p tree
-    cp wd/tree/tree.nwk tree/tree.nwk
+    repgenr ${params.repgenr_opts} phylo-build \\
+        --genomes-dir ${reps_dir}/representatives \\
+        --outgroup-dir outgroup \\
+        --outgroup-accession ${outgroup_accession} \\
+        -o . -t ${task.cpus} ${params.phylo_args}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
