@@ -2,6 +2,7 @@ nextflow_workflow {
 
     name "DEREPLICATE_SCATTER (stub)"
     script "../subworkflows/local/dereplicate_scatter.nf"
+    tag "stub"
     workflow "DEREPLICATE_SCATTER"
     options "-stub"
 

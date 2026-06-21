@@ -2,6 +2,7 @@ nextflow_workflow {
 
     name "ACQUIRE (stub)"
     script "../subworkflows/local/acquire.nf"
+    tag "stub"
     workflow "ACQUIRE"
     options "-stub"
 
