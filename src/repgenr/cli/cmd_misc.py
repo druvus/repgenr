@@ -1,4 +1,4 @@
-"""Auxiliary commands: glance, derep-unpack, derep-stock, list-tools."""
+"""Auxiliary commands: status, glance, derep-unpack, derep-stock, list-tools."""
 
 from __future__ import annotations
 
@@ -7,6 +7,58 @@ from pathlib import Path
 import typer
 
 from .base import _run, app
+
+# Canonical stage order per lineage, used by `status` to show progress and the
+# next step. Optional stages (snptype, glance, derep-unpack) are reported as
+# extras when present but are not part of the required chain.
+_BACTERIAL_CHAIN = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
+_VIRAL_CHAIN = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
+
+
+@app.command()
+def status(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+) -> None:
+    """Show which pipeline stages have completed in a working directory."""
+    from ..core.config import CONFIG_FILENAME, Config
+
+    if not (workdir / CONFIG_FILENAME).exists():
+        typer.echo(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
+        typer.echo("Start with 'repgenr metadata -wd <wd> ...' (or 'vmetadata' for viruses).")
+        raise typer.Exit()
+
+    cfg = Config.load(workdir)
+    recorded = cfg.stages
+    viral = any(name in recorded for name in ("vmetadata", "vgenome"))
+    chain = _VIRAL_CHAIN if viral else _BACTERIAL_CHAIN
+
+    typer.echo(f"RepGenR workdir: {workdir}")
+    typer.echo(f"Pipeline: {'viral' if viral else 'bacterial'}\n")
+
+    next_stage: str | None = None
+    for stage in chain:
+        rec = recorded.get(stage)
+        if rec is not None and rec.completed:
+            tool = f" [{rec.tool}]" if rec.tool else ""
+            typer.echo(f"  [done]    {stage}{tool}  {rec.completed}")
+        else:
+            marker = "next" if next_stage is None else "    "
+            typer.echo(f"  [{marker}] {stage}")
+            if next_stage is None:
+                next_stage = stage
+
+    extras = [s for s in recorded if s not in chain]
+    if extras:
+        typer.echo("\n  optional stages run:")
+        for stage in extras:
+            rec = recorded[stage]
+            tool = f" [{rec.tool}]" if rec.tool else ""
+            typer.echo(f"    {stage}{tool}  {rec.completed or '(incomplete)'}")
+
+    if next_stage is None:
+        typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
+    else:
+        typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
 
 
 @app.command()
