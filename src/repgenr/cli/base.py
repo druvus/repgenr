@@ -83,17 +83,25 @@ def _require_unit_interval(value: float | None, label: str) -> None:
         raise UserInputError(f"{label} must be in (0, 1], got {value}.")
 
 
+# Parameters that change how work is scheduled but not the result, so they are
+# excluded from the resume fingerprint -- changing --threads / --num-processes
+# must not force an otherwise-identical stage to recompute from scratch.
+_NON_RESULT_PARAMS = frozenset({"threads", "num_processes"})
+
+
 def _stage_fingerprint(stage_name: str, params: object) -> str:
     """Stable hash of a stage invocation, used to skip already-completed work.
 
     Built from the stage name plus the parameter object (a dataclass), so the
     same invocation produces the same fingerprint across runs. Paths and other
-    non-JSON values are stringified.
+    non-JSON values are stringified. Non-result params (thread/worker counts) are
+    excluded so they do not invalidate the resume cache.
     """
     if dataclasses.is_dataclass(params) and not isinstance(params, type):
-        payload: object = dataclasses.asdict(params)
+        payload: dict = dataclasses.asdict(params)
     else:
-        payload = vars(params)
+        payload = dict(vars(params))
+    payload = {k: v for k, v in payload.items() if k not in _NON_RESULT_PARAMS}
     blob = json.dumps({"stage": stage_name, "params": payload}, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
