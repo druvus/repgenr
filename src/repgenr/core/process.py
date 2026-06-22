@@ -14,7 +14,9 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import signal
 import subprocess
+import threading
 from collections import deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -22,6 +24,22 @@ from pathlib import Path
 from .errors import ToolExecutionError
 
 _DEFAULT_TAIL = 50
+
+
+def _default_timeout() -> float | None:
+    """Global subprocess timeout (seconds) from ``REPGENR_SUBPROCESS_TIMEOUT``.
+
+    Unset (the default) means no timeout, preserving prior behavior; operators
+    can cap every external tool with one environment variable.
+    """
+    raw = os.environ.get("REPGENR_SUBPROCESS_TIMEOUT")
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
 
 
 def run(
@@ -33,12 +51,18 @@ def run(
     check: bool = True,
     stdout_path: str | os.PathLike[str] | None = None,
     log_prefix: str | None = None,
+    timeout: float | None = None,
 ) -> int:
     """Run ``command`` (an argument vector) without a shell.
 
     Output is line-streamed to ``logger`` at INFO. When ``stdout_path`` is given,
     stdout is written there instead (stderr still goes to the logger) -- use this
     for tools that emit their result on stdout (e.g. ``mashtree``).
+
+    ``timeout`` (seconds) caps the run: on expiry the whole process group is
+    killed and :class:`ToolExecutionError` is raised, so a hung tool (or a stuck
+    ``docker pull``) cannot wedge the pipeline. It defaults to the
+    ``REPGENR_SUBPROCESS_TIMEOUT`` environment variable (unset = no timeout).
 
     Returns the process exit code. Raises :class:`ToolExecutionError` on a
     non-zero exit when ``check`` is True.
@@ -49,8 +73,11 @@ def run(
 
     full_env = {**os.environ, **env} if env else None
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)
+    limit = timeout if timeout is not None else _default_timeout()
 
     out_handle = open(stdout_path, "w") if stdout_path is not None else None
+    timer: threading.Timer | None = None
+    timed_out = False
     try:
         proc = subprocess.Popen(
             cmd,
@@ -60,7 +87,21 @@ def run(
             stderr=subprocess.STDOUT if out_handle is None else subprocess.PIPE,
             text=True,
             bufsize=1,
+            # Own process group so a timeout can kill the tool and its children.
+            start_new_session=limit is not None,
         )
+
+        if limit is not None:
+            def _kill() -> None:
+                nonlocal timed_out
+                timed_out = True
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+            timer = threading.Timer(limit, _kill)
+            timer.start()
+
         stream = proc.stdout if out_handle is None else proc.stderr
         if stream is not None:
             for raw in stream:
@@ -71,9 +112,14 @@ def run(
                 logger.info("%s%s", prefix, line)
         returncode = proc.wait()
     finally:
+        if timer is not None:
+            timer.cancel()
         if out_handle is not None:
             out_handle.close()
 
+    if timed_out:
+        tail.append(f"[killed after {limit}s timeout]")
+        raise ToolExecutionError(cmd, returncode, output="\n".join(tail))
     if check and returncode != 0:
         raise ToolExecutionError(cmd, returncode, output="\n".join(tail))
     return returncode
