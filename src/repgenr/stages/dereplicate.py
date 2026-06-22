@@ -9,6 +9,7 @@ manifest derep status is updated.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 from dataclasses import dataclass, replace
@@ -42,7 +43,7 @@ class DereplicateParams:
     # tool (native-scaling tools are single-pass by default but can be chunked
     # explicitly, e.g. to bound memory/open-file counts at 1000s-10000s genomes).
     process_size: int | None = None
-    num_processes: int = 1  # parallel stage-1 chunk workers (threads split across them)
+    num_processes: int = 0  # parallel stage-1 chunk workers (0 = auto); threads split across them
     # Stage-1 (intra-chunk) ANI thresholds. Default to the main thresholds; set
     # them looser to avoid over-collapsing within a chunk before the stage-2 pass.
     pre_primary_ani: float | None = None
@@ -174,6 +175,10 @@ def _dereplicate_to_result(
         return adapter.dereplicate(genomes, scratch, derep_params, logger)
     assert params.process_size is not None  # guaranteed by needs_chunking
 
+    workers = (
+        params.num_processes if params.num_processes > 0
+        else _auto_num_processes(derep_params.threads)
+    )
     pre_primary, pre_secondary = _resolve_pre_thresholds(params, derep_params.secondary_ani)
     native = adapter.capabilities.supports_native_scaling
     logger.info(
@@ -186,8 +191,23 @@ def _dereplicate_to_result(
     )
     return _dereplicate_chunked(
         adapter, genomes, scratch, derep_params, params.process_size,
-        params.num_processes, pre_primary, pre_secondary, logger,
+        workers, pre_primary, pre_secondary, logger,
     )
+
+
+def _auto_num_processes(threads: int) -> int:
+    """Default parallel chunk-worker count when --num-processes is 0 (auto).
+
+    Benchmarks (1256 genomes, sourmash) show running chunks in parallel -- each at
+    threads/workers threads, so the total thread budget is unchanged -- is ~2.2x
+    faster at 4 workers and ~3x at 8 vs serial chunks, because a single tool run
+    doesn't use many threads efficiently on one chunk. Target ~4 threads per
+    worker (a balanced point, leaving per-chunk threading for larger genomes),
+    capped by the core count; never exceed the thread budget (so threads/worker
+    stays >= 1 and nothing is oversubscribed).
+    """
+    cores = os.cpu_count() or threads
+    return max(1, min(threads // 4, cores))
 
 
 def _search_target_reps(

@@ -73,7 +73,9 @@ def dereplicate(
         help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",
     ),
     num_processes: int = typer.Option(
-        1, "-p", "--num-processes", help="Parallel stage-1 chunk workers (threads split across)."
+        0, "-p", "--num-processes",
+        help="Parallel stage-1 chunk workers (threads split across them). "
+        "0 = auto (~threads/4, capped by cores).",
     ),
     pre_primary_ani: float | None = typer.Option(
         None, "--pre-primary-ani",
