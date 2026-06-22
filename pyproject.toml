@@ -37,7 +37,9 @@ sparse = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "ruff>=0.5",
+    # Pin ruff: its import-sort rules shift between minors, so an unpinned floor
+    # let CI lint with a newer ruff than the dev env and fail on ordering.
+    "ruff==0.15.18",
     "mypy>=1.10",
     "types-PyYAML",
     "types-requests",
