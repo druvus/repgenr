@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repgenr.stages.vgenome import _matches, _read_ncbi, _select_outgroup_from_matrix
+from repgenr.viral._common import select_outgroup_from_matrix
+from repgenr.viral.bvbrc import _matches, _read_ncbi
 from repgenr.viral.entrez import TAXNAMES_ORDERED, _group_taxa
 
 
@@ -60,7 +61,7 @@ def test_select_outgroup_prefers_distant_candidate(tmp_path: Path) -> None:
         "O_x\t0.30\t0.31\t0\t0.40\n"
         "O_y\t0.50\t0.51\t0.40\t0\n"
     )
-    chosen = _select_outgroup_from_matrix(matrix, logger=_NullLogger())
+    chosen = select_outgroup_from_matrix(matrix, logger=_NullLogger())
     assert chosen in ("O_x", "O_y")
 
 
