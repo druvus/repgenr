@@ -17,11 +17,12 @@ import shutil
 import signal
 import subprocess
 import threading
+import zipfile
 from collections import deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from .errors import ToolExecutionError
+from .errors import ToolExecutionError, WorkdirError
 
 _DEFAULT_TAIL = 50
 
@@ -123,6 +124,22 @@ def run(
     if check and returncode != 0:
         raise ToolExecutionError(cmd, returncode, output="\n".join(tail))
     return returncode
+
+
+def unzip(zip_path: str | os.PathLike[str], dest: str | os.PathLike[str]) -> None:
+    """Extract a zip, turning a truncated/corrupt archive into a clear error.
+
+    A `datasets` download that was cut short (network reset, full disk) leaves a
+    bad zip; ``zipfile`` then raises ``BadZipFile`` which would surface as a raw
+    traceback. Map it to :class:`WorkdirError` naming the file so a re-run retries.
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(dest)
+    except zipfile.BadZipFile as exc:
+        raise WorkdirError(
+            f"Corrupt or truncated download: {zip_path} ({exc}). Re-run to retry."
+        ) from exc
 
 
 def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[str]) -> Path:

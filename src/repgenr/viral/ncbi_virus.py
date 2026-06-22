@@ -14,11 +14,11 @@ import json
 import logging
 import re
 import shutil
-import zipfile
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from ..core import process
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
@@ -141,8 +141,7 @@ def fetch(
         cmd += ["--released-after", released_after]
     runner(DATASETS_CAPS, cmd, logger=logger, log_prefix="datasets")
 
-    with zipfile.ZipFile(zip_path) as zf:
-        zf.extractall(extract)
+    process.unzip(zip_path, extract)
     report = extract / "ncbi_dataset" / "data" / "data_report.jsonl"
     fna = extract / "ncbi_dataset" / "data" / "genomic.fna"
     if not report.exists() or not fna.exists():

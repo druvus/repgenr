@@ -14,10 +14,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..core import process
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.context import WorkdirContext
-from ..core.contracts import genome_filename
+from ..core.contracts import FASTA_SUFFIXES, genome_filename
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, preflight
 
@@ -28,6 +29,8 @@ _DATASETS_CAPS = ToolCapabilities(
     conda=("conda-forge::ncbi-datasets-cli",),
 )
 _DOWNLOAD_BATCH_SIZE = 5000  # accessions per datasets download/rehydrate call
+_EST_BYTES_PER_GENOME = 5_000_000  # rough peak-disk estimate (zip + extract + final)
+_MIN_FREE_BYTES = 1_000_000_000  # hard floor: refuse to start a batch under ~1 GB free
 
 
 def _run_cmd(cmd, **kwargs):
@@ -100,10 +103,49 @@ def _output_name(g) -> str:
 
 
 def _prune(genomes_dir: Path, keep: set[str], logger) -> None:
+    # Only ever remove genome FASTA files (never directories or user-placed
+    # files): a non-selected FASTA is stale, anything else is left untouched.
     for f in genomes_dir.iterdir():
-        if f.name not in keep:
-            f.unlink()
-            logger.info("Removed %s (no longer selected)", f.name)
+        if f.name in keep or not f.is_file() or not f.name.endswith(FASTA_SUFFIXES):
+            continue
+        f.unlink()
+        logger.info("Removed %s (no longer selected)", f.name)
+
+
+def _check_disk(scratch_dir: Path, n_accessions: int, logger) -> None:
+    """Refuse to start a download with almost no free disk; warn when tight.
+
+    Genome sizes are unknown ahead of time, so this is a coarse guard against the
+    "filled the volume mid-run" failure, not a precise reservation.
+    """
+    free = shutil.disk_usage(scratch_dir).free
+    if free < _MIN_FREE_BYTES:
+        raise WorkdirError(
+            f"Only {free / 1e9:.1f} GB free under {scratch_dir}; refusing to download "
+            f"{n_accessions} genomes. Free disk space or point --outdir at a larger volume."
+        )
+    estimate = n_accessions * _EST_BYTES_PER_GENOME * 2
+    if free < estimate:
+        logger.warning(
+            "Low disk: ~%.1f GB free, up to ~%.1f GB may be needed for %d genomes.",
+            free / 1e9, estimate / 1e9, n_accessions,
+        )
+
+
+def _assert_fasta(path: Path) -> None:
+    """Cheap sanity check that a downloaded file is FASTA, not an error page.
+
+    NCBI/GTDB occasionally serve an HTML error body with a 200 status; catching
+    it here names the offending file instead of failing cryptically inside an
+    aligner far downstream.
+    """
+    with open(path, "rb") as fo:
+        head = fo.read(1)
+    if head != b">":
+        raise WorkdirError(
+            f"Downloaded genome is not FASTA (does not start with '>'): {path.name}. "
+            "The download may be an error page; re-run to retry."
+        )
 
 
 def download_accessions(
@@ -127,6 +169,7 @@ def download_accessions(
     dest_dir.mkdir(parents=True, exist_ok=True)
     scratch_dir.mkdir(parents=True, exist_ok=True)
     total = len(accessions)
+    _check_disk(scratch_dir, total, logger)
     n_batches = (total + _DOWNLOAD_BATCH_SIZE - 1) // _DOWNLOAD_BATCH_SIZE
     for bi, start in enumerate(range(0, total, _DOWNLOAD_BATCH_SIZE)):
         batch = accessions[start : start + _DOWNLOAD_BATCH_SIZE]
@@ -152,17 +195,27 @@ def _download_one_batch(
         ],
         logger=logger, log_prefix="datasets",
     )
-    with zipfile.ZipFile(zip_path) as zf:
-        zf.extractall(extract)
+    process.unzip(zip_path, extract)
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
         logger=logger, log_prefix="datasets",
     )
 
+    produced: set[str] = set()
     for fna in extract.rglob("*.fna"):
         name = filenames.get(fna.parent.name)
         if name:
-            shutil.move(str(fna), str(dest_dir / name))
+            target = dest_dir / name
+            shutil.move(str(fna), str(target))
+            _assert_fasta(target)
+            produced.add(fna.parent.name)
+
+    missing = [acc for acc in batch if acc not in produced]
+    if missing:
+        logger.warning(
+            "NCBI returned no genome for %d of %d accessions in batch %d (e.g. %s)",
+            len(missing), len(batch), bi, ", ".join(missing[:3]),
+        )
 
     if not keep_files:
         zip_path.unlink(missing_ok=True)
@@ -181,9 +234,17 @@ def _download_outgroup(ctx, outgroup, logger) -> None:
         logger=logger, log_prefix="datasets",
     )
     name = _output_name(outgroup)
-    with zipfile.ZipFile(zip_path) as zf:
-        for item in zf.namelist():
-            if item.endswith(".fna") and outgroup.accession in item:
-                (ctx.outgroup_dir / name).write_bytes(zf.read(item))
-                break
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            for item in zf.namelist():
+                if item.endswith(".fna") and outgroup.accession in item:
+                    (ctx.outgroup_dir / name).write_bytes(zf.read(item))
+                    break
+    except zipfile.BadZipFile as exc:
+        raise WorkdirError(
+            f"Corrupt outgroup download: {zip_path} ({exc}). Re-run to retry."
+        ) from exc
+    out_path = ctx.outgroup_dir / name
+    if out_path.exists():
+        _assert_fasta(out_path)
     zip_path.unlink(missing_ok=True)
