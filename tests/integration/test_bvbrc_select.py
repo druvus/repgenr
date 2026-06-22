@@ -88,3 +88,28 @@ def test_run_select_writes_matching_genomes(workdir: Path) -> None:
     assert n == 2  # the two mastadenovirus sequences; the 'Other virus' is excluded
     written = {p.name for p in ctx.genomes_dir.iterdir()}
     assert written == {"acc1.fasta", "acc2.fasta"}
+
+
+def test_run_select_parses_fasta_once(workdir: Path, monkeypatch) -> None:
+    # The legacy path used to re-parse the whole download four times; it should
+    # now do a single metadata pass (sequences come from the lazy index).
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+
+    real_parse = bvbrc.SeqIO.parse
+    calls = {"n": 0}
+
+    def counting_parse(*a, **k):
+        calls["n"] += 1
+        return real_parse(*a, **k)
+
+    monkeypatch.setattr(bvbrc.SeqIO, "parse", counting_parse)
+    params = VgenomeParams(
+        target_genus="mastadenovirus", no_outgroup=True, length_range="250-350"
+    )
+    bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    assert calls["n"] == 1  # one metadata scan; sequences via SeqIO.index
