@@ -9,10 +9,11 @@ the taxonomic lineage. Network access is required.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterable
 from time import sleep
 
-import requests
+from ..core import http
 
 # Order in which to present taxonomic names. The last "real" levels are followed
 # by the custom "undefined_strain" bucket and the sub-lineage levels.
@@ -28,9 +29,25 @@ _ENTREZ_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
 
 def _send_query(taxon_ids: Iterable[str]) -> list[str]:
-    params = {"db": "taxonomy", "id": list(taxon_ids), "retmode": "xml"}
-    response = requests.get(_ENTREZ_BASE + "efetch.fcgi", params=params, timeout=120)
-    return response.text.split("\n")
+    # NCBI asks high-volume callers to identify themselves (tool/email) and
+    # raises the rate limit from 3 to 10 req/s when an API key is supplied.
+    params: dict[str, object] = {
+        "db": "taxonomy", "id": list(taxon_ids), "retmode": "xml", "tool": "repgenr",
+    }
+    email = os.environ.get("NCBI_EMAIL")
+    if email:
+        params["email"] = email
+    api_key = os.environ.get("NCBI_API_KEY")
+    if api_key:
+        params["api_key"] = api_key
+    # Shared retry/backoff session with status checking (a throttle/error page is
+    # raised, not silently fed to the XML parser as empty taxonomy).
+    return http.get_text(_ENTREZ_BASE + "efetch.fcgi", params=params).split("\n")
+
+
+def _request_delay() -> float:
+    """Seconds to wait between Entrez requests (3 req/s, or 10 with an API key)."""
+    return 0.11 if os.environ.get("NCBI_API_KEY") else 0.34
 
 
 def get_taxon_data_from_entrez(
@@ -58,7 +75,7 @@ def get_taxon_data_from_entrez(
         for enum, sublist in enumerate(sublists):
             logger.info("Submitting Entrez sublist %d (%d taxids)", enum, len(sublist))
             entrez_response += _send_query(sublist)
-            sleep(0.5)  # stay under the Entrez rate limit
+            sleep(_request_delay())  # stay under the Entrez rate limit
 
         for chunk_raw in _group_taxa(entrez_response):
             parsed = _parse_taxon(chunk_raw, tax_ids_list, tax_ids_to_parse, taxids_alts, logger)

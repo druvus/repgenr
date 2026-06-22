@@ -18,13 +18,11 @@ import gzip
 import shutil
 import tarfile
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-import requests
-
+from ..core import http
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     SELECTION_TSV,
@@ -159,9 +157,12 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
             return dest
         try:
             logger.info("Downloading %s", url)
-            urllib.request.urlretrieve(url, dest)
+            # Streams through a .part file with a size check (core.http), and
+            # retries transient 5xx/429; a 404 for this layout falls through to
+            # the next naming scheme.
+            http.download(url, dest, logger=logger)
             return dest
-        except Exception as exc:  # try the next naming scheme
+        except WorkdirError as exc:  # try the next naming scheme
             logger.warning("Download failed (%s); trying next target", exc)
     raise WorkdirError("Could not download GTDB metadata; check release/version.")
 
@@ -307,13 +308,8 @@ def _write_selection(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) 
 # --- GTDB API source --------------------------------------------------------
 
 def _api_get(path: str, params: dict | None = None) -> dict:
-    url = f"{GTDB_API_BASE}{path}"
-    try:
-        resp = requests.get(url, params=params, timeout=120)
-        resp.raise_for_status()
-        return resp.json()
-    except requests.RequestException as exc:
-        raise WorkdirError(f"GTDB API request failed: {url} ({exc})") from exc
+    # Shared retry/backoff session; raises WorkdirError naming the URL on failure.
+    return http.get_json(f"{GTDB_API_BASE}{path}", params=params)
 
 
 def _target_taxon(params: MetadataParams) -> str:
