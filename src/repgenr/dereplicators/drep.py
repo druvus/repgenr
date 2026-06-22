@@ -22,6 +22,7 @@ from ..core.containers import run_tool
 from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import link_or_copy
 from .base import (
     STATUS_CONTAINED,
     STATUS_FAIL_QC,
@@ -88,7 +89,12 @@ class DrepDereplicator(Dereplicator):
 
 
 def _stage_genome(src: Path, dest_dir: Path) -> Path:
-    """Copy ``src`` into ``dest_dir``, decompressing a .gz on the way."""
+    """Stage ``src`` into ``dest_dir`` for dRep, decompressing a .gz on the way.
+
+    A plain FASTA is hardlinked (instant, no extra disk -- dRep only reads it);
+    only a .gz genuinely needs a new decompressed file. Staging the whole input
+    set previously copied every genome.
+    """
     if src.suffix == ".gz":
         import gzip
 
@@ -98,7 +104,7 @@ def _stage_genome(src: Path, dest_dir: Path) -> Path:
         return target
     target = dest_dir / src.name
     if not target.exists():
-        shutil.copy2(src, target)
+        link_or_copy(src, target)
     return target
 
 
