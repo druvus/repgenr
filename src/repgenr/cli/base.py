@@ -33,6 +33,10 @@ app = typer.Typer(
 # Top-level run options shared by every subcommand (set in the callback).
 _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
 
+# One default thread count for every stage's -t/--threads, so the CLI is
+# consistent (stages previously mixed 16 and 24).
+DEFAULT_THREADS = 16
+
 
 def _require_choice(value: str, choices: set[str], label: str) -> None:
     if value not in choices:

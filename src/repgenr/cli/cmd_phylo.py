@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import _parse_key_values, _require_choice, _run, app
+from .base import DEFAULT_THREADS, _parse_key_values, _require_choice, _run, app
 
 
 @app.command()
@@ -16,7 +16,7 @@ def snptype(
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
 ) -> None:
     """Call SNPs and build a core-SNP alignment."""
     from ..snptypers.base import registry as _snp_registry
@@ -56,7 +56,7 @@ def phylo(
         help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
         "or seed_weight=11 (progressivemauve).",
     ),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
     from ..aligners.base import registry as _aln_registry
