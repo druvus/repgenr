@@ -6,13 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, _run, app
-
-# Canonical stage order per lineage, used by `status` to show progress and the
-# next step. Optional stages (snptype, glance, derep-unpack) are reported as
-# extras when present but are not part of the required chain.
-_BACTERIAL_CHAIN = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
-_VIRAL_CHAIN = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
+from .base import DEFAULT_THREADS, PIPELINE_BACTERIAL, PIPELINE_VIRAL, _run, app
 
 
 @app.command()
@@ -30,7 +24,7 @@ def status(
     cfg = Config.load(workdir)
     recorded = cfg.stages
     viral = any(name in recorded for name in ("vmetadata", "vgenome"))
-    chain = _VIRAL_CHAIN if viral else _BACTERIAL_CHAIN
+    chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
 
     typer.echo(f"RepGenR workdir: {workdir}")
     typer.echo(f"Pipeline: {'viral' if viral else 'bacterial'}\n")
