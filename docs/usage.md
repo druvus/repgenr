@@ -23,7 +23,7 @@ consumes. There is no shared working directory; results are published under
 ```bash
 nextflow run nextflow/main.nf \
     --mode bacterial \
-    --metadata_args '-r 232.0 -v bac120 -d rep -l genus -tg francisella' \
+    --metadata_args '-r 232.0 --gtdb-version bac120 -d rep -l genus -tg francisella' \
     --outdir results \
     -profile standard
 ```

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import _run, app
+from .base import DEFAULT_THREADS, _run, app
 
 # Canonical stage order per lineage, used by `status` to show progress and the
 # next step. Optional stages (snptype, glance, derep-unpack) are reported as
@@ -64,7 +64,7 @@ def status(
 @app.command()
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    threads: int = typer.Option(24, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     plot_max: float = typer.Option(1.0, "--plot-max"),
     plot_min: float = typer.Option(0.0, "--plot-min"),
     keep_files: bool = typer.Option(False, "--keep-files"),

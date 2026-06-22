@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from ..core.errors import UserInputError
-from .base import _require_choice, _require_unit_interval, _run, app
+from .base import DEFAULT_THREADS, _require_choice, _require_unit_interval, _run, app
 
 
 @app.command()
@@ -19,7 +19,9 @@ def metadata(
         "tsv", "--source", help="tsv (download full table) or api (GTDB API, target only)."
     ),
     release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
-    version: str | None = typer.Option(None, "-v", "--version", help="bac120/ar53 (tsv source)."),
+    gtdb_version: str | None = typer.Option(
+        None, "--gtdb-version", help="bac120/ar53 (tsv source)."
+    ),
     target_family: str | None = typer.Option(None, "-tf", "--target-family"),
     target_genus: str | None = typer.Option(None, "-tg", "--target-genus"),
     target_species: str | None = typer.Option(None, "-ts", "--target-species"),
@@ -34,7 +36,7 @@ def metadata(
     def build() -> MetadataParams:
         return MetadataParams(
             dataset=dataset, level=level, source=source,
-            release=release, version=version,
+            release=release, version=gtdb_version,
             target_family=target_family, target_genus=target_genus,
             target_species=target_species, outgroup_accession=outgroup_accession,
             metadata_path=metadata_path, nodownload=nodownload, limit=limit,
@@ -65,7 +67,7 @@ def dereplicate(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     process_size: int | None = typer.Option(
         None, "-s", "--process-size",
         help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",

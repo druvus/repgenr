@@ -15,6 +15,7 @@ from ..core.errors import UserInputError
 from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
+    DEFAULT_THREADS,
     _parse_key_values,
     _read_path_fofn,
     _require_choice,
@@ -53,7 +54,7 @@ def dereplicate_chunk_cmd(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Dereplicate one chunk of genomes (scatter step; writes a chunk result dir)."""
@@ -105,7 +106,7 @@ def phylo_build_cmd(
     aligner_arg: list[str] = typer.Option(
         [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
     ),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
 ) -> None:
     """Build a phylogeny from a genomes directory (stateless data-channel step)."""
     from ..aligners.base import registry as _aln_registry
@@ -188,7 +189,7 @@ def dereplicate_merge_cmd(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(16, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Dereplicate the union of chunk representatives (gather step)."""
