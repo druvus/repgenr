@@ -44,3 +44,14 @@ def test_run_validates_tool(monkeypatch, tmp_path) -> None:
     _record(monkeypatch)
     result = _runner.invoke(app, ["run", "-wd", str(tmp_path), "--tool", "bogus"])
     assert result.exit_code != 0
+
+
+def test_run_dry_run_previews_without_executing(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(app, [
+        "run", "-wd", str(tmp_path), "--dry-run", "-l", "genus", "-tg", "francisella",
+    ])
+    assert result.exit_code == 0, result.stdout
+    assert calls == []  # no stage executed
+    assert "[dry-run]" in result.stdout
+    assert "dereplicate" in result.stdout and "tree2tax" in result.stdout

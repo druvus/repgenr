@@ -17,6 +17,8 @@ from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
+    PIPELINE_BACTERIAL,
+    PIPELINE_VIRAL,
     _require_choice,
     _require_unit_interval,
     _run,
@@ -56,6 +58,9 @@ def run(
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
     # --- common ---
     threads: int = typer.Option(DEFAULT_THREADS, "--threads"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the stages and key parameters, then exit."
+    ),
 ) -> None:
     """Run the whole pipeline end to end (bacterial by default, --viral for viruses)."""
     from ..dereplicators.base import registry as _derep_registry
@@ -71,6 +76,28 @@ def run(
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
+
+    if dry_run:
+        chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
+        typer.echo(
+            f"[dry-run] {'viral' if viral else 'bacterial'} pipeline in {workdir}:"
+        )
+        for stage in chain:
+            typer.echo(f"  - {stage}")
+        selection = (
+            f"target={target}, genus={target_genus}, species={target_species}"
+            if viral
+            else f"dataset={dataset}, level={level}, "
+            f"family={target_family}, genus={target_genus}, species={target_species}"
+        )
+        typer.echo(f"selection: {selection}")
+        typer.echo(
+            f"dereplicate: tool={derep_tool}, primary_ani={primary_ani}, "
+            f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}, "
+            f"aligner={aligner}; threads={threads}"
+        )
+        typer.echo("[dry-run] no work done.")
+        return
 
     if viral:
         from ..stages.vgenome import VgenomeParams
