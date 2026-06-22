@@ -10,6 +10,7 @@ manifest derep status is updated.
 from __future__ import annotations
 
 import shutil
+import sqlite3
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -395,7 +396,10 @@ def _taxon_lookup(ctx: WorkdirContext, level: str) -> dict[str, str]:
     lookup: dict[str, str] = {}
     try:
         records = ctx.manifest.all_genomes(include_outgroup=True)
-    except Exception:  # no manifest (e.g. tests) -> empty taxonomy, everything stays a singleton
+    except (sqlite3.OperationalError, OSError):
+        # Manifest absent / not yet initialized (e.g. the data-channel path or
+        # tests) -> empty taxonomy, everything stays a singleton. A corrupt
+        # manifest raises sqlite3.DatabaseError, which is left to propagate.
         return lookup
     for rec in records:
         if not rec.filename:

@@ -70,7 +70,13 @@ class GenomeRecord:
 
 
 class Manifest:
-    """Thin SQLite wrapper for the genome inventory."""
+    """Thin SQLite wrapper for the genome inventory.
+
+    Not thread-safe: the single connection (``check_same_thread`` default) must be
+    used from the thread that opened it. Stages write the manifest on the main
+    thread; do not call it from inside a ``parallel_map`` worker. WAL + the busy
+    timeout cover concurrency across *processes* (Nextflow scatter), not threads.
+    """
 
     def __init__(self, path: str | os.PathLike[str]):
         self.path = Path(path)

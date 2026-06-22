@@ -203,12 +203,21 @@ def _singularity_source(image: str, config: ContainerConfig, logger: logging.Log
     sif = config.cache_dir / f"{_sanitize(image)}.sif"
     if not sif.exists():
         logger.info("Pulling %s -> %s", source, sif)
-        process.run(
-            [config.engine_binary(), "pull", str(sif), source],
-            logger=logger,
-            env=_engine_env(config),
-            log_prefix="singularity",
-        )
+        # Pull to a temp path and rename on success: an interrupted pull must not
+        # leave a corrupt .sif that sif.exists() then treats as cached forever.
+        tmp = sif.with_name(sif.name + ".partial")
+        tmp.unlink(missing_ok=True)
+        try:
+            process.run(
+                [config.engine_binary(), "pull", str(tmp), source],
+                logger=logger,
+                env=_engine_env(config),
+                log_prefix="singularity",
+            )
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
+        tmp.replace(sif)
     return str(sif)
 
 

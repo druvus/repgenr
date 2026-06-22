@@ -7,14 +7,16 @@ The HTTP call is replaced with a fixture XML payload so the lineage parsing
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 
+import pytest
+
+from repgenr.core.errors import WorkdirError
 from repgenr.viral import entrez
-from repgenr.viral.entrez import _parse_taxon, get_taxon_data_from_entrez
+from repgenr.viral.entrez import _parse_taxon_element, get_taxon_data_from_entrez
 
 _LOG = logging.getLogger("test")
 
-# One Taxon with a LineageEx, in the line-indentation shape _group_taxa expects:
-# the opening <Taxon> is unindented, everything inside is indented.
 _XML = """<?xml version="1.0"?>
 <TaxaSet>
 <Taxon>
@@ -39,7 +41,7 @@ _XML = """<?xml version="1.0"?>
 
 
 def test_get_taxon_data_parses_lineage(monkeypatch) -> None:
-    monkeypatch.setattr(entrez, "_send_query", lambda ids: _XML.split("\n"))
+    monkeypatch.setattr(entrez, "_send_query", lambda ids: _XML)
     monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)  # no rate-limit waits
 
     data, missing, _alts = get_taxon_data_from_entrez(["10535"], _LOG)
@@ -53,20 +55,27 @@ def test_get_taxon_data_parses_lineage(monkeypatch) -> None:
 
 
 def test_get_taxon_data_marks_missing(monkeypatch) -> None:
-    # Empty response -> the requested taxid is reported missing and gets an
-    # all-None lineage placeholder rather than raising.
-    monkeypatch.setattr(entrez, "_send_query", lambda ids: [""])
+    # A valid but empty TaxaSet -> the requested taxid is reported missing and
+    # gets an all-None lineage placeholder rather than raising.
+    monkeypatch.setattr(entrez, "_send_query", lambda ids: "<TaxaSet></TaxaSet>")
     monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
     data, missing, _alts = get_taxon_data_from_entrez(["55555"], _LOG)
     assert missing == {"55555"}
     assert data["55555"]["taxdata"]["genus"]["name"] is None
 
 
-def test_parse_taxon_ignores_unexpected_taxid() -> None:
-    chunk = (
-        "    <TaxId>999</TaxId>"
-        "    <ScientificName>Ghost</ScientificName>"
-        "    <Rank>species</Rank>"
+def test_non_xml_response_raises(monkeypatch) -> None:
+    # An HTML throttle/error page must hard-fail, not yield empty taxonomy.
+    monkeypatch.setattr(entrez, "_send_query", lambda ids: "<html><body>429</body></html>")
+    monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
+    with pytest.raises(WorkdirError):
+        get_taxon_data_from_entrez(["10535"], _LOG)
+
+
+def test_parse_taxon_element_ignores_unexpected_taxid() -> None:
+    el = ET.fromstring(
+        "<Taxon><TaxId>999</TaxId><ScientificName>Ghost</ScientificName>"
+        "<Rank>species</Rank></Taxon>"
     )
-    # 999 was not requested, so the chunk is ignored (returns None).
-    assert _parse_taxon(chunk, ["10535"], ["10535"], {}, _LOG) is None
+    # 999 was not requested, so the element is ignored (returns None).
+    assert _parse_taxon_element(el, ["10535"], ["10535"], {}, _LOG) is None
