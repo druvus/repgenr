@@ -187,13 +187,15 @@ def _download_group(target: str, dest: Path, logger) -> None:
                 f"Could not find virus group '{capitalized}' at BV-BRC. "
                 "Check the name (try --list), or download all with --target viruses."
             ) from exc
-        ftp.sendcmd("TYPE A")
-        with open(dest, "w") as fo:
-            ftp.retrlines("RETR " + remote, lambda line: fo.write(line + "\n"))
+        # Binary transfer with an exact size check: ASCII mode + a 1000-byte
+        # tolerance previously let a silently-truncated FASTA pass as complete.
+        with open(dest, "wb") as fo:
+            ftp.retrbinary("RETR " + remote, fo.write)
     local_size = dest.stat().st_size if dest.exists() else 0
-    if remote_size and abs(remote_size - local_size) >= 1000:
+    if remote_size and local_size != remote_size:
+        dest.unlink(missing_ok=True)
         raise WorkdirError(
-            f"Downloaded size {local_size} differs from remote {remote_size} by >1000 bytes."
+            f"Incomplete BV-BRC download: got {local_size} of {remote_size} bytes."
         )
     logger.info("Download finished (%d bytes)", local_size)
 
