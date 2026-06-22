@@ -37,10 +37,16 @@ from ..core.contracts import (
 )
 from ..core.errors import WorkdirError
 from ..core.process import link_or_copy
+from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, registry
 from .dereplicate import _compose_two_stage
 
 _REPRESENTATIVES_DIR = "representatives"
+
+
+def _maybe_write_versions(path: Path | None, versions: dict[str, str]) -> None:
+    if path is not None:
+        write_versions_fragment(path, versions)
 
 
 @dataclass
@@ -53,6 +59,7 @@ class ChunkParams:
     aligned_fraction: float = 0.50
     threads: int = 16
     extra: dict | None = None
+    versions_out: Path | None = None
 
 
 @dataclass
@@ -65,6 +72,7 @@ class MergeParams:
     aligned_fraction: float = 0.50
     threads: int = 16
     extra: dict | None = None
+    versions_out: Path | None = None
 
 
 def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResult:
@@ -78,7 +86,8 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         )
 
     adapter = registry.create(params.tool)
-    adapter.preflight()
+    versions = adapter.preflight()
+    _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,
@@ -109,7 +118,8 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         raise WorkdirError("dereplicate-merge: the chunk directories hold no representatives.")
 
     adapter = registry.create(params.tool)
-    adapter.preflight()
+    versions = adapter.preflight()
+    _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,

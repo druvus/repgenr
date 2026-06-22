@@ -140,6 +140,7 @@ class PhyloBuildParams:
     outgroup_dir: Path | None = None
     outgroup_accession: Path | None = None
     phylo: PhyloParams = field(default_factory=PhyloParams)
+    versions_out: Path | None = None
 
 
 def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
@@ -166,6 +167,10 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
         scratch_dir=params.out_dir / "scratch",
     )
     outcome = build_tree(genomes, outgroup_file, outgroup_leaf, dirs, params.phylo, logger)
+    if params.versions_out is not None:
+        from ..core.versions import write_versions_fragment
+
+        write_versions_fragment(params.versions_out, outcome.versions)
     return outcome.tree
 
 

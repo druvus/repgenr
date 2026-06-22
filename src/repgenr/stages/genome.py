@@ -23,7 +23,7 @@ from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, preflight
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
-_DATASETS_CAPS = ToolCapabilities(
+DATASETS_CAPS = ToolCapabilities(
     name="datasets",
     required_binaries=(_DATASETS,),
     conda=("conda-forge::ncbi-datasets-cli",),
@@ -35,7 +35,7 @@ _MIN_FREE_BYTES = 1_000_000_000  # hard floor: refuse to start a batch under ~1 
 
 def _run_cmd(cmd, **kwargs):
     """Run the datasets CLI, containerized when a backend is active."""
-    return run_tool(_DATASETS_CAPS, cmd, **kwargs)
+    return run_tool(DATASETS_CAPS, cmd, **kwargs)
 
 
 @dataclass
@@ -46,7 +46,7 @@ class GenomeParams:
 
 def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     logger = ctx.logger
-    versions = preflight(_DATASETS_CAPS)
+    versions = preflight(DATASETS_CAPS)
 
     manifest = ctx.manifest
     selected = [g for g in manifest.all_genomes(include_outgroup=False)]

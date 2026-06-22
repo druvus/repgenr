@@ -20,7 +20,9 @@ from pathlib import Path
 
 from ..core.contracts import read_selection
 from ..core.errors import WorkdirError
-from .genome import download_accessions
+from ..core.plugins import preflight
+from ..core.versions import write_versions_fragment
+from .genome import DATASETS_CAPS, download_accessions
 
 
 @dataclass
@@ -28,6 +30,7 @@ class GenomeFetchParams:
     selection_tsv: Path
     out_dir: Path
     keep_files: bool = False
+    versions_out: Path | None = None
 
 
 def genome_fetch(params: GenomeFetchParams, logger: logging.Logger) -> int:
@@ -37,6 +40,8 @@ def genome_fetch(params: GenomeFetchParams, logger: logging.Logger) -> int:
     """
     if not params.selection_tsv.exists():
         raise WorkdirError(f"genome-fetch: selection file not found: {params.selection_tsv}")
+    if params.versions_out is not None:
+        write_versions_fragment(params.versions_out, preflight(DATASETS_CAPS))
     rows = read_selection(params.selection_tsv)
     if not rows:
         raise WorkdirError(f"genome-fetch: selection file is empty: {params.selection_tsv}")

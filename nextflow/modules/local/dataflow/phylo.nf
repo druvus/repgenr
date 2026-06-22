@@ -26,12 +26,14 @@ process PHYLO {
         --genomes-dir ${reps_dir}/representatives \\
         --outgroup-dir outgroup \\
         --outgroup-accession ${outgroup_accession} \\
-        -o . -t ${task.cpus} ${params.phylo_args}
+        -o . -t ${task.cpus} ${params.phylo_args} \\
+        --versions-out tool_versions.yml
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        repgenr: \$(repgenr --version | sed 's/repgenr //')
-    END_VERSIONS
+    cat > versions.yml <<END_VERSIONS
+"${task.process}":
+    repgenr: \$(repgenr --version | sed 's/repgenr //')
+END_VERSIONS
+    cat tool_versions.yml >> versions.yml
     """
 
     stub:
