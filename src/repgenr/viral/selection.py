@@ -85,8 +85,11 @@ def run_records(
                 SelectionRow(r.accession, r.family, r.genus, r.species, False, name)
             )
 
+    tool_versions: dict[str, str] = {}
     if not params.no_outgroup and not params.group_segments:
-        og = _determine_outgroup_records(ctx, records, kept, (lo, hi), params, seqs, logger)
+        og, tool_versions = _determine_outgroup_records(
+            ctx, records, kept, (lo, hi), params, seqs, logger
+        )
         if og is not None:
             selection_rows.append(
                 SelectionRow(og.accession, og.family, og.genus, og.species, True,
@@ -101,6 +104,7 @@ def run_records(
             "source": "ncbi_virus", "selected": n_written,
             "group_segments": params.group_segments, "no_outgroup": params.no_outgroup,
         },
+        tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
@@ -223,8 +227,12 @@ def _write_isolate_groups(genomes_dir, records, seqs, logger):
 
 
 def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, logger):
-    """Pick an outgroup from species outside the selection, via mashtree."""
-    check_binaries((MASHTREE,))
+    """Pick an outgroup from species outside the selection, via mashtree.
+
+    Returns ``(outgroup_record_or_None, tool_versions)`` so the caller can record
+    the resolved mashtree version in provenance.
+    """
+    versions = check_binaries((MASHTREE,))
     kept_species = {r.species for r in kept}
     kept_acc = {r.accession for r in kept}
     cand_by_species: dict[str, list] = {}
@@ -238,7 +246,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     }
     if not candidates:
         logger.warning("No outgroup candidates found; proceeding without an outgroup.")
-        return None
+        return None, versions
 
     outgroup_wd = ctx.workdir / "virus_outgroup_wd"
     if outgroup_wd.exists():
@@ -267,7 +275,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     genome_files = sorted(gdir.glob("*.fasta"))
     if len([f for f in genome_files if f.name.startswith("O_")]) == 0:
         logger.warning("No length-compatible outgroup candidates; proceeding without one.")
-        return None
+        return None, versions
     matrix = outgroup_wd / "distance_matrix.tsv"
     run_cmd(
         ["mashtree", "--genomesize", str(int(mid)), "--mindepth", "0",
@@ -277,11 +285,11 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     label = select_outgroup_from_matrix(matrix, logger) if matrix.exists() else None
     if label is None:
         logger.warning("Could not assign an outgroup; proceeding without one.")
-        return None
+        return None, versions
     acc = label[2:] if label.startswith(("O_", "S_")) else label
     og = rec_by_acc.get(acc)
     if og is None or acc in kept_acc:
-        return None
+        return None, versions
 
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
     name = genome_filename(og.family, og.genus, og.species, og.accession)
@@ -290,4 +298,4 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     logger.info("Selected outgroup: %s (%s)", og.accession, og.species)
     if not params.keep_files:
         shutil.rmtree(outgroup_wd, ignore_errors=True)
-    return og
+    return og, versions

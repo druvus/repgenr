@@ -73,14 +73,16 @@ def run_select(
     sequences = _open_sequences(fasta, params.ignore_duplicates)
     n_written = _write_genomes(ctx, records, sequences, kept, params, logger)
 
+    tool_versions: dict[str, str] = {}
     if not params.no_outgroup:
-        _determine_outgroup(
+        tool_versions = _determine_outgroup(
             ctx, records, sequences, base, kept, length_range, params, logger
         )
 
     ctx.config.record_stage(
         "vgenome",
         params={"selected": n_written, "no_outgroup": params.no_outgroup},
+        tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
@@ -276,8 +278,9 @@ def _write_genomes(ctx, records, sequences, kept, params: VgenomeParams, logger)
 
 def _determine_outgroup(
     ctx, records, sequences, base, kept, length_range, params: VgenomeParams, logger
-) -> None:
-    check_binaries((MASHTREE,))
+) -> dict[str, str]:
+    """Pick an outgroup via mashtree; return the resolved tool versions."""
+    versions = check_binaries((MASHTREE,))
     outgroup_wd = ctx.workdir / "virus_outgroup_wd"
     if outgroup_wd.exists():
         shutil.rmtree(outgroup_wd)
@@ -331,3 +334,4 @@ def _determine_outgroup(
     logger.info("Selected outgroup: %s", outgroup_id)
     if not params.keep_files:
         shutil.rmtree(outgroup_wd, ignore_errors=True)
+    return versions
