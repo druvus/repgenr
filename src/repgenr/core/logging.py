@@ -29,7 +29,11 @@ def configure_logging(
     to ``<workdir>/<log_filename>``.
     """
     logger = logging.getLogger(_LOGGER_NAME)
-    logger.setLevel(level)
+    # The logger passes everything to the handlers; each handler filters: the
+    # console respects the requested level (INFO/--quiet/--verbose) while the file
+    # always keeps full DEBUG detail, so an unexpected-error traceback is captured
+    # in the run log without cluttering the console.
+    logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     logger.propagate = False
 
@@ -37,6 +41,7 @@ def configure_logging(
 
     console = logging.StreamHandler()
     console.setFormatter(formatter)
+    console.setLevel(level)
     logger.addHandler(console)
 
     if workdir is not None:
@@ -45,6 +50,7 @@ def configure_logging(
             wd.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(wd / log_filename)
             file_handler.setFormatter(formatter)
+            file_handler.setLevel(logging.DEBUG)
             logger.addHandler(file_handler)
         except OSError:
             logger.warning("Could not open log file under %s; console only", wd)
