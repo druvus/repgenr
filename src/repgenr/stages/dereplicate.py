@@ -206,12 +206,20 @@ def _search_target_reps(
     best_diff = None
     best_ani = None
     seen: set[float] = set()
+    # Sketches depend on the genome set + ksize/scaled, not the ANI threshold, so
+    # share one sketch dir across iterations: adapters that support it (sourmash)
+    # sketch once and every iteration reuses it instead of re-sketching.
+    sketch_cache = scratch / "target" / "sketches"
     for i in range(_MAX_TARGET_ITERS):
         mid = round((lo + hi) / 2, 5)
         if mid in seen:
             break
         seen.add(mid)
-        dp = replace(derep_params, secondary_ani=mid)
+        dp = replace(
+            derep_params,
+            secondary_ani=mid,
+            extra={**derep_params.extra, "sketch_cache": str(sketch_cache)},
+        )
         iter_dir = scratch / "target" / f"iter{i}"
         res = _dereplicate_to_result(adapter, genomes, iter_dir, dp, params, logger)
         n = len(res.representatives)

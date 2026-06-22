@@ -69,10 +69,17 @@ class SourmashDereplicator(Dereplicator):
         sani = params.secondary_ani
         threshold = sani if sani <= 1.0 else sani / 100
 
+        # Signatures depend only on the genome set + ksize/scaled, not the ANI
+        # threshold. The --target-reps search passes a shared sketch_cache dir so
+        # the (expensive) sketching runs once and every threshold iteration
+        # reuses it instead of re-sketching the same genomes.
+        cache = params.extra.get("sketch_cache")
+        sketch_cache = Path(cache) if cache else None
+
         if _branchwater_available(self.capabilities, logger):
             try:
                 clusters, status = self._sparse_dereplicate(
-                    genomes, out_dir, ksize, scaled, threshold, params, logger
+                    genomes, out_dir, ksize, scaled, threshold, params, logger, sketch_cache
                 )
             except (ToolExecutionError, WorkdirError) as exc:
                 logger.warning(
@@ -81,11 +88,11 @@ class SourmashDereplicator(Dereplicator):
                     exc,
                 )
                 clusters, status = self._dense_dereplicate(
-                    genomes, out_dir, ksize, scaled, threshold, logger
+                    genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache
                 )
         else:
             clusters, status = self._dense_dereplicate(
-                genomes, out_dir, ksize, scaled, threshold, logger
+                genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache
             )
 
         rep_paths = [p for p in genomes if p.name in clusters]
@@ -103,36 +110,43 @@ class SourmashDereplicator(Dereplicator):
         scaled: int,
         threshold: float,
         logger: logging.Logger,
+        sketch_cache: Path | None = None,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Stock sourmash sketch + N x N compare (no plugin needed)."""
-        sig_dir = out_dir / "signatures"
-        sig_dir.mkdir(exist_ok=True)
-        fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+        sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
+        sig_dir.mkdir(parents=True, exist_ok=True)
 
-        # The genome paths live inside the fofn, not in argv, so the container
-        # backend cannot infer their mounts; declare their directories (using
-        # un-resolved abspaths to match write_fofn and the backend's bind logic).
-        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+        def _sigs() -> list[Path]:
+            # Skip macOS AppleDouble companions ("._*") on exFAT/NTFS volumes.
+            return [
+                p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
+                if not p.name.startswith("._")
+            ]
 
-        # one signature file per genome, named by genome basename
-        run_tool(self.capabilities,
-            [
-                "sourmash", "sketch", "dna",
-                "-p", f"k={ksize},scaled={scaled}",
-                "--from-file", fofn,
-                "--outdir", sig_dir,
-            ],
-            logger=logger,
-            log_prefix="sourmash",
-            extra_mounts=genome_dirs,
-        )
+        cached = _sigs()
+        if len(cached) >= len(genomes):
+            logger.info("Reusing %d cached sourmash signatures", len(cached))
+        else:
+            fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+            # The genome paths live inside the fofn, not in argv, so the container
+            # backend cannot infer their mounts; declare their directories (using
+            # un-resolved abspaths to match write_fofn and the backend's bind logic).
+            genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+            # one signature file per genome, named by genome basename
+            run_tool(self.capabilities,
+                [
+                    "sourmash", "sketch", "dna",
+                    "-p", f"k={ksize},scaled={scaled}",
+                    "--from-file", fofn,
+                    "--outdir", sig_dir,
+                ],
+                logger=logger,
+                log_prefix="sourmash",
+                extra_mounts=genome_dirs,
+            )
 
         matrix_csv = out_dir / "compare.csv"
-        # Skip macOS AppleDouble companions ("._*") that appear on exFAT/NTFS volumes.
-        sig_files = [
-            p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
-            if not p.name.startswith("._")
-        ]
+        sig_files = _sigs()
         if not sig_files:
             raise WorkdirError(f"sourmash produced no signatures under {sig_dir}")
         # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
@@ -161,6 +175,7 @@ class SourmashDereplicator(Dereplicator):
         threshold: float,
         params: DerepParams,
         logger: logging.Logger,
+        sketch_cache: Path | None = None,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Branchwater manysketch + pairwise: emit only above-threshold edges.
 
@@ -169,31 +184,40 @@ class SourmashDereplicator(Dereplicator):
         yields a superset of the edges we want; we then keep only pairs whose
         Jaccard column is >= ``threshold``, matching the dense ``compare`` graph.
         """
-        # manysketch reads a CSV of (name, genome_filename, protein_filename). The
-        # name becomes the signature name, which is what pairwise reports -- plain
-        # sketch leaves the name empty, so the edge list would be unlabelled.
-        sketch_csv = out_dir / "manysketch.csv"
-        lines = ["name,genome_filename,protein_filename"]
-        for g in genomes:
-            lines.append(f"{g.stem},{os.path.abspath(g)},")
-        sketch_csv.write_text("\n".join(lines) + "\n")
-
-        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         threads = str(params.threads)
-        sigs_zip = out_dir / "signatures.zip"
-        run_tool(self.capabilities,
-            [
-                "sourmash", "scripts", "manysketch", sketch_csv,
-                "-o", sigs_zip,
-                "-p", f"dna,k={ksize},scaled={scaled}",
-                "-c", threads,
-            ],
-            logger=logger,
-            log_prefix="sourmash",
-            extra_mounts=[*genome_dirs, str(sketch_csv)],
+        sigs_zip = (
+            sketch_cache / "signatures.zip" if sketch_cache is not None
+            else out_dir / "signatures.zip"
         )
-        if not sigs_zip.exists():
-            raise WorkdirError(f"sourmash manysketch produced no signatures at {sigs_zip}")
+        if sketch_cache is not None:
+            sketch_cache.mkdir(parents=True, exist_ok=True)
+
+        if sigs_zip.exists():
+            logger.info("Reusing cached sourmash signatures.zip")
+        else:
+            # manysketch reads a CSV of (name, genome_filename, protein_filename).
+            # The name becomes the signature name, which is what pairwise reports --
+            # plain sketch leaves it empty, so the edge list would be unlabelled.
+            sketch_csv = out_dir / "manysketch.csv"
+            lines = ["name,genome_filename,protein_filename"]
+            for g in genomes:
+                lines.append(f"{g.stem},{os.path.abspath(g)},")
+            sketch_csv.write_text("\n".join(lines) + "\n")
+
+            genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+            run_tool(self.capabilities,
+                [
+                    "sourmash", "scripts", "manysketch", sketch_csv,
+                    "-o", sigs_zip,
+                    "-p", f"dna,k={ksize},scaled={scaled}",
+                    "-c", threads,
+                ],
+                logger=logger,
+                log_prefix="sourmash",
+                extra_mounts=[*genome_dirs, str(sketch_csv)],
+            )
+            if not sigs_zip.exists():
+                raise WorkdirError(f"sourmash manysketch produced no signatures at {sigs_zip}")
 
         pairwise_csv = out_dir / "pairwise.csv"
         run_tool(self.capabilities,
