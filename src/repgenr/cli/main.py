@@ -17,6 +17,7 @@ from . import (  # noqa: F401  (registration side effects)
     cmd_bacterial,
     cmd_misc,
     cmd_phylo,
+    cmd_run,
     cmd_steps,
     cmd_viral,
 )
