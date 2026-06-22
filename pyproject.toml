@@ -10,16 +10,22 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "jaclew" }]
+# Upper caps to the next major: RepGenR is an application (a pinned CLI/pipeline,
+# not a library others resolve against), so capping guards a fresh install from a
+# surprise breaking major (e.g. numpy 3, biopython 2) without the downstream
+# resolver friction caps cause for libraries. Raise a cap when that major is
+# vetted. For fully reproducible scientific runs, pin via the conda lock (see
+# environment.yml), which also covers the external bioinformatics tools.
 dependencies = [
-    "typer>=0.12",
-    "PyYAML>=6.0",
-    "requests>=2.31",
-    "numpy>=1.26",
-    "matplotlib>=3.8",
-    "biopython>=1.83",
+    "typer>=0.12,<1.0",
+    "PyYAML>=6.0,<7.0",
+    "requests>=2.31,<3.0",
+    "numpy>=1.26,<3.0",
+    "matplotlib>=3.8,<4.0",
+    "biopython>=1.83,<2.0",
     # dendropy: pure-Python phylogenetics (tree2tax rooting/topology). Replaced
     # ete3, which dragged in heavy/GUI deps and the removed stdlib 'cgi' module.
-    "dendropy>=4.6",
+    "dendropy>=4.6,<6.0",
 ]
 
 [project.optional-dependencies]
