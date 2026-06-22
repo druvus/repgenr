@@ -93,6 +93,41 @@ repgenr snptype -wd $WD --tool simple
 repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
 ```
 
+### Viruses
+
+The viral path selects from NCBI Virus by default (via the `datasets` CLI);
+`vmetadata --source bvbrc` uses the legacy BV-BRC FTP path instead.
+
+```bash
+WD=./hav
+repgenr vmetadata -wd $WD --target hepatovirus            # NCBI Virus (default)
+repgenr vgenome   -wd $WD --target-genus Hepatovirus      # add --group-segments for segmented viruses
+repgenr dereplicate -wd $WD --tool skder --virus
+repgenr phylo -wd $WD --treebuilder mashtree
+repgenr tree2tax -wd $WD --include-dereplicated
+# or: repgenr run -wd $WD --viral -t hepatovirus -tg Hepatovirus --treebuilder mashtree
+```
+
+## Troubleshooting
+
+- **`MissingBinaryError` / a tool is not found.** The Python package does not
+  install the bioinformatics tools. Use the conda environment
+  (`mamba env create -f environment.yml`) or put the tool on `PATH`. Run
+  `repgenr list-tools` to see the adapters and `--container docker` (or
+  `singularity`) to run tools in pinned images instead.
+- **Apple Silicon / arm64.** BioContainers are amd64; pass
+  `--platform linux/amd64` (and enable Rosetta) so emulated images run.
+- **A stage failed; where are the details?** Errors print a concise message; the
+  full traceback is in `<workdir>/repgenr.log`. Re-run with `--verbose` to see it
+  on the console. `repgenr status -wd <WD>` shows what completed and what is next.
+- **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
+  (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
+  `--source api` mode fetches only the target taxon (no full-table download).
+- **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
+  optionally `NCBI_EMAIL`) to raise the request-rate limit.
+- **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
+  external tool; on expiry the process group is killed with a clear error.
+
 ## Nextflow
 
 The Nextflow layer runs the pipeline as typed data channels (no shared working
@@ -104,7 +139,8 @@ nextflow run nextflow/main.nf -profile standard --outdir results \
     --derep_tool sourmash --phylo_args "--treebuilder mashtree"
 ```
 
-`--mode viral` runs the BV-BRC path instead. Profiles: `standard` (local),
+`--mode viral` runs the viral path instead (NCBI Virus by default; BV-BRC is
+available via `--vmetadata_args "--source bvbrc"`). Profiles: `standard` (local),
 `slurm`, `cloud`, `test` (add a container profile such as `singularity` to run
 the tools in pinned images). Resource labels (`process_low/medium/high`) are
 tuned per profile; heavy aligners such as Cactus use `process_high`. Set

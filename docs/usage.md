@@ -5,8 +5,8 @@
 RepGenR builds a representative-genome repository for a taxonomic group and the
 matching FlexTaxD taxonomy. The pipeline runs five stages in order:
 
-1. **metadata** -- select genome accessions (GTDB for bacteria/archaea, BV-BRC
-   for viruses).
+1. **metadata** -- select genome accessions (GTDB for bacteria/archaea; the
+   viral path uses `vmetadata`/`vgenome`, sourcing from NCBI Virus by default).
 2. **genome** -- download and organise the selected genomes with NCBI Datasets.
 3. **dereplicate** -- cluster genomes by ANI and pick representatives.
 4. **phylo** -- build a phylogeny from the representatives.
@@ -35,7 +35,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--outdir` | `results` | Published results and execution reports. |
-| `--mode` | `bacterial` | `bacterial` (GTDB) or `viral` (BV-BRC). |
+| `--mode` | `bacterial` | `bacterial` (GTDB) or `viral` (NCBI Virus; BV-BRC via `--vmetadata_args "--source bvbrc"`). |
 | `--metadata_args` | see config | Arguments for the bacterial metadata stage. |
 | `--vmetadata_args` / `--vgenome_args` | see config | Viral metadata / genome selection arguments. |
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
