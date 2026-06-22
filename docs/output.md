@@ -1,9 +1,10 @@
 # repgenr: Output
 
-RepGenR writes all stage outputs into the shared working directory
-(`--workdir`). Execution reports are written under `--outdir` (default
-`results/`). A later Phase 4 increment will additionally publish the key
-results as staged channel files.
+The CLI writes all stage outputs into the shared working directory
+(`--workdir`). The Nextflow data-channel pipeline instead flows results between
+processes as staged channel files and publishes the key deliverables (the tree,
+`tree2tax.tsv`, `genomes_map.tsv`) plus execution reports under `--outdir`
+(default `results/`).
 
 ## Working directory layout
 
