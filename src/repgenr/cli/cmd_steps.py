@@ -11,7 +11,7 @@ from pathlib import Path
 
 import typer
 
-from ..core.errors import RepGenRError, UserInputError
+from ..core.errors import UserInputError
 from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
@@ -20,6 +20,7 @@ from .base import (
     _require_choice,
     _require_unit_interval,
     app,
+    stage_errors,
 )
 
 
@@ -35,14 +36,11 @@ def genome_fetch_cmd(
     from ..stages.genome_steps import GenomeFetchParams, genome_fetch
 
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
-    try:
+    with stage_errors(logger):
         genome_fetch(
             GenomeFetchParams(selection_tsv=selection, out_dir=out_dir, keep_files=keep_files),
             logger,
         )
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
 
 
 @app.command(name="dereplicate-chunk")
@@ -62,15 +60,14 @@ def dereplicate_chunk_cmd(
     from ..dereplicators.base import registry as _derep_registry
     from ..stages.derep_steps import ChunkParams, dereplicate_chunk
 
-    # A concrete tool (not 'auto') so every scattered chunk and the merge agree.
-    _require_choice(tool, set(_derep_registry.names()), "--tool")
-    _require_unit_interval(primary_ani, "--primary-ani")
-    _require_unit_interval(secondary_ani, "--secondary-ani")
-    _require_unit_interval(aligned_fraction, "--aligned-fraction")
-    genomes = _read_path_fofn(genomes_fofn)
-
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
-    try:
+    with stage_errors(logger):
+        # A concrete tool (not 'auto') so every scattered chunk and the merge agree.
+        _require_choice(tool, set(_derep_registry.names()), "--tool")
+        _require_unit_interval(primary_ani, "--primary-ani")
+        _require_unit_interval(secondary_ani, "--secondary-ani")
+        _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        genomes = _read_path_fofn(genomes_fofn)
         dereplicate_chunk(
             ChunkParams(
                 tool=tool, genomes=genomes, out_dir=out_dir,
@@ -80,9 +77,6 @@ def dereplicate_chunk_cmd(
             ),
             logger,
         )
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
 
 
 @app.command(name="phylo-build")
@@ -119,20 +113,20 @@ def phylo_build_cmd(
     from ..stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
     from ..treebuilders.base import registry as _tb_registry
 
-    _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
-    _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
-    if msa_source == "aligner":
-        _require_choice(aligner, set(_aln_registry.names()), "--aligner")
-    else:
-        _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
-
-    phylo_params = PhyloParams(
-        treebuilder=treebuilder, msa_source=msa_source, aligner=aligner, snptyper=snptyper,
-        no_outgroup=no_outgroup, bootstrap=bootstrap, reference=reference, threads=threads,
-        extra=_parse_key_values(aligner_arg, "--aligner-arg"),
-    )
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
-    try:
+    with stage_errors(logger):
+        _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
+        _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
+        if msa_source == "aligner":
+            _require_choice(aligner, set(_aln_registry.names()), "--aligner")
+        else:
+            _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
+
+        phylo_params = PhyloParams(
+            treebuilder=treebuilder, msa_source=msa_source, aligner=aligner, snptyper=snptyper,
+            no_outgroup=no_outgroup, bootstrap=bootstrap, reference=reference, threads=threads,
+            extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+        )
         phylo_build(
             PhyloBuildParams(
                 genomes_dir=genomes_dir, out_dir=out_dir,
@@ -141,9 +135,6 @@ def phylo_build_cmd(
             ),
             logger,
         )
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
 
 
 @app.command(name="tree2tax-relations")
@@ -172,7 +163,7 @@ def tree2tax_relations_cmd(
     from ..stages.tree2tax import Tree2taxStepParams, tree2tax_relations
 
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
-    try:
+    with stage_errors(logger):
         tree2tax_relations(
             Tree2taxStepParams(
                 tree=tree, out_dir=out_dir, clusters=clusters,
@@ -182,9 +173,6 @@ def tree2tax_relations_cmd(
             ),
             logger,
         )
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
 
 
 @app.command(name="dereplicate-merge")
@@ -207,18 +195,17 @@ def dereplicate_merge_cmd(
     from ..dereplicators.base import registry as _derep_registry
     from ..stages.derep_steps import MergeParams, dereplicate_merge
 
-    _require_choice(tool, set(_derep_registry.names()), "--tool")
-    _require_unit_interval(primary_ani, "--primary-ani")
-    _require_unit_interval(secondary_ani, "--secondary-ani")
-    _require_unit_interval(aligned_fraction, "--aligned-fraction")
-    chunk_dirs = list(chunk_dir)
-    if chunk_fofn is not None:
-        chunk_dirs += _read_path_fofn(chunk_fofn)
-    if not chunk_dirs:
-        raise UserInputError("Provide at least one --chunk-dir or a --chunk-fofn.")
-
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
-    try:
+    with stage_errors(logger):
+        _require_choice(tool, set(_derep_registry.names()), "--tool")
+        _require_unit_interval(primary_ani, "--primary-ani")
+        _require_unit_interval(secondary_ani, "--secondary-ani")
+        _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        chunk_dirs = list(chunk_dir)
+        if chunk_fofn is not None:
+            chunk_dirs += _read_path_fofn(chunk_fofn)
+        if not chunk_dirs:
+            raise UserInputError("Provide at least one --chunk-dir or a --chunk-fofn.")
         dereplicate_merge(
             MergeParams(
                 tool=tool, chunk_dirs=chunk_dirs, out_dir=out_dir,
@@ -228,6 +215,3 @@ def dereplicate_merge_cmd(
             ),
             logger,
         )
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc

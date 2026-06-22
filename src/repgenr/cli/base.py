@@ -12,6 +12,8 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +118,34 @@ def main(
     )
 
 
+@contextmanager
+def stage_errors(logger: logging.Logger) -> Iterator[None]:
+    """Turn errors into clean CLI exits instead of raw tracebacks.
+
+    A :class:`RepGenRError` (expected, user-facing) is logged concisely. Any
+    other exception is unexpected: a concise message goes to the console and the
+    full traceback is captured -- in the run log when one exists (DEBUG), or on
+    the console otherwise (e.g. a data-channel step with no workdir). Both exit
+    non-zero. ``--verbose`` shows the traceback on the console too.
+    """
+    try:
+        yield
+    except typer.Exit:
+        raise
+    except RepGenRError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:
+        logger.error("Unexpected error: %s", exc)
+        if any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+            logger.debug("Full traceback:", exc_info=True)
+            logger.error("See the run log for the full traceback, or re-run with --verbose.")
+        else:
+            # No persistent log (data-channel step): surface the traceback now.
+            logger.error("Full traceback:", exc_info=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) -> None:
     """Common harness: context, dispatch, clean error handling.
 
@@ -126,7 +156,7 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
     logger = configure_logging(
         workdir if (create or workdir.exists()) else None, level=_RUN_STATE["log_level"]
     )
-    try:
+    with stage_errors(logger):
         ctx = WorkdirContext(workdir, logger=logger, create=create)
         params = build_params()
         fingerprint = _stage_fingerprint(stage_name, params)
@@ -150,9 +180,6 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
         if record is not None:
             record.fingerprint = fingerprint
             ctx.save_config()
-    except RepGenRError as exc:
-        logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
 
 
 def _parse_key_values(items: list[str], label: str) -> dict[str, str]:
