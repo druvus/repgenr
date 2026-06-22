@@ -173,8 +173,12 @@ def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> No
     # representative genomes as symlinks (often into a Nextflow-/container-staged
     # input tree); hardlinking the symlink itself -- which os.link does on macOS --
     # produces a broken, 0-byte staged file. Linking the real target instead keeps
-    # the content and still shares the inode (no extra disk).
-    src_s, dst_s = os.path.realpath(os.fspath(src)), os.fspath(dst)
+    # the content and still shares the inode (no extra disk). realpath() walks the
+    # whole path with lstat, so only pay it when src is actually a symlink (the
+    # common case -- staging plain genome files -- skips it).
+    src_path = os.fspath(src)
+    src_s = os.path.realpath(src_path) if os.path.islink(src_path) else src_path
+    dst_s = os.fspath(dst)
     try:
         os.link(src_s, dst_s)
     except OSError:

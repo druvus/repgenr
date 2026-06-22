@@ -217,6 +217,9 @@ class SourmashDereplicator(Dereplicator):
         return _sparse_greedy_cluster(labels, neighbors, name_by_label)
 
 
+_BRANCHWATER_CACHE: dict[tuple[str, int], bool] = {}
+
+
 def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bool:
     """True when the branchwater plugin (``sourmash scripts pairwise``) is usable.
 
@@ -224,7 +227,17 @@ def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bo
     runs: native (plugin pip-installed) vs a container image that may not bundle
     it. Any failure (missing subcommand, missing image, missing binary) means the
     dense fallback is used instead.
+
+    The probe is a real subprocess/container start, so memoize it per (tool,
+    container config) for the process lifetime -- chunked dereplication calls this
+    once per chunk otherwise, paying a container cold-start each time.
     """
+    from ..core.containers import get_config
+
+    key = (caps.name, id(get_config()))
+    cached = _BRANCHWATER_CACHE.get(key)
+    if cached is not None:
+        return cached
     try:
         rc = run_tool(
             caps,
@@ -234,9 +247,11 @@ def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bo
             stdout_path=os.devnull,
             log_prefix="sourmash",
         )
+        result = rc == 0
     except (ToolExecutionError, MissingBinaryError, FileNotFoundError, OSError):
-        return False
-    return rc == 0
+        result = False
+    _BRANCHWATER_CACHE[key] = result
+    return result
 
 
 def _parse_pairwise_csv(
