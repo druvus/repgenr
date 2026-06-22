@@ -78,6 +78,8 @@ def run(ctx: WorkdirContext, params: VmetadataParams) -> int:
 
 
 def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
+    from ..core.errors import MissingBinaryError
+    from ..core.plugins import preflight
     from ..viral import ncbi_virus
 
     assert params.target is not None
@@ -94,6 +96,12 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
         (download_wd / "metadata_base.tsv").read_text()
     )
 
+    # Best-effort provenance: fetch already used datasets, so this normally
+    # resolves; never fail the stage just to record a version.
+    try:
+        tool_versions = preflight(ncbi_virus.DATASETS_CAPS)
+    except MissingBinaryError:
+        tool_versions = {}
     ctx.config.record_stage(
         "vmetadata",
         params={
@@ -101,6 +109,7 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
             "complete_only": params.complete_only, "host": params.host,
             "sequences": len(records),
         },
+        tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

@@ -20,10 +20,12 @@ process METADATA {
     cp metadata_wd/selection.tsv selection.tsv
     cp metadata_wd/outgroup_accession.txt outgroup_accession.txt
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        repgenr: \$(repgenr --version | sed 's/repgenr //')
-    END_VERSIONS
+    repgenr versions -wd metadata_wd --versions-out tool_versions.yml
+    cat > versions.yml <<END_VERSIONS
+"${task.process}":
+    repgenr: \$(repgenr --version | sed 's/repgenr //')
+END_VERSIONS
+    cat tool_versions.yml >> versions.yml
     """
 
     stub:

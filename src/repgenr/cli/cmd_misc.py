@@ -10,6 +10,32 @@ from .base import DEFAULT_THREADS, PIPELINE_BACTERIAL, PIPELINE_VIRAL, _run, app
 
 
 @app.command()
+def versions(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write a versions.yml fragment here instead of stdout."
+    ),
+) -> None:
+    """Print the external-tool versions recorded in a workdir's repgenr.yaml.
+
+    Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
+    surface the resolved tool versions into versions.yml.
+    """
+    from ..core.config import Config
+    from ..core.versions import write_versions_fragment
+
+    cfg = Config.load(workdir)
+    merged: dict[str, str] = {}
+    for record in cfg.stages.values():
+        merged.update(record.tool_versions)
+    if versions_out is not None:
+        write_versions_fragment(versions_out, merged)
+    else:
+        for tool, ver in sorted(merged.items()):
+            typer.echo(f"{tool}: {ver}")
+
+
+@app.command()
 def status(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
 ) -> None:
