@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean, median
@@ -154,9 +155,14 @@ def _length_range_records(selected, params: VgenomeParams, logger) -> tuple[int,
     return rng
 
 
-def _seq_map(fasta: Path) -> dict[str, SeqRecord]:
-    """accession -> SeqRecord, from an NCBI Virus genomic.fna (headers '>acc ...')."""
-    return {entry.id: entry for entry in SeqIO.parse(str(fasta), "fasta")}
+def _seq_map(fasta: Path) -> Mapping[str, SeqRecord]:
+    """accession -> SeqRecord, from an NCBI Virus genomic.fna (headers '>acc ...').
+
+    Uses an on-disk offset index (``SeqIO.index``) rather than loading every
+    record into a dict: only the kept/outgroup accessions are materialized on
+    access, so memory stays bounded for a large genus download.
+    """
+    return SeqIO.index(str(fasta), "fasta")
 
 
 def _passes_length(rec: VirusRecord, lo: int, hi: int, discard, seqs) -> bool:

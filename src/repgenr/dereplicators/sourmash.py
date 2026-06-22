@@ -42,6 +42,10 @@ from .base import (
     DerepResult,
 )
 
+# Above this, the dense N x N float64 matrix is too large to hold in memory
+# (~0.2 GB at 5k, ~20 GB at 50k); require the sparse branchwater path instead.
+_DENSE_MAX_GENOMES = 5000
+
 
 class SourmashDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
@@ -113,6 +117,13 @@ class SourmashDereplicator(Dereplicator):
         sketch_cache: Path | None = None,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Stock sourmash sketch + N x N compare (no plugin needed)."""
+        if len(genomes) > _DENSE_MAX_GENOMES:
+            raise WorkdirError(
+                f"sourmash dense compare needs an N x N matrix for {len(genomes)} genomes "
+                f"(~{len(genomes) ** 2 * 8 / 1e9:.0f} GB). Install the branchwater plugin "
+                "(pip install sourmash_plugin_branchwater) for the sparse path, or use a "
+                "tool that scales better at this size (e.g. --tool skder)."
+            )
         sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
         sig_dir.mkdir(parents=True, exist_ok=True)
 
