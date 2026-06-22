@@ -37,6 +37,39 @@ _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
 # consistent (stages previously mixed 16 and 24).
 DEFAULT_THREADS = 16
 
+# Canonical stage order per lineage. Used to show progress (`status`) and to warn
+# when a skipped stage is older than an upstream stage that re-ran (stale skip).
+PIPELINE_BACTERIAL = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
+PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
+
+
+def _warn_if_stale(stage_name: str, config: Any, logger: logging.Logger) -> None:
+    """Warn when skipping a stage that an upstream stage now post-dates.
+
+    Re-running an upstream stage (e.g. ``dereplicate --force``) and then a
+    downstream stage with unchanged parameters would otherwise silently skip the
+    downstream against new inputs. ISO timestamps compare lexicographically.
+    """
+    stages = config.stages
+    chain = PIPELINE_VIRAL if any(n in stages for n in ("vmetadata", "vgenome")) else \
+        PIPELINE_BACTERIAL
+    if stage_name not in chain:
+        return
+    here = stages.get(stage_name)
+    if here is None or not here.completed:
+        return
+    idx = chain.index(stage_name)
+    newer = [
+        up for up in chain[:idx]
+        if (rec := stages.get(up)) is not None and rec.completed and rec.completed > here.completed
+    ]
+    if newer:
+        logger.warning(
+            "Stage '%s' is older than upstream stage(s) %s that re-ran since; its result "
+            "may be stale. Re-run with --force to rebuild it.",
+            stage_name, ", ".join(newer),
+        )
+
 
 def _require_choice(value: str, choices: set[str], label: str) -> None:
     if value not in choices:
@@ -171,6 +204,7 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
             and prior.completed
             and prior.fingerprint == fingerprint
         ):
+            _warn_if_stale(stage_name, ctx.config, logger)
             logger.info(
                 "Stage '%s' already completed with the same parameters; skipping "
                 "(use --force to re-run).", stage_name,

@@ -63,6 +63,24 @@ repgenr phylo -wd $WD --aligner progressivemauve --treebuilder iqtree
 repgenr tree2tax -wd $WD --include-dereplicated
 ```
 
+Or run the whole chain in one command (bacterial by default; `--viral` for the
+NCBI Virus path), then check progress at any time:
+
+```bash
+repgenr run -wd $WD -d rep -l genus -tg francisella --tool skder --treebuilder iqtree
+repgenr status -wd $WD     # which stages are done, and what to run next
+```
+
+### Resume and `--force`
+
+Each stage records its parameters in `repgenr.yaml`; re-running a stage that
+already completed with the same parameters is a safe no-op (it logs that it
+skipped). Change a parameter, or pass `--force`, to re-run it. A stage that
+crashed mid-run has no completion stamp and so always re-runs. If you re-run an
+upstream stage (e.g. `dereplicate --force`) and then a downstream stage whose
+parameters are unchanged, the downstream skip is flagged as potentially stale —
+pass `--force` there too to rebuild against the new inputs.
+
 Alternatives:
 
 ```bash
