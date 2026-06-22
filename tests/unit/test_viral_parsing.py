@@ -6,24 +6,18 @@ from pathlib import Path
 
 from repgenr.viral._common import select_outgroup_from_matrix
 from repgenr.viral.bvbrc import _matches, _read_ncbi
-from repgenr.viral.entrez import TAXNAMES_ORDERED, _group_taxa
+from repgenr.viral.entrez import TAXNAMES_ORDERED, _iter_taxa
 
 
-def test_group_taxa_splits_on_top_level_taxon() -> None:
-    lines = [
-        "<Taxon>",
-        "  <TaxId>11620</TaxId>",
-        "  <ScientificName>Lassa</ScientificName>",
-        "</Taxon>",
-        "<Taxon>",
-        "  <TaxId>10535</TaxId>",
-        "  <ScientificName>Adeno</ScientificName>",
-        "</Taxon>",
-    ]
-    groups = _group_taxa(lines)
-    assert len(groups) == 2
-    assert "11620" in groups[0]
-    assert "10535" in groups[1]
+def test_iter_taxa_returns_top_level_taxon_elements() -> None:
+    xml = (
+        "<TaxaSet>"
+        "<Taxon><TaxId>11620</TaxId><ScientificName>Lassa</ScientificName></Taxon>"
+        "<Taxon><TaxId>10535</TaxId><ScientificName>Adeno</ScientificName></Taxon>"
+        "</TaxaSet>"
+    )
+    taxa = _iter_taxa(xml)
+    assert [t.findtext("TaxId") for t in taxa] == ["11620", "10535"]
 
 
 def test_read_ncbi_and_matches(tmp_path: Path) -> None:

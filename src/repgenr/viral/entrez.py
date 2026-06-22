@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import logging
 import os
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from time import sleep
 
 from ..core import http
+from ..core.errors import WorkdirError
 
 # Order in which to present taxonomic names. The last "real" levels are followed
 # by the custom "undefined_strain" bucket and the sub-lineage levels.
@@ -28,7 +30,7 @@ TAXNAMES_ORDERED += ["subphylum", "subfamily"]
 _ENTREZ_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
 
-def _send_query(taxon_ids: Iterable[str]) -> list[str]:
+def _send_query(taxon_ids: Iterable[str]) -> str:
     # NCBI asks high-volume callers to identify themselves (tool/email) and
     # raises the rate limit from 3 to 10 req/s when an API key is supplied.
     params: dict[str, object] = {
@@ -42,7 +44,7 @@ def _send_query(taxon_ids: Iterable[str]) -> list[str]:
         params["api_key"] = api_key
     # Shared retry/backoff session with status checking (a throttle/error page is
     # raised, not silently fed to the XML parser as empty taxonomy).
-    return http.get_text(_ENTREZ_BASE + "efetch.fcgi", params=params).split("\n")
+    return http.get_text(_ENTREZ_BASE + "efetch.fcgi", params=params)
 
 
 def _request_delay() -> float:
@@ -71,17 +73,17 @@ def get_taxon_data_from_entrez(
             tax_ids_to_parse[i : i + num_ids_per_query]
             for i in range(0, len(tax_ids_to_parse), num_ids_per_query)
         ]
-        entrez_response: list[str] = []
         for enum, sublist in enumerate(sublists):
             logger.info("Submitting Entrez sublist %d (%d taxids)", enum, len(sublist))
-            entrez_response += _send_query(sublist)
+            xml_text = _send_query(sublist)
+            for taxon_el in _iter_taxa(xml_text):
+                parsed = _parse_taxon_element(
+                    taxon_el, tax_ids_list, tax_ids_to_parse, taxids_alts, logger
+                )
+                if parsed is not None:
+                    taxid, data = parsed
+                    taxids_data[taxid] = data
             sleep(_request_delay())  # stay under the Entrez rate limit
-
-        for chunk_raw in _group_taxa(entrez_response):
-            parsed = _parse_taxon(chunk_raw, tax_ids_list, tax_ids_to_parse, taxids_alts, logger)
-            if parsed is not None:
-                taxid, data = parsed
-                taxids_data[taxid] = data
 
         missing = set(tax_ids_list).difference(taxids_data)
         tax_ids_to_parse = list(missing)
@@ -102,28 +104,31 @@ def get_taxon_data_from_entrez(
     return taxids_data, missing, taxids_alts
 
 
-def _group_taxa(lines: list[str]) -> list[str]:
-    groups: list[str] = []
-    for line in lines:
-        if not line:
-            continue
-        if line[0] != " " and "<Taxon>" in line:
-            groups.append("")
-        elif line[0] == " " and groups:
-            groups[-1] += line
-    return groups
+def _iter_taxa(xml_text: str) -> list[ET.Element]:
+    """Parse an efetch taxonomy response and return its top-level <Taxon> elements.
+
+    An unparseable body (an HTML error/throttle page) or an unexpected root
+    (e.g. NCBI's ``<eFetchResult><ERROR>``) raises :class:`WorkdirError` with a
+    snippet, rather than silently yielding empty taxonomy.
+    """
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        snippet = xml_text[:200].replace("\n", " ")
+        raise WorkdirError(f"Entrez returned a non-XML response ({exc}): {snippet!r}") from exc
+    if root.tag != "TaxaSet":
+        snippet = xml_text[:200].replace("\n", " ")
+        raise WorkdirError(f"Unexpected Entrez response root <{root.tag}>: {snippet!r}")
+    return root.findall("Taxon")
 
 
-def _parse_taxon(chunk_raw, tax_ids_list, tax_ids_to_parse, taxids_alts, logger):
-    chunk = chunk_raw.split("<LineageEx>")[0]
-    taxid = chunk.split("<TaxId>")[1].split("</TaxId>")[0]
+def _parse_taxon_element(el, tax_ids_list, tax_ids_to_parse, taxids_alts, logger):
+    taxid = el.findtext("TaxId") or ""
 
     taxid_alts: list[str] = []
-    if "<AkaTaxIds>" in chunk_raw:
-        aka = chunk_raw.split("<AkaTaxIds>")[1].split("</AkaTaxIds>")[0]
-        for piece in aka.split("</TaxId>"):
-            if "<TaxId>" in piece:
-                taxid_alts.append(piece.split("<TaxId>")[1])
+    aka = el.find("AkaTaxIds")
+    if aka is not None:
+        taxid_alts = [t.text for t in aka.findall("TaxId") if t.text]
 
     aliases = [taxid, *taxid_alts]
     for alias in aliases:
@@ -138,26 +143,23 @@ def _parse_taxon(chunk_raw, tax_ids_list, tax_ids_to_parse, taxids_alts, logger)
         logger.info("Entrez returned an unexpected taxid %s; ignoring", taxid)
         return None
 
-    scientific_name = chunk.split("<ScientificName>")[1].split("</ScientificName>")[0]
-    rank = chunk.split("<Rank>")[1].split("</Rank>")[0]
+    scientific_name = el.findtext("ScientificName") or ""
+    rank = el.findtext("Rank") or ""
 
     level_data: dict[str, dict] = {rank: {"taxid": taxid, "name": scientific_name, "level": rank}}
-    if "<LineageEx>" in chunk_raw:
-        lineage = chunk_raw.split("<LineageEx>")[1].split("</LineageEx>")[0]
-        for piece in lineage.split("</Taxon>"):
-            if "<Taxon>" not in piece:
-                continue
-            sub = piece.split("<Taxon>")[1]
-            chunk_taxid = sub.split("<TaxId>")[1].split("</TaxId>")[0]
+    lineage = el.find("LineageEx")
+    if lineage is not None:
+        for sub in lineage.findall("Taxon"):
+            chunk_taxid = sub.findtext("TaxId") or ""
             if chunk_taxid in taxids_alts:
                 for alt in taxids_alts[chunk_taxid]:
                     if alt in set(tax_ids_list):
                         chunk_taxid = alt
                         break
-            chunk_name = sub.split("<ScientificName>")[1].split("</ScientificName>")[0]
-            chunk_level = sub.split("<Rank>")[1].split("</Rank>")[0]
+            chunk_level = sub.findtext("Rank") or ""
             level_data[chunk_level] = {
-                "taxid": chunk_taxid, "name": chunk_name, "level": chunk_level
+                "taxid": chunk_taxid, "name": sub.findtext("ScientificName") or "",
+                "level": chunk_level,
             }
 
     for name in TAXNAMES_ORDERED:

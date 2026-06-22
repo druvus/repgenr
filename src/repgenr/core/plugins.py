@@ -9,6 +9,7 @@ and external tools need no core edits.
 
 from __future__ import annotations
 
+import logging
 import shutil
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
@@ -55,7 +56,11 @@ class Registry[T]:
             try:
                 self._classes[ep.name] = ep.load()
             except Exception as exc:  # a broken third-party plugin must not kill the run
-                # Deferred: surfaced only if the broken name is actually requested.
+                # Deferred: surfaced only if the broken name is actually requested,
+                # but log at debug so a broken in-tree adapter is diagnosable.
+                logging.getLogger("repgenr").debug(
+                    "Plugin %r (group %s) failed to load: %s", ep.name, self.group, exc
+                )
                 self._classes.setdefault(ep.name, _BrokenPlugin(ep.name, exc))  # type: ignore[arg-type]
         self._loaded = True
 
