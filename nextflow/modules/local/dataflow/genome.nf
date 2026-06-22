@@ -21,12 +21,14 @@ process GENOME {
 
     script:
     """
-    repgenr ${params.repgenr_opts} genome-fetch --selection ${selection} --out out
+    repgenr ${params.repgenr_opts} genome-fetch --selection ${selection} --out out \\
+        --versions-out tool_versions.yml
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        repgenr: \$(repgenr --version | sed 's/repgenr //')
-    END_VERSIONS
+    cat > versions.yml <<END_VERSIONS
+"${task.process}":
+    repgenr: \$(repgenr --version | sed 's/repgenr //')
+END_VERSIONS
+    cat tool_versions.yml >> versions.yml
     """
 
     stub:

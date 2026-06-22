@@ -31,12 +31,14 @@ process DEREP_MERGE {
         --primary-ani ${params.derep_primary_ani} \\
         --secondary-ani ${params.derep_secondary_ani} \\
         --aligned-fraction ${params.derep_aligned_fraction} \\
-        --threads ${task.cpus}
+        --threads ${task.cpus} \\
+        --versions-out tool_versions.yml
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        repgenr: \$(repgenr --version | sed 's/repgenr //')
-    END_VERSIONS
+    cat > versions.yml <<END_VERSIONS
+"${task.process}":
+    repgenr: \$(repgenr --version | sed 's/repgenr //')
+END_VERSIONS
+    cat tool_versions.yml >> versions.yml
     """
 
     stub:

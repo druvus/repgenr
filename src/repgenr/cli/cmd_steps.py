@@ -32,6 +32,9 @@ def genome_fetch_cmd(
     ),
     out_dir: Path = typer.Option(..., "-o", "--out", help="Output dir for downloaded genomes."),
     keep_files: bool = typer.Option(False, "--keep-files", help="Keep download intermediates."),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
 ) -> None:
     """Download genomes listed in a selection.tsv (stateless data-channel step)."""
     from ..stages.genome_steps import GenomeFetchParams, genome_fetch
@@ -39,7 +42,10 @@ def genome_fetch_cmd(
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
         genome_fetch(
-            GenomeFetchParams(selection_tsv=selection, out_dir=out_dir, keep_files=keep_files),
+            GenomeFetchParams(
+                selection_tsv=selection, out_dir=out_dir, keep_files=keep_files,
+                versions_out=versions_out,
+            ),
             logger,
         )
 
@@ -56,6 +62,9 @@ def dereplicate_chunk_cmd(
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
 ) -> None:
     """Dereplicate one chunk of genomes (scatter step; writes a chunk result dir)."""
     from ..dereplicators.base import registry as _derep_registry
@@ -75,6 +84,7 @@ def dereplicate_chunk_cmd(
                 primary_ani=primary_ani, secondary_ani=secondary_ani,
                 aligned_fraction=aligned_fraction, threads=threads,
                 extra={"virus": virus} if virus else {},
+                versions_out=versions_out,
             ),
             logger,
         )
@@ -107,6 +117,9 @@ def phylo_build_cmd(
         [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
 ) -> None:
     """Build a phylogeny from a genomes directory (stateless data-channel step)."""
     from ..aligners.base import registry as _aln_registry
@@ -132,7 +145,7 @@ def phylo_build_cmd(
             PhyloBuildParams(
                 genomes_dir=genomes_dir, out_dir=out_dir,
                 outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
-                phylo=phylo_params,
+                phylo=phylo_params, versions_out=versions_out,
             ),
             logger,
         )
@@ -159,6 +172,9 @@ def tree2tax_relations_cmd(
     include_dereplicated: bool = typer.Option(
         False, "--include-dereplicated", help="List redundant genomes under their representative."
     ),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
 ) -> None:
     """Emit FlexTaxD relations from a tree (stateless data-channel step)."""
     from ..stages.tree2tax import Tree2taxStepParams, tree2tax_relations
@@ -171,6 +187,7 @@ def tree2tax_relations_cmd(
                 outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
                 node_basename=node_basename, root_name=root_name,
                 remove_outgroup=remove_outgroup, include_dereplicated=include_dereplicated,
+                versions_out=versions_out,
             ),
             logger,
         )
@@ -191,6 +208,9 @@ def dereplicate_merge_cmd(
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
 ) -> None:
     """Dereplicate the union of chunk representatives (gather step)."""
     from ..dereplicators.base import registry as _derep_registry
@@ -213,6 +233,7 @@ def dereplicate_merge_cmd(
                 primary_ani=primary_ani, secondary_ani=secondary_ani,
                 aligned_fraction=aligned_fraction, threads=threads,
                 extra={"virus": virus} if virus else {},
+                versions_out=versions_out,
             ),
             logger,
         )

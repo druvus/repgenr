@@ -55,6 +55,7 @@ class Tree2taxStepParams:
     root_name: str = "root"
     remove_outgroup: bool = False
     include_dereplicated: bool = False
+    versions_out: Path | None = None
 
 
 def _emit_relations(
@@ -114,6 +115,12 @@ def tree2tax_relations(
         else {}
     )
     params.out_dir.mkdir(parents=True, exist_ok=True)
+    if params.versions_out is not None:
+        # No external tools on this step (pure dendropy); the empty fragment lets
+        # the Nextflow module still record repgenr.
+        from ..core.versions import write_versions_fragment
+
+        write_versions_fragment(params.versions_out, {})
     return _emit_relations(
         params.tree.read_text().strip(),
         outgroup_leaf,
