@@ -143,6 +143,12 @@ def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
 
 def _reference_path(ctx, reference_name, genomes) -> Path:
     if reference_name:
+        # Resolved against the workdir genome dirs only: a path component would
+        # let the lookup escape them.
+        if Path(reference_name).name != reference_name:
+            raise UserInputError(
+                f"--reference must be a genome file basename, not a path: {reference_name}"
+            )
         for base in (ctx.representatives_dir, ctx.genomes_dir):
             cand = base / reference_name
             if cand.exists():

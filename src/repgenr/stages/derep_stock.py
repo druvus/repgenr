@@ -7,6 +7,7 @@ files; unpacking restores them into the working directory.
 
 from __future__ import annotations
 
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,7 @@ from ..core.contracts import CLUSTERS_TSV, GENOME_STATUS_TSV
 from ..core.errors import UserInputError
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV)
+_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 @dataclass
@@ -31,6 +33,13 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
         return
     if not params.name:
         raise UserInputError("pack/unpack/delete require --name")
+    # The name becomes a directory under the store and is passed to rmtree on
+    # pack/delete, so it must be a plain single-component name.
+    if not _NAME_RE.fullmatch(params.name):
+        raise UserInputError(
+            f"Invalid run name '{params.name}': use letters, digits, '.', '_' or '-' "
+            "(no leading '.', no path separators)"
+        )
     run_path = store / params.name
     match params.action:
         case "pack":
