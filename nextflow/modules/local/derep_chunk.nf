@@ -17,6 +17,9 @@ process DEREP_CHUNK {
 
     script:
     """
+    # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
+    export REPGENR_PROPAGATE_TOOL_EXIT=1
+
     # Build a file-of-filenames from the staged genomes (never argv -- ARG_MAX).
     ls -1 inputs/* > genomes.fofn
 

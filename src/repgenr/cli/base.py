@@ -21,7 +21,7 @@ import typer
 
 from .. import __version__
 from ..core.context import WorkdirContext
-from ..core.errors import RepGenRError, UserInputError
+from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
 from ..core.logging import configure_logging
 
 app = typer.Typer(
@@ -163,6 +163,23 @@ def main(
     )
 
 
+def _tool_exit_code(returncode: int) -> int:
+    """Exit code for a failed external tool.
+
+    Interactive use keeps the historical exit 1. Under
+    ``REPGENR_PROPAGATE_TOOL_EXIT=1`` (set by the Nextflow modules) the tool's
+    code is forwarded, with a signal kill mapped to 128+signum (SIGKILL -> 137),
+    so Nextflow's retry-on-exitStatus rule can react to e.g. an OOM kill.
+    """
+    if os.environ.get("REPGENR_PROPAGATE_TOOL_EXIT", "") in ("", "0"):
+        return 1
+    if returncode < 0:
+        code = 128 - returncode
+    else:
+        code = returncode
+    return code if 0 < code <= 255 else 1
+
+
 @contextmanager
 def stage_errors(logger: logging.Logger) -> Iterator[None]:
     """Turn errors into clean CLI exits instead of raw tracebacks.
@@ -177,6 +194,9 @@ def stage_errors(logger: logging.Logger) -> Iterator[None]:
         yield
     except typer.Exit:
         raise
+    except ToolExecutionError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=_tool_exit_code(exc.returncode)) from exc
     except RepGenRError as exc:
         logger.error("%s", exc)
         raise typer.Exit(code=1) from exc

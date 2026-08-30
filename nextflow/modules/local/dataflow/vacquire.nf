@@ -20,6 +20,9 @@ process VACQUIRE {
 
     script:
     """
+    # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
+    export REPGENR_PROPAGATE_TOOL_EXIT=1
+
     repgenr ${params.repgenr_opts} vmetadata -wd wd ${params.vmetadata_args}
     repgenr ${params.repgenr_opts} vgenome   -wd wd ${params.vgenome_args}
 

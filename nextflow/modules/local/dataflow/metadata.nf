@@ -16,6 +16,9 @@ process METADATA {
 
     script:
     """
+    # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
+    export REPGENR_PROPAGATE_TOOL_EXIT=1
+
     repgenr ${params.repgenr_opts} metadata -wd metadata_wd ${params.metadata_args}
     cp metadata_wd/selection.tsv selection.tsv
     cp metadata_wd/outgroup_accession.txt outgroup_accession.txt
