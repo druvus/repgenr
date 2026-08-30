@@ -22,7 +22,7 @@
                     "type": "string",
                     "default": "bacterial",
                     "enum": ["bacterial", "viral"],
-                    "description": "Which lineage pipeline to run: 'bacterial' (GTDB) or 'viral' (BV-BRC).",
+                    "description": "Which lineage pipeline to run: 'bacterial' (GTDB) or 'viral' (NCBI Virus by default, BV-BRC via --source).",
                     "fa_icon": "fas fa-bacteria"
                 }
             }
@@ -35,14 +35,14 @@
             "properties": {
                 "metadata_args": {
                     "type": "string",
-                    "default": "-r 232.0 -v bac120 -d rep -l genus -tg francisella",
+                    "default": "-r 232.0 --gtdb-version bac120 -d rep -l genus -tg francisella",
                     "description": "Arguments for the bacterial metadata stage (GTDB selection).",
                     "fa_icon": "fas fa-table"
                 },
                 "vmetadata_args": {
                     "type": "string",
                     "default": "-t adenoviridae",
-                    "description": "Arguments for the viral metadata stage (BV-BRC selection).",
+                    "description": "Arguments for the viral metadata stage (NCBI Virus by default, BV-BRC via --source bvbrc).",
                     "fa_icon": "fas fa-table"
                 },
                 "vgenome_args": {
@@ -72,9 +72,13 @@
             "description": "Two-stage chunking knobs for large dereplication inputs.",
             "properties": {
                 "derep_process_size": {
-                    "type": ["integer", "string", "null"],
+                    "anyOf": [
+                        { "type": "integer", "minimum": 1 },
+                        { "type": "string", "pattern": "^[1-9][0-9]*$" },
+                        { "type": "null" }
+                    ],
                     "default": null,
-                    "description": "Genomes per chunk for the scatter-gather dereplication. Leave unset for a single chunk. (string accepted so command-line overrides validate.)",
+                    "description": "Genomes per chunk for the scatter-gather dereplication. Leave unset for a single chunk. (A digit string is accepted so command-line overrides validate.)",
                     "fa_icon": "fas fa-th"
                 },
                 "derep_tool": {

@@ -16,6 +16,8 @@ process DEREP_CHUNK {
     path 'versions.yml'                , emit: versions
 
     script:
+    // Virus-tuned tool parameters whenever the viral pipeline is running.
+    def virus_flag = params.mode == 'viral' ? '--virus' : ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
@@ -26,7 +28,7 @@ process DEREP_CHUNK {
     repgenr ${params.repgenr_opts} dereplicate-chunk \\
         --genomes-fofn genomes.fofn \\
         --out ${meta.id} \\
-        --tool ${params.derep_tool} \\
+        --tool ${params.derep_tool} ${virus_flag} \\
         --primary-ani ${params.derep_primary_ani} \\
         --secondary-ani ${params.derep_secondary_ani} \\
         --aligned-fraction ${params.derep_aligned_fraction} \\
