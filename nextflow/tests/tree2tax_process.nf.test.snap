@@ -1,0 +1,31 @@
+{
+    "emits taxonomy relations and a genome map for every leaf": {
+        "content": [
+            {
+                "0": [
+                    "tree2tax.tsv:md5,43712b8874742df6e2e56ce858cdba17"
+                ],
+                "1": [
+                    "genomes_map.tsv:md5,d5a08fe8c03f9205358e612647e15bc9"
+                ],
+                "2": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ],
+                "genomes_map": [
+                    "genomes_map.tsv:md5,d5a08fe8c03f9205358e612647e15bc9"
+                ],
+                "tree2tax": [
+                    "tree2tax.tsv:md5,43712b8874742df6e2e56ce858cdba17"
+                ],
+                "versions": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:17:45.121227",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

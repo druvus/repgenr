@@ -1,0 +1,43 @@
+{
+    "emits viral genomes, the outgroup, and its accession": {
+        "content": [
+            {
+                "0": [
+                    [
+                        "Vir_gen_sp1_iso1.fasta:md5,9a5359767874a9770ac435769ff00d93",
+                        "Vir_gen_sp2_iso2.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                    ]
+                ],
+                "1": [
+                    "Vir_out_grp_iso9.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                ],
+                "2": [
+                    "outgroup_accession.txt:md5,e184a94cf0ccec767fdfce0f1794b0e0"
+                ],
+                "3": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ],
+                "genomes": [
+                    [
+                        "Vir_gen_sp1_iso1.fasta:md5,9a5359767874a9770ac435769ff00d93",
+                        "Vir_gen_sp2_iso2.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                    ]
+                ],
+                "outgroup": [
+                    "Vir_out_grp_iso9.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                ],
+                "outgroup_accession": [
+                    "outgroup_accession.txt:md5,e184a94cf0ccec767fdfce0f1794b0e0"
+                ],
+                "versions": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:16:39.619879",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

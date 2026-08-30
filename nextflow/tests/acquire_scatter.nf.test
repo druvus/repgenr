@@ -14,6 +14,14 @@ nextflow_pipeline {
         }
         then {
             assert workflow.success
+            // METADATA + GENOME + one DEREP_CHUNK per genome (process size 1,
+            // 2 non-outgroup genomes in the stub selection) + DEREP_MERGE
+            def names = workflow.trace.succeeded().collect { it.name }
+            assert names.any { it.contains('METADATA') }
+            assert names.any { it.contains('GENOME') }
+            assert names.count { it.contains('DEREP_CHUNK') } == 2
+            assert names.any { it.contains('DEREP_MERGE') }
+            assert workflow.trace.failed().size() == 0
         }
     }
 }

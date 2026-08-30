@@ -1,0 +1,49 @@
+{
+    "merges chunk representatives into one contract directory": {
+        "content": [
+            {
+                "0": [
+                    [
+                        {
+                            "id": "merged"
+                        },
+                        [
+                            "clusters.tsv:md5,e7bbabc269dd861fe162fb9f04c92ccf",
+                            "genome_status.tsv:md5,641b472a80864434c69b49425ed0e1fc",
+                            [
+                                "Fam_g_s_GCA_000001.1.fasta:md5,24f2394df35184acdce20b01eab57184",
+                                "Fam_g_s_GCA_000002.1.fasta:md5,7a4216d2b686cdf6eaf2e1da4fb4701c"
+                            ]
+                        ]
+                    ]
+                ],
+                "1": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ],
+                "reps": [
+                    [
+                        {
+                            "id": "merged"
+                        },
+                        [
+                            "clusters.tsv:md5,e7bbabc269dd861fe162fb9f04c92ccf",
+                            "genome_status.tsv:md5,641b472a80864434c69b49425ed0e1fc",
+                            [
+                                "Fam_g_s_GCA_000001.1.fasta:md5,24f2394df35184acdce20b01eab57184",
+                                "Fam_g_s_GCA_000002.1.fasta:md5,7a4216d2b686cdf6eaf2e1da4fb4701c"
+                            ]
+                        ]
+                    ]
+                ],
+                "versions": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:17:36.556165",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "materializes every selection row as a genome or outgroup FASTA": {
+        "content": [
+            {
+                "0": [
+                    [
+                        "Fam_Gen_sp1_GCF_000001.1.fasta:md5,9a5359767874a9770ac435769ff00d93",
+                        "Fam_Gen_sp2_GCF_000002.1.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                    ]
+                ],
+                "1": [
+                    "Fam_Out_grp_GCF_000009.1.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                ],
+                "2": [
+                    "versions.yml:md5,443b65f0aa22c543e0557491044953b2"
+                ],
+                "genomes": [
+                    [
+                        "Fam_Gen_sp1_GCF_000001.1.fasta:md5,9a5359767874a9770ac435769ff00d93",
+                        "Fam_Gen_sp2_GCF_000002.1.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                    ]
+                ],
+                "outgroup": [
+                    "Fam_Out_grp_GCF_000009.1.fasta:md5,9a5359767874a9770ac435769ff00d93"
+                ],
+                "versions": [
+                    "versions.yml:md5,443b65f0aa22c543e0557491044953b2"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:17:39.353003",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

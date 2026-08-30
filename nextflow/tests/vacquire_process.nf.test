@@ -1,0 +1,20 @@
+nextflow_process {
+
+    name "VACQUIRE (stub)"
+    script "../modules/local/dataflow/vacquire.nf"
+    tag "stub"
+    process "VACQUIRE"
+    options "-stub"
+
+    test("emits viral genomes, the outgroup, and its accession") {
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            def genomes = [process.out.genomes.get(0)].flatten().collect { file(it).name }.sort()
+            assert genomes == ['Vir_gen_sp1_iso1.fasta', 'Vir_gen_sp2_iso2.fasta']
+            def outgroup = [process.out.outgroup.get(0)].flatten().collect { file(it).name }
+            assert outgroup == ['Vir_out_grp_iso9.fasta']
+            assert path(process.out.outgroup_accession.get(0)).text.trim() == 'iso9'
+        }
+    }
+}
