@@ -140,7 +140,8 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
         return Path(params.metadata_path)
 
     ctx.workdir.mkdir(parents=True, exist_ok=True)
-    assert params.release is not None  # _validate guarantees this for the tsv source
+    if params.release is None:
+        raise UserInputError("tsv source needs --release like '232.0' (major.minor).")
     major = int(float(params.release))
     base = (
         f"https://data.gtdb.ecogenomic.org/releases/release{major}/"
@@ -329,7 +330,8 @@ def _target_taxon(params: MetadataParams) -> str:
         name = params.target_genus
     else:  # species
         name = f"{params.target_genus} {params.target_species}"
-    assert name is not None  # guaranteed by _validate for the chosen level
+    if name is None:
+        raise UserInputError(f"Level '{params.level}' needs a --target-{params.level}.")
     return f"{prefix}__{_capitalize_taxon(name)}"
 
 

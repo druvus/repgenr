@@ -11,11 +11,28 @@ from __future__ import annotations
 
 import logging
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 
 from .binaries import BinarySpec, check_binaries
-from .errors import PluginError
+from .errors import PluginError, UserInputError
+
+
+def parse_extra_int(extra: Mapping[str, object], key: str, default: int) -> int:
+    """Read an integer tool override from ``--extra`` with a clear error.
+
+    A non-integer value (e.g. ``--extra ksize=big``) raises
+    :class:`UserInputError` naming the key instead of a raw ``ValueError``
+    traceback from ``int()``.
+    """
+    raw = extra.get(key, default)
+    try:
+        return int(raw)  # type: ignore[call-overload]
+    except (TypeError, ValueError) as exc:
+        raise UserInputError(
+            f"Extra parameter '{key}' must be an integer, got {raw!r}."
+        ) from exc
 
 
 @dataclass(frozen=True)

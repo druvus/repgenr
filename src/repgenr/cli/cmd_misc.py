@@ -84,7 +84,7 @@ def status(
 @app.command()
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     plot_max: float = typer.Option(1.0, "--plot-max"),
     plot_min: float = typer.Option(0.0, "--plot-min"),
     keep_files: bool = typer.Option(False, "--keep-files"),

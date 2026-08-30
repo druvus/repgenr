@@ -41,7 +41,8 @@ def neighbor_joining(labels: list[str], dist: list[list[float]]) -> str:
                 if q < best_q:
                     best_q = q
                     best_pair = (i, j)
-        assert best_pair is not None
+        if best_pair is None:  # m >= 3 here, so some pair was always scored
+            raise RuntimeError("Neighbor-joining found no pair to merge.")
         i, j = best_pair
 
         dij = d[i][j]

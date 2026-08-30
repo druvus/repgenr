@@ -11,7 +11,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
-from ..core.plugins import ToolCapabilities
+from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
 from ..tree.newick import neighbor_joining
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
@@ -39,8 +39,8 @@ class SourmashBuilder(TreeBuilder):
     ) -> Path:
         genomes = as_genome_list(msa_or_genomes)
         out_dir.mkdir(parents=True, exist_ok=True)
-        ksize = int(params.extra.get("ksize", self.capabilities.default_params["ksize"]))
-        scaled = int(params.extra.get("scaled", self.capabilities.default_params["scaled"]))
+        ksize = parse_extra_int(params.extra, "ksize", self.capabilities.default_params["ksize"])
+        scaled = parse_extra_int(params.extra, "scaled", self.capabilities.default_params["scaled"])
 
         sig_dir = out_dir / "signatures"
         sig_dir.mkdir(exist_ok=True)

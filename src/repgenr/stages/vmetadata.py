@@ -82,7 +82,8 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
     from ..core.plugins import preflight
     from ..viral import ncbi_virus
 
-    assert params.target is not None
+    if params.target is None:
+        raise UserInputError("Supply --target (e.g. adenoviridae) or --list.")
     records = ncbi_virus.fetch(
         params.target, download_wd,
         complete_only=params.complete_only, host=params.host,

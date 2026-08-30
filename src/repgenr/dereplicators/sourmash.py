@@ -34,7 +34,7 @@ import numpy.typing as npt
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import MissingBinaryError, ToolExecutionError, WorkdirError
-from ..core.plugins import ToolCapabilities
+from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
 from .base import (
     STATUS_CONTAINED,
@@ -70,8 +70,8 @@ class SourmashDereplicator(Dereplicator):
         logger: logging.Logger,
     ) -> DerepResult:
         out_dir.mkdir(parents=True, exist_ok=True)
-        ksize = int(params.extra.get("ksize", self.capabilities.default_params["ksize"]))
-        scaled = int(params.extra.get("scaled", self.capabilities.default_params["scaled"]))
+        ksize = parse_extra_int(params.extra, "ksize", self.capabilities.default_params["ksize"])
+        scaled = parse_extra_int(params.extra, "scaled", self.capabilities.default_params["scaled"])
         sani = params.secondary_ani
         threshold = sani if sani <= 1.0 else sani / 100
 

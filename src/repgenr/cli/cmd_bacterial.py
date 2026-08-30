@@ -28,7 +28,7 @@ def metadata(
     outgroup_accession: str | None = typer.Option(None, "--outgroup-accession"),
     metadata_path: str | None = typer.Option(None, "--metadata-path"),
     nodownload: bool = typer.Option(False, "--nodownload"),
-    limit: int | None = typer.Option(None, "--limit"),
+    limit: int | None = typer.Option(None, "--limit", min=1),
 ) -> None:
     """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
     from ..stages.metadata import MetadataParams
@@ -67,7 +67,7 @@ def dereplicate(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     process_size: int | None = typer.Option(
         None, "-s", "--process-size",
         help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",
