@@ -64,3 +64,21 @@ def test_glance_keep_files(workdir: Path, monkeypatch) -> None:
 
     glance_run(ctx, GlanceParams(threads=2, keep_files=True))
     assert (ctx.workdir / "glance_wd").exists()  # scratch retained
+
+
+def test_glance_passes_fofn(workdir: Path, monkeypatch) -> None:
+    ctx = _setup(workdir)
+    captured: dict = {}
+
+    def fake(caps, command, *, logger, **kwargs):
+        captured["cmd"] = [str(c) for c in command]
+        return _fake_drep(caps, command, logger=logger, **kwargs)
+
+    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
+    monkeypatch.setattr(glance_mod, "run_tool", fake)
+    glance_run(ctx, GlanceParams())
+
+    parts = captured["cmd"]
+    gidx = parts.index("-g")
+    assert parts[gidx + 1].endswith(".fofn")
+    assert parts[gidx + 2] == "--processors"

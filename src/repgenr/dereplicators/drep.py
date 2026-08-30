@@ -22,7 +22,7 @@ from ..core.containers import run_tool
 from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import link_or_copy
+from ..core.process import link_or_copy, write_fofn
 from .base import (
     STATUS_CONTAINED,
     STATUS_FAIL_QC,
@@ -61,9 +61,12 @@ class DrepDereplicator(Dereplicator):
             staged.append(_stage_genome(src, genomes_dir))
 
         drep_wd = out_dir / "drep_workdir"
+        # dRep accepts a text file of genome paths for -g; a large set on argv
+        # would hit the OS ARG_MAX limit.
+        fofn = write_fofn(staged, out_dir / "genomes.fofn")
         cmd: list[str | Path] = [
             "dRep", "dereplicate", drep_wd,
-            "-g", *staged,
+            "-g", fofn,
             "--processors", str(params.threads),
             "-sa", str(params.secondary_ani),
             "-pa", str(params.primary_ani),
@@ -79,7 +82,8 @@ class DrepDereplicator(Dereplicator):
                 "--ignoreGenomeQuality",
                 "--clusterAlg", "single",
             ]
-        run_tool(self.capabilities, cmd, logger=logger, log_prefix="drep")
+        run_tool(self.capabilities, cmd, logger=logger, log_prefix="drep",
+                 extra_mounts=[str(genomes_dir)])
 
         if not drep_wd.exists():
             raise WorkdirError(
