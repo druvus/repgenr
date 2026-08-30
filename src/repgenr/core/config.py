@@ -83,8 +83,16 @@ class Config:
             "repgenr_version": self.repgenr_version,
             "stages": {name: rec.to_dict() for name, rec in self.stages.items()},
         }
-        with open(path, "w") as fo:
-            yaml.safe_dump(data, fo, sort_keys=False, default_flow_style=False)
+        # This file carries every stage's provenance and resume fingerprint, so
+        # write beside it and rename: a crash mid-write must not truncate it.
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as fo:
+                yaml.safe_dump(data, fo, sort_keys=False, default_flow_style=False)
+            os.replace(tmp, path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
         return path
 
     def record_stage(

@@ -84,3 +84,13 @@ def test_error_paths(workdir: Path) -> None:
         derep_stock_run(ctx, DerepStockParams(action="delete", name="missing"))
     with pytest.raises(UserInputError):
         derep_stock_run(ctx, DerepStockParams(action="bogus", name="run1"))
+
+
+@pytest.mark.parametrize("bad_name", ["../escape", "/abs/path", "a/b", "..", ".hidden"])
+def test_traversal_names_rejected(workdir: Path, bad_name: str) -> None:
+    # --name becomes a directory under the stock store and is passed to rmtree
+    # on delete, so separators and dot-prefixes must be rejected outright.
+    ctx = _setup_contract(workdir)
+    for action in ("pack", "unpack", "delete"):
+        with pytest.raises(UserInputError, match="name"):
+            derep_stock_run(ctx, DerepStockParams(action=action, name=bad_name))
