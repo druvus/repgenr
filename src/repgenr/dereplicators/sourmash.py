@@ -21,8 +21,10 @@ Two back-ends compute the pairwise similarities, picked automatically:
 from __future__ import annotations
 
 import csv
+import hashlib
 import logging
 import os
+import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
@@ -127,22 +129,22 @@ class SourmashDereplicator(Dereplicator):
         sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
         sig_dir.mkdir(parents=True, exist_ok=True)
 
-        def _sigs() -> list[Path]:
-            # Skip macOS AppleDouble companions ("._*") on exFAT/NTFS volumes.
-            return [
-                p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
-                if not p.name.startswith("._")
-            ]
-
-        cached = _sigs()
-        if len(cached) >= len(genomes):
-            logger.info("Reusing %d cached sourmash signatures", len(cached))
-        else:
-            fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+        # Reuse is decided per genome, never by counting files: the cache dir may
+        # be shared with other chunks (disjoint genome sets), so only this call's
+        # genomes may be sketched, matched, and compared.
+        sig_by_genome = _find_signatures(sig_dir, genomes)
+        missing = [g for g in genomes if g not in sig_by_genome]
+        if missing:
+            if len(missing) < len(genomes):
+                logger.info(
+                    "Reusing %d cached sourmash signatures, sketching %d",
+                    len(genomes) - len(missing), len(missing),
+                )
+            fofn = write_fofn(missing, out_dir / "genomes.fofn")
             # The genome paths live inside the fofn, not in argv, so the container
             # backend cannot infer their mounts; declare their directories (using
             # un-resolved abspaths to match write_fofn and the backend's bind logic).
-            genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
+            genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in missing})
             # one signature file per genome, named by genome basename
             run_tool(self.capabilities,
                 [
@@ -155,11 +157,19 @@ class SourmashDereplicator(Dereplicator):
                 log_prefix="sourmash",
                 extra_mounts=genome_dirs,
             )
+            sig_by_genome = _find_signatures(sig_dir, genomes)
+        else:
+            logger.info("Reusing %d cached sourmash signatures", len(genomes))
 
+        unsketched = [g.name for g in genomes if g not in sig_by_genome]
+        if unsketched:
+            raise WorkdirError(
+                f"sourmash produced no signatures under {sig_dir} for: "
+                + ", ".join(unsketched[:5])
+                + ("..." if len(unsketched) > 5 else "")
+            )
         matrix_csv = out_dir / "compare.csv"
-        sig_files = _sigs()
-        if not sig_files:
-            raise WorkdirError(f"sourmash produced no signatures under {sig_dir}")
+        sig_files = sorted(sig_by_genome[g] for g in genomes)
         # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
         compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
         run_tool(self.capabilities,
@@ -196,15 +206,19 @@ class SourmashDereplicator(Dereplicator):
         Jaccard column is >= ``threshold``, matching the dense ``compare`` graph.
         """
         threads = str(params.threads)
-        sigs_zip = (
-            sketch_cache / "signatures.zip" if sketch_cache is not None
-            else out_dir / "signatures.zip"
-        )
         if sketch_cache is not None:
+            # The cache dir may be shared with other chunks (disjoint genome
+            # sets), so the zip is keyed by the genome set + sketch params: a
+            # different set can never be mistaken for this one, and concurrent
+            # writers target distinct temp files promoted atomically.
             sketch_cache.mkdir(parents=True, exist_ok=True)
+            digest = _genome_set_digest(genomes, ksize, scaled)
+            sigs_zip = sketch_cache / f"signatures-{digest}.zip"
+        else:
+            sigs_zip = out_dir / "signatures.zip"
 
         if sigs_zip.exists():
-            logger.info("Reusing cached sourmash signatures.zip")
+            logger.info("Reusing cached sourmash %s", sigs_zip.name)
         else:
             # manysketch reads a CSV of (name, genome_filename, protein_filename).
             # The name becomes the signature name, which is what pairwise reports --
@@ -215,20 +229,24 @@ class SourmashDereplicator(Dereplicator):
                 lines.append(f"{g.stem},{os.path.abspath(g)},")
             sketch_csv.write_text("\n".join(lines) + "\n")
 
+            # Unique temp name beside the final zip (same dir, so the replace is
+            # atomic and concurrent writers of the same set cannot collide).
+            tmp_zip = sigs_zip.parent / f".{sigs_zip.stem}.{uuid.uuid4().hex}.partial.zip"
             genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
             run_tool(self.capabilities,
                 [
                     "sourmash", "scripts", "manysketch", sketch_csv,
-                    "-o", sigs_zip,
+                    "-o", tmp_zip,
                     "-p", f"dna,k={ksize},scaled={scaled}",
                     "-c", threads,
                 ],
                 logger=logger,
                 log_prefix="sourmash",
-                extra_mounts=[*genome_dirs, str(sketch_csv)],
+                extra_mounts=[*genome_dirs, str(sketch_csv), str(tmp_zip.parent)],
             )
-            if not sigs_zip.exists():
-                raise WorkdirError(f"sourmash manysketch produced no signatures at {sigs_zip}")
+            if not tmp_zip.exists():
+                raise WorkdirError(f"sourmash manysketch produced no signatures at {tmp_zip}")
+            os.replace(tmp_zip, sigs_zip)
 
         pairwise_csv = out_dir / "pairwise.csv"
         run_tool(self.capabilities,
@@ -250,6 +268,30 @@ class SourmashDereplicator(Dereplicator):
         labels = [g.stem for g in sorted(genomes, key=lambda g: g.name)]
         neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels))
         return _sparse_greedy_cluster(labels, neighbors, name_by_label)
+
+
+def _find_signatures(sig_dir: Path, genomes: Sequence[Path]) -> dict[Path, Path]:
+    """Map each genome to its signature file in ``sig_dir``, by exact name.
+
+    ``sourmash sketch --outdir`` names signatures after the input file
+    (``<name>.sig``); some producers use the stem instead, so both are accepted.
+    Only exact per-genome matches count -- a shared cache dir may hold
+    signatures for other genome sets, which must never satisfy a lookup.
+    """
+    out: dict[Path, Path] = {}
+    for g in genomes:
+        for cand in (f"{g.name}.sig", f"{g.name}.sig.gz", f"{g.stem}.sig", f"{g.stem}.sig.gz"):
+            p = sig_dir / cand
+            if p.exists():
+                out[g] = p
+                break
+    return out
+
+
+def _genome_set_digest(genomes: Sequence[Path], ksize: int, scaled: int) -> str:
+    """Short digest identifying a genome set + sketch params for cache keying."""
+    blob = "\n".join(sorted(g.name for g in genomes)) + f"|k={ksize}|scaled={scaled}"
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 
 _BRANCHWATER_CACHE: dict[tuple[str, int], bool] = {}

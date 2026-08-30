@@ -229,6 +229,9 @@ def _search_target_reps(
     # Sketches depend on the genome set + ksize/scaled, not the ANI threshold, so
     # share one sketch dir across iterations: adapters that support it (sourmash)
     # sketch once and every iteration reuses it instead of re-sketching.
+    # The adapter keys cache entries to the requested genome set (per-genome
+    # signature matching, digest-named zips), so the shared dir stays correct
+    # even when an iteration dereplicates in parallel chunks.
     sketch_cache = scratch / "target" / "sketches"
     for i in range(_MAX_TARGET_ITERS):
         mid = round((lo + hi) / 2, 5)
