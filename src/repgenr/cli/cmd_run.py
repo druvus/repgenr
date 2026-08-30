@@ -53,7 +53,9 @@ def run(
     aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder"),
+    msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
     aligner: str = typer.Option("progressivemauve", "--aligner"),
+    snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
     # --- taxonomy output ---
     include_dereplicated: bool = typer.Option(
@@ -86,6 +88,10 @@ def run(
         dereplicate_params(
             tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
             aligned_fraction=aligned_fraction,
+        )
+        phylo_params(
+            treebuilder=treebuilder, msa_source=msa_source,
+            aligner=aligner, snptyper=snptyper,
         )
         if not viral and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
@@ -135,7 +141,8 @@ def run(
         extra={"virus": True} if viral else {},
     ))
     _run("phylo", workdir, lambda: phylo_params(
-        treebuilder=treebuilder, aligner=aligner, no_outgroup=no_outgroup, threads=threads,
+        treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,
+        snptyper=snptyper, no_outgroup=no_outgroup, threads=threads,
     ))
     _run("tree2tax", workdir, lambda: tree2tax_params(
         include_dereplicated=include_dereplicated,

@@ -23,6 +23,9 @@ All notable changes to RepGenR are documented here. The format follows
   level.
 
 ### Added
+- `repgenr run` accepts `--msa-source` and `--snptyper`, so the SNP-typing
+  phylogeny path (previously manual-only via `repgenr phylo`) is reachable from
+  the one-shot orchestrator with identical resume fingerprints.
 - **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
   data-channel workflow with no shared working directory. Parameter schema
   (`nextflow_schema.json`) with nf-schema validation, execution reports and
