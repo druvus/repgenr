@@ -14,6 +14,7 @@ provenance.
 
 from __future__ import annotations
 
+import csv
 import gzip
 import shutil
 import tarfile
@@ -199,10 +200,12 @@ def _parse_metadata(path: Path, params: MetadataParams, logger) -> dict[str, dic
     logger.info("Parsing GTDB metadata")
     accessions: dict[str, dict] = {}
     with _open_metadata(path, path.parent) as fo:
-        header = fo.readline().rstrip("\n").split("\t")
+        reader = csv.reader(fo, delimiter="\t")
+        header = next(reader, [])
         idx = {name: i for i, name in enumerate(header)}
-        for line in fo:
-            fields = line.rstrip("\n").split("\t")
+        for fields in reader:
+            if not fields:
+                continue
             acc_raw = fields[idx["accession"]]
             accession = acc_raw.replace("GB_", "").replace("RS_", "")
             rep = fields[idx["gtdb_genome_representative"]]

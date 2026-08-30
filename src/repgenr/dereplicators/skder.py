@@ -22,6 +22,7 @@ Two robustness notes:
 
 from __future__ import annotations
 
+import csv
 import logging
 import shutil
 import tempfile
@@ -185,11 +186,10 @@ def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float]]:
             return
         edge_file = matches[0]
 
-    with open(edge_file, encoding="utf-8") as fo:
-        for ln, line in enumerate(fo):
+    with open(edge_file, encoding="utf-8", newline="") as fo:
+        for ln, fields in enumerate(csv.reader(fo, delimiter="\t")):
             if ln == 0:
                 continue  # header
-            fields = line.rstrip("\n").split("\t")
             if len(fields) < 5:
                 continue
             try:
