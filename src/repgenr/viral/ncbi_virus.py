@@ -20,7 +20,7 @@ from pathlib import Path
 
 from ..core import process
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool
+from ..core.containers import run_tool_with_retries
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 
@@ -116,13 +116,19 @@ def fetch(
     host: str | None = None,
     released_after: str | None = None,
     logger: logging.Logger,
-    runner: Callable[..., int] = run_tool,
+    runner: Callable[..., int] | None = None,
 ) -> list[VirusRecord]:
     """Download an NCBI Virus package for ``target`` and return its records.
 
     Writes the package sequences to ``out_dir/download.fa`` (headers
     ``>accession ...``). ``runner`` is injectable for tests.
     """
+    if runner is None:
+        def runner(caps, cmd, **kw):
+            # datasets performs its own network transfers with no built-in
+            # retry; cap and retry it like the bacterial download path.
+            return run_tool_with_retries(caps, cmd, timeout=3600.0, **kw)
+
     out_dir.mkdir(parents=True, exist_ok=True)
     zip_path = out_dir / "ncbi_virus.zip"
     extract = out_dir / "ncbi_virus_pkg"

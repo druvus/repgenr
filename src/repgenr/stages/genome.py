@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ..core import process
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool
+from ..core.containers import run_tool_with_retries
 from ..core.context import WorkdirContext
 from ..core.contracts import FASTA_SUFFIXES, genome_filename
 from ..core.errors import WorkdirError
@@ -33,9 +33,12 @@ _EST_BYTES_PER_GENOME = 5_000_000  # rough peak-disk estimate (zip + extract + f
 _MIN_FREE_BYTES = 1_000_000_000  # hard floor: refuse to start a batch under ~1 GB free
 
 
+_DATASETS_TIMEOUT = 3600.0  # per-invocation cap; a hung transfer must not block forever
+
+
 def _run_cmd(cmd, **kwargs):
-    """Run the datasets CLI, containerized when a backend is active."""
-    return run_tool(DATASETS_CAPS, cmd, **kwargs)
+    """Run the datasets CLI with retries and a timeout (it has neither built in)."""
+    return run_tool_with_retries(DATASETS_CAPS, cmd, timeout=_DATASETS_TIMEOUT, **kwargs)
 
 
 @dataclass
@@ -140,8 +143,8 @@ def _assert_fasta(path: Path) -> None:
     aligner far downstream.
     """
     with open(path, "rb") as fo:
-        head = fo.read(1)
-    if head != b">":
+        head = fo.read(4096)
+    if not head.lstrip().startswith(b">"):
         raise WorkdirError(
             f"Downloaded genome is not FASTA (does not start with '>'): {path.name}. "
             "The download may be an error page; re-run to retry."

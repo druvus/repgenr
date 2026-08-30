@@ -147,3 +147,35 @@ def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
     cfg = ContainerConfig(backend="docker", wave_enabled=True)
     with pytest.raises(containers.ToolExecutionError, match="no image"):
         resolve_image(_wave_caps(), cfg)
+
+
+# --- retrying tool runner -----------------------------------------------------
+
+
+def test_run_tool_with_retries_recovers(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def flaky(caps, cmd, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise containers.ToolExecutionError(list(cmd), 1, output="net down")
+        return 0
+
+    monkeypatch.setattr(containers, "run_tool", flaky)
+    monkeypatch.setattr(containers.time, "sleep", lambda s: None)
+    rc = containers.run_tool_with_retries(
+        _wave_caps(), ["datasets", "download"], logger=_LOG, attempts=3
+    )
+    assert rc == 0 and calls["n"] == 3
+
+
+def test_run_tool_with_retries_exhausts(monkeypatch) -> None:
+    def always_fail(caps, cmd, **kwargs):
+        raise containers.ToolExecutionError(list(cmd), 1, output="net down")
+
+    monkeypatch.setattr(containers, "run_tool", always_fail)
+    monkeypatch.setattr(containers.time, "sleep", lambda s: None)
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool_with_retries(
+            _wave_caps(), ["datasets", "download"], logger=_LOG, attempts=2
+        )

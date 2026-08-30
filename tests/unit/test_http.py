@@ -8,6 +8,7 @@ file.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,8 @@ import requests
 
 from repgenr.core import http
 from repgenr.core.errors import WorkdirError
+
+_LOG = logging.getLogger("test")
 
 
 class _FakeResp:
@@ -103,3 +106,44 @@ def test_download_request_error(monkeypatch, tmp_path: Path) -> None:
     with pytest.raises(WorkdirError, match="Download failed"):
         http.download("https://x/f.gz", tmp_path / "f.gz")
     assert not (tmp_path / "f.gz.part").exists()
+
+
+# --- MD5 manifest verification ------------------------------------------------
+
+
+def test_verify_md5_manifest_ok(monkeypatch, tmp_path: Path) -> None:
+    f = tmp_path / "data.tsv.gz"
+    f.write_bytes(b"payload")
+    import hashlib
+
+    digest = hashlib.md5(b"payload").hexdigest()
+    manifest = f"{digest}  ./data.tsv.gz\nffff  ./other.txt\n"
+    monkeypatch.setattr(http, "get_text", lambda url, **k: manifest)
+    assert http.verify_md5_manifest(f, "https://x/MD5SUM.txt", logger=_LOG) is True
+
+
+def test_verify_md5_manifest_mismatch_raises(monkeypatch, tmp_path: Path) -> None:
+    f = tmp_path / "data.tsv.gz"
+    f.write_bytes(b"payload")
+    manifest = "0" * 32 + "  ./data.tsv.gz\n"
+    monkeypatch.setattr(http, "get_text", lambda url, **k: manifest)
+    with pytest.raises(WorkdirError, match="hecksum"):
+        http.verify_md5_manifest(f, "https://x/MD5SUM.txt", logger=_LOG)
+
+
+def test_verify_md5_manifest_unavailable_skips(monkeypatch, tmp_path: Path) -> None:
+    f = tmp_path / "data.tsv.gz"
+    f.write_bytes(b"payload")
+
+    def boom(url, **k):
+        raise WorkdirError("404")
+
+    monkeypatch.setattr(http, "get_text", boom)
+    assert http.verify_md5_manifest(f, "https://x/MD5SUM.txt", logger=_LOG) is False
+
+
+def test_verify_md5_manifest_unlisted_file_skips(monkeypatch, tmp_path: Path) -> None:
+    f = tmp_path / "data.tsv.gz"
+    f.write_bytes(b"payload")
+    monkeypatch.setattr(http, "get_text", lambda url, **k: "aa" * 16 + "  ./other.txt\n")
+    assert http.verify_md5_manifest(f, "https://x/MD5SUM.txt", logger=_LOG) is False
