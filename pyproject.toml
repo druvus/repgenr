@@ -101,6 +101,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["repgenr"]
+branch = true
 
 [tool.coverage.report]
 show_missing = true
