@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +16,13 @@ from repgenr.core.plugins import parse_extra_int
 _runner = CliRunner()
 _LOG = logging.getLogger("test")
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(output: str) -> str:
+    """Strip ANSI color codes (CI terminals get Rich-styled usage errors)."""
+    return _ANSI.sub("", output)
+
 
 # --- Typer range constraints (usage errors exit 2) ----------------------------
 
@@ -22,13 +30,13 @@ _LOG = logging.getLogger("test")
 def test_threads_zero_rejected(tmp_path) -> None:
     result = _runner.invoke(app, ["dereplicate", "-wd", str(tmp_path), "--threads", "0"])
     assert result.exit_code == 2
-    assert "--threads" in result.output
+    assert "--threads" in _plain(result.output)
 
 
 def test_bootstrap_negative_rejected(tmp_path) -> None:
     result = _runner.invoke(app, ["phylo", "-wd", str(tmp_path), "--bootstrap", "-1"])
     assert result.exit_code == 2
-    assert "--bootstrap" in result.output
+    assert "--bootstrap" in _plain(result.output)
 
 
 def test_limit_zero_rejected(tmp_path) -> None:
@@ -37,7 +45,7 @@ def test_limit_zero_rejected(tmp_path) -> None:
         ["metadata", "-wd", str(tmp_path), "-tg", "Francisella", "--limit", "0"],
     )
     assert result.exit_code == 2
-    assert "--limit" in result.output
+    assert "--limit" in _plain(result.output)
 
 
 def test_length_deviation_negative_rejected(tmp_path) -> None:
@@ -45,7 +53,7 @@ def test_length_deviation_negative_rejected(tmp_path) -> None:
         app, ["vgenome", "-wd", str(tmp_path), "--length-deviation", "-1"]
     )
     assert result.exit_code == 2
-    assert "--length-deviation" in result.output
+    assert "--length-deviation" in _plain(result.output)
 
 
 # --- --released-after parsed at the CLI boundary ------------------------------
@@ -58,7 +66,7 @@ def test_released_after_malformed_rejected(tmp_path, raw) -> None:
         ["vmetadata", "-wd", str(tmp_path), "-t", "coronavirus", "--released-after", raw],
     )
     assert result.exit_code == 2
-    assert "MM/DD/YYYY" in result.output
+    assert "MM/DD/YYYY" in _plain(result.output)
 
 
 # --- parse_extra_int helper ---------------------------------------------------
