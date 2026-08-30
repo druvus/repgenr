@@ -88,9 +88,15 @@ class SourmashDereplicator(Dereplicator):
                     genomes, out_dir, ksize, scaled, threshold, params, logger, sketch_cache
                 )
             except (ToolExecutionError, WorkdirError) as exc:
+                # Availability was pre-probed, so this is a genuine tool failure
+                # (bad parameters, OOM, broken image) -- surface it. Silently
+                # switching to the dense back-end can change which
+                # representatives are picked, so the fallback is opt-in.
+                if not _dense_fallback_requested(params):
+                    raise
                 logger.warning(
                     "sourmash branchwater sparse path failed (%s); "
-                    "falling back to dense compare",
+                    "dense fallback requested, retrying with dense compare",
                     exc,
                 )
                 clusters, status = self._dense_dereplicate(
@@ -294,7 +300,14 @@ def _genome_set_digest(genomes: Sequence[Path], ksize: int, scaled: int) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 
-_BRANCHWATER_CACHE: dict[tuple[str, int], bool] = {}
+def _dense_fallback_requested(params: DerepParams) -> bool:
+    """Opt-in to retrying a failed sparse run with the dense back-end."""
+    if params.extra.get("dense_fallback"):
+        return True
+    return os.environ.get("REPGENR_SOURMASH_DENSE_FALLBACK", "") not in ("", "0")
+
+
+_BRANCHWATER_CACHE: dict[tuple, bool] = {}
 
 
 def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bool:
@@ -311,7 +324,7 @@ def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bo
     """
     from ..core.containers import get_config
 
-    key = (caps.name, id(get_config()))
+    key = (caps.name, get_config().cache_key())
     cached = _BRANCHWATER_CACHE.get(key)
     if cached is not None:
         return cached
