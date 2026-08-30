@@ -65,18 +65,29 @@ def get_taxon_data_from_entrez(
     taxids_data: dict[str, dict] = {}
     taxids_alts: dict[str, list[str]] = {}
 
+    last_error: WorkdirError | None = None
     for loop in range(attempts):
         if not tax_ids_to_parse:
             continue
 
+        last_error = None
         sublists = [
             tax_ids_to_parse[i : i + num_ids_per_query]
             for i in range(0, len(tax_ids_to_parse), num_ids_per_query)
         ]
         for enum, sublist in enumerate(sublists):
             logger.info("Submitting Entrez sublist %d (%d taxids)", enum, len(sublist))
-            xml_text = _send_query(sublist)
-            for taxon_el in _iter_taxa(xml_text):
+            # One failing sublist must not abort the enrichment and discard the
+            # other sublists' parsed data; the retry loop re-requests only the
+            # still-missing taxids.
+            try:
+                taxa = _iter_taxa(_send_query(sublist))
+            except WorkdirError as exc:
+                logger.warning("Entrez sublist %d failed (%s); will retry", enum, exc)
+                last_error = exc
+                sleep(_request_delay())
+                continue
+            for taxon_el in taxa:
                 parsed = _parse_taxon_element(
                     taxon_el, tax_ids_list, tax_ids_to_parse, taxids_alts, logger
                 )
@@ -92,6 +103,12 @@ def get_taxon_data_from_entrez(
             sleep(1)
 
     missing = set(tax_ids_list).difference(taxids_data)
+    if missing and last_error is not None:
+        # Requests for these taxids kept erroring: fail loudly rather than
+        # writing placeholder taxonomy for data that was never fetched.
+        raise WorkdirError(
+            f"Entrez failed for {len(missing)} taxids after {attempts} attempts: {last_error}"
+        ) from last_error
     if missing:
         logger.warning("Entrez: failed to obtain data for %d taxids", len(missing))
         for taxid in missing:

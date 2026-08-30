@@ -23,6 +23,26 @@ if TYPE_CHECKING:
 MASHTREE = BinarySpec("mashtree", version_args=("--version",), min_version="1.2")
 
 
+def parse_custom_filter(kv: str) -> tuple[str, str]:
+    """Split one ``--target-custom`` entry into ``(key, value)`` at the first colon.
+
+    Values may themselves contain colons (e.g. strain names). Both selection
+    back-ends parse entries through here so the syntax cannot diverge; a
+    malformed entry raises :class:`UserInputError` instead of being silently
+    skipped or crashing an unpacking.
+    """
+    from ..core.errors import UserInputError
+
+    key, sep, val = kv.partition(":")
+    key = key.strip()
+    val = val.strip()
+    if not sep or not key or not val:
+        raise UserInputError(
+            f"Invalid --target-custom entry '{kv}': expected 'key:value'"
+        )
+    return key, val
+
+
 def parse_targets(params: VgenomeParams) -> dict[str, list[str]]:
     """Collect the requested taxonomy levels into ``{level: [values]}``."""
     out: dict[str, list[str]] = {}
