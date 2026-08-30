@@ -9,6 +9,7 @@ modules import it lazily), so there is no import cycle with the stage module.
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from statistics import mean, median, stdev
 from typing import TYPE_CHECKING
@@ -63,9 +64,8 @@ def select_outgroup_from_matrix(matrix: Path, logger: logging.Logger) -> str | N
     """
     header: list[str] = []
     rows: list[list[str]] = []
-    with open(matrix, encoding="utf-8") as fo:
-        for enum, line in enumerate(fo):
-            parts = line.rstrip("\n").split("\t")
+    with open(matrix, encoding="utf-8", newline="") as fo:
+        for enum, parts in enumerate(csv.reader(fo, delimiter="\t")):
             if enum == 0:
                 header = parts
             else:

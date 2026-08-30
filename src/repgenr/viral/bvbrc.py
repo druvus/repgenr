@@ -10,6 +10,7 @@ the metadata tables rather than from per-record fields.
 
 from __future__ import annotations
 
+import csv
 import logging
 import shutil
 from collections.abc import Mapping
@@ -95,10 +96,10 @@ def run_select(
 
 def _read_base(path: Path) -> dict[str, dict]:
     base: dict[str, dict] = {}
-    with open(path, encoding="utf-8") as fo:
-        next(fo)
-        for line in fo:
-            f = line.rstrip("\n").split("\t")
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.reader(fo, delimiter="\t")
+        next(reader, None)
+        for f in reader:
             taxid = f[0]
             base[taxid] = {
                 "num": int(f[2]), "seq_min": int(f[3]), "seq_max": int(f[4]),
@@ -110,10 +111,10 @@ def _read_base(path: Path) -> dict[str, dict]:
 def _read_ncbi(path: Path) -> dict[str, list[dict]]:
     ncbi: dict[str, list[dict]] = {}
     n = len(TAXNAMES_ORDERED)
-    with open(path, encoding="utf-8") as fo:
-        next(fo)
-        for line in fo:
-            f = line.rstrip("\n").split("\t")
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.reader(fo, delimiter="\t")
+        next(reader, None)
+        for f in reader:
             if len(f) < 3 + 2 * n:
                 continue
             taxid = f[0]

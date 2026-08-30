@@ -14,6 +14,7 @@ import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,12 +44,24 @@ PIPELINE_BACTERIAL = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
 PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
 
 
+def _completed_at(value: str | None) -> datetime | None:
+    """Parse a stage's completed timestamp; None when missing or malformed."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _warn_if_stale(stage_name: str, config: Any, logger: logging.Logger) -> None:
     """Warn when skipping a stage that an upstream stage now post-dates.
 
     Re-running an upstream stage (e.g. ``dereplicate --force``) and then a
     downstream stage with unchanged parameters would otherwise silently skip the
-    downstream against new inputs. ISO timestamps compare lexicographically.
+    downstream against new inputs. Timestamps are compared as parsed datetimes,
+    not lexicographically, so differing ISO offset/precision forms compare
+    correctly; a malformed timestamp is treated as unknown (no warning).
     """
     stages = config.stages
     chain = PIPELINE_VIRAL if any(n in stages for n in ("vmetadata", "vgenome")) else \
@@ -56,12 +69,15 @@ def _warn_if_stale(stage_name: str, config: Any, logger: logging.Logger) -> None
     if stage_name not in chain:
         return
     here = stages.get(stage_name)
-    if here is None or not here.completed:
+    here_at = _completed_at(here.completed) if here is not None else None
+    if here_at is None:
         return
     idx = chain.index(stage_name)
     newer = [
         up for up in chain[:idx]
-        if (rec := stages.get(up)) is not None and rec.completed and rec.completed > here.completed
+        if (rec := stages.get(up)) is not None
+        and (rec_at := _completed_at(rec.completed)) is not None
+        and rec_at > here_at
     ]
     if newer:
         logger.warning(
