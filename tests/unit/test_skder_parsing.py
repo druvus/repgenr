@@ -52,3 +52,27 @@ def test_edges_below_cutoff_not_clustered(tmp_path: Path) -> None:
     # memX not assigned to any cluster, but still marked contained
     assert result.clusters["repA.fasta"] == []
     assert result.genome_status["memX.fasta"] == "contained"
+
+
+def test_skder_warns_when_argv_may_overflow(tmp_path, monkeypatch, caplog) -> None:
+    import logging
+
+    import pytest
+
+    from repgenr.dereplicators import skder as skder_mod
+    from repgenr.dereplicators.base import DerepParams
+    from repgenr.dereplicators.skder import SkderDereplicator
+
+    monkeypatch.setattr(skder_mod, "_ARGV_WARN_GENOMES", 3)
+
+    def stop(caps, cmd, **kwargs):
+        raise RuntimeError("stop before running the tool")
+
+    monkeypatch.setattr(skder_mod, "run_tool", stop)
+    genomes = [tmp_path / f"g{i}.fasta" for i in range(4)]
+    params = DerepParams(primary_ani=0.9, secondary_ani=0.99, threads=1)
+    with caplog.at_level(logging.WARNING), pytest.raises(RuntimeError):
+        SkderDereplicator().dereplicate(
+            genomes, tmp_path / "out", params, logging.getLogger("test")
+        )
+    assert "--process-size" in caplog.text

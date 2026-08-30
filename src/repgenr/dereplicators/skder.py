@@ -42,6 +42,8 @@ from .base import (
     DerepResult,
 )
 
+_ARGV_WARN_GENOMES = 5000
+
 
 class SkderDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
@@ -57,6 +59,8 @@ class SkderDereplicator(Dereplicator):
         conda=("bioconda::skder",),
     )
 
+    # skDER takes genome paths on argv (no fofn-style input); warn when the
+    # set is large enough that the OS ARG_MAX limit becomes a concern.
     def dereplicate(
         self,
         genomes: Sequence[Path],
@@ -70,6 +74,13 @@ class SkderDereplicator(Dereplicator):
         # then copy its results back next to the working directory.
         local_tmp = Path(tempfile.mkdtemp(prefix="repgenr_skder_"))
         result_dir = local_tmp / "skder_out"
+        if len(genomes) > _ARGV_WARN_GENOMES:
+            logger.warning(
+                "skDER receives %d genome paths on argv; at this scale the OS "
+                "ARG_MAX limit may be exceeded. Use --process-size to bound the "
+                "number of genomes per call.",
+                len(genomes),
+            )
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
         ani_pct = _as_percent(params.secondary_ani)
         af_pct = _as_percent(params.aligned_fraction)

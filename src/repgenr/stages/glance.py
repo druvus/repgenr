@@ -16,6 +16,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
 from ..core.plugins import preflight
+from ..core.process import write_fofn
 
 
 @dataclass
@@ -40,10 +41,14 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     if glance_wd.exists():
         shutil.rmtree(glance_wd)
 
+    # Genome paths go through a fofn (dRep accepts a paths file for -g), so a
+    # large set cannot overflow argv; declare the genome dir for the container
+    # backend since the paths are no longer argv tokens.
+    fofn = write_fofn(genomes, ctx.scratch_dir / "glance" / "genomes.fofn")
     run_tool(caps,
-        ["dRep", "compare", "--SkipSecondary", "-g", *genomes,
+        ["dRep", "compare", "--SkipSecondary", "-g", fofn,
          "--processors", str(params.threads), glance_wd],
-        logger=logger, log_prefix="drep",
+        logger=logger, log_prefix="drep", extra_mounts=[str(ctx.genomes_dir)],
     )
 
     dendrogram = glance_wd / "figures" / "Primary_clustering_dendrogram.pdf"
