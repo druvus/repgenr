@@ -1,0 +1,112 @@
+"""`repgenr run` and the manual per-stage commands fingerprint identically.
+
+Both entry points are driven through CliRunner with the `_run` harness replaced
+by a recorder; for equivalent CLI intent, every stage's params object -- and
+therefore its resume fingerprint -- must be equal, so a `run` followed by a
+manual command (or vice versa) skips instead of silently re-running.
+"""
+
+from __future__ import annotations
+
+import pytest
+from typer.testing import CliRunner
+
+from repgenr.cli import cmd_bacterial, cmd_phylo, cmd_run, cmd_viral
+from repgenr.cli.base import _stage_fingerprint
+from repgenr.cli.main import app
+
+_runner = CliRunner()
+
+
+@pytest.fixture()
+def dispatched(monkeypatch) -> list[tuple]:
+    calls: list[tuple] = []
+
+    def fake_run(stage, workdir, build, *, create=False):
+        calls.append((stage, build()))
+
+    for mod in (cmd_run, cmd_bacterial, cmd_phylo, cmd_viral):
+        monkeypatch.setattr(mod, "_run", fake_run)
+    return calls
+
+
+def _fingerprints(calls: list[tuple]) -> dict[str, str]:
+    return {stage: _stage_fingerprint(stage, params, {}, {}) for stage, params in calls}
+
+
+def test_bacterial_run_matches_manual_commands(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
+        "-r", "232.0", "--gtdb-version", "bac120",
+        "--tool", "skder", "--treebuilder", "mashtree",
+    ])
+    assert result.exit_code == 0, result.output
+    run_fps = _fingerprints(dispatched)
+    dispatched.clear()
+
+    for args in (
+        ["metadata", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
+         "-r", "232.0", "--gtdb-version", "bac120"],
+        ["genome", "-wd", wd],
+        ["dereplicate", "-wd", wd, "--tool", "skder"],
+        ["phylo", "-wd", wd, "--treebuilder", "mashtree"],
+        ["tree2tax", "-wd", wd],
+    ):
+        result = _runner.invoke(app, args)
+        assert result.exit_code == 0, result.output
+    manual_fps = _fingerprints(dispatched)
+
+    assert set(run_fps) == {"metadata", "genome", "dereplicate", "phylo", "tree2tax"}
+    for stage, fp in run_fps.items():
+        assert manual_fps[stage] == fp, f"run vs manual fingerprint diverges for {stage}"
+
+
+def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "--viral", "-t", "adenoviridae", "-tg", "mastadenovirus",
+        "--tool", "skder", "--treebuilder", "mashtree",
+    ])
+    assert result.exit_code == 0, result.output
+    run_fps = _fingerprints(dispatched)
+    dispatched.clear()
+
+    for args in (
+        ["vmetadata", "-wd", wd, "-t", "adenoviridae"],
+        ["vgenome", "-wd", wd, "-tg", "mastadenovirus"],
+        ["dereplicate", "-wd", wd, "--tool", "skder", "--virus"],
+        ["phylo", "-wd", wd, "--treebuilder", "mashtree"],
+        ["tree2tax", "-wd", wd],
+    ):
+        result = _runner.invoke(app, args)
+        assert result.exit_code == 0, result.output
+    manual_fps = _fingerprints(dispatched)
+
+    assert set(run_fps) == {"vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax"}
+    for stage, fp in run_fps.items():
+        assert manual_fps[stage] == fp, f"run vs manual fingerprint diverges for {stage}"
+
+
+def test_run_include_dereplicated_flag(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
+        "--gtdb-version", "bac120", "--no-include-dereplicated",
+    ])
+    assert result.exit_code == 0, result.output
+    params = dict(dispatched)["tree2tax"]
+    assert params.include_dereplicated is False
+
+
+def test_tree2tax_defaults_to_include_dereplicated(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, ["tree2tax", "-wd", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    params = dict(dispatched)["tree2tax"]
+    assert params.include_dereplicated is True
+
+
+def test_bacterial_run_requires_level(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, ["run", "-wd", str(tmp_path), "-tg", "francisella"])
+    assert result.exit_code != 0
+    assert dispatched == []

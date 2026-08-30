@@ -13,14 +13,13 @@ from pathlib import Path
 
 import typer
 
+from ..core.errors import UserInputError
 from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_VIRAL,
-    _require_choice,
-    _require_unit_interval,
     _run,
     app,
     stage_errors,
@@ -56,6 +55,11 @@ def run(
     treebuilder: str = typer.Option("iqtree", "--treebuilder"),
     aligner: str = typer.Option("progressivemauve", "--aligner"),
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
+    # --- taxonomy output ---
+    include_dereplicated: bool = typer.Option(
+        True, "--include-dereplicated/--no-include-dereplicated",
+        help="List redundant genomes under their representative in tree2tax.",
+    ),
     # --- common ---
     threads: int = typer.Option(DEFAULT_THREADS, "--threads", min=1),
     dry_run: bool = typer.Option(
@@ -63,19 +67,28 @@ def run(
     ),
 ) -> None:
     """Run the whole pipeline end to end (bacterial by default, --viral for viruses)."""
-    from ..dereplicators.base import registry as _derep_registry
-    from ..stages.dereplicate import DereplicateParams
-    from ..stages.phylo import PhyloParams
-    from ..stages.tree2tax import Tree2taxParams
+    from .param_builders import (
+        dereplicate_params,
+        genome_params,
+        metadata_params,
+        phylo_params,
+        tree2tax_params,
+        vgenome_params,
+        vmetadata_params,
+    )
 
     logger = configure_logging(
         workdir if workdir.exists() else None, level=_RUN_STATE["log_level"]
     )
     with stage_errors(logger):
-        _require_choice(derep_tool, {"auto", *_derep_registry.names()}, "--tool")
-        _require_unit_interval(primary_ani, "--primary-ani")
-        _require_unit_interval(secondary_ani, "--secondary-ani")
-        _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        # Fail fast before any stage runs; the same validation re-runs inside
+        # each stage's builder.
+        dereplicate_params(
+            tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
+            aligned_fraction=aligned_fraction,
+        )
+        if not viral and not level:
+            raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
 
     if dry_run:
         chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
@@ -100,37 +113,33 @@ def run(
         return
 
     if viral:
-        from ..stages.vgenome import VgenomeParams
-        from ..stages.vmetadata import VmetadataParams
-
-        _run("vmetadata", workdir, lambda: VmetadataParams(
+        _run("vmetadata", workdir, lambda: vmetadata_params(
             target=target, source=viral_source,
         ), create=True)
-        _run("vgenome", workdir, lambda: VgenomeParams(
+        _run("vgenome", workdir, lambda: vgenome_params(
             target_genus=target_genus, target_species=target_species,
             no_outgroup=no_outgroup, group_segments=group_segments,
         ))
     else:
-        from ..stages.genome import GenomeParams
-        from ..stages.metadata import MetadataParams
-
-        _run("metadata", workdir, lambda: MetadataParams(
+        _run("metadata", workdir, lambda: metadata_params(
             dataset=dataset, level=level or "", source=metadata_source,
             release=release, version=gtdb_version,
             target_family=target_family, target_genus=target_genus,
             target_species=target_species, outgroup_accession=outgroup_accession,
         ), create=True)
-        _run("genome", workdir, lambda: GenomeParams())
+        _run("genome", workdir, lambda: genome_params())
 
-    _run("dereplicate", workdir, lambda: DereplicateParams(
+    _run("dereplicate", workdir, lambda: dereplicate_params(
         tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
         aligned_fraction=aligned_fraction, threads=threads,
         extra={"virus": True} if viral else {},
     ))
-    _run("phylo", workdir, lambda: PhyloParams(
+    _run("phylo", workdir, lambda: phylo_params(
         treebuilder=treebuilder, aligner=aligner, no_outgroup=no_outgroup, threads=threads,
     ))
-    _run("tree2tax", workdir, lambda: Tree2taxParams(include_dereplicated=True))
+    _run("tree2tax", workdir, lambda: tree2tax_params(
+        include_dereplicated=include_dereplicated,
+    ))
 
     typer.echo(
         f"\nPipeline complete. Deliverables in {workdir}: "

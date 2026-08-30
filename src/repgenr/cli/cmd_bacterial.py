@@ -6,8 +6,7 @@ from pathlib import Path
 
 import typer
 
-from ..core.errors import UserInputError
-from .base import DEFAULT_THREADS, _require_choice, _require_unit_interval, _run, app
+from .base import DEFAULT_THREADS, _run, app
 
 
 @app.command()
@@ -31,10 +30,10 @@ def metadata(
     limit: int | None = typer.Option(None, "--limit", min=1),
 ) -> None:
     """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
-    from ..stages.metadata import MetadataParams
+    from .param_builders import metadata_params
 
-    def build() -> MetadataParams:
-        return MetadataParams(
+    def build():
+        return metadata_params(
             dataset=dataset, level=level, source=source,
             release=release, version=gtdb_version,
             target_family=target_family, target_genus=target_genus,
@@ -52,10 +51,10 @@ def genome(
     keep_files: bool = typer.Option(False, "--keep-files"),
 ) -> None:
     """Download and organize genomes selected by the metadata stage."""
-    from ..stages.genome import GenomeParams
+    from .param_builders import genome_params
 
-    def build() -> GenomeParams:
-        return GenomeParams(accession_list_only=accession_list_only, keep_files=keep_files)
+    def build():
+        return genome_params(accession_list_only=accession_list_only, keep_files=keep_files)
 
     _run("genome", workdir, build)
 
@@ -98,20 +97,10 @@ def dereplicate(
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
-    from ..dereplicators.base import registry as _derep_registry
-    from ..stages.dereplicate import DereplicateParams
+    from .param_builders import dereplicate_params
 
-    def build() -> DereplicateParams:
-        _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
-        _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
-        if target_reps < 0:
-            raise UserInputError(f"--target-reps must be >= 0, got {target_reps}.")
-        _require_unit_interval(primary_ani, "--primary-ani")
-        _require_unit_interval(secondary_ani, "--secondary-ani")
-        _require_unit_interval(aligned_fraction, "--aligned-fraction")
-        _require_unit_interval(pre_primary_ani, "--pre-primary-ani")
-        _require_unit_interval(pre_secondary_ani, "--pre-secondary-ani")
-        return DereplicateParams(
+    def build():
+        return dereplicate_params(
             tool=tool,
             primary_ani=primary_ani,
             secondary_ani=secondary_ani,

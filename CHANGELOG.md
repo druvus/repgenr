@@ -14,6 +14,13 @@ All notable changes to RepGenR are documented here. The format follows
   all unchanged. Re-running an upstream stage automatically re-runs downstream
   stages; the previous timestamp-based "may be stale" warning is removed.
   Workdirs created by older versions re-run each stage once.
+- **Breaking: `repgenr run` and the manual commands now build identical stage
+  parameters** through shared builders, so the two entry points share resume
+  fingerprints. `tree2tax --include-dereplicated` now defaults to on for both
+  (previously only `repgenr run` enabled it); pass
+  `--no-include-dereplicated` for the old manual behavior. The bacterial
+  `repgenr run` now requires `-l/--level` instead of silently passing an empty
+  level.
 
 ### Added
 - **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
