@@ -60,7 +60,7 @@ def dereplicate_chunk_cmd(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
@@ -111,12 +111,14 @@ def phylo_build_cmd(
     ),
     snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
-    bootstrap: int = typer.Option(0, "-B", "--bootstrap", help="Bootstrap replicates (>=1000)."),
+    bootstrap: int = typer.Option(
+        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000)."
+    ),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     aligner_arg: list[str] = typer.Option(
         [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -206,7 +208,7 @@ def dereplicate_merge_cmd(
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."

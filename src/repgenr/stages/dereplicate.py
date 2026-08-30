@@ -173,7 +173,8 @@ def _dereplicate_to_result(
     )
     if not needs_chunking:
         return adapter.dereplicate(genomes, scratch, derep_params, logger)
-    assert params.process_size is not None  # guaranteed by needs_chunking
+    if params.process_size is None:  # guaranteed by needs_chunking
+        raise RuntimeError("Chunked dereplication reached without --process-size set.")
 
     workers = (
         params.num_processes if params.num_processes > 0
@@ -259,7 +260,8 @@ def _search_target_reps(
             lo = mid  # too few reps -> stricter threshold
         else:
             hi = mid  # too many reps -> looser threshold
-    assert best is not None
+    if best is None:  # the search loop always runs at least one iteration
+        raise RuntimeError("target-reps search finished without evaluating any threshold.")
     logger.info(
         "target-reps: chose secondary-ani=%.5f -> %d representatives (target %d)",
         best_ani, len(best.representatives), target,

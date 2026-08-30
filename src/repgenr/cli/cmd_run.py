@@ -57,7 +57,7 @@ def run(
     aligner: str = typer.Option("progressivemauve", "--aligner"),
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
     # --- common ---
-    threads: int = typer.Option(DEFAULT_THREADS, "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "--threads", min=1),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the stages and key parameters, then exit."
     ),

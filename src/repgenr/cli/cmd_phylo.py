@@ -16,7 +16,7 @@ def snptype(
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
 ) -> None:
     """Call SNPs and build a core-SNP alignment."""
     from ..snptypers.base import registry as _snp_registry
@@ -49,14 +49,16 @@ def phylo(
     snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
-    bootstrap: int = typer.Option(0, "-B", "--bootstrap", help="Bootstrap replicates (>=1000)."),
+    bootstrap: int = typer.Option(
+        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000)."
+    ),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     aligner_arg: list[str] = typer.Option(
         [], "--aligner-arg",
         help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
         "or seed_weight=11 (progressivemauve).",
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
     from ..aligners.base import registry as _aln_registry

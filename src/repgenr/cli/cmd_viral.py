@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import typer
 
 from .base import _require_choice, _run, app
+
+
+def _validate_released_after(value: str | None) -> str | None:
+    """Reject a malformed --released-after date before any network work runs."""
+    if value is None:
+        return value
+    try:
+        datetime.strptime(value, "%m/%d/%Y")
+    except ValueError as exc:
+        raise typer.BadParameter(
+            f"expected MM/DD/YYYY (e.g. 01/31/2024), got '{value}'."
+        ) from exc
+    return value
 
 
 @app.command()
@@ -22,7 +36,8 @@ def vmetadata(
         False, "--complete-only", help="ncbi_virus: only COMPLETE sequences."
     ),
     released_after: str | None = typer.Option(
-        None, "--released-after", help="ncbi_virus: MM/DD/YYYY."
+        None, "--released-after", callback=_validate_released_after,
+        help="ncbi_virus: MM/DD/YYYY.",
     ),
     list_targets: bool = typer.Option(False, "-l", "--list", help="List BV-BRC targets and exit."),
 ) -> None:
@@ -48,7 +63,7 @@ def vgenome(
     target_serotype: str | None = typer.Option(None, "-tse", "--target-serotype"),
     target_custom: str | None = typer.Option(None, "-tc", "--target-custom", help="key:value."),
     length_all: bool = typer.Option(False, "--length-all"),
-    length_deviation: int = typer.Option(10, "--length-deviation"),
+    length_deviation: int = typer.Option(10, "--length-deviation", min=0),
     length_method: str = typer.Option("median_of_medians", "--length-method"),
     length_range: str | None = typer.Option(None, "--length-range", help="e.g. 25000-35000."),
     discard: str | None = typer.Option(None, "--discard", help="Comma-separated header tags."),
