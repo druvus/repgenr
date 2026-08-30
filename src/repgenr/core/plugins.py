@@ -75,8 +75,9 @@ class Registry[T]:
             except Exception as exc:  # a broken third-party plugin must not kill the run
                 # Deferred: surfaced only if the broken name is actually requested,
                 # but log at debug so a broken in-tree adapter is diagnosable.
-                logging.getLogger("repgenr").debug(
-                    "Plugin %r (group %s) failed to load: %s", ep.name, self.group, exc
+                logging.getLogger("repgenr").warning(
+                    "Plugin %r (group %s) failed to load and is unavailable: %s",
+                    ep.name, self.group, exc,
                 )
                 self._classes.setdefault(ep.name, _BrokenPlugin(ep.name, exc))  # type: ignore[arg-type]
         self._loaded = True
@@ -84,6 +85,11 @@ class Registry[T]:
     def names(self) -> list[str]:
         self._load()
         return sorted(self._classes)
+
+    def is_broken(self, name: str) -> bool:
+        """True when ``name`` is registered but its adapter failed to import."""
+        self._load()
+        return isinstance(self._classes.get(name), _BrokenPlugin)
 
     def get(self, name: str) -> type[T]:
         self._load()
@@ -153,6 +159,10 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
     for name in registry.names():
         cap = _capabilities_of(registry, name)
         if cap is None:
+            logging.getLogger("repgenr").warning(
+                "auto-select skipping '%s' (%s): the plugin failed to load.",
+                name, registry.group,
+            )
             continue
         limit = cap.recommended_max_genomes
         available = 1 if _binaries_available(cap) else 0
