@@ -57,10 +57,3 @@ def configure_logging(
 
     return logger
 
-
-def get_logger() -> logging.Logger:
-    """Return the shared ``repgenr`` logger (configure_logging if not yet set up)."""
-    logger = logging.getLogger(_LOGGER_NAME)
-    if not logger.handlers:
-        return configure_logging()
-    return logger
