@@ -27,7 +27,7 @@ _MDB = (
 )
 
 
-def _fake_drep(command, *, logger, **kwargs) -> None:
+def _fake_drep(caps, command, *, logger, **kwargs) -> None:
     """Stand in for `dRep compare`: write the outputs glance reads back."""
     glance_wd = Path(command[-1])
     (glance_wd / "figures").mkdir(parents=True)
@@ -46,8 +46,8 @@ def _setup(workdir: Path) -> WorkdirContext:
 
 def test_glance_happy_path(workdir: Path, monkeypatch) -> None:
     ctx = _setup(workdir)
-    monkeypatch.setattr(glance_mod, "check_binaries", lambda specs: None)
-    monkeypatch.setattr(glance_mod, "run_cmd", _fake_drep)
+    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
+    monkeypatch.setattr(glance_mod, "run_tool", _fake_drep)
 
     out_pdf = glance_run(ctx, GlanceParams(threads=2))
 
@@ -59,8 +59,8 @@ def test_glance_happy_path(workdir: Path, monkeypatch) -> None:
 
 def test_glance_keep_files(workdir: Path, monkeypatch) -> None:
     ctx = _setup(workdir)
-    monkeypatch.setattr(glance_mod, "check_binaries", lambda specs: None)
-    monkeypatch.setattr(glance_mod, "run_cmd", _fake_drep)
+    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
+    monkeypatch.setattr(glance_mod, "run_tool", _fake_drep)
 
     glance_run(ctx, GlanceParams(threads=2, keep_files=True))
     assert (ctx.workdir / "glance_wd").exists()  # scratch retained

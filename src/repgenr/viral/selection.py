@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-from ..core.binaries import check_binaries
+from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
-from ..core.process import run as run_cmd
+from ..core.plugins import preflight
+from ..treebuilders.mashtree import MashtreeBuilder
 from ._common import (
-    MASHTREE,
     parse_custom_filter,
     parse_targets,
     select_outgroup_from_matrix,
@@ -237,7 +237,9 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     Returns ``(outgroup_record_or_None, tool_versions)`` so the caller can record
     the resolved mashtree version in provenance.
     """
-    versions = check_binaries((MASHTREE,))
+    # Container-aware: checks the image when a backend is active, the host
+    # binary otherwise, and runs mashtree wherever the check passed.
+    versions = preflight(MashtreeBuilder.capabilities)
     kept_species = {r.species for r in kept}
     kept_acc = {r.accession for r in kept}
     cand_by_species: dict[str, list] = {}
@@ -282,7 +284,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
         logger.warning("No length-compatible outgroup candidates; proceeding without one.")
         return None, versions
     matrix = outgroup_wd / "distance_matrix.tsv"
-    run_cmd(
+    run_tool(MashtreeBuilder.capabilities,
         ["mashtree", "--genomesize", str(int(mid)), "--mindepth", "0",
          "--outmatrix", matrix, *genome_files],
         logger=logger, log_prefix="mashtree", stdout_path=outgroup_wd / "mashtree.dnd",

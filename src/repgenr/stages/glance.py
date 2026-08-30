@@ -11,13 +11,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.binaries import BinarySpec, check_binaries
+from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.contracts import list_fasta
 from ..core.errors import WorkdirError
-from ..core.process import run as run_cmd
-
-_DREP = BinarySpec("dRep", version_args=("--version",))
+from ..core.plugins import preflight
 
 
 @dataclass
@@ -30,7 +28,10 @@ class GlanceParams:
 
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
-    check_binaries((_DREP,))
+    from ..dereplicators.drep import DrepDereplicator
+
+    caps = DrepDereplicator.capabilities
+    preflight(caps)
     genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
@@ -39,7 +40,7 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     if glance_wd.exists():
         shutil.rmtree(glance_wd)
 
-    run_cmd(
+    run_tool(caps,
         ["dRep", "compare", "--SkipSecondary", "-g", *genomes,
          "--processors", str(params.threads), glance_wd],
         logger=logger, log_prefix="drep",
