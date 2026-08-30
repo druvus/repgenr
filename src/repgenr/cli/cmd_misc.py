@@ -143,4 +143,7 @@ def list_tools() -> None:
         ("snptypers", snptypers),
         ("treebuilders", treebuilders),
     ):
-        typer.echo(f"{label}: {', '.join(reg.names()) or '(none)'}")
+        entries = [
+            f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()
+        ]
+        typer.echo(f"{label}: {', '.join(entries) or '(none)'}")
