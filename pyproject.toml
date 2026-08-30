@@ -81,7 +81,11 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# PLW1514: every text-mode open()/read_text/write_text must pass encoding=
+# (locale-dependent defaults break on non-UTF-8 systems).
+select = ["E", "F", "I", "UP", "B", "PLW1514"]
+preview = true
+explicit-preview-rules = true
 # Typer relies on function-call defaults (typer.Option/Argument).
 per-file-ignores = { "src/repgenr/cli/*.py" = ["B008"] }
 

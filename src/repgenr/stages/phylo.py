@@ -124,7 +124,7 @@ def build_tree(
 
     final = dirs.tree_dir / TREE_NWK
     if tree.resolve() != final.resolve():
-        final.write_text(Path(tree).read_text())
+        final.write_text(Path(tree).read_text(encoding="utf-8"))
     logger.info("Phylogenetic tree written to %s", final)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
@@ -236,7 +236,7 @@ def resolve_outgroup_files(
     if not accession_file.exists() or not outgroup_dir.exists():
         logger.warning("No outgroup found; proceeding without one")
         return None, None
-    accession = accession_file.read_text().strip()
+    accession = accession_file.read_text(encoding="utf-8").strip()
     if not accession:
         logger.warning("No outgroup accession recorded; proceeding without one")
         return None, None

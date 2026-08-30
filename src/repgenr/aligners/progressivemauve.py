@@ -97,7 +97,7 @@ def _concatenate(per_query_fastas: list[Path], reference: Path, out_path: Path) 
     """Write the reference row once, then each query row; leaf names are stems."""
     ref_stem = reference.stem
     written_ref = False
-    with open(out_path, "w") as out:
+    with open(out_path, "w", encoding="utf-8") as out:
         for fa in per_query_fastas:
             for name, seq in _read_fasta(fa):
                 leaf = Path(name).stem
@@ -113,7 +113,7 @@ def _concatenate(per_query_fastas: list[Path], reference: Path, out_path: Path) 
 def _read_fasta(path: Path):
     name = None
     seq: list[str] = []
-    with open(path) as fo:
+    with open(path, encoding="utf-8") as fo:
         for line in fo:
             line = line.rstrip("\n")
             if line.startswith(">"):

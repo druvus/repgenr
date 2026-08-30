@@ -63,7 +63,7 @@ def select_outgroup_from_matrix(matrix: Path, logger: logging.Logger) -> str | N
     """
     header: list[str] = []
     rows: list[list[str]] = []
-    with open(matrix) as fo:
+    with open(matrix, encoding="utf-8") as fo:
         for enum, line in enumerate(fo):
             parts = line.rstrip("\n").split("\t")
             if enum == 0:

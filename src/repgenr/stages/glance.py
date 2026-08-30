@@ -69,7 +69,7 @@ def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
     from matplotlib import pyplot as plt
 
     values = []
-    with open(mdb, newline="") as fo:
+    with open(mdb, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo)
         for row in reader:
             if row.get("genome1") == row.get("genome2"):

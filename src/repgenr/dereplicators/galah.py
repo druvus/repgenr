@@ -70,7 +70,7 @@ class GalahDereplicator(Dereplicator):
         clusters: dict[str, list[str]] = {}
         status: dict[str, str] = {}
         rep_paths: dict[str, Path] = {}
-        with open(clusters_file) as fo:
+        with open(clusters_file, encoding="utf-8") as fo:
             for line in fo:
                 line = line.strip()
                 if not line:

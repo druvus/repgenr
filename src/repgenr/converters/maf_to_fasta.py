@@ -105,7 +105,7 @@ def maf_to_fasta(
             f"highly divergent inputs)."
         )
 
-    with open(out_path, "w") as fo:
+    with open(out_path, "w", encoding="utf-8") as fo:
         for s in ordered_species:
             seq = "".join(pieces[s])
             fo.write(f">{s}\n")
@@ -116,7 +116,7 @@ def maf_to_fasta(
 
 def _iter_blocks(maf_path: Path):
     block: list[_Row] = []
-    with open(maf_path) as fo:
+    with open(maf_path, encoding="utf-8") as fo:
         for line in fo:
             if line.startswith("a"):
                 if block:

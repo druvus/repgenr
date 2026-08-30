@@ -16,7 +16,7 @@ _NWK = (
 
 def _edges(path: Path) -> set[tuple[str, str]]:
     out = set()
-    for line in path.read_text().splitlines()[1:]:
+    for line in path.read_text(encoding="utf-8").splitlines()[1:]:
         c, p = line.split("\t")
         out.add((c, p))
     return out

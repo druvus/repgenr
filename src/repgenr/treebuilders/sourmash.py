@@ -88,7 +88,7 @@ class SourmashBuilder(TreeBuilder):
 
 
 def _read_csv(path: Path) -> tuple[list[str], list[list[float]]]:
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.reader(fo)
         labels = next(reader)
         matrix = [[float(x) for x in row] for row in reader]

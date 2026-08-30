@@ -42,15 +42,17 @@ def _fake_run_tool(calls: list[tuple[str, list[str]]]):
         parts = [str(c) for c in cmd]
         if "manysketch" in parts:
             csv_path = Path(parts[parts.index("manysketch") + 1])
-            rows = csv_path.read_text().splitlines()[1:]
+            rows = csv_path.read_text(encoding="utf-8").splitlines()[1:]
             calls.append(("manysketch", [r.split(",")[1] for r in rows]))
-            Path(parts[parts.index("-o") + 1]).write_text("zip")
+            Path(parts[parts.index("-o") + 1]).write_text("zip", encoding="utf-8")
         elif "pairwise" in parts:
             calls.append(("pairwise", [parts[parts.index("pairwise") + 1]]))
-            Path(parts[parts.index("-o") + 1]).write_text("query_name,match_name,jaccard\n")
+            Path(parts[parts.index("-o") + 1]).write_text(
+                "query_name,match_name,jaccard\n", encoding="utf-8"
+            )
         elif "sketch" in parts:
             fofn = Path(parts[parts.index("--from-file") + 1])
-            paths = fofn.read_text().splitlines()
+            paths = fofn.read_text(encoding="utf-8").splitlines()
             calls.append(("sketch", paths))
             outdir = Path(parts[parts.index("--outdir") + 1])
             outdir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +65,9 @@ def _fake_run_tool(calls: list[tuple[str, list[str]]]):
             labels = [Path(s).stem for s in sigs]
             n = len(labels)
             body = "\n".join(",".join("1.0" for _ in range(n)) for _ in range(n))
-            Path(parts[parts.index("--csv") + 1]).write_text(",".join(labels) + "\n" + body + "\n")
+            Path(parts[parts.index("--csv") + 1]).write_text(
+                ",".join(labels) + "\n" + body + "\n", encoding="utf-8"
+            )
         return 0
 
     return run_tool

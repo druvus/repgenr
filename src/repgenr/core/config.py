@@ -63,7 +63,7 @@ class Config:
             from .. import __version__
 
             return cls(repgenr_version=__version__)
-        with open(path) as fo:
+        with open(path, encoding="utf-8") as fo:
             data = yaml.safe_load(fo) or {}
         stages = {
             name: StageRecord.from_dict(rec or {})

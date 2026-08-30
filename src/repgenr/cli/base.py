@@ -266,4 +266,5 @@ def _read_path_fofn(path: Path) -> list[Path]:
     """Read a file-of-filenames (one path per line; blank lines ignored)."""
     if not path.exists():
         raise UserInputError(f"File not found: {path}")
-    return [Path(line.strip()) for line in path.read_text().splitlines() if line.strip()]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [Path(line.strip()) for line in lines if line.strip()]

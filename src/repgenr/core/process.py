@@ -76,7 +76,7 @@ def run(
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)
     limit = timeout if timeout is not None else _default_timeout()
 
-    out_handle = open(stdout_path, "w") if stdout_path is not None else None
+    out_handle = open(stdout_path, "w", encoding="utf-8") if stdout_path is not None else None
     timer: threading.Timer | None = None
     timed_out = False
     try:
@@ -154,7 +154,7 @@ def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[
     """
     dest_path = Path(dest)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(dest_path, "w") as fo:
+    with open(dest_path, "w", encoding="utf-8") as fo:
         for p in paths:
             fo.write(f"{os.path.abspath(os.fspath(p))}\n")
     return dest_path

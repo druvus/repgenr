@@ -65,5 +65,5 @@ class SnippyTyper(SnpTyper):
         if not core_aln.exists():
             raise WorkdirError("snippy-core did not produce a core alignment (.aln)")
         core_fasta = out_dir / "core_snp.fasta"
-        core_fasta.write_text(core_aln.read_text())
+        core_fasta.write_text(core_aln.read_text(encoding="utf-8"))
         return SnpResult(core_snp_fasta=core_fasta, masked=False)

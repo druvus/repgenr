@@ -97,7 +97,7 @@ def run_select(
 
 def _read_base(path: Path) -> dict[str, dict]:
     base: dict[str, dict] = {}
-    with open(path) as fo:
+    with open(path, encoding="utf-8") as fo:
         next(fo)
         for line in fo:
             f = line.rstrip("\n").split("\t")
@@ -112,7 +112,7 @@ def _read_base(path: Path) -> dict[str, dict]:
 def _read_ncbi(path: Path) -> dict[str, list[dict]]:
     ncbi: dict[str, list[dict]] = {}
     n = len(TAXNAMES_ORDERED)
-    with open(path) as fo:
+    with open(path, encoding="utf-8") as fo:
         next(fo)
         for line in fo:
             f = line.rstrip("\n").split("\t")
@@ -255,7 +255,7 @@ def _filter_by_length(selected, headers, length_range, params: VgenomeParams, lo
 
 
 def _write_record(seq: SeqRecord, dest: Path) -> None:
-    dest.write_text(f">{seq.description}\n{seq.seq}\n")
+    dest.write_text(f">{seq.description}\n{seq.seq}\n", encoding="utf-8")
 
 
 def _write_genomes(ctx, records, sequences, kept, params: VgenomeParams, logger) -> int:

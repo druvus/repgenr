@@ -127,7 +127,7 @@ def _write_base_from_records(path: Path, records) -> None:
         g = by_taxid.setdefault(r.taxid, {"lens": [], "species": r.species, "organism": r.organism})
         g["lens"].append(r.length)
     header = ["taxid", "name", "num", "seq_min", "seq_max", "seq_med", "seq_mean", "description"]
-    with open(path, "w") as fo:
+    with open(path, "w", encoding="utf-8") as fo:
         fo.write("\t".join(header) + "\n")
         for taxid, g in sorted(by_taxid.items(), key=lambda x: len(x[1]["lens"]), reverse=True):
             lens = g["lens"]
@@ -159,7 +159,7 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
         name: {**data, "datasets": sorted(data["datasets"])}
         for name, data in taxnames_data.items()
     }
-    with open(download_wd / "metadata_ncbi_taxnames_data.json", "w") as fo:
+    with open(download_wd / "metadata_ncbi_taxnames_data.json", "w", encoding="utf-8") as fo:
         json.dump(serializable, fo)
 
     # copy human-readable tables to the workdir root with a virus_ prefix
@@ -263,7 +263,7 @@ def _taxnames_data(ncbi_data, missing, taxid_bvbrc) -> dict[str, dict]:
 
 def _write_base(path: Path, base: dict) -> None:
     header = ["taxid", "name", "num", "seq_min", "seq_max", "seq_med", "seq_mean", "description"]
-    with open(path, "w") as fo:
+    with open(path, "w", encoding="utf-8") as fo:
         fo.write("\t".join(header) + "\n")
         for taxid, data in sorted(base.items(), key=lambda x: x[1]["num"], reverse=True):
             row = [
@@ -277,7 +277,7 @@ def _write_ncbi(path: Path, ncbi_data: dict, base: dict) -> None:
     header = ["taxid", "name", "num_with_tag"] + TAXNAMES_ORDERED + [
         f"{x}_taxid" for x in TAXNAMES_ORDERED
     ]
-    with open(path, "w") as fo:
+    with open(path, "w", encoding="utf-8") as fo:
         fo.write("\t".join(header) + "\n")
         ordered = sorted(
             ncbi_data.items(),

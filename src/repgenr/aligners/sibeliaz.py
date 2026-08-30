@@ -132,7 +132,7 @@ def _sibeliaz_invocation(out_dir: Path, logger: logging.Logger) -> list[str]:
     real = shutil.which("sibeliaz")
     if real is None:
         return ["sibeliaz"]
-    script = Path(real).read_text()
+    script = Path(real).read_text(encoding="utf-8")
     if "-printf" not in script:  # already BSD-friendly / unexpected layout
         return ["sibeliaz"]
 
@@ -151,7 +151,7 @@ def _build_seqid_map(genomes) -> dict[str, str]:
     name_map: dict[str, str] = {}
     for genome in genomes:
         stem = genome.stem
-        with open(genome) as fo:
+        with open(genome, encoding="utf-8") as fo:
             for line in fo:
                 if line.startswith(">"):
                     seqid = line[1:].split()[0]

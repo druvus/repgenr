@@ -158,8 +158,8 @@ def fetch(
 
 
 def write_records(path: Path, records: list[VirusRecord]) -> None:
-    path.write_text(json.dumps([asdict(r) for r in records]))
+    path.write_text(json.dumps([asdict(r) for r in records]), encoding="utf-8")
 
 
 def read_records(path: Path) -> list[VirusRecord]:
-    return [VirusRecord(**row) for row in json.loads(path.read_text())]
+    return [VirusRecord(**row) for row in json.loads(path.read_text(encoding="utf-8"))]
