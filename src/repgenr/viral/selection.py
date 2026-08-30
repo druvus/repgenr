@@ -21,12 +21,10 @@ from typing import TYPE_CHECKING
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
-from ..core.plugins import preflight
-from ..treebuilders.mashtree import MashtreeBuilder
+from . import _outgroup
 from ._common import (
     parse_custom_filter,
     parse_targets,
@@ -237,9 +235,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     Returns ``(outgroup_record_or_None, tool_versions)`` so the caller can record
     the resolved mashtree version in provenance.
     """
-    # Container-aware: checks the image when a backend is active, the host
-    # binary otherwise, and runs mashtree wherever the check passed.
-    versions = preflight(MashtreeBuilder.capabilities)
+    versions = _outgroup.preflight_mashtree()
     kept_species = {r.species for r in kept}
     kept_acc = {r.accession for r in kept}
     cand_by_species: dict[str, list] = {}
@@ -255,11 +251,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
         logger.warning("No outgroup candidates found; proceeding without an outgroup.")
         return None, versions
 
-    outgroup_wd = ctx.workdir / "virus_outgroup_wd"
-    if outgroup_wd.exists():
-        shutil.rmtree(outgroup_wd)
-    gdir = outgroup_wd / "genomes"
-    gdir.mkdir(parents=True)
+    outgroup_wd, gdir = _outgroup.prepare_workdir(ctx)
     lo, hi = length_range
     mid = (lo + hi) / 2
     rec_by_acc: dict[str, VirusRecord] = {}
@@ -267,7 +259,9 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     def _emit(prefix: str, recs: list, cap: int) -> None:
         written = 0
         for r in recs:
-            if written >= cap or not (mid * 0.85 <= r.length <= mid * 1.15):
+            if written >= cap or not _outgroup.within_length_tolerance(
+                r.length, mid, _outgroup.RECORDS_LENGTH_TOLERANCE
+            ):
                 continue
             (gdir / f"{prefix}_{r.accession}.fasta").write_text(
                 f">{r.accession}\n{seqs[r.accession].seq}\n"
@@ -283,12 +277,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     if len([f for f in genome_files if f.name.startswith("O_")]) == 0:
         logger.warning("No length-compatible outgroup candidates; proceeding without one.")
         return None, versions
-    matrix = outgroup_wd / "distance_matrix.tsv"
-    run_tool(MashtreeBuilder.capabilities,
-        ["mashtree", "--genomesize", str(int(mid)), "--mindepth", "0",
-         "--outmatrix", matrix, *genome_files],
-        logger=logger, log_prefix="mashtree", stdout_path=outgroup_wd / "mashtree.dnd",
-    )
+    matrix = _outgroup.run_mashtree_matrix(genome_files, int(mid), outgroup_wd, logger)
     label = select_outgroup_from_matrix(matrix, logger) if matrix.exists() else None
     if label is None:
         logger.warning("Could not assign an outgroup; proceeding without one.")
@@ -303,6 +292,5 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     (ctx.outgroup_dir / name).write_text(f">{seqs[acc].description}\n{seqs[acc].seq}\n")
     (ctx.workdir / "outgroup_accession.txt").write_text(og.accession + "\n")
     logger.info("Selected outgroup: %s (%s)", og.accession, og.species)
-    if not params.keep_files:
-        shutil.rmtree(outgroup_wd, ignore_errors=True)
+    _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
     return og, versions

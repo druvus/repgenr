@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-from repgenr.viral import bvbrc, selection
+from repgenr.viral import _outgroup, bvbrc, selection
 from repgenr.viral.bvbrc import _Record
 
 _LOG = logging.getLogger("test")
@@ -43,8 +43,9 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
     from repgenr.viral.ncbi_virus import VirusRecord
 
     calls: list = []
-    monkeypatch.setattr(selection, "run_tool", _fake_run_tool(calls))
-    monkeypatch.setattr(selection, "preflight", lambda caps: {"mashtree": "9.9"})
+    # both back-ends share the mashtree scaffolding in viral._outgroup
+    monkeypatch.setattr(_outgroup, "run_tool", _fake_run_tool(calls))
+    monkeypatch.setattr(_outgroup, "preflight", lambda caps: {"mashtree": "9.9"})
 
     def rec(acc: str, species: str) -> VirusRecord:
         return VirusRecord(
@@ -69,8 +70,8 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
 
 def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) -> None:
     calls: list = []
-    monkeypatch.setattr(bvbrc, "run_tool", _fake_run_tool(calls))
-    monkeypatch.setattr(bvbrc, "preflight", lambda caps: {"mashtree": "9.9"})
+    monkeypatch.setattr(_outgroup, "run_tool", _fake_run_tool(calls))
+    monkeypatch.setattr(_outgroup, "preflight", lambda caps: {"mashtree": "9.9"})
 
     records = [
         _Record(name="S1", bvbrc_id="1.1", taxid="1", description="S1", length=100),
@@ -91,3 +92,10 @@ def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) 
     assert versions == {"mashtree": "9.9"}
     assert [name for name, _ in calls] == ["mashtree"]
     assert (tmp_path / "outgroup_accession.txt").read_text().strip() == "O1"
+
+
+def test_divergent_length_tolerances_stay_divergent() -> None:
+    """The two back-ends' tolerances differ on purpose (see viral/_outgroup.py);
+    unifying them silently changes which genomes existing users get."""
+    assert _outgroup.RECORDS_LENGTH_TOLERANCE == 0.15
+    assert _outgroup.BVBRC_LENGTH_TOLERANCE == 0.10

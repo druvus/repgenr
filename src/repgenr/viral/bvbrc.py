@@ -22,11 +22,9 @@ from typing import TYPE_CHECKING
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.errors import UserInputError, WorkdirError
-from ..core.plugins import preflight
-from ..treebuilders.mashtree import MashtreeBuilder
+from . import _outgroup
 from ._common import (
     parse_custom_filter,
     parse_targets,
@@ -284,14 +282,8 @@ def _determine_outgroup(
     ctx, records, sequences, base, kept, length_range, params: VgenomeParams, logger
 ) -> dict[str, str]:
     """Pick an outgroup via mashtree; return the resolved tool versions."""
-    # Container-aware: checks the image when a backend is active, the host
-    # binary otherwise, and runs mashtree wherever the check passed.
-    versions = preflight(MashtreeBuilder.capabilities)
-    outgroup_wd = ctx.workdir / "virus_outgroup_wd"
-    if outgroup_wd.exists():
-        shutil.rmtree(outgroup_wd)
-    genomes_dir = outgroup_wd / "genomes"
-    genomes_dir.mkdir(parents=True)
+    versions = _outgroup.preflight_mashtree()
+    outgroup_wd, genomes_dir = _outgroup.prepare_workdir(ctx)
 
     candidates = {
         taxid for taxid, meta in base.items()
@@ -311,18 +303,17 @@ def _determine_outgroup(
         if not (rec.taxid in kept or rec.taxid in candidates) or rec.taxid not in base:
             continue
         metric = base[rec.taxid]["seq_med"]
-        if not (metric * 0.9 <= rec.length <= metric * 1.1):
+        if not _outgroup.within_length_tolerance(
+            rec.length, metric, _outgroup.BVBRC_LENGTH_TOLERANCE
+        ):
             continue
         prefix = "S" if rec.taxid in kept else "O"
         _write_record(sequences[rec.name], genomes_dir / f"{prefix}_{rec.name}.fasta")
         written[rec.taxid] = written.get(rec.taxid, 0) + 1
 
-    matrix = outgroup_wd / "distance_matrix.tsv"
     genome_files = sorted(genomes_dir.glob("*.fasta"))
-    run_tool(MashtreeBuilder.capabilities,
-        ["mashtree", "--genomesize", str(int(mean(length_range))), "--mindepth", "0",
-         "--outmatrix", matrix, *genome_files],
-        logger=logger, log_prefix="mashtree", stdout_path=outgroup_wd / "mashtree.dnd",
+    matrix = _outgroup.run_mashtree_matrix(
+        genome_files, int(mean(length_range)), outgroup_wd, logger
     )
     if not matrix.exists():
         raise WorkdirError("mashtree produced no distance matrix; check the installation.")
@@ -338,6 +329,5 @@ def _determine_outgroup(
     if outgroup_id in sequences:
         _write_record(sequences[outgroup_id], ctx.outgroup_dir / f"{outgroup_id}.fasta")
     logger.info("Selected outgroup: %s", outgroup_id)
-    if not params.keep_files:
-        shutil.rmtree(outgroup_wd, ignore_errors=True)
+    _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
     return versions
