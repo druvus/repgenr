@@ -73,13 +73,20 @@ repgenr status -wd $WD     # which stages are done, and what to run next
 
 ### Resume and `--force`
 
-Each stage records its parameters in `repgenr.yaml`; re-running a stage that
-already completed with the same parameters is a safe no-op (it logs that it
-skipped). Change a parameter, or pass `--force`, to re-run it. A stage that
-crashed mid-run has no completion stamp and so always re-runs. If you re-run an
-upstream stage (e.g. `dereplicate --force`) and then a downstream stage whose
-parameters are unchanged, the downstream skip is flagged as potentially stale —
-pass `--force` there too to rebuild against the new inputs.
+Each stage records its parameters, the digests of its inputs, and the container
+identity in `repgenr.yaml`; re-running a stage is a safe no-op only when all
+three are unchanged (it logs that it skipped). Re-running an upstream stage
+(e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
+downstream stage re-runs automatically the next time it is invoked. Change a
+parameter, switch `--container`, or pass `--force` to re-run explicitly. A
+stage that crashed mid-run has no completion stamp and so always re-runs.
+
+Two limitations, both covered by `--force`: input directories are digested from
+file metadata (name, size, mtime), so an in-place edit that preserves size and
+mtime is not detected; and upgrading a natively installed tool binary does not
+invalidate previous results (switching the container backend or platform does).
+Workdirs created by older RepGenR versions re-run each stage once (the
+fingerprint format changed).
 
 Alternatives:
 

@@ -12,7 +12,7 @@ directory; a `WorkdirContext` resolves the canonical path layout, logging, the
 cli/main.py            Typer app; one command per stage
 core/
   context.py           WorkdirContext: paths + services
-  config.py            repgenr.yaml (per-stage tool, params, versions)
+  config.py            repgenr.yaml (per-stage tool, params, versions, resume fingerprint + input digests)
   manifest.py          SQLite genome inventory
   contracts.py         canonical inter-stage file readers/writers
   process.py           subprocess wrapper (no shell, no globs)

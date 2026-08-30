@@ -62,3 +62,37 @@ def test_incomplete_stage_reruns(tmp_path: Path, monkeypatch) -> None:
     cli._run("faketest2", tmp_path, lambda: _P(), create=True)
     cli._run("faketest2", tmp_path, lambda: _P(), create=True)
     assert calls == [1, 1]  # not skipped, because completed was never set
+
+
+def test_registered_input_change_reruns(tmp_path: Path, monkeypatch) -> None:
+    """A stage with a STAGE_INPUTS entry reruns when its input dir changes."""
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    input_dir = tmp_path / "genomes"
+    input_dir.mkdir(parents=True)
+    (input_dir / "g1.fasta").write_text(">g1\nACGT\n", encoding="utf-8")
+    monkeypatch.setitem(cli.STAGE_INPUTS, "faketest", lambda ctx, p: [ctx.genomes_dir])
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # runs
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # unchanged input -> skip
+    assert calls == [1]
+
+    (input_dir / "g2.fasta").write_text(">g2\nACGT\n", encoding="utf-8")
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # new input file -> rerun
+    assert calls == [1, 1]
+
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # stable again -> skip
+    assert calls == [1, 1]
+
+
+def test_unregistered_stage_still_skips_on_params(tmp_path: Path, monkeypatch) -> None:
+    """A stage without a STAGE_INPUTS entry fingerprints on params alone."""
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    assert "faketest" not in cli.STAGE_INPUTS
+
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)
+    assert calls == [1]

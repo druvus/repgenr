@@ -6,6 +6,15 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: resume fingerprints are input-aware.** A completed stage is now
+  skipped only when its parameters, the digests of its inputs (upstream stage
+  outputs, digested from file metadata for genome directories and content for
+  small contract files), and the container identity (backend/platform/wave) are
+  all unchanged. Re-running an upstream stage automatically re-runs downstream
+  stages; the previous timestamp-based "may be stale" warning is removed.
+  Workdirs created by older versions re-run each stage once.
+
 ### Added
 - **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
   data-channel workflow with no shared working directory. Parameter schema
