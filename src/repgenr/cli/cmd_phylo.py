@@ -61,19 +61,10 @@ def phylo(
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
-    from ..aligners.base import registry as _aln_registry
-    from ..snptypers.base import registry as _snp_registry
-    from ..stages.phylo import PhyloParams
-    from ..treebuilders.base import registry as _tb_registry
+    from .param_builders import phylo_params
 
-    def build() -> PhyloParams:
-        _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
-        _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
-        if msa_source == "aligner":
-            _require_choice(aligner, set(_aln_registry.names()), "--aligner")
-        else:
-            _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
-        return PhyloParams(
+    def build():
+        return phylo_params(
             treebuilder=treebuilder,
             msa_source=msa_source,
             aligner=aligner,
@@ -96,14 +87,15 @@ def tree2tax(
     root_name: str = typer.Option("root", "-r", "--root-name", help="Name for the root node."),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
     include_dereplicated: bool = typer.Option(
-        False, "--include-dereplicated", help="List redundant genomes under their representative."
+        True, "--include-dereplicated/--no-include-dereplicated",
+        help="List redundant genomes under their representative.",
     ),
 ) -> None:
     """Emit FlexTaxD-compatible taxonomy relations from the tree."""
-    from ..stages.tree2tax import Tree2taxParams
+    from .param_builders import tree2tax_params
 
-    def build() -> Tree2taxParams:
-        return Tree2taxParams(
+    def build():
+        return tree2tax_params(
             node_basename=node_basename,
             root_name=root_name,
             remove_outgroup=remove_outgroup,

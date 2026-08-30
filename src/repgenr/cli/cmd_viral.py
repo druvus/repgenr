@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from .base import _require_choice, _run, app
+from .base import _run, app
 
 
 def _validate_released_after(value: str | None) -> str | None:
@@ -42,11 +42,10 @@ def vmetadata(
     list_targets: bool = typer.Option(False, "-l", "--list", help="List BV-BRC targets and exit."),
 ) -> None:
     """Retrieve viral metadata from NCBI Virus (default) or BV-BRC."""
-    from ..stages.vmetadata import VmetadataParams
+    from .param_builders import vmetadata_params
 
-    def build() -> VmetadataParams:
-        _require_choice(source, {"ncbi_virus", "bvbrc"}, "--source")
-        return VmetadataParams(
+    def build():
+        return vmetadata_params(
             target=target, filter=filter, list_targets=list_targets,
             source=source, host=host, complete_only=complete_only,
             released_after=released_after,
@@ -79,10 +78,10 @@ def vgenome(
     keep_files: bool = typer.Option(False, "--keep-files"),
 ) -> None:
     """Select and organize viral genomes (virus equivalent of genome)."""
-    from ..stages.vgenome import VgenomeParams
+    from .param_builders import vgenome_params
 
-    def build() -> VgenomeParams:
-        return VgenomeParams(
+    def build():
+        return vgenome_params(
             target_genus=target_genus, target_species=target_species,
             target_serotype=target_serotype, target_custom=target_custom,
             length_all=length_all, length_deviation=length_deviation,

@@ -39,7 +39,9 @@ class Tree2taxParams:
     root_name: str = "root"
     remove_outgroup: bool = False
     all_genomes: bool = False
-    include_dereplicated: bool = False
+    # Default on: the genomes_map deliverable lists redundant genomes under
+    # their representative, matching what `repgenr run` has always produced.
+    include_dereplicated: bool = True
 
 
 @dataclass
