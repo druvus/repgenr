@@ -26,21 +26,38 @@ from .errors import ToolExecutionError, WorkdirError
 
 _DEFAULT_TAIL = 50
 
+_module_logger = logging.getLogger(__name__)
+
+# A malformed REPGENR_SUBPROCESS_TIMEOUT is reported once, not on every
+# subprocess launch.
+_warned_bad_timeout = False
+
 
 def _default_timeout() -> float | None:
     """Global subprocess timeout (seconds) from ``REPGENR_SUBPROCESS_TIMEOUT``.
 
     Unset (the default) means no timeout, preserving prior behavior; operators
-    can cap every external tool with one environment variable.
+    can cap every external tool with one environment variable. A value that is
+    not a positive number is ignored (no timeout) with a single warning.
     """
+    global _warned_bad_timeout
     raw = os.environ.get("REPGENR_SUBPROCESS_TIMEOUT")
     if not raw:
         return None
     try:
         value = float(raw)
     except ValueError:
-        return None
-    return value if value > 0 else None
+        value = -1.0
+    if value > 0:
+        return value
+    if not _warned_bad_timeout:
+        _warned_bad_timeout = True
+        _module_logger.warning(
+            "Ignoring REPGENR_SUBPROCESS_TIMEOUT=%r: expected a positive "
+            "number of seconds; running without a subprocess timeout.",
+            raw,
+        )
+    return None
 
 
 def run(

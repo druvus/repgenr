@@ -109,6 +109,21 @@ def test_run_tool_wraps_when_backend_active(monkeypatch) -> None:
     assert captured["cmd"][-2:] == ["skder", "-h"]
 
 
+@pytest.mark.parametrize("backend", ["none", "docker"])
+def test_run_tool_forwards_timeout(monkeypatch, backend) -> None:
+    configure_container(backend)
+    captured = {}
+
+    def fake_run(command, **kw):
+        captured["timeout"] = kw.get("timeout")
+        return 0
+
+    monkeypatch.setattr(containers.process, "run", fake_run)
+    caps = ToolCapabilities(name="skder", container="img:1")
+    containers.run_tool(caps, ["skder", "-h"], logger=_LOG, timeout=42.0)
+    assert captured["timeout"] == 42.0
+
+
 # --- Wave image minting robustness --------------------------------------------
 
 
