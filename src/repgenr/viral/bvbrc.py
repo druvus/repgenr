@@ -22,12 +22,12 @@ from typing import TYPE_CHECKING
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-from ..core.binaries import check_binaries
+from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.errors import UserInputError, WorkdirError
-from ..core.process import run as run_cmd
+from ..core.plugins import preflight
+from ..treebuilders.mashtree import MashtreeBuilder
 from ._common import (
-    MASHTREE,
     parse_custom_filter,
     parse_targets,
     select_outgroup_from_matrix,
@@ -284,7 +284,9 @@ def _determine_outgroup(
     ctx, records, sequences, base, kept, length_range, params: VgenomeParams, logger
 ) -> dict[str, str]:
     """Pick an outgroup via mashtree; return the resolved tool versions."""
-    versions = check_binaries((MASHTREE,))
+    # Container-aware: checks the image when a backend is active, the host
+    # binary otherwise, and runs mashtree wherever the check passed.
+    versions = preflight(MashtreeBuilder.capabilities)
     outgroup_wd = ctx.workdir / "virus_outgroup_wd"
     if outgroup_wd.exists():
         shutil.rmtree(outgroup_wd)
@@ -317,7 +319,7 @@ def _determine_outgroup(
 
     matrix = outgroup_wd / "distance_matrix.tsv"
     genome_files = sorted(genomes_dir.glob("*.fasta"))
-    run_cmd(
+    run_tool(MashtreeBuilder.capabilities,
         ["mashtree", "--genomesize", str(int(mean(length_range))), "--mindepth", "0",
          "--outmatrix", matrix, *genome_files],
         logger=logger, log_prefix="mashtree", stdout_path=outgroup_wd / "mashtree.dnd",

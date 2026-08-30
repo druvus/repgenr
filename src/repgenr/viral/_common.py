@@ -13,15 +13,10 @@ from pathlib import Path
 from statistics import mean, median, stdev
 from typing import TYPE_CHECKING
 
-from ..core.binaries import BinarySpec
-
 if TYPE_CHECKING:
     import logging
 
     from ..stages.vgenome import VgenomeParams
-
-MASHTREE = BinarySpec("mashtree", version_args=("--version",), min_version="1.2")
-
 
 def parse_custom_filter(kv: str) -> tuple[str, str]:
     """Split one ``--target-custom`` entry into ``(key, value)`` at the first colon.
