@@ -27,6 +27,7 @@ class StageRecord:
     tool_versions: dict[str, str] = field(default_factory=dict)
     completed: str | None = None  # ISO timestamp, set by caller
     fingerprint: str | None = None  # hash of the stage invocation, for resume
+    inputs: dict[str, str] = field(default_factory=dict)  # input path -> digest
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +36,7 @@ class StageRecord:
             "tool_versions": self.tool_versions,
             "completed": self.completed,
             "fingerprint": self.fingerprint,
+            "inputs": self.inputs,
         }
 
     @classmethod
@@ -45,6 +47,7 @@ class StageRecord:
             tool_versions=dict(data.get("tool_versions") or {}),
             completed=data.get("completed"),
             fingerprint=data.get("fingerprint"),
+            inputs=dict(data.get("inputs") or {}),
         )
 
 
@@ -103,12 +106,16 @@ class Config:
         params: dict[str, Any] | None = None,
         tool_versions: dict[str, str] | None = None,
         completed: str | None = None,
+        fingerprint: str | None = None,
+        inputs: dict[str, str] | None = None,
     ) -> StageRecord:
         record = StageRecord(
             tool=tool,
             params=dict(params or {}),
             tool_versions=dict(tool_versions or {}),
             completed=completed,
+            fingerprint=fingerprint,
+            inputs=dict(inputs or {}),
         )
         self.stages[name] = record
         return record
