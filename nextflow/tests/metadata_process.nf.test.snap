@@ -1,0 +1,31 @@
+{
+    "emits selection.tsv, the outgroup accession, and versions": {
+        "content": [
+            {
+                "0": [
+                    "selection.tsv:md5,7c47edc27d1144b5b32721e944955df1"
+                ],
+                "1": [
+                    "outgroup_accession.txt:md5,41a1da4ab52c59b9258b23c01abcc68d"
+                ],
+                "2": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ],
+                "outgroup_accession": [
+                    "outgroup_accession.txt:md5,41a1da4ab52c59b9258b23c01abcc68d"
+                ],
+                "selection": [
+                    "selection.tsv:md5,7c47edc27d1144b5b32721e944955df1"
+                ],
+                "versions": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:16:36.873723",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

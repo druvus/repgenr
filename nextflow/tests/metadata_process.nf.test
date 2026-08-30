@@ -1,0 +1,22 @@
+nextflow_process {
+
+    name "METADATA (stub)"
+    script "../modules/local/dataflow/metadata.nf"
+    tag "stub"
+    process "METADATA"
+    options "-stub"
+
+    test("emits selection.tsv, the outgroup accession, and versions") {
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            with(path(process.out.selection.get(0))) {
+                def lines = readLines()
+                assert lines[0] == 'accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename'
+                assert lines.size() == 4
+                assert lines.count { it.split('\t')[4] == '1' } == 1
+            }
+            assert path(process.out.outgroup_accession.get(0)).text.trim() == 'GCF_000009.1'
+        }
+    }
+}

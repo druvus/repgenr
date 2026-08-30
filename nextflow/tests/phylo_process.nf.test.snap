@@ -1,0 +1,25 @@
+{
+    "emits a Newick tree naming every representative": {
+        "content": [
+            {
+                "0": [
+                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                ],
+                "1": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ],
+                "tree": [
+                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                ],
+                "versions": [
+                    "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
+                ]
+            }
+        ],
+        "timestamp": "2026-08-30T20:17:42.293247",
+        "meta": {
+            "nf-test": "0.9.5",
+            "nextflow": "26.04.3"
+        }
+    }
+}

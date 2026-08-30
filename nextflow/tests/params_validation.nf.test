@@ -1,0 +1,32 @@
+nextflow_pipeline {
+
+    name "Parameter validation (nf-schema)"
+    script "../main.nf"
+    tag "stub"
+
+    test("an unknown mode fails validation before any stage runs") {
+        when {
+            params {
+                mode = 'fungal'
+            }
+        }
+        then {
+            assert !workflow.success
+            assert workflow.stdout.join('\n').contains('mode') ||
+                   workflow.stderr.join('\n').contains('mode')
+        }
+    }
+
+    test("an unknown dereplicator tool fails validation") {
+        when {
+            params {
+                derep_tool = 'nosuchtool'
+            }
+        }
+        then {
+            assert !workflow.success
+            assert workflow.stdout.join('\n').contains('derep_tool') ||
+                   workflow.stderr.join('\n').contains('derep_tool')
+        }
+    }
+}

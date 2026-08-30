@@ -1,0 +1,37 @@
+nextflow_process {
+
+    name "DEREP_MERGE (stub)"
+    script "../modules/local/derep_merge.nf"
+    tag "stub"
+    process "DEREP_MERGE"
+    options "-stub"
+
+    test("merges chunk representatives into one contract directory") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'merged'],
+                    [ file("${projectDir}/nextflow/tests/data/chunk_0") ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            with(process.out.reps.get(0)) {
+                assert get(0).id == 'merged'
+                def dir = get(1)
+                assert path("${dir}/clusters.tsv").exists()
+                assert path("${dir}/genome_status.tsv").exists()
+                def reps = path("${dir}/representatives").list().collect { it.fileName.toString() }.sort()
+                assert reps == ['Fam_g_s_GCA_000001.1.fasta', 'Fam_g_s_GCA_000002.1.fasta']
+                // every representative is listed in the status table
+                def status = path("${dir}/genome_status.tsv").readLines().drop(1)
+                assert status.size() == 2
+                assert status.every { it.endsWith('\trepresentative') }
+            }
+        }
+    }
+}

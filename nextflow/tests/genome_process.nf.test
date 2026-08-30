@@ -1,0 +1,29 @@
+nextflow_process {
+
+    name "GENOME (stub)"
+    script "../modules/local/dataflow/genome.nf"
+    tag "stub"
+    process "GENOME"
+    options "-stub"
+
+    test("materializes every selection row as a genome or outgroup FASTA") {
+        when {
+            process {
+                """
+                input[0] = file("${projectDir}/nextflow/tests/data/selection.tsv")
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            def genomes = [process.out.genomes.get(0)].flatten().collect { file(it).name }.sort()
+            assert genomes == [
+                'Fam_Gen_sp1_GCF_000001.1.fasta',
+                'Fam_Gen_sp2_GCF_000002.1.fasta',
+            ]
+            def outgroup = [process.out.outgroup.get(0)].flatten().collect { file(it).name }
+            assert outgroup == ['Fam_Out_grp_GCF_000009.1.fasta']
+        }
+    }
+}
