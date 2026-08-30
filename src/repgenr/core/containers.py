@@ -126,10 +126,18 @@ def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
         cmd += ["--platform", config.platform]
     import subprocess
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired as exc:
+        raise ToolExecutionError(cmd, -1, output="wave timed out after 600s") from exc
     if proc.returncode != 0:
         raise ToolExecutionError(cmd, proc.returncode, output=proc.stderr.strip())
-    image = proc.stdout.strip().splitlines()[-1].strip()
+    lines = proc.stdout.strip().splitlines()
+    if not lines or not lines[-1].strip():
+        raise ToolExecutionError(
+            cmd, proc.returncode, output="wave returned no image URI on stdout"
+        )
+    image = lines[-1].strip()
     _WAVE_CACHE[conda_spec] = image
     return image
 
