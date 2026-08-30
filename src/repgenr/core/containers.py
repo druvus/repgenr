@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -291,6 +292,7 @@ def run_tool(
     stdout_path: str | os.PathLike[str] | None = None,
     log_prefix: str | None = None,
     extra_mounts: Sequence[str | os.PathLike[str]] = (),
+    timeout: float | None = None,
 ) -> int:
     """Run an adapter's tool command, containerized when a backend is active."""
     config = _CONFIG
@@ -298,7 +300,7 @@ def run_tool(
     if image is None:
         return process.run(
             command, logger=logger, cwd=cwd, env=env, check=check,
-            stdout_path=stdout_path, log_prefix=log_prefix,
+            stdout_path=stdout_path, log_prefix=log_prefix, timeout=timeout,
         )
 
     argv = [str(part) for part in command]
@@ -308,5 +310,35 @@ def run_tool(
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
     return process.run(
         wrapped, logger=logger, cwd=cwd, env=merged_env, check=check,
-        stdout_path=stdout_path, log_prefix=log_prefix or caps.name,
+        stdout_path=stdout_path, log_prefix=log_prefix or caps.name, timeout=timeout,
     )
+
+
+def run_tool_with_retries(
+    caps: ToolCapabilities,
+    command: Sequence[str | os.PathLike[str]],
+    *,
+    logger: logging.Logger,
+    attempts: int = 3,
+    retry_delay: float = 5.0,
+    **kwargs,
+) -> int:
+    """Run a network-dependent tool with exponential-backoff retries.
+
+    For tools like the NCBI datasets CLI that perform their own transfers and
+    have no built-in retry: a transient failure is retried (backoff doubles per
+    attempt); the last failure propagates unchanged.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return run_tool(caps, command, logger=logger, **kwargs)
+        except ToolExecutionError as exc:
+            if attempt == attempts:
+                raise
+            delay = retry_delay * 2 ** (attempt - 1)
+            logger.warning(
+                "%s failed (attempt %d/%d): %s; retrying in %.0fs",
+                caps.name, attempt, attempts, exc, delay,
+            )
+            time.sleep(delay)
+    raise RuntimeError("unreachable")

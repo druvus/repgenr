@@ -13,7 +13,9 @@ transfer never leaves a truncated file that later parses as if complete.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -108,3 +110,44 @@ def download(
     if logger is not None:
         logger.info("Downloaded %s (%d bytes)", dest.name, written)
     return dest
+
+
+_MD5_RE = re.compile(r"^([0-9a-fA-F]{32})\s+\.?/?(.+)$")
+
+
+def verify_md5_manifest(
+    path: Path, manifest_url: str, *, logger: logging.Logger
+) -> bool:
+    """Verify ``path`` against an md5sum-format manifest published beside it.
+
+    Returns True when the checksum matches. An unavailable manifest or a file
+    not listed in it is logged and skipped (False) -- upstream layouts vary --
+    but an actual mismatch raises :class:`WorkdirError`: the download is
+    corrupt and must not be parsed.
+    """
+    try:
+        text = get_text(manifest_url)
+    except WorkdirError as exc:
+        logger.warning("Checksum manifest unavailable (%s); skipping verification", exc)
+        return False
+    expected = None
+    for line in text.splitlines():
+        m = _MD5_RE.match(line.strip())
+        if m and Path(m.group(2)).name == path.name:
+            expected = m.group(1).lower()
+            break
+    if expected is None:
+        logger.warning("%s not listed in %s; skipping verification", path.name, manifest_url)
+        return False
+    digest = hashlib.md5()
+    with open(path, "rb") as fo:
+        for chunk in iter(lambda: fo.read(_CHUNK), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if actual != expected:
+        raise WorkdirError(
+            f"Checksum mismatch for {path.name}: expected {expected}, got {actual}. "
+            "The download is corrupt; delete it and re-run."
+        )
+    logger.info("Checksum verified for %s", path.name)
+    return True

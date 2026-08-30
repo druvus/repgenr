@@ -161,6 +161,14 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
             # retries transient 5xx/429; a 404 for this layout falls through to
             # the next naming scheme.
             http.download(url, dest, logger=logger)
+            try:
+                http.verify_md5_manifest(
+                    dest, base.rsplit("/", 1)[0] + "/MD5SUM.txt", logger=logger
+                )
+            except WorkdirError:
+                # corrupt transfer: remove it so a re-run downloads afresh
+                dest.unlink(missing_ok=True)
+                raise
             return dest
         except WorkdirError as exc:  # try the next naming scheme
             logger.warning("Download failed (%s); trying next target", exc)
