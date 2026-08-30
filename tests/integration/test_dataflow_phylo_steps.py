@@ -25,7 +25,7 @@ _NWK = (
 
 
 def _edges(path: Path) -> set[tuple[str, str]]:
-    return {tuple(line.split("\t")) for line in path.read_text().splitlines()[1:]}  # type: ignore[misc]
+    return {tuple(line.split("\t")) for line in path.read_text(encoding="utf-8").splitlines()[1:]}  # type: ignore[misc]
 
 
 def test_tree2tax_relations_step(tmp_path: Path) -> None:

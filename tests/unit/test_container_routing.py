@@ -29,7 +29,7 @@ def _fake_run_tool(calls: list):
         parts = [str(c) for c in cmd]
         calls.append((caps.name, parts))
         matrix = Path(parts[parts.index("--outmatrix") + 1])
-        matrix.write_text(_MATRIX)
+        matrix.write_text(_MATRIX, encoding="utf-8")
         return 0
 
     return run_tool

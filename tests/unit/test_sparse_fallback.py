@@ -43,7 +43,7 @@ def _failing_sparse_fake(calls: list[str]):
             fofn = Path(parts[parts.index("--from-file") + 1])
             outdir = Path(parts[parts.index("--outdir") + 1])
             outdir.mkdir(parents=True, exist_ok=True)
-            for p in fofn.read_text().splitlines():
+            for p in fofn.read_text(encoding="utf-8").splitlines():
                 (outdir / f"{Path(p).stem}.sig").write_text("sig")
         elif "compare" in parts:
             calls.append("compare")
@@ -51,7 +51,9 @@ def _failing_sparse_fake(calls: list[str]):
             labels = [Path(s).stem for s in fofn.read_text().splitlines()]
             n = len(labels)
             body = "\n".join(",".join("1.0" for _ in range(n)) for _ in range(n))
-            Path(parts[parts.index("--csv") + 1]).write_text(",".join(labels) + "\n" + body + "\n")
+            Path(parts[parts.index("--csv") + 1]).write_text(
+                ",".join(labels) + "\n" + body + "\n", encoding="utf-8"
+            )
         return 0
 
     return run_tool

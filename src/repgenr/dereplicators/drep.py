@@ -117,7 +117,7 @@ def _parse_drep_output(drep_wd: Path, logger: logging.Logger) -> DerepResult:
     clusters_by_id: dict[str, set[str]] = {}
     genome_cluster: dict[str, str] = {}
     cdb = drep_wd / "data_tables" / "Cdb.csv"
-    with open(cdb, newline="") as fo:
+    with open(cdb, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo)
         for row in reader:
             genome = row["genome"]
@@ -162,7 +162,7 @@ def _parse_genome_information(drep_wd: Path, logger: logging.Logger) -> dict[str
         logger.warning("genomeInformation.csv not found; skipping QC status")
         return {}
     out: dict[str, float] = {}
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.reader(fo)
         header = next(reader, None)
         if header is None:

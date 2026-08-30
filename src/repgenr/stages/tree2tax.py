@@ -182,7 +182,7 @@ def _resolve_outgroup_leaf_from(
     if not accession_file.exists() or not outgroup_dir.exists():
         logger.warning("No outgroup available; tree is left unrooted")
         return None
-    accession = accession_file.read_text().strip()
+    accession = accession_file.read_text(encoding="utf-8").strip()
     if not accession:
         logger.warning("No outgroup accession recorded; tree is left unrooted")
         return None

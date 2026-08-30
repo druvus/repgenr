@@ -24,4 +24,4 @@ def write_versions_fragment(path: str | Path, versions: dict[str, str]) -> None:
     """
     lines = [f"    {tool}: {ver}" for tool, ver in sorted(versions.items())]
     text = "\n".join(lines) + "\n" if lines else ""
-    Path(path).write_text(text)
+    Path(path).write_text(text, encoding="utf-8")

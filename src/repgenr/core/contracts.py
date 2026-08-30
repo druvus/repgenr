@@ -111,7 +111,7 @@ class SelectionRow:
 def write_selection(path: Path, rows: list[SelectionRow]) -> None:
     """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as fo:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["accession", "family", "genus", "species", "is_outgroup", "filename"])
         for r in rows:
@@ -124,7 +124,7 @@ def write_selection(path: Path, rows: list[SelectionRow]) -> None:
 def read_selection(path: Path) -> list[SelectionRow]:
     """Read a selection.tsv back into SelectionRow records."""
     rows: list[SelectionRow] = []
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo, delimiter="\t")
         for row in reader:
             rows.append(
@@ -143,7 +143,7 @@ def read_selection(path: Path) -> list[SelectionRow]:
 def write_clusters(path: Path, clusters: dict[str, list[str]]) -> None:
     """Write representative -> members. Each representative also lists itself."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as fo:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["representative", "member"])
         for rep, members in clusters.items():
@@ -156,7 +156,7 @@ def write_clusters(path: Path, clusters: dict[str, list[str]]) -> None:
 def read_clusters(path: Path) -> dict[str, list[str]]:
     """Read representative -> members (members exclude the representative itself)."""
     clusters: dict[str, list[str]] = defaultdict(list)
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.reader(fo, delimiter="\t")
         next(reader, None)  # skip header
         for row in reader:
@@ -171,7 +171,7 @@ def read_clusters(path: Path) -> dict[str, list[str]]:
 
 def write_genome_status(path: Path, status: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as fo:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["genome", "status"])
         for genome, value in sorted(status.items()):
@@ -181,7 +181,7 @@ def write_genome_status(path: Path, status: dict[str, str]) -> None:
 def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
     """Write child -> parent edges (FlexTaxD), de-duplicated, order preserved."""
     seen: set[tuple[str, str]] = set()
-    with open(path, "w", newline="") as fo:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["child", "parent"])
         for child, parent in edges:
@@ -193,7 +193,7 @@ def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
 
 def write_genomes_map(path: Path, mapping: list[tuple[str, str]]) -> None:
     """Write accession -> leaf rows."""
-    with open(path, "w", newline="") as fo:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         for accession, leaf in mapping:
             writer.writerow([accession, leaf])

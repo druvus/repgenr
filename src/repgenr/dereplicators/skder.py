@@ -174,7 +174,7 @@ def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float]]:
             return
         edge_file = matches[0]
 
-    with open(edge_file) as fo:
+    with open(edge_file, encoding="utf-8") as fo:
         for ln, line in enumerate(fo):
             if ln == 0:
                 continue  # header

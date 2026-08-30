@@ -67,7 +67,7 @@ def test_reference_gap_removed(tmp_path: Path) -> None:
 def _read_fasta(path: Path) -> dict[str, str]:
     records: dict[str, str] = {}
     name = None
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith(">"):
             name = line[1:]
             records[name] = ""

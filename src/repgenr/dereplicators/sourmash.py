@@ -354,7 +354,7 @@ def _parse_pairwise_csv(
     introduce a phantom node.
     """
     neighbors: dict[str, set[str]] = {}
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo)
         for row in reader:
             q = row.get("query_name", "")
@@ -414,7 +414,7 @@ def _sparse_greedy_cluster(
 
 
 def _read_compare_csv(path: Path) -> tuple[list[str], npt.NDArray[np.float64]]:
-    with open(path, newline="") as fo:
+    with open(path, encoding="utf-8", newline="") as fo:
         labels = next(csv.reader(fo))
         # Parse the N x N body straight into a contiguous float array. At 1000s of
         # genomes this is far smaller and faster than a Python list-of-lists

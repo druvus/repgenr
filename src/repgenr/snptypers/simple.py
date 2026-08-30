@@ -112,7 +112,7 @@ def _call_one(genome: Path, ref: Path, work: Path, params: SnpParams, logger) ->
 
 def _concat_fasta(path: Path) -> str:
     parts: list[str] = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.startswith(">"):
             parts.append(line.strip())
     return "".join(parts)
@@ -126,7 +126,7 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
     variable_cols = [
         col for col in range(length) if len({s[col] for s in seqs}) > 1
     ]
-    with open(core_fasta, "w") as fo:
+    with open(core_fasta, "w", encoding="utf-8") as fo:
         for name, seq in zip(names, seqs, strict=True):
             snp_seq = "".join(seq[c] for c in variable_cols)
             fo.write(f">{name}\n")
@@ -137,7 +137,7 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
     snp_rows = {
         name: "".join(seqs[i][c] for c in variable_cols) for i, name in enumerate(names)
     }
-    with open(snp_matrix, "w") as fo:
+    with open(snp_matrix, "w", encoding="utf-8") as fo:
         fo.write("\t" + "\t".join(names) + "\n")
         for a in names:
             dists = [
