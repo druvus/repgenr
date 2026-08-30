@@ -110,3 +110,34 @@ def test_bacterial_run_requires_level(dispatched, tmp_path) -> None:
     result = _runner.invoke(app, ["run", "-wd", str(tmp_path), "-tg", "francisella"])
     assert result.exit_code != 0
     assert dispatched == []
+
+
+def test_run_snptype_msa_source_matches_manual_phylo(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
+        "--gtdb-version", "bac120",
+        "--msa-source", "snptype", "--snptyper", "simple", "--treebuilder", "iqtree",
+    ])
+    assert result.exit_code == 0, result.output
+    run_phylo = dict(dispatched)["phylo"]
+    assert (run_phylo.msa_source, run_phylo.snptyper) == ("snptype", "simple")
+    run_fp = _stage_fingerprint("phylo", run_phylo, {}, {})
+    dispatched.clear()
+
+    result = _runner.invoke(app, [
+        "phylo", "-wd", wd, "--msa-source", "snptype", "--snptyper", "simple",
+        "--treebuilder", "iqtree",
+    ])
+    assert result.exit_code == 0, result.output
+    manual_fp = _stage_fingerprint("phylo", dict(dispatched)["phylo"], {}, {})
+    assert manual_fp == run_fp
+
+
+def test_run_bad_msa_source_fails(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, [
+        "run", "-wd", str(tmp_path), "-l", "genus", "-tg", "x",
+        "-r", "232.0", "--gtdb-version", "bac120", "--msa-source", "nosuch",
+    ])
+    assert result.exit_code != 0
+    assert dispatched == []
