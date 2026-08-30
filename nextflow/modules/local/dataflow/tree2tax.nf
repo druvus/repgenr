@@ -23,6 +23,9 @@ process TREE2TAX {
 
     script:
     """
+    # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
+    export REPGENR_PROPAGATE_TOOL_EXIT=1
+
     repgenr ${params.repgenr_opts} tree2tax-relations \\
         --tree ${tree} \\
         --clusters ${reps_dir}/clusters.tsv \\

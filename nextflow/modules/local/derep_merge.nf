@@ -18,6 +18,9 @@ process DEREP_MERGE {
 
     script:
     """
+    # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
+    export REPGENR_PROPAGATE_TOOL_EXIT=1
+
     # One --chunk-dir per staged chunk directory.
     args=""
     for d in chunks/*; do
