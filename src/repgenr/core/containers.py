@@ -46,6 +46,21 @@ class ContainerConfig:
     def active(self) -> bool:
         return self.backend != NATIVE
 
+    def cache_key(self) -> tuple:
+        """Value-based identity for memoization keyed on this config.
+
+        ``id()`` is unsuitable: a reconfigured global config frees the old
+        object, whose address can be reused, yielding stale cache hits.
+        """
+        return (
+            self.backend,
+            self.engine,
+            self.platform,
+            str(self.cache_dir) if self.cache_dir else None,
+            self.wave_enabled,
+            tuple(str(m) for m in self.extra_mounts),
+        )
+
     def engine_binary(self) -> str:
         if self.engine:
             return self.engine
