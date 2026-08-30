@@ -107,3 +107,43 @@ def test_run_tool_wraps_when_backend_active(monkeypatch) -> None:
     assert captured["cmd"][0] == "docker"
     assert "img:1" in captured["cmd"]
     assert captured["cmd"][-2:] == ["skder", "-h"]
+
+
+# --- Wave image minting robustness --------------------------------------------
+
+
+def _wave_caps() -> ToolCapabilities:
+    return ToolCapabilities(name="sourmash", conda=("bioconda::sourmash",))
+
+
+@pytest.fixture()
+def _wave_env(monkeypatch):
+    containers._WAVE_CACHE.clear()
+    monkeypatch.setattr(containers.shutil, "which", lambda name: "/usr/bin/wave")
+    yield
+    containers._WAVE_CACHE.clear()
+
+
+def test_wave_timeout_raises_tool_error(monkeypatch, _wave_env) -> None:
+    import subprocess
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, 600)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = ContainerConfig(backend="docker", wave_enabled=True)
+    with pytest.raises(containers.ToolExecutionError, match="timed out"):
+        resolve_image(_wave_caps(), cfg)
+
+
+def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
+    import subprocess
+    from types import SimpleNamespace
+
+    def fake_run(cmd, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = ContainerConfig(backend="docker", wave_enabled=True)
+    with pytest.raises(containers.ToolExecutionError, match="no image"):
+        resolve_image(_wave_caps(), cfg)
