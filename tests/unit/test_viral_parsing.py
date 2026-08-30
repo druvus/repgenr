@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from repgenr.viral._common import select_outgroup_from_matrix
 from repgenr.viral.bvbrc import _matches, _read_ncbi
 from repgenr.viral.entrez import TAXNAMES_ORDERED, _iter_taxa
@@ -65,3 +67,34 @@ class _NullLogger:
 
     def warning(self, *a, **k):
         pass
+
+
+def test_parse_custom_filter_splits_at_first_colon() -> None:
+    from repgenr.viral._common import parse_custom_filter
+
+    assert parse_custom_filter("host:homo sapiens") == ("host", "homo sapiens")
+    # values may themselves contain colons (e.g. strain names)
+    assert parse_custom_filter("strain:a/wuhan:2019") == ("strain", "a/wuhan:2019")
+
+
+@pytest.mark.parametrize("bad", ["nocolon", ":value", "key:", ":"])
+def test_parse_custom_filter_rejects_malformed(bad: str) -> None:
+    from repgenr.core.errors import UserInputError
+    from repgenr.viral._common import parse_custom_filter
+
+    with pytest.raises(UserInputError, match="target-custom"):
+        parse_custom_filter(bad)
+
+
+def test_bvbrc_custom_filter_value_with_colon(tmp_path: Path) -> None:
+    # A colon inside the value crashed the old split(":") unpacking.
+    import logging
+
+    from repgenr.viral.bvbrc import _Record, _select_by_taxonomy
+
+    records = [_Record(name="r1", bvbrc_id="b1", taxid="11", description="d", length=100)]
+    ncbi = {"11": [{"taxlevelname": "strain", "taxname": "a/wuhan:2019", "taxid": "11"}]}
+    selected, headers = _select_by_taxonomy(
+        records, ncbi, {"custom": ["strain:a/wuhan:2019"]}, logging.getLogger("test")
+    )
+    assert "11" in selected and selected["11"] == {"b1": 100}

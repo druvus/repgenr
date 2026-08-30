@@ -79,3 +79,48 @@ def test_parse_taxon_element_ignores_unexpected_taxid() -> None:
     )
     # 999 was not requested, so the element is ignored (returns None).
     assert _parse_taxon_element(el, ["10535"], ["10535"], {}, _LOG) is None
+
+
+def _xml_for(ids: list[str]) -> str:
+    taxa = "".join(
+        f"<Taxon><TaxId>{i}</TaxId><ScientificName>Virus {i}</ScientificName>"
+        f"<Rank>species</Rank></Taxon>"
+        for i in ids
+    )
+    return f"<TaxaSet>{taxa}</TaxaSet>"
+
+
+def test_sublist_failure_keeps_other_sublists(monkeypatch) -> None:
+    # One sublist erroring must not discard data already parsed from the
+    # others; the retry loop re-requests only the failed taxids.
+    calls: list[list[str]] = []
+
+    def fake_send(ids):
+        ids = list(ids)
+        calls.append(ids)
+        if ids == ["20002"] and len(calls) < 3:
+            raise WorkdirError("throttled")
+        return _xml_for(ids)
+
+    monkeypatch.setattr(entrez, "_send_query", fake_send)
+    monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
+
+    data, missing, _alts = get_taxon_data_from_entrez(
+        ["20001", "20002"], _LOG, num_ids_per_query=1
+    )
+    assert not missing
+    assert data["20001"]["name"] == "Virus 20001"
+    assert data["20002"]["name"] == "Virus 20002"
+    assert calls == [["20001"], ["20002"], ["20002"]]
+
+
+def test_persistent_transport_failure_raises(monkeypatch) -> None:
+    # If a sublist never succeeds, the stage must fail loudly instead of
+    # writing placeholder taxonomy for taxids that were never fetched.
+    def fake_send(ids):
+        raise WorkdirError("connection reset")
+
+    monkeypatch.setattr(entrez, "_send_query", fake_send)
+    monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
+    with pytest.raises(WorkdirError, match="attempts"):
+        get_taxon_data_from_entrez(["30003"], _LOG)

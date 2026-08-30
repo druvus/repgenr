@@ -26,7 +26,12 @@ from ..core.binaries import check_binaries
 from ..core.context import WorkdirContext
 from ..core.errors import UserInputError, WorkdirError
 from ..core.process import run as run_cmd
-from ._common import MASHTREE, parse_targets, select_outgroup_from_matrix
+from ._common import (
+    MASHTREE,
+    parse_custom_filter,
+    parse_targets,
+    select_outgroup_from_matrix,
+)
 from .entrez import TAXNAMES_ORDERED
 
 if TYPE_CHECKING:
@@ -180,15 +185,14 @@ def _open_sequences(fasta: Path, ignore_duplicates: bool) -> Mapping[str, SeqRec
 def _select_by_taxonomy(records: list[_Record], ncbi: dict, targets: dict, logger):
     selected: dict[str, dict[str, int]] = {}
     headers: dict[str, dict[str, str]] = {}
+    custom_pairs = [parse_custom_filter(kv) for kv in targets.get("custom", ())]
     for rec in records:
         ok = True
         for level, values in targets.items():
             if level == "custom":
-                hit = False
-                for kv in values:
-                    key, val = kv.split(":")
-                    if _matches(ncbi, rec.taxid, key, [val]):
-                        hit = True
+                hit = any(
+                    _matches(ncbi, rec.taxid, key, [val]) for key, val in custom_pairs
+                )
                 if not hit:
                     ok = False
             elif not _matches(ncbi, rec.taxid, level, values):

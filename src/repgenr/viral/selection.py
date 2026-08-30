@@ -26,7 +26,12 @@ from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
 from ..core.process import run as run_cmd
-from ._common import MASHTREE, parse_targets, select_outgroup_from_matrix
+from ._common import (
+    MASHTREE,
+    parse_custom_filter,
+    parse_targets,
+    select_outgroup_from_matrix,
+)
 from .ncbi_virus import VirusRecord, read_records
 
 if TYPE_CHECKING:
@@ -128,9 +133,9 @@ def _record_matches(rec, targets: dict[str, list[str]]) -> bool:
             ok = any(_norm(v) in _norm(rec.organism) for v in values)
         elif level == "custom":
             def _custom_ok(kv: str) -> bool:
-                key, _, val = kv.partition(":")
-                return _norm(str(getattr(rec, key.strip(), ""))) == _norm(val)
-            ok = all(_custom_ok(kv) for kv in values if ":" in kv)
+                key, val = parse_custom_filter(kv)
+                return _norm(str(getattr(rec, key, ""))) == _norm(val)
+            ok = all(_custom_ok(kv) for kv in values)
         else:
             ok = False
         if not ok:
