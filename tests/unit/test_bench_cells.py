@@ -56,13 +56,14 @@ def test_derep_matrix_covers_tools_sizes_scenarios():
 def test_command_derep_step_argv(tmp_path):
     set_dir = tmp_path / "set"
     set_dir.mkdir()
-    for name in ("b.fasta", "a.fasta"):
+    for name in ("b.fasta", "a.fasta", "._a.fasta"):  # AppleDouble must be skipped
         (set_dir / name).write_text(">x\nACGT\n", encoding="utf-8")
     work = tmp_path / "work"
     work.mkdir()
     cell = Cell(id="t", kind="derep_step", tool="skder", set_name="clonal_100_clustered")
     argv, out = _command(cell, set_dir, work)
     assert "dereplicate-chunk" in argv
+    assert argv[0].endswith("repgenr")  # console script, not python -m
     assert "--genomes-fofn" in argv
     assert argv[argv.index("--tool") + 1] == "skder"
     fofn = work / "genomes.fofn"

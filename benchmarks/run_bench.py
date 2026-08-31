@@ -43,8 +43,18 @@ def _python() -> str:
     return sys.executable
 
 
+def _repgenr() -> str:
+    """The repgenr console script installed next to the interpreter."""
+    return str(Path(sys.executable).parent / "repgenr")
+
+
+def _fastas(set_dir: Path) -> list[Path]:
+    """Sorted genome FASTAs, skipping macOS AppleDouble ``._*`` files (exFAT)."""
+    return sorted(p for p in set_dir.glob("*.fasta") if not p.name.startswith("."))
+
+
 def _fofn_for(set_dir: Path, work: Path, subset: int | None) -> Path:
-    fastas = sorted(set_dir.glob("*.fasta"))
+    fastas = _fastas(set_dir)
     if subset is not None:
         fastas = fastas[:subset]
     fofn = work / "genomes.fofn"
@@ -56,7 +66,7 @@ def _subset_dir(set_dir: Path, work: Path, subset: int) -> Path:
     """Materialize the first N genomes as copies (sets live on exFAT: no links)."""
     out = work / "genomes_subset"
     out.mkdir(parents=True, exist_ok=True)
-    for p in sorted(set_dir.glob("*.fasta"))[:subset]:
+    for p in _fastas(set_dir)[:subset]:
         target = out / p.name
         if not target.exists():
             shutil.copy2(p, target)
@@ -66,10 +76,11 @@ def _subset_dir(set_dir: Path, work: Path, subset: int) -> Path:
 def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
     """Build the argv for a cell; returns (argv, clusters_tsv_or_out_dir)."""
     py = _python()
+    rg = _repgenr()
     if cell.kind == "derep_step":
         fofn = _fofn_for(set_dir, work, cell.subset)
         out = work / "derep_out"
-        argv = [py, "-m", "repgenr", "dereplicate-chunk",
+        argv = [rg, "dereplicate-chunk",
                 "--genomes-fofn", str(fofn), "-o", str(out),
                 "--tool", cell.tool, "-t", "8", *cell.extra_args]
         return argv, out
@@ -83,9 +94,9 @@ def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
         genomes = wd / "genomes"
         if not genomes.exists():
             genomes.mkdir(parents=True)
-            for p in sorted(set_dir.glob("*.fasta")):
+            for p in _fastas(set_dir):
                 shutil.copy2(p, genomes / p.name)
-        argv = [py, "-m", "repgenr", "--force", "dereplicate", "-wd", str(wd),
+        argv = [rg, "--force", "dereplicate", "-wd", str(wd),
                 "--tool", cell.tool, "-t", "8", *cell.extra_args]
         return argv, wd / "derep"
     if cell.kind == "tree_step":
@@ -93,7 +104,7 @@ def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
             _subset_dir(set_dir, work, cell.subset) if cell.subset is not None else set_dir
         )
         out = work / "phylo_out"
-        argv = [py, "-m", "repgenr", "phylo-build",
+        argv = [rg, "phylo-build",
                 "--genomes-dir", str(genomes_dir), "-o", str(out),
                 "--treebuilder", cell.tool, "--no-outgroup", "-t", "8",
                 *cell.extra_args]
