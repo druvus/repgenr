@@ -164,6 +164,13 @@ def _snp_help() -> str:
     return tool_choices_help(registry, auto=False, prefix="SNP typer: ")
 
 
+def _mask_help() -> str:
+    from ..core.plugins import tool_choices_help
+    from ..maskers.base import registry
+
+    return tool_choices_help(registry, auto=False, prefix="Recombination masking: none, ")
+
+
 def _require_choice(value: str, choices: set[str], label: str) -> None:
     if value not in choices:
         raise UserInputError(

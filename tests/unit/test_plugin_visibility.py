@@ -134,3 +134,81 @@ def test_third_party_adapter_without_run_tool_survives_contract_fixture(
     for name in registry.names():
         module = sys.modules[registry.get(name).__module__]
         monkeypatch.setattr(module, "run_tool", lambda *a, **k: 0, raising=False)
+
+
+def test_masker_family_is_registered() -> None:
+    from repgenr.maskers.base import registry as masker_registry
+
+    assert "gubbins" in masker_registry.names()
+
+
+def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_tool) -> None:
+    """The snptype stage's --mask goes through the masker registry, so a new
+    masker is one adapter + one entry point away."""
+
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.maskers.base import Masker, registry
+    from repgenr.snptypers.base import SnpResult
+    from repgenr.stages import snptype as snptype_mod
+    from repgenr.stages.snptype import SnptypeParams, snptype_core
+
+    class FakeMasker(Masker):
+        capabilities = ToolCapabilities(name="fakemask")
+
+        def mask(self, core_snp_fasta, out_dir, logger):
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / "filtered.fasta"
+            out.write_text(">m\nAC\n", encoding="utf-8")
+            return out
+
+    register_tool(registry, "fakemask", FakeMasker)
+
+    class FakeTyper:
+        requires_reference = False
+
+        def preflight(self):
+            return {}
+
+        def call(self, genomes, ref, out_dir, params, logger):
+            core = out_dir / "raw.fasta"
+            core.write_text(">a\nACGT\n", encoding="utf-8")
+            return SnpResult(core_snp_fasta=core)
+
+    monkeypatch.setattr(
+        snptype_mod.snp_registry, "create", lambda name: FakeTyper()
+    )
+    genomes = [tmp_path / "g1.fasta"]
+    genomes[0].write_text(">g1\nACGT\n", encoding="utf-8")
+    result, versions = snptype_core(
+        genomes, None, tmp_path / "snp", tmp_path / "scratch",
+        SnptypeParams(tool="whatever", mask="fakemask"), logging.getLogger("test"),
+    )
+    assert result.masked is True
+    assert (tmp_path / "snp" / "core_snp.fasta").read_text(encoding="utf-8") == ">m\nAC\n"
+
+
+def test_unknown_masker_lists_available(tmp_path, monkeypatch) -> None:
+    from repgenr.core.errors import PluginError
+    from repgenr.snptypers.base import SnpResult
+    from repgenr.stages import snptype as snptype_mod
+    from repgenr.stages.snptype import SnptypeParams, snptype_core
+
+    class FakeTyper:
+        requires_reference = False
+
+        def preflight(self):
+            return {}
+
+        def call(self, genomes, ref, out_dir, params, logger):
+            core = out_dir / "raw.fasta"
+            core.write_text(">a\nACGT\n", encoding="utf-8")
+            return SnpResult(core_snp_fasta=core)
+
+    monkeypatch.setattr(snptype_mod.snp_registry, "create", lambda name: FakeTyper())
+    genomes = [tmp_path / "g1.fasta"]
+    genomes[0].write_text(">g1\nACGT\n", encoding="utf-8")
+    with pytest.raises(PluginError, match="gubbins"):
+        snptype_core(
+            genomes, None, tmp_path / "snp", tmp_path / "scratch",
+            SnptypeParams(tool="x", mask="nosuchmask"), logging.getLogger("test"),
+        )
