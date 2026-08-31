@@ -78,17 +78,19 @@ def tree_cells() -> list[Cell]:
              subset=(None if n == 1000 else n))
         for n in (100, 500, 1000)
     ]
-    # ML builders need an MSA: subset via the sibeliaz aligner (capped small).
+    # ML builders need an MSA via the sibeliaz aligner. Measured: n=100 times
+    # out at 2 h (whole-genome alignment dominates; recorded as a finding), so
+    # the ML curve is sampled at 20/50 genomes with a 1 h cap.
     cells += [
-        Cell(id="tree-fasttree-balanced-100", kind="tree_step", tool="fasttree",
-             set_name="balanced_1000_clustered", subset=100,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=7200),
-        Cell(id="tree-fasttree-balanced-200", kind="tree_step", tool="fasttree",
-             set_name="balanced_1000_clustered", subset=200,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=7200),
-        Cell(id="tree-iqtree-balanced-100", kind="tree_step", tool="iqtree",
-             set_name="balanced_1000_clustered", subset=100,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=7200),
+        Cell(id="tree-fasttree-balanced-20", kind="tree_step", tool="fasttree",
+             set_name="balanced_1000_clustered", subset=20,
+             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
+        Cell(id="tree-fasttree-balanced-50", kind="tree_step", tool="fasttree",
+             set_name="balanced_1000_clustered", subset=50,
+             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
+        Cell(id="tree-iqtree-balanced-20", kind="tree_step", tool="iqtree",
+             set_name="balanced_1000_clustered", subset=20,
+             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
     ]
     return cells
 

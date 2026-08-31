@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -121,10 +122,20 @@ def _env() -> dict[str, str]:
 
 def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
     start = time.monotonic()
-    proc = subprocess.run(
+    # start_new_session puts the tool and all its children in one process
+    # group, so a timeout kills the whole tree (sibeliaz et al. spawn deep).
+    with subprocess.Popen(
         ["/usr/bin/time", "-l", *argv],
-        capture_output=True, text=True, timeout=timeout_s, env=_env(),
-    )
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=_env(), start_new_session=True,
+    ) as popen:
+        try:
+            stdout, stderr = popen.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            os.killpg(popen.pid, signal.SIGKILL)
+            popen.wait()
+            raise
+    proc = subprocess.CompletedProcess(argv, popen.returncode, stdout, stderr)
     wall = time.monotonic() - start
     log_path.write_text(proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:],
                         encoding="utf-8")
