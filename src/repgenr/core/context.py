@@ -68,6 +68,12 @@ class WorkdirContext:
         return self.workdir / "scratch"
 
     # -- services -------------------------------------------------------------
+    def close(self) -> None:
+        """Release held resources (the manifest's SQLite connection, if opened)."""
+        manifest = self.__dict__.get("manifest")
+        if manifest is not None:
+            manifest.close()
+
     @cached_property
     def manifest(self) -> Manifest:
         return Manifest.open(self.workdir)

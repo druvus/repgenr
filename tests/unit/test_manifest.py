@@ -85,3 +85,52 @@ def test_set_derep_status_many(tmp_path: Path) -> None:
     assert by_acc["GCF_000001.1"].derep_status == "contained"
     assert by_acc["GCF_000001.1"].representative == "GCF_000000.1"
     m.close()
+
+
+def test_replace_genomes_deletes_deselected(tmp_path: Path) -> None:
+    m = Manifest(tmp_path / "m.sqlite")
+    m.upsert_many([
+        GenomeRecord(accession="A1", species="a"),
+        GenomeRecord(accession="A2", species="b"),
+        GenomeRecord(accession="OG", species="og", is_outgroup=True),
+    ])
+    # re-selection keeps A1, drops A2, new outgroup
+    m.replace_genomes([
+        GenomeRecord(accession="A1", species="a"),
+        GenomeRecord(accession="OG2", species="og2", is_outgroup=True),
+    ])
+    accs = {g.accession for g in m.all_genomes(include_outgroup=True)}
+    assert accs == {"A1", "OG2"}
+
+
+def test_set_derep_status_many_clears_stale_rows(tmp_path: Path) -> None:
+    m = Manifest(tmp_path / "m.sqlite")
+    m.upsert_many([
+        GenomeRecord(accession="A1"),
+        GenomeRecord(accession="A2"),
+        GenomeRecord(accession="A3"),
+    ])
+    m.set_derep_status_many([
+        ("A1", "representative", None),
+        ("A2", "contained", "A1"),
+        ("A3", "representative", None),
+    ])
+    # a narrower re-dereplication: A3 no longer appears in the result at all
+    m.set_derep_status_many([
+        ("A1", "representative", None),
+        ("A2", "contained", "A1"),
+    ])
+    by_acc = {g.accession: g for g in m.all_genomes(include_outgroup=True)}
+    assert by_acc["A3"].derep_status is None, "stale representative status cleared"
+    assert by_acc["A3"].representative is None
+    assert by_acc["A1"].derep_status == "representative"
+
+
+def test_manifest_digest_changes_after_reconciliation(tmp_path: Path) -> None:
+    from repgenr.core.inputs import manifest_digest
+
+    m = Manifest(tmp_path / "m.sqlite")
+    m.upsert_many([GenomeRecord(accession="A1"), GenomeRecord(accession="A2")])
+    before = manifest_digest(m)
+    m.replace_genomes([GenomeRecord(accession="A1")])
+    assert manifest_digest(m) != before

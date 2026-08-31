@@ -310,49 +310,56 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
     )
     with stage_errors(logger):
         ctx = WorkdirContext(workdir, logger=logger, create=create)
-        params = build_params()
-        if _is_query_only(stage_name, params):
-            # Pure query (list/preview): run the body, leave the resume record
-            # of the last real run untouched.
-            module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
-            module.run(ctx, params)
-            return
-        # Digested once: upstream inputs are stable while this stage executes,
-        # so the same digests are stamped onto the record after the run.
-        digests = _stage_input_digests(ctx, stage_name, params)
-        fingerprint = _stage_fingerprint(stage_name, params, digests, _env_fragment())
-        prior = ctx.config.stages.get(stage_name)
-        if not _RUN_STATE["force"] and prior is not None and prior.completed:
-            if prior.fingerprint == fingerprint:
-                logger.info(
-                    "Stage '%s' already completed with the same parameters and "
-                    "inputs; skipping (use --force to re-run).", stage_name,
-                )
-                return
-            changed = sorted(
-                key for key in {*prior.inputs, *digests}
-                if prior.inputs.get(key) != digests.get(key)
-            )
-            if changed and prior.inputs:
-                logger.info(
-                    "Stage '%s': input %s changed since last completion; re-running.",
-                    stage_name, ", ".join(f"'{c}'" for c in changed),
-                )
-        if prior is not None and prior.completed:
-            # Dirty the record before the stage body runs: a crash mid-stage
-            # must not leave a completed-looking record over partial outputs.
-            prior.completed = None
-            prior.fingerprint = None
-            ctx.save_config()
+        try:
+            _run_stage(stage_name, ctx, build_params, logger)
+        finally:
+            ctx.close()
+
+
+def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> None:
+    params = build_params()
+    if _is_query_only(stage_name, params):
+        # Pure query (list/preview): run the body, leave the resume record
+        # of the last real run untouched.
         module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
         module.run(ctx, params)
-        # Stamp fingerprint + input digests on the record the stage just wrote,
-        # so the next invocation can skip.
-        record = ctx.config.stages.get(stage_name)
-        if record is not None:
-            record.fingerprint = fingerprint
-            record.inputs = digests
-            ctx.save_config()
+        return
+    # Digested once: upstream inputs are stable while this stage executes,
+    # so the same digests are stamped onto the record after the run.
+    digests = _stage_input_digests(ctx, stage_name, params)
+    fingerprint = _stage_fingerprint(stage_name, params, digests, _env_fragment())
+    prior = ctx.config.stages.get(stage_name)
+    if not _RUN_STATE["force"] and prior is not None and prior.completed:
+        if prior.fingerprint == fingerprint:
+            logger.info(
+                "Stage '%s' already completed with the same parameters and "
+                "inputs; skipping (use --force to re-run).", stage_name,
+            )
+            return
+        changed = sorted(
+            key for key in {*prior.inputs, *digests}
+            if prior.inputs.get(key) != digests.get(key)
+        )
+        if changed and prior.inputs:
+            logger.info(
+                "Stage '%s': input %s changed since last completion; re-running.",
+                stage_name, ", ".join(f"'{c}'" for c in changed),
+            )
+    if prior is not None and prior.completed:
+        # Dirty the record before the stage body runs: a crash mid-stage
+        # must not leave a completed-looking record over partial outputs.
+        prior.completed = None
+        prior.fingerprint = None
+        ctx.save_config()
+    module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
+    module.run(ctx, params)
+    # Stamp fingerprint + input digests on the record the stage just wrote,
+    # so the next invocation can skip.
+    record = ctx.config.stages.get(stage_name)
+    if record is not None:
+        record.fingerprint = fingerprint
+        record.inputs = digests
+        ctx.save_config()
 
 
 def _parse_key_values(items: list[str], label: str) -> dict[str, str]:

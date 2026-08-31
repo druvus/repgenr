@@ -158,3 +158,15 @@ def test_missing_accessions_logged_not_fatal(ctx, monkeypatch, caplog) -> None:
         count = genome.run(ctx, GenomeParams())
     assert count == 2
     assert any("no genome" in r.getMessage() for r in caplog.records)
+
+
+def test_stale_outgroup_files_pruned(ctx, monkeypatch) -> None:
+    """Only the current outgroup remains in outgroup/ after the stage runs."""
+    _fake_run_cmd(monkeypatch)
+    ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
+    stale = ctx.outgroup_dir / "Old_Out_grp_GCF_777777.7.fasta"
+    stale.write_text(">old\nACGT\n", encoding="utf-8")
+
+    genome.run(ctx, GenomeParams())
+    names = sorted(p.name for p in ctx.outgroup_dir.iterdir())
+    assert names == ["Francisellaceae_Francisella_philomiragia_GCF_000010.1.fasta"]
