@@ -57,8 +57,8 @@ Outgroup rooting is handled once in the stage, regardless of the tools chosen.
   directory scans.
 * `process.run` always passes argument vectors and uses file-of-filenames
   instead of shell globs, so large genome sets do not hit `ARG_MAX`.
-* Dereplicators declare `supports_native_scaling`; tools that do not (dRep) are
-  wrapped with two-stage chunking, while skDER/galah/sourmash run directly.
+* Two-stage chunked dereplication is opt-in via `--process-size` for any tool;
+  `supports_native_scaling` only informs auto-selection and log wording.
 * Nextflow provides the actual parallelism and HPC/cloud execution; resource
   labels assign heavy stages (Cactus) to large nodes.
 
