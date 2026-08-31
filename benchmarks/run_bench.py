@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -112,11 +113,17 @@ def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
     raise ValueError(f"unknown cell kind {cell.kind}")
 
 
+def _env() -> dict[str, str]:
+    """Put the conda env's bin first so tool binaries resolve to that env."""
+    env_bin = str(Path(sys.executable).parent)
+    return {**os.environ, "PATH": f"{env_bin}:{os.environ.get('PATH', '')}"}
+
+
 def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
     start = time.monotonic()
     proc = subprocess.run(
         ["/usr/bin/time", "-l", *argv],
-        capture_output=True, text=True, timeout=timeout_s,
+        capture_output=True, text=True, timeout=timeout_s, env=_env(),
     )
     wall = time.monotonic() - start
     log_path.write_text(proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:],
