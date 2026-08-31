@@ -274,4 +274,7 @@ def _download_outgroup(ctx, outgroup, logger) -> None:
     out_path = ctx.outgroup_dir / name
     if out_path.exists():
         _assert_fasta(out_path)
+    # Only the current outgroup may remain: stale outgroups from earlier
+    # selections would otherwise accumulate and could shadow this one.
+    _prune(ctx.outgroup_dir, {name}, ctx.logger)
     zip_path.unlink(missing_ok=True)

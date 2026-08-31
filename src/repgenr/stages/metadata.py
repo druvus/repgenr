@@ -296,7 +296,8 @@ def _pick_outgroup(accessions, selected, target_levels, params):
 
 
 def _populate_manifest(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) -> None:
-    ctx.manifest.upsert_many([*selected, outgroup])
+    # Replace, not upsert: a re-selection must remove de-selected rows.
+    ctx.manifest.replace_genomes([*selected, outgroup])
 
 
 def _write_outgroup_file(ctx, outgroup_acc) -> None:

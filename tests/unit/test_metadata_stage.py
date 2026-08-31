@@ -212,3 +212,14 @@ def test_api_no_rows_raises(tmp_path, monkeypatch) -> None:
     )
     with pytest.raises(UserInputError, match="no genomes"):
         metadata.run(ctx, params)
+
+
+def test_narrower_reselection_shrinks_manifest(tmp_path, gtdb_tsv) -> None:
+    """Re-running metadata with a narrower selection removes de-selected rows."""
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(gtdb_tsv))  # 3 tularensis + outgroup
+    assert len(ctx.manifest.all_genomes(include_outgroup=True)) == 4
+
+    metadata.run(ctx, _params(gtdb_tsv, limit=1))
+    accs = {g.accession for g in ctx.manifest.all_genomes(include_outgroup=True)}
+    assert len(accs) == 2  # one selected + one outgroup, older rows gone

@@ -34,6 +34,8 @@ def configure_logging(
     # always keeps full DEBUG detail, so an unexpected-error traceback is captured
     # in the run log without cluttering the console.
     logger.setLevel(logging.DEBUG)
+    for handler in logger.handlers:
+        handler.close()
     logger.handlers.clear()
     logger.propagate = False
 

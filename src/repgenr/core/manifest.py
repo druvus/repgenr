@@ -147,6 +147,18 @@ class Manifest:
         with self.transaction() as conn:
             conn.executemany(_UPSERT_SQL, [_record_params(r) for r in records])
 
+    def replace_genomes(self, records: list[GenomeRecord]) -> None:
+        """Make the manifest hold exactly ``records``: delete de-selected rows,
+        then upsert, in one transaction. A re-selection (crashed or not) can no
+        longer leave the manifest holding the union of old and new selections."""
+        keep = {r.accession for r in records}
+        with self.transaction() as conn:
+            cur = conn.execute("SELECT accession FROM genomes")
+            stale = [row[0] for row in cur.fetchall() if row[0] not in keep]
+            conn.executemany("DELETE FROM genomes WHERE accession = ?",
+                             [(acc,) for acc in stale])
+            conn.executemany(_UPSERT_SQL, [_record_params(r) for r in records])
+
     def set_derep_status(
         self, accession: str, status: str, representative: str | None = None
     ) -> None:
@@ -157,9 +169,15 @@ class Manifest:
         self, updates: Sequence[tuple[str, str, str | None]]
     ) -> None:
         """Batch derep-status updates (accession, status, representative) in one
-        transaction; avoids one commit per genome on large sets."""
+        transaction; avoids one commit per genome on large sets.
+
+        Statuses are RESET for every row first: a dereplication result
+        describes the whole current genome set, so genomes absent from the new
+        result must not keep a stale 'representative' status from a prior run.
+        """
         rows = [(status, rep, accession) for accession, status, rep in updates]
         with self.transaction() as conn:
+            conn.execute("UPDATE genomes SET derep_status = NULL, representative = NULL")
             conn.executemany(_SET_DEREP_SQL, rows)
 
     def count(self) -> int:

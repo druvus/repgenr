@@ -289,6 +289,10 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
 
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
     name = genome_filename(og.family, og.genus, og.species, og.accession)
+    # Remove outgroups from earlier selections before writing the current one.
+    for stale in ctx.outgroup_dir.iterdir():
+        if stale.is_file() and stale.name != name and not stale.name.startswith("."):
+            stale.unlink()
     (ctx.outgroup_dir / name).write_text(f">{seqs[acc].description}\n{seqs[acc].seq}\n")
     (ctx.workdir / "outgroup_accession.txt").write_text(og.accession + "\n")
     logger.info("Selected outgroup: %s (%s)", og.accession, og.species)
