@@ -6,6 +6,13 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `repgenr doctor`: read-only workdir health check that verifies outputs
+  against the records in `repgenr.yaml` -- interrupted stages, missing or
+  corrupt genomes, manifest drift, representative/cluster mismatches,
+  truncated deliverables, unresolvable outgroups, leftover temp files, and
+  stages whose inputs changed since completion. Exits 1 on failures.
+
 ### Changed
 - **Crash/restart hardening (stage audit)**: a stage that crashes while
   re-running is no longer silently skipped on restart (the resume record is

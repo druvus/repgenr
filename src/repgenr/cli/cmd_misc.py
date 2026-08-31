@@ -1,4 +1,4 @@
-"""Auxiliary commands: status, glance, derep-unpack, derep-stock, list-tools."""
+"""Auxiliary commands: status, doctor, glance, derep-unpack, derep-stock, list-tools."""
 
 from __future__ import annotations
 
@@ -92,6 +92,32 @@ def status(
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
     else:
         typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
+
+
+@app.command()
+def doctor(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+) -> None:
+    """Verify a workdir's outputs against its records (read-only health check).
+
+    `status` reports what repgenr.yaml claims; `doctor` checks the claims
+    against the filesystem and the manifest: interrupted stages, missing or
+    corrupt genomes, manifest drift, representative/cluster mismatches,
+    truncated deliverables, and stages whose inputs changed since completion.
+    Exits 1 when any failure is found.
+    """
+    from ..core.doctor import diagnose
+
+    findings = diagnose(workdir)
+    label = {"ok": "OK  ", "warn": "WARN", "fail": "FAIL"}
+    order = {"fail": 0, "warn": 1, "ok": 2}
+    for f in sorted(findings, key=lambda f: (order[f.level], f.area)):
+        typer.echo(f"[{label[f.level]}] {f.area}: {f.message}")
+    failures = sum(1 for f in findings if f.level == "fail")
+    warnings = sum(1 for f in findings if f.level == "warn")
+    typer.echo(f"\n{failures} failure(s), {warnings} warning(s).")
+    if failures:
+        raise typer.Exit(code=1)
 
 
 @app.command()
