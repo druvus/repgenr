@@ -20,6 +20,7 @@ from Bio import SeqIO
 
 from ..core.context import WorkdirContext
 from ..core.errors import UserInputError, WorkdirError
+from ..core.integrity import looks_like_fasta
 from ..viral.entrez import TAXNAMES_ORDERED, get_taxon_data_from_entrez
 
 BVBRC_FTP = "ftp.bvbrc.org"
@@ -143,7 +144,7 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
     target = params.target.lower()
     download_fa = download_wd / "download.fa"
 
-    if not (download_fa.exists() and download_fa.stat().st_size > 0):
+    if not looks_like_fasta(download_fa):
         _download_group(target, download_fa, logger)
     else:
         logger.info("Group FASTA already present; reusing %s", download_fa)

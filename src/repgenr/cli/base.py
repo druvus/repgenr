@@ -151,7 +151,9 @@ def _require_unit_interval(value: float | None, label: str) -> None:
 # Parameters that change how work is scheduled but not the result, so they are
 # excluded from the resume fingerprint -- changing --threads / --num-processes
 # must not force an otherwise-identical stage to recompute from scratch.
-_NON_RESULT_PARAMS = frozenset({"threads", "num_processes"})
+# allow_incomplete only gates the input-completeness refusal; on complete
+# inputs it changes nothing, so it must not invalidate the resume cache.
+_NON_RESULT_PARAMS = frozenset({"threads", "num_processes", "allow_incomplete"})
 
 
 # Fingerprint format version. Bumping it guarantees fingerprints from older

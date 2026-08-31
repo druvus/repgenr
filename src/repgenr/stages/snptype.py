@@ -21,8 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CORE_SNP_FASTA, atomic_path, list_fasta
+from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
+from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -34,7 +35,20 @@ class SnptypeParams:
     reference: str | None = None
     all_genomes: bool = False
     mask: str = "none"  # none | gubbins
+    allow_incomplete: bool = False
     extra: dict = field(default_factory=dict)
+
+
+def _check_inputs(ctx, all_genomes: bool, allow_incomplete: bool, logger) -> None:
+    if all_genomes:
+        check_genome_completeness(
+            ctx.genomes_dir, ctx.workdir, logger=logger, allow_incomplete=allow_incomplete
+        )
+    else:
+        check_representatives_consistency(
+            ctx.representatives_dir, ctx.derep_dir / CLUSTERS_TSV,
+            logger=logger, allow_incomplete=allow_incomplete,
+        )
 
 
 def snptype_core(
@@ -112,6 +126,7 @@ def snptype_core(
 
 def run(ctx: WorkdirContext, params: SnptypeParams) -> SnpResult:
     logger = ctx.logger
+    _check_inputs(ctx, params.all_genomes, params.allow_incomplete, logger)
     genomes = _genome_set(ctx, params.all_genomes)
     if not genomes:
         raise WorkdirError("No genomes found for SNP typing. Run the genome (and derep) stages.")
