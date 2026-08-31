@@ -11,17 +11,15 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.containers import run_tool
 from ..core.context import WorkdirContext
 from ..core.contracts import list_fasta
-from ..core.errors import WorkdirError
-from ..core.plugins import preflight
-from ..core.process import write_fofn
+from ..core.errors import UserInputError, WorkdirError
 
 
 @dataclass
 class GlanceParams:
     threads: int = 24
+    tool: str = "drep"
     plot_max: float = 1.0
     plot_min: float = 0.0
     keep_files: bool = False
@@ -29,10 +27,20 @@ class GlanceParams:
 
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
-    from ..dereplicators.drep import DrepDereplicator
+    from ..dereplicators.base import Dereplicator, registry
 
-    caps = DrepDereplicator.capabilities
-    preflight(caps)
+    adapter = registry.create(params.tool)
+    if type(adapter).compare is Dereplicator.compare:
+        supporters = sorted(
+            name for name in registry.names()
+            if not registry.is_broken(name)
+            and registry.get(name).compare is not Dereplicator.compare
+        )
+        raise UserInputError(
+            f"Dereplicator '{params.tool}' does not support glance comparisons. "
+            f"Tools with compare support: {', '.join(supporters) or 'none'}."
+        )
+    adapter.preflight()
     genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
@@ -41,26 +49,16 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     if glance_wd.exists():
         shutil.rmtree(glance_wd)
 
-    # Genome paths go through a fofn (dRep accepts a paths file for -g), so a
-    # large set cannot overflow argv; declare the genome dir for the container
-    # backend since the paths are no longer argv tokens.
-    fofn = write_fofn(genomes, ctx.scratch_dir / "glance" / "genomes.fofn")
-    run_tool(caps,
-        ["dRep", "compare", "--SkipSecondary", "-g", fofn,
-         "--processors", str(params.threads), glance_wd],
-        logger=logger, log_prefix="drep", extra_mounts=[str(ctx.genomes_dir)],
-    )
+    result = adapter.compare(genomes, glance_wd, params.threads, logger)
 
-    dendrogram = glance_wd / "figures" / "Primary_clustering_dendrogram.pdf"
     out_pdf = ctx.workdir / "glance_clustering_dendrogram.pdf"
-    if dendrogram.exists():
-        shutil.copy2(dendrogram, out_pdf)
+    if result.dendrogram is not None:
+        shutil.copy2(result.dendrogram, out_pdf)
 
-    mdb = glance_wd / "data_tables" / "Mdb.csv"
-    if mdb.exists():
-        _plot(mdb, ctx.workdir, params, logger)
+    if result.similarity_csv is not None:
+        _plot(result.similarity_csv, ctx.workdir, params, logger)
     else:
-        logger.warning("Mdb.csv not found; skipping plots")
+        logger.warning("No similarity table produced; skipping plots")
 
     if not params.keep_files and glance_wd.exists():
         shutil.rmtree(glance_wd)

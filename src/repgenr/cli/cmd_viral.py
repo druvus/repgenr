@@ -72,6 +72,10 @@ def vgenome(
         help="ncbi_virus: combine an isolate's segments into one genome (segmented viruses).",
     ),
     min_outgroup_genomes: int = typer.Option(5, "--outgroup-candidates-taxid-min-genomes"),
+    outgroup_treebuilder: str = typer.Option(
+        "mashtree", "--outgroup-treebuilder",
+        help="Tree builder used for the outgroup distance matrix.",
+    ),
     glance: bool = typer.Option(False, "--glance", help="Print selection and stop."),
     print_fasta_headers: bool = typer.Option(False, "--print-fasta-headers"),
     ignore_duplicates: bool = typer.Option(False, "--ignore-duplicates"),
@@ -88,6 +92,7 @@ def vgenome(
             length_method=length_method, length_range=length_range, discard=discard,
             no_outgroup=no_outgroup, group_segments=group_segments,
             outgroup_candidates_taxid_min_genomes=min_outgroup_genomes,
+            outgroup_treebuilder=outgroup_treebuilder,
             glance=glance, print_fasta_headers=print_fasta_headers,
             ignore_duplicates=ignore_duplicates, keep_files=keep_files,
         )

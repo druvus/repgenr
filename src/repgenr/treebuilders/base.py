@@ -55,6 +55,23 @@ class TreeBuilder(ABC):
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)
 
+    def distance_matrix(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        params: TreeParams,
+        logger: logging.Logger,
+    ) -> Path:
+        """Optional capability: pairwise distance matrix over ``genomes``.
+
+        Used by the viral outgroup selection. Builders that can emit a matrix
+        override this; the default signals the capability is absent.
+        """
+        raise NotImplementedError(
+            f"Tree builder '{self.capabilities.name}' does not produce a "
+            "distance matrix (no distance_matrix() implementation)."
+        )
+
     @abstractmethod
     def build(
         self,

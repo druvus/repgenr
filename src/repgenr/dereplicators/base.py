@@ -40,6 +40,19 @@ class DerepParams:
 
 
 @dataclass
+class CompareResult:
+    """Output of an all-vs-all comparison (the glance stage's contract).
+
+    ``similarity_csv`` holds pairwise rows with at least the columns
+    ``genome1``, ``genome2``, ``similarity``; ``dendrogram`` is an optional
+    pre-rendered clustering figure.
+    """
+
+    similarity_csv: Path | None = None
+    dendrogram: Path | None = None
+
+
+@dataclass
 class DerepResult:
     """Normalized output every dereplicator must return."""
 
@@ -57,6 +70,23 @@ class Dereplicator(ABC):
     def preflight(self) -> dict[str, str]:
         """Confirm required binaries are present; return resolved versions."""
         return preflight(self.capabilities)
+
+    def compare(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        threads: int,
+        logger: logging.Logger,
+    ) -> CompareResult:
+        """Optional capability: all-vs-all comparison for ``repgenr glance``.
+
+        Adapters that can produce a pairwise similarity table override this;
+        the default signals the capability is absent.
+        """
+        raise NotImplementedError(
+            f"Dereplicator '{self.capabilities.name}' does not support glance "
+            "comparisons (no compare() implementation)."
+        )
 
     @abstractmethod
     def dereplicate(

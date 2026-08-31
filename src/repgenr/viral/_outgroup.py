@@ -27,21 +27,43 @@ import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..core.containers import run_tool
+from ..core.errors import UserInputError
 from ..core.plugins import preflight
-from ..treebuilders.mashtree import MashtreeBuilder
 
 RECORDS_LENGTH_TOLERANCE = 0.15
 BVBRC_LENGTH_TOLERANCE = 0.10
 
 
-def preflight_mashtree() -> dict[str, str]:
-    """Resolve mashtree availability and version.
+def resolve_outgroup_builder(tool: str):
+    """Resolve the tree builder used for the outgroup distance matrix.
+
+    Any registered tree builder implementing ``distance_matrix`` works
+    (``--outgroup-treebuilder``); mashtree is the default.
+    """
+    from ..treebuilders.base import TreeBuilder, registry
+
+    builder = registry.create(tool)
+    if type(builder).distance_matrix is TreeBuilder.distance_matrix:
+        supporters = sorted(
+            name for name in registry.names()
+            if not registry.is_broken(name)
+            and registry.get(name).distance_matrix is not TreeBuilder.distance_matrix
+        )
+        raise UserInputError(
+            f"Tree builder '{tool}' cannot produce the outgroup distance "
+            f"matrix. Tools with distance-matrix support: "
+            f"{', '.join(supporters) or 'none'}."
+        )
+    return builder
+
+
+def preflight_outgroup_builder(builder) -> dict[str, str]:
+    """Resolve the builder's availability and version.
 
     Container-aware: checks the image when a backend is active, the host binary
-    otherwise, and mashtree later runs wherever this check passed.
+    otherwise, and the tool later runs wherever this check passed.
     """
-    return preflight(MashtreeBuilder.capabilities)
+    return preflight(builder.capabilities)
 
 
 def prepare_workdir(ctx) -> tuple[Path, Path]:
@@ -59,23 +81,23 @@ def within_length_tolerance(length: float, center: float, tolerance: float) -> b
     return center * (1 - tolerance) <= length <= center * (1 + tolerance)
 
 
-def run_mashtree_matrix(
+def run_distance_matrix(
+    builder,
     genome_files: Sequence[Path],
     genomesize: int,
     outgroup_wd: Path,
     logger: logging.Logger,
 ) -> Path:
-    """Run mashtree over the staged candidates; return the distance-matrix path.
+    """Run the builder's distance matrix over the staged candidates.
 
     The caller decides how to treat a missing matrix file (warn vs raise).
     """
-    matrix = outgroup_wd / "distance_matrix.tsv"
-    run_tool(MashtreeBuilder.capabilities,
-        ["mashtree", "--genomesize", str(genomesize), "--mindepth", "0",
-         "--outmatrix", matrix, *genome_files],
-        logger=logger, log_prefix="mashtree", stdout_path=outgroup_wd / "mashtree.dnd",
+    from ..treebuilders.base import TreeParams
+
+    return builder.distance_matrix(
+        genome_files, outgroup_wd,
+        TreeParams(extra={"genomesize": genomesize}), logger,
     )
-    return matrix
 
 
 def cleanup_workdir(outgroup_wd: Path, keep_files: bool) -> None:

@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
+import repgenr.treebuilders.mashtree as mashtree_mod
 from repgenr.viral import _outgroup, bvbrc, selection
 from repgenr.viral.bvbrc import _Record
 
@@ -43,8 +44,8 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
     from repgenr.viral.ncbi_virus import VirusRecord
 
     calls: list = []
-    # both back-ends share the mashtree scaffolding in viral._outgroup
-    monkeypatch.setattr(_outgroup, "run_tool", _fake_run_tool(calls))
+    # both back-ends route the matrix through the registered tree builder
+    monkeypatch.setattr(mashtree_mod, "run_tool", _fake_run_tool(calls))
     monkeypatch.setattr(_outgroup, "preflight", lambda caps: {"mashtree": "9.9"})
 
     def rec(acc: str, species: str) -> VirusRecord:
@@ -57,7 +58,10 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
     records = kept + [rec("O1", "SpeciesB")]
     seqs = {"S1": _seq("S1"), "O1": _seq("O1")}
     ctx = SimpleNamespace(workdir=tmp_path, outgroup_dir=tmp_path / "outgroup")
-    params = SimpleNamespace(outgroup_candidates_taxid_min_genomes=1, keep_files=False)
+    params = SimpleNamespace(
+        outgroup_candidates_taxid_min_genomes=1, keep_files=False,
+        outgroup_treebuilder="mashtree",
+    )
 
     og, versions = selection._determine_outgroup_records(
         ctx, records, kept, (90, 110), params, seqs, _LOG
@@ -70,7 +74,7 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
 
 def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) -> None:
     calls: list = []
-    monkeypatch.setattr(_outgroup, "run_tool", _fake_run_tool(calls))
+    monkeypatch.setattr(mashtree_mod, "run_tool", _fake_run_tool(calls))
     monkeypatch.setattr(_outgroup, "preflight", lambda caps: {"mashtree": "9.9"})
 
     records = [
@@ -84,7 +88,10 @@ def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) 
     }
     kept = {"1": {"1.1": 100}}
     ctx = SimpleNamespace(workdir=tmp_path, outgroup_dir=tmp_path / "outgroup")
-    params = SimpleNamespace(outgroup_candidates_taxid_min_genomes=1, keep_files=False)
+    params = SimpleNamespace(
+        outgroup_candidates_taxid_min_genomes=1, keep_files=False,
+        outgroup_treebuilder="mashtree",
+    )
 
     versions = bvbrc._determine_outgroup(
         ctx, records, sequences, base, kept, (90, 110), params, _LOG

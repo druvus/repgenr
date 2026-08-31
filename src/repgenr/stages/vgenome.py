@@ -34,6 +34,7 @@ class VgenomeParams:
     no_outgroup: bool = False
     group_segments: bool = False  # ncbi_virus: combine an isolate's segments into one genome
     outgroup_candidates_taxid_min_genomes: int = 5
+    outgroup_treebuilder: str = "mashtree"  # any builder with distance_matrix support
     glance: bool = False
     print_fasta_headers: bool = False
     ignore_duplicates: bool = False

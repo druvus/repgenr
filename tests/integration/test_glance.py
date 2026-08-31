@@ -1,6 +1,6 @@
 """glance stage: dRep-compare ANI overview.
 
-dRep is not available in CI, so the runner and the binary preflight are
+dRep is not available in CI, so the adapter's runner and preflight are
 monkeypatched: the fake dRep writes the dendrogram and an Mdb.csv into the work
 directory, and the test asserts glance copies the dendrogram out, renders the
 boxplot/histogram from Mdb.csv, and honours --keep-files for the scratch dir.
@@ -14,8 +14,8 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless: no display in CI
 
+import repgenr.dereplicators.drep as drep_mod  # noqa: E402
 from repgenr.core.context import WorkdirContext  # noqa: E402
-from repgenr.stages import glance as glance_mod  # noqa: E402
 from repgenr.stages.glance import GlanceParams  # noqa: E402
 from repgenr.stages.glance import run as glance_run  # noqa: E402
 
@@ -46,8 +46,8 @@ def _setup(workdir: Path) -> WorkdirContext:
 
 def test_glance_happy_path(workdir: Path, monkeypatch) -> None:
     ctx = _setup(workdir)
-    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
-    monkeypatch.setattr(glance_mod, "run_tool", _fake_drep)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
 
     out_pdf = glance_run(ctx, GlanceParams(threads=2))
 
@@ -59,8 +59,8 @@ def test_glance_happy_path(workdir: Path, monkeypatch) -> None:
 
 def test_glance_keep_files(workdir: Path, monkeypatch) -> None:
     ctx = _setup(workdir)
-    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
-    monkeypatch.setattr(glance_mod, "run_tool", _fake_drep)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
 
     glance_run(ctx, GlanceParams(threads=2, keep_files=True))
     assert (ctx.workdir / "glance_wd").exists()  # scratch retained
@@ -74,8 +74,8 @@ def test_glance_passes_fofn(workdir: Path, monkeypatch) -> None:
         captured["cmd"] = [str(c) for c in command]
         return _fake_drep(caps, command, logger=logger, **kwargs)
 
-    monkeypatch.setattr(glance_mod, "preflight", lambda caps: {})
-    monkeypatch.setattr(glance_mod, "run_tool", fake)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", fake)
     glance_run(ctx, GlanceParams())
 
     parts = captured["cmd"]
