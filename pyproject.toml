@@ -98,6 +98,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# repo root on sys.path so audit tooling under benchmarks/ is importable in tests
+pythonpath = ["."]
 markers = [
     "requires_binary: test needs an external bioinformatics binary present on PATH",
 ]
