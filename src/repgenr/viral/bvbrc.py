@@ -283,7 +283,8 @@ def _determine_outgroup(
     ctx, records, sequences, base, kept, length_range, params: VgenomeParams, logger
 ) -> dict[str, str]:
     """Pick an outgroup via mashtree; return the resolved tool versions."""
-    versions = _outgroup.preflight_mashtree()
+    builder = _outgroup.resolve_outgroup_builder(params.outgroup_treebuilder)
+    versions = _outgroup.preflight_outgroup_builder(builder)
     outgroup_wd, genomes_dir = _outgroup.prepare_workdir(ctx)
 
     candidates = {
@@ -313,8 +314,8 @@ def _determine_outgroup(
         written[rec.taxid] = written.get(rec.taxid, 0) + 1
 
     genome_files = sorted(genomes_dir.glob("*.fasta"))
-    matrix = _outgroup.run_mashtree_matrix(
-        genome_files, int(mean(length_range)), outgroup_wd, logger
+    matrix = _outgroup.run_distance_matrix(
+        builder, genome_files, int(mean(length_range)), outgroup_wd, logger
     )
     if not matrix.exists():
         raise WorkdirError("mashtree produced no distance matrix; check the installation.")

@@ -23,6 +23,26 @@ class MashtreeBuilder(TreeBuilder):
     )
     input_kind = InputKind.GENOMES
 
+    def distance_matrix(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        params: TreeParams,
+        logger: logging.Logger,
+    ) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        matrix = out_dir / "distance_matrix.tsv"
+        cmd: list[str | Path] = ["mashtree"]
+        genomesize = params.extra.get("genomesize")
+        if genomesize is not None:
+            cmd += ["--genomesize", str(int(genomesize))]
+        cmd += ["--mindepth", "0", "--outmatrix", matrix, *genomes]
+        run_tool(self.capabilities, cmd,
+            logger=logger, log_prefix="mashtree",
+            stdout_path=out_dir / "mashtree.dnd",
+        )
+        return matrix
+
     def build(
         self,
         msa_or_genomes: Path | Sequence[Path],

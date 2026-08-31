@@ -235,7 +235,8 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     Returns ``(outgroup_record_or_None, tool_versions)`` so the caller can record
     the resolved mashtree version in provenance.
     """
-    versions = _outgroup.preflight_mashtree()
+    builder = _outgroup.resolve_outgroup_builder(params.outgroup_treebuilder)
+    versions = _outgroup.preflight_outgroup_builder(builder)
     kept_species = {r.species for r in kept}
     kept_acc = {r.accession for r in kept}
     cand_by_species: dict[str, list] = {}
@@ -277,7 +278,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     if len([f for f in genome_files if f.name.startswith("O_")]) == 0:
         logger.warning("No length-compatible outgroup candidates; proceeding without one.")
         return None, versions
-    matrix = _outgroup.run_mashtree_matrix(genome_files, int(mid), outgroup_wd, logger)
+    matrix = _outgroup.run_distance_matrix(builder, genome_files, int(mid), outgroup_wd, logger)
     label = select_outgroup_from_matrix(matrix, logger) if matrix.exists() else None
     if label is None:
         logger.warning("Could not assign an outgroup; proceeding without one.")

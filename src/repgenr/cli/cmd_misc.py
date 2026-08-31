@@ -6,7 +6,14 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, PIPELINE_BACTERIAL, PIPELINE_VIRAL, _run, app
+from .base import (
+    DEFAULT_THREADS,
+    PIPELINE_BACTERIAL,
+    PIPELINE_VIRAL,
+    _derep_help,
+    _run,
+    app,
+)
 
 
 @app.command()
@@ -90,6 +97,7 @@ def status(
 @app.command()
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    tool: str = typer.Option("drep", "--tool", help=_derep_help(auto=False)),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     plot_max: float = typer.Option(1.0, "--plot-max"),
     plot_min: float = typer.Option(0.0, "--plot-min"),
@@ -100,7 +108,8 @@ def glance(
 
     def build() -> GlanceParams:
         return GlanceParams(
-            threads=threads, plot_max=plot_max, plot_min=plot_min, keep_files=keep_files
+            tool=tool, threads=threads, plot_max=plot_max, plot_min=plot_min,
+            keep_files=keep_files,
         )
 
     _run("glance", workdir, build)

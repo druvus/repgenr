@@ -27,6 +27,7 @@ from .base import (
     STATUS_CONTAINED,
     STATUS_FAIL_QC,
     STATUS_REPRESENTATIVE,
+    CompareResult,
     Dereplicator,
     DerepParams,
     DerepResult,
@@ -43,6 +44,33 @@ class DrepDereplicator(Dereplicator):
         recommended_max_genomes=2000,
         supports_native_scaling=False,
     )
+
+    def compare(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        threads: int,
+        logger: logging.Logger,
+    ) -> CompareResult:
+        """All-vs-all Mash comparison via ``dRep compare`` (primary ANI only)."""
+        # Genome paths go through a fofn (dRep accepts a paths file for -g), so
+        # a large set cannot overflow argv; declare the genome dirs for the
+        # container backend since the paths are no longer argv tokens.
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+        genome_dirs = sorted({str(g.parent) for g in genomes})
+        compare_wd = out_dir / "drep_compare_wd"
+        run_tool(self.capabilities,
+            ["dRep", "compare", "--SkipSecondary", "-g", fofn,
+             "--processors", str(threads), compare_wd],
+            logger=logger, log_prefix="drep", extra_mounts=genome_dirs,
+        )
+        dendrogram = compare_wd / "figures" / "Primary_clustering_dendrogram.pdf"
+        mdb = compare_wd / "data_tables" / "Mdb.csv"
+        return CompareResult(
+            similarity_csv=mdb if mdb.exists() else None,
+            dendrogram=dendrogram if dendrogram.exists() else None,
+        )
 
     def dereplicate(
         self,

@@ -134,3 +134,26 @@ def test_third_party_adapter_without_run_tool_survives_contract_fixture(
     for name in registry.names():
         module = sys.modules[registry.get(name).__module__]
         monkeypatch.setattr(module, "run_tool", lambda *a, **k: 0, raising=False)
+
+
+def test_glance_rejects_tool_without_compare(tmp_path) -> None:
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.errors import UserInputError
+    from repgenr.stages.glance import GlanceParams
+    from repgenr.stages.glance import run as glance_run
+
+    ctx = WorkdirContext(tmp_path, create=True)
+    ctx.genomes_dir.mkdir()
+    (ctx.genomes_dir / "g.fasta").write_text(">g\nAC\n", encoding="utf-8")
+    with pytest.raises(UserInputError, match="drep"):
+        glance_run(ctx, GlanceParams(tool="skder"))  # skder has no compare()
+
+
+def test_outgroup_builder_must_support_distance_matrix() -> None:
+    from repgenr.core.errors import UserInputError
+    from repgenr.viral._outgroup import resolve_outgroup_builder
+
+    builder = resolve_outgroup_builder("mashtree")
+    assert builder.capabilities.name == "mashtree"
+    with pytest.raises(UserInputError, match="mashtree"):
+        resolve_outgroup_builder("iqtree")  # no distance_matrix support
