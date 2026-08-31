@@ -184,13 +184,10 @@ class SourmashDereplicator(Dereplicator):
         sig_files = sorted(sig_by_genome[g] for g in genomes)
         # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
         compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
-        # --ani converts the matrix to ANI estimates, matching the threshold's
-        # unit (raw Jaccard at k=31 sits far below ANI: ~0.8 at 99.6 pct ANI).
         run_tool(self.capabilities,
             [
                 "sourmash", "compare",
                 "-k", str(ksize),
-                "--ani",
                 "--csv", matrix_csv,
                 "--from-file", compare_fofn,
             ],
@@ -198,9 +195,15 @@ class SourmashDereplicator(Dereplicator):
             log_prefix="sourmash",
         )
 
+        # Convert the Jaccard matrix to ANI estimates so the threshold applies
+        # on the same scale as skder/galah (raw Jaccard at k=31 is ~0.8 for a
+        # 99.6 pct ANI pair). Converting here, rather than via ``compare
+        # --ani``, keeps identical-content pairs at 1.0 even for tiny sketches,
+        # where sourmash's estimator refuses and reports 0.
         labels, sim = _read_compare_csv(matrix_csv)
+        ani = _jaccard_to_ani_matrix(np.asarray(sim, dtype=float), ksize)
         name_by_label = _match_labels_to_genomes(labels, genomes)
-        return _greedy_cluster(labels, sim, name_by_label, threshold)
+        return _greedy_cluster(labels, ani, name_by_label, threshold)
 
     def _sparse_dereplicate(
         self,
@@ -354,6 +357,17 @@ def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bo
         result = False
     _BRANCHWATER_CACHE[key] = result
     return result
+
+
+def _jaccard_to_ani_matrix(sim: npt.NDArray[np.float64], ksize: int) -> npt.NDArray[np.float64]:
+    """Elementwise ANI estimate from a Jaccard similarity matrix.
+
+    Jaccard's containment equivalent is 2j/(1+j); the ANI estimate is its
+    k-th root (the quantity ``sourmash compare --ani`` reports, within 1e-4
+    on real genomes). Zero stays zero.
+    """
+    containment = 2 * sim / (1 + sim)
+    return np.where(sim > 0, containment ** (1.0 / ksize), 0.0)
 
 
 def _parse_pairwise_csv(
