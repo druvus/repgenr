@@ -61,6 +61,12 @@ def status(
         if rec is not None and rec.completed:
             tool = f" [{rec.tool}]" if rec.tool else ""
             typer.echo(f"  [done]    {stage}{tool}  {rec.completed}")
+        elif rec is not None and (rec.params or rec.tool):
+            # A record without a completed stamp but with provenance: the stage
+            # started a (re-)run and did not finish -- its outputs may be partial.
+            typer.echo(f"  [interrupted] {stage}  (crashed mid-run; re-run it)")
+            if next_stage is None:
+                next_stage = stage
         else:
             marker = "next" if next_stage is None else "    "
             typer.echo(f"  [{marker}] {stage}")

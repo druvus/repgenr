@@ -57,3 +57,16 @@ def test_status_all_complete(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
     assert result.exit_code == 0
     assert "All stages complete" in result.stdout
+
+
+def test_status_marks_interrupted_stage(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("metadata", completed="2026-01-01T00:00:00")
+    # dereplicate started a re-run and crashed: provenance present, no stamp
+    cfg.record_stage("genome", tool="datasets", params={"total": 5})
+    cfg.save(tmp_path)
+
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "[interrupted] genome" in result.stdout
+    assert "crashed mid-run" in result.stdout

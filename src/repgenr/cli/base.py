@@ -21,7 +21,7 @@ import typer
 
 from .. import __version__
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, SELECTION_TSV, TREE_NWK
+from ..core.contracts import CLUSTERS_TSV, SELECTION_TSV, TREE_NWK
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
 from ..core.inputs import inputs_digest, manifest_digest
 from ..core.logging import configure_logging
@@ -46,14 +46,15 @@ PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
-    paths = [
+    # snp/core_snp.fasta is deliberately NOT declared for msa_source=snptype:
+    # phylo regenerates it from the same genome set, so declaring it would make
+    # the stage's fingerprint depend on its own output and force a spurious
+    # rerun on every second invocation.
+    return [
         ctx.genomes_dir if getattr(params, "all_genomes", False)
         else ctx.representatives_dir,
         ctx.outgroup_dir,
     ]
-    if getattr(params, "msa_source", "aligner") == "snptype":
-        paths.append(ctx.snp_dir / CORE_SNP_FASTA)
-    return paths
 
 
 def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
@@ -72,7 +73,15 @@ STAGE_INPUTS: dict[str, Any] = {
     "metadata": lambda ctx, p: [],  # network-only
     "vmetadata": lambda ctx, p: [],
     "genome": lambda ctx, p: [ctx.workdir / SELECTION_TSV],
-    "vgenome": lambda ctx, p: [ctx.workdir / SELECTION_TSV],
+    # vgenome WRITES selection.tsv, so its inputs are the vmetadata download
+    # artifacts (records path and legacy BV-BRC tables; absent ones digest to
+    # the stable sentinel).
+    "vgenome": lambda ctx, p: [
+        ctx.workdir / "virus_download_wd" / "download.fa",
+        ctx.workdir / "virus_download_wd" / "virus_records.json",
+        ctx.workdir / "virus_download_wd" / "metadata_base.tsv",
+        ctx.workdir / "virus_download_wd" / "metadata_ncbi.tsv",
+    ],
     "dereplicate": lambda ctx, p: [ctx.genomes_dir],
     "snptype": lambda ctx, p: [
         ctx.genomes_dir if getattr(p, "all_genomes", False) else ctx.representatives_dir
@@ -84,6 +93,23 @@ STAGE_INPUTS: dict[str, Any] = {
 # Stages whose result also depends on the manifest's genome rows (taxonomy,
 # derep status), digested from ordered query results.
 _MANIFEST_INPUT_STAGES = frozenset({"tree2tax"})
+
+# Param flags that turn a stage invocation into a pure query (list/preview
+# modes that write no pipeline outputs). Such invocations bypass the resume
+# machinery entirely: no skip check, no dirty marker, no fingerprint stamp --
+# otherwise a query would either be wrongly skipped or would restamp/dirty the
+# record of the last real run.
+QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
+    "genome": ("accession_list_only",),
+    "vmetadata": ("list_targets",),
+    "vgenome": ("glance",),
+}
+
+
+def _is_query_only(stage_name: str, params: Any) -> bool:
+    return any(
+        getattr(params, flag, False) for flag in QUERY_ONLY_FLAGS.get(stage_name, ())
+    )
 
 
 def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> dict[str, str]:
@@ -285,6 +311,12 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
     with stage_errors(logger):
         ctx = WorkdirContext(workdir, logger=logger, create=create)
         params = build_params()
+        if _is_query_only(stage_name, params):
+            # Pure query (list/preview): run the body, leave the resume record
+            # of the last real run untouched.
+            module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
+            module.run(ctx, params)
+            return
         # Digested once: upstream inputs are stable while this stage executes,
         # so the same digests are stamped onto the record after the run.
         digests = _stage_input_digests(ctx, stage_name, params)
@@ -306,6 +338,12 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
                     "Stage '%s': input %s changed since last completion; re-running.",
                     stage_name, ", ".join(f"'{c}'" for c in changed),
                 )
+        if prior is not None and prior.completed:
+            # Dirty the record before the stage body runs: a crash mid-stage
+            # must not leave a completed-looking record over partial outputs.
+            prior.completed = None
+            prior.fingerprint = None
+            ctx.save_config()
         module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
         module.run(ctx, params)
         # Stamp fingerprint + input digests on the record the stage just wrote,
