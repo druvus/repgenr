@@ -66,6 +66,9 @@ simple = "repgenr.snptypers.simple:SimpleSnpTyper"
 snippy = "repgenr.snptypers.snippy:SnippyTyper"
 parsnp = "repgenr.snptypers.parsnp:ParsnpTyper"
 
+[project.entry-points."repgenr.maskers"]
+gubbins = "repgenr.maskers.gubbins:GubbinsMasker"
+
 [project.entry-points."repgenr.treebuilders"]
 iqtree = "repgenr.treebuilders.iqtree:IqtreeBuilder"
 fasttree = "repgenr.treebuilders.fasttree:FasttreeBuilder"

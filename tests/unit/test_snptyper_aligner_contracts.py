@@ -2,7 +2,7 @@
 
 Same pattern as test_adapter_contracts: a faked ``run_tool`` records argv and
 writes canned tool outputs, so each adapter's real output-parsing runs without
-the binaries. Also covers the gubbins recombination-masking helper.
+the binaries. Also covers the gubbins masker adapter.
 """
 
 from __future__ import annotations
@@ -126,11 +126,10 @@ def recorded(monkeypatch) -> list[list[str]]:
             module = sys.modules[reg.get(name).__module__]
             monkeypatch.setattr(module, "run_tool", fake, raising=False)
     import repgenr.converters.hal_to_maf as h2m
-    import repgenr.snptypers.gubbins as gubbins
+    import repgenr.maskers.gubbins as gubbins
 
     monkeypatch.setattr(h2m, "run_tool", fake)
     monkeypatch.setattr(gubbins, "run_tool", fake)
-    monkeypatch.setattr(gubbins, "preflight", lambda caps: {})
     return calls
 
 
@@ -172,11 +171,11 @@ def test_snptyper_contract(tool, genomes, recorded, tmp_path) -> None:
 
 
 def test_gubbins_masking_returns_filtered_fasta(genomes, recorded, tmp_path) -> None:
-    from repgenr.snptypers.gubbins import mask_recombination
+    from repgenr.maskers.gubbins import GubbinsMasker
 
     core = tmp_path / "core_snp.fasta"
     core.write_text(_CANNED_MSA, encoding="utf-8")
-    filtered = mask_recombination(core, tmp_path / "gubbins_out", _LOG)
+    filtered = GubbinsMasker().mask(core, tmp_path / "gubbins_out", _LOG)
     assert filtered.exists()
     assert filtered.name.endswith(".filtered_polymorphic_sites.fasta")
     assert any(Path(c[0]).name == "run_gubbins.py" for c in recorded)

@@ -99,15 +99,17 @@ def snptype_core(
 
     core = snp_dir / CORE_SNP_FASTA
     masked = False
-    if params.mask == "gubbins":
-        from ..snptypers.gubbins import mask_recombination
+    if params.mask not in ("none", ""):
+        from ..maskers.base import registry as masker_registry
 
-        filtered = mask_recombination(result.core_snp_fasta, scratch / "gubbins", logger)
+        masker = masker_registry.create(params.mask)
+        versions.update(masker.preflight())
+        filtered = masker.mask(
+            result.core_snp_fasta, scratch / params.mask, logger
+        )
         with atomic_path(core) as tmp:
             shutil.copy2(filtered, tmp)
         masked = True
-    elif params.mask not in ("none", ""):
-        raise UserInputError(f"Unknown mask '{params.mask}' (none|gubbins)")
     else:
         with atomic_path(core) as tmp:
             shutil.copy2(result.core_snp_fasta, tmp)
