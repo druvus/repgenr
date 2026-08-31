@@ -21,7 +21,13 @@ from pathlib import Path
 from ..aligners.base import AlignParams
 from ..aligners.base import registry as aligner_registry
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, TREE_NWK, list_fasta, parse_genome_filename
+from ..core.contracts import (
+    CLUSTERS_TSV,
+    TREE_NWK,
+    accession_from_filename,
+    list_fasta,
+    parse_genome_filename,
+)
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import auto_select, scale_warning
@@ -252,9 +258,16 @@ def resolve_outgroup_files(
     if not accession:
         logger.warning("No outgroup accession recorded; proceeding without one")
         return None, None
-    for f in sorted(outgroup_dir.iterdir()):
-        if accession in f.name:
+    candidates = sorted(p for p in outgroup_dir.iterdir() if not p.name.startswith("."))
+    # Exact match on the parsed accession first; a stale file whose name merely
+    # contains the accession must not shadow the intended outgroup.
+    for f in candidates:
+        if accession_from_filename(f.name) == accession:
             logger.info("Using %s as outgroup", f.name)
+            return f, f.stem
+    for f in candidates:
+        if accession in f.name:
+            logger.info("Using %s as outgroup (substring match)", f.name)
             return f, f.stem
     logger.warning("Outgroup accession %s not found in %s", accession, outgroup_dir)
     return None, None
