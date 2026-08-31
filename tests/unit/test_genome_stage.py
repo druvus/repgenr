@@ -158,3 +158,56 @@ def test_missing_accessions_logged_not_fatal(ctx, monkeypatch, caplog) -> None:
         count = genome.run(ctx, GenomeParams())
     assert count == 2
     assert any("no genome" in r.getMessage() for r in caplog.records)
+
+
+def test_html_download_not_shipped_and_recorded_missing(ctx, monkeypatch) -> None:
+    """A non-FASTA body (HTML error page) is never moved into genomes/ and the
+    accession lands in missing_accessions.txt instead of failing the stage."""
+    from repgenr.core.contracts import MISSING_ACCESSIONS_TXT
+
+    def fake(cmd, *, logger, **kw):
+        cmd = [str(c) for c in cmd]
+        if "--dehydrated" in cmd:
+            acc_file = Path(cmd[cmd.index("--inputfile") + 1])
+            zip_path = Path(cmd[cmd.index("--filename") + 1])
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                zf.writestr("README.md", acc_file.read_text(encoding="utf-8"))
+        elif cmd[:2] == ["datasets", "rehydrate"]:
+            extract = Path(cmd[cmd.index("--directory") + 1])
+            readme = extract / "README.md"
+            for i, acc in enumerate(readme.read_text(encoding="utf-8").splitlines()):
+                if not acc:
+                    continue
+                fna = extract / "data" / acc / f"{acc}_genomic.fna"
+                fna.parent.mkdir(parents=True, exist_ok=True)
+                # first accession downloads fine; second is an HTML error page
+                body = b">seq\nACGT\n" if i == 0 else b"<html>error</html>"
+                fna.write_bytes(body)
+        elif cmd[:3] == ["datasets", "download", "genome"]:
+            zip_path = Path(cmd[cmd.index("--filename") + 1])
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                zf.writestr("data/GCF_000010.1/x.fna", b">seq\nACGT\n")
+        return 0
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    count = genome.run(ctx, GenomeParams())
+    assert count == 2
+    names = sorted(p.name for p in ctx.genomes_dir.iterdir())
+    assert names == ["Francisellaceae_Francisella_tularensis_GCF_000001.1.fasta"]
+    missing = (ctx.workdir / MISSING_ACCESSIONS_TXT).read_text(encoding="utf-8")
+    assert "GCF_000002.1" in missing
+
+
+def test_present_html_file_is_redownloaded(ctx, monkeypatch) -> None:
+    """An HTML file left at a genome path by a crashed run is re-downloaded,
+    not accepted as already present."""
+    calls = _fake_run_cmd(monkeypatch)
+    ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
+    bad = ctx.genomes_dir / "Francisellaceae_Francisella_tularensis_GCF_000001.1.fasta"
+    bad.write_text("<html>Service unavailable</html>", encoding="utf-8")
+
+    genome.run(ctx, GenomeParams())
+    assert bad.read_text(encoding="utf-8").startswith(">"), "bad file replaced"
+    acc_list = (ctx.workdir / "ncbi_acc_download_list.txt").read_text(encoding="utf-8")
+    assert "GCF_000001.1" in acc_list
+    assert any("--dehydrated" in c for c in calls)

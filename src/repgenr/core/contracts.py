@@ -36,6 +36,9 @@ CORE_SNP_FASTA = "core_snp.fasta"
 TREE_NWK = "tree.nwk"
 TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
+# Accessions the genome stage requested but NCBI returned nothing for;
+# the completeness guard excuses them (core.integrity).
+MISSING_ACCESSIONS_TXT = "missing_accessions.txt"
 
 
 # Recognised genome FASTA extensions, longest-first so suffix stripping is

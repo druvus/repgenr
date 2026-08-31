@@ -21,8 +21,9 @@ from pathlib import Path
 from ..aligners.base import AlignParams
 from ..aligners.base import registry as aligner_registry
 from ..core.context import WorkdirContext
-from ..core.contracts import TREE_NWK, list_fasta, parse_genome_filename
+from ..core.contracts import CLUSTERS_TSV, TREE_NWK, list_fasta, parse_genome_filename
 from ..core.errors import UserInputError, WorkdirError
+from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
@@ -42,6 +43,7 @@ class PhyloParams:
     threads: int = 16
     bootstrap: int = 0
     reference: str | None = None
+    allow_incomplete: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -176,6 +178,16 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
 
 def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     logger = ctx.logger
+    if params.all_genomes:
+        check_genome_completeness(
+            ctx.genomes_dir, ctx.workdir, logger=logger,
+            allow_incomplete=params.allow_incomplete,
+        )
+    else:
+        check_representatives_consistency(
+            ctx.representatives_dir, ctx.derep_dir / CLUSTERS_TSV,
+            logger=logger, allow_incomplete=params.allow_incomplete,
+        )
     genomes = _genome_set(ctx, params.all_genomes)
     if not genomes:
         raise WorkdirError(
