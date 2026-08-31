@@ -17,6 +17,10 @@ def snptype(
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    allow_incomplete: bool = typer.Option(
+        False, "--allow-incomplete",
+        help="Proceed with a warning when the input genome set is incomplete.",
+    ),
 ) -> None:
     """Call SNPs and build a core-SNP alignment."""
     from ..snptypers.base import registry as _snp_registry
@@ -31,6 +35,7 @@ def snptype(
             reference=reference,
             all_genomes=all_genomes,
             mask=mask,
+            allow_incomplete=allow_incomplete,
         )
 
     _run("snptype", workdir, build)
@@ -59,6 +64,10 @@ def phylo(
         "or seed_weight=11 (progressivemauve).",
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    allow_incomplete: bool = typer.Option(
+        False, "--allow-incomplete",
+        help="Proceed with a warning when the input genome set is incomplete.",
+    ),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
     from .param_builders import phylo_params
@@ -75,6 +84,7 @@ def phylo(
             reference=reference,
             threads=threads,
             extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+            allow_incomplete=allow_incomplete,
         )
 
     _run("phylo", workdir, build)

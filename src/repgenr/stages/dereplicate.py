@@ -27,6 +27,7 @@ from ..core.contracts import (
 )
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
+from ..core.integrity import check_genome_completeness
 from ..core.plugins import auto_select, scale_warning
 from ..core.process import link_or_copy
 from ..dereplicators.base import DerepParams, DerepResult, registry
@@ -56,10 +57,16 @@ class DereplicateParams:
     # near this count (re-runs dereplication per search step).
     target_reps: int = 0
     extra: dict | None = None
+    # Proceed on a partial genome set with a warning instead of refusing.
+    allow_incomplete: bool = False
 
 
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     logger = ctx.logger
+    check_genome_completeness(
+        ctx.genomes_dir, ctx.workdir, logger=logger,
+        allow_incomplete=params.allow_incomplete,
+    )
     genomes = _list_genomes(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(

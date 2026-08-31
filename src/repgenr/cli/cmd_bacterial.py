@@ -95,6 +95,10 @@ def dereplicate(
         "(0 = off; re-runs dereplication per search step).",
     ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    allow_incomplete: bool = typer.Option(
+        False, "--allow-incomplete",
+        help="Proceed with a warning when genomes/ is missing selected genomes.",
+    ),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
     from .param_builders import dereplicate_params
@@ -113,6 +117,7 @@ def dereplicate(
             reduce=reduce,
             target_reps=target_reps,
             extra={"virus": virus} if virus else {},
+            allow_incomplete=allow_incomplete,
         )
 
     _run("dereplicate", workdir, build)

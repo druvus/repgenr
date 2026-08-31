@@ -15,10 +15,11 @@ def test_download_splits_into_fixed_size_batches(monkeypatch, tmp_path: Path) ->
     monkeypatch.setattr(genome, "_DOWNLOAD_BATCH_SIZE", 5)
     # hermetic: the real free-disk guard must not fail this test on a full host
     monkeypatch.setattr(genome, "_check_disk", lambda scratch, n, logger: None)
-    monkeypatch.setattr(
-        genome, "_download_one_batch",
-        lambda batch, filenames, dest_dir, scratch_dir, logger, keep_files, bi: seen.append(batch),
-    )
+    def fake_batch(batch, filenames, dest_dir, scratch_dir, logger, keep_files, bi):
+        seen.append(batch)
+        return []  # no missing accessions
+
+    monkeypatch.setattr(genome, "_download_one_batch", fake_batch)
     accs = [f"GCF_{i:03d}.1" for i in range(12)]
     genome.download_accessions(
         accs, {}, tmp_path / "dest", tmp_path / "scratch", _LOG, keep_files=False

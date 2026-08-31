@@ -18,8 +18,9 @@ from ..core import process
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool_with_retries
 from ..core.context import WorkdirContext
-from ..core.contracts import FASTA_SUFFIXES, genome_filename
+from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, genome_filename
 from ..core.errors import WorkdirError
+from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
@@ -63,10 +64,11 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     # Drop genome files that are no longer selected.
     _prune(ctx.genomes_dir, set(filenames.values()), logger)
 
+    # A present file only counts when it plausibly holds FASTA data: an HTML
+    # error page left behind by a crashed run must be re-downloaded, not shipped.
     to_download = [
         acc for acc, name in filenames.items()
-        if not (ctx.genomes_dir / name).exists()
-        or (ctx.genomes_dir / name).stat().st_size == 0
+        if not looks_like_fasta(ctx.genomes_dir / name)
     ]
     logger.info(
         "%d to download, %d already present", len(to_download), len(selected) - len(to_download)
@@ -78,10 +80,17 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
         logger.info("Accession list written; stopping (--accession-list-only)")
         return 0
 
+    missing: list[str] = []
     if to_download:
-        download_accessions(
-            to_download, filenames, ctx.genomes_dir, ctx.workdir, logger, params.keep_files
+        missing = download_accessions(
+            to_download, filenames, ctx.genomes_dir, ctx.scratch_dir / "genome_download",
+            logger, params.keep_files,
         )
+    # Record accessions NCBI returned nothing for, so downstream completeness
+    # checks can excuse them (and a re-run retries them).
+    (ctx.workdir / MISSING_ACCESSIONS_TXT).write_text(
+        "".join(f"{acc}\n" for acc in sorted(missing)), encoding="utf-8"
+    )
 
     if outgroup:
         _download_outgroup(ctx, outgroup[0], logger)
@@ -158,8 +167,10 @@ def download_accessions(
     scratch_dir: Path,
     logger,
     keep_files: bool = False,
-) -> None:
+) -> list[str]:
     """Download genomes in fixed-size sub-batches into ``dest_dir``.
+
+    Returns the accessions no genome came back for.
 
     Each sub-batch is downloaded, rehydrated, and moved into ``dest_dir``
     independently, so a failure loses only one batch and a re-run resumes (the
@@ -174,16 +185,20 @@ def download_accessions(
     total = len(accessions)
     _check_disk(scratch_dir, total, logger)
     n_batches = (total + _DOWNLOAD_BATCH_SIZE - 1) // _DOWNLOAD_BATCH_SIZE
+    missing: list[str] = []
     for bi, start in enumerate(range(0, total, _DOWNLOAD_BATCH_SIZE)):
         batch = accessions[start : start + _DOWNLOAD_BATCH_SIZE]
         logger.info("Download batch %d/%d (%d accessions)", bi + 1, n_batches, len(batch))
-        _download_one_batch(batch, filenames, dest_dir, scratch_dir, logger, keep_files, bi)
+        missing += _download_one_batch(
+            batch, filenames, dest_dir, scratch_dir, logger, keep_files, bi
+        )
+    return missing
 
 
 def _download_one_batch(
     batch: list[str], filenames: dict[str, str], dest_dir: Path, scratch_dir: Path,
     logger, keep_files: bool, bi: int,
-) -> None:
+) -> list[str]:
     acc_file = scratch_dir / f"ncbi_acc_batch{bi}.txt"
     acc_file.write_text("\n".join(batch))
     zip_path = scratch_dir / f"ncbi_download_{bi}.zip"
@@ -208,9 +223,17 @@ def _download_one_batch(
     for fna in extract.rglob("*.fna"):
         name = filenames.get(fna.parent.name)
         if name:
+            # Validate BEFORE moving into genomes/: a non-FASTA body (HTML error
+            # page served with HTTP 200) must never land at a genome path, where
+            # a re-run would accept it as already present.
+            if not looks_like_fasta(fna):
+                logger.warning(
+                    "Discarding non-FASTA download for %s (error page?)", fna.parent.name
+                )
+                fna.unlink(missing_ok=True)
+                continue
             target = dest_dir / name
             shutil.move(str(fna), str(target))
-            _assert_fasta(target)
             produced.add(fna.parent.name)
 
     missing = [acc for acc in batch if acc not in produced]
@@ -224,6 +247,7 @@ def _download_one_batch(
         zip_path.unlink(missing_ok=True)
         acc_file.unlink(missing_ok=True)
         shutil.rmtree(extract, ignore_errors=True)
+    return missing
 
 
 def _download_outgroup(ctx, outgroup, logger) -> None:

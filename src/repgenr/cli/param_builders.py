@@ -109,6 +109,7 @@ def dereplicate_params(
     reduce: Any = _UNSET,
     target_reps: Any = _UNSET,
     extra: Any = _UNSET,
+    allow_incomplete: Any = _UNSET,
 ) -> DereplicateParams:
     from ..core.errors import UserInputError
     from ..dereplicators.base import registry as _derep_registry
@@ -133,6 +134,7 @@ def dereplicate_params(
         threads=threads, process_size=process_size, num_processes=num_processes,
         pre_primary_ani=pre_primary_ani, pre_secondary_ani=pre_secondary_ani,
         reduce=reduce, target_reps=target_reps, extra=extra,
+        allow_incomplete=allow_incomplete,
     )
 
 
@@ -148,6 +150,7 @@ def phylo_params(
     reference: Any = _UNSET,
     threads: Any = _UNSET,
     extra: Any = _UNSET,
+    allow_incomplete: Any = _UNSET,
 ) -> PhyloParams:
     from ..aligners.base import registry as _aln_registry
     from ..snptypers.base import registry as _snp_registry
@@ -167,6 +170,7 @@ def phylo_params(
         PhyloParams, treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,
         snptyper=snptyper, all_genomes=all_genomes, no_outgroup=no_outgroup,
         bootstrap=bootstrap, reference=reference, threads=threads, extra=extra,
+        allow_incomplete=allow_incomplete,
     )
 
 
