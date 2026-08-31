@@ -17,6 +17,10 @@ from ..core.process import write_fofn
 from ..tree.newick import neighbor_joining
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
+# Measured (docs/scaling-audit.md): the pure-Python NJ is ~30 s of the 142 s
+# total at n=1000 and cubic beyond; refuse sizes that extrapolate to hours.
+_NJ_MAX_GENOMES = 5000
+
 
 class SourmashBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
@@ -27,7 +31,7 @@ class SourmashBuilder(TreeBuilder):
             BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
         ),
         default_params={"ksize": 31, "scaled": 1000},
-        recommended_max_genomes=10000,
+        recommended_max_genomes=2000,
     )
     input_kind = InputKind.GENOMES
 
@@ -39,6 +43,14 @@ class SourmashBuilder(TreeBuilder):
         logger: logging.Logger,
     ) -> Path:
         genomes = as_genome_list(msa_or_genomes)
+        if len(genomes) > _NJ_MAX_GENOMES:
+            raise WorkdirError(
+                f"The sourmash tree builder runs a pure-Python O(n^3) neighbor "
+                f"joining; {len(genomes)} genomes extrapolate to many hours "
+                f"(measured fit: ~1.6 h at 5000, ~12 h at 10000). Use a tool "
+                f"built for this size (e.g. --treebuilder mashtree), or "
+                f"dereplicate further first."
+            )
         out_dir.mkdir(parents=True, exist_ok=True)
         ksize = parse_extra_int(params.extra, "ksize", self.capabilities.default_params["ksize"])
         scaled = parse_extra_int(params.extra, "scaled", self.capabilities.default_params["scaled"])

@@ -183,6 +183,31 @@ def unzip(zip_path: str | os.PathLike[str], dest: str | os.PathLike[str]) -> Non
         ) from exc
 
 
+# Close to the common ARG_MAX of 1 MiB (macOS and most Linux configurations);
+# execve also counts the environment, so warn with headroom.
+_ARGV_BYTES_WARN = 900_000
+
+
+def warn_argv_bytes(
+    tool: str, argv: Sequence[str | os.PathLike[str]], logger: logging.Logger
+) -> None:
+    """Warn when an argv's byte size approaches the OS ARG_MAX limit.
+
+    Some tools take every genome path on argv (mashtree, sibeliaz,
+    snippy-core); at thousands of genomes the exec can fail with E2BIG.
+    Use before run_tool for such invocations. Reduce the set (dereplicate
+    first, or --process-size for dereplication) when the warning fires.
+    """
+    total = sum(len(os.fsencode(os.fspath(a))) + 1 for a in argv)
+    if total >= _ARGV_BYTES_WARN:
+        logger.warning(
+            "%s receives ~%d KB across %d command-line arguments; the OS "
+            "ARG_MAX limit (commonly 1 MB) may be exceeded and the tool may "
+            "fail to launch. Reduce the genome set per call.",
+            tool, total // 1000, len(argv),
+        )
+
+
 def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[str]) -> Path:
     """Write a file-of-filenames (one absolute path per line) and return its path.
 

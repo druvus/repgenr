@@ -1,0 +1,141 @@
+"""Scale-diagnostics guards found by the scaling audit (docs/scaling-audit.md)."""
+
+from __future__ import annotations
+
+import logging
+
+import pytest
+
+from repgenr.core.errors import WorkdirError
+from repgenr.core.process import warn_argv_bytes
+from repgenr.dereplicators.base import (
+    STATUS_CONTAINED,
+    STATUS_REPRESENTATIVE,
+    DerepParams,
+    DerepResult,
+)
+from repgenr.stages.dereplicate import DereplicateParams, _search_target_reps
+from repgenr.stages.genome import _timeout_for
+
+_LOGGER = logging.getLogger("scale-diagnostics")
+
+
+# --- argv byte preflight ------------------------------------------------------
+
+
+def test_warn_argv_bytes_warns_near_arg_max(caplog):
+    argv = ["tool", *[f"/data/genomes/genome_{i:06d}.fasta" for i in range(40000)]]
+    with caplog.at_level(logging.WARNING):
+        warn_argv_bytes("mashtree", argv, _LOGGER)
+    assert any("ARG_MAX" in rec.message for rec in caplog.records)
+
+
+def test_warn_argv_bytes_quiet_for_small_argv(caplog):
+    with caplog.at_level(logging.WARNING):
+        warn_argv_bytes("mashtree", ["tool", "a.fasta", "b.fasta"], _LOGGER)
+    assert not caplog.records
+
+
+def test_mashtree_build_preflights_argv(tmp_path, monkeypatch, caplog):
+    from repgenr.treebuilders import mashtree as mt
+
+    monkeypatch.setattr(mt, "run_tool", lambda *a, **k: None)
+    genomes = [tmp_path / f"very/long/prefix/genome_{i:06d}.fasta" for i in range(40000)]
+    adapter = mt.MashtreeBuilder()
+    from repgenr.treebuilders.base import TreeParams
+
+    with caplog.at_level(logging.WARNING):
+        adapter.build(genomes, tmp_path / "out", TreeParams(threads=2), _LOGGER)
+    assert any("ARG_MAX" in rec.message for rec in caplog.records)
+
+
+# --- sourmash dense memory message --------------------------------------------
+
+
+def test_dense_refusal_reports_real_gigabytes(tmp_path):
+    from repgenr.dereplicators.sourmash import SourmashDereplicator
+
+    genomes = [tmp_path / f"g{i}.fasta" for i in range(5001)]
+    with pytest.raises(WorkdirError, match=r"~0\.2 GB"):
+        SourmashDereplicator()._dense_dereplicate(
+            genomes, tmp_path / "out", 31, 1000, 0.99, _LOGGER
+        )
+
+
+# --- sourmash tree builder measured limit -------------------------------------
+
+
+def test_sourmash_treebuilder_limit_is_measured():
+    from repgenr.treebuilders.sourmash import SourmashBuilder
+
+    # 10000 was an unbenchmarked assertion; the measured n^3 fit extrapolates
+    # to ~12 h of pure-Python NJ there (docs/scaling-audit.md).
+    assert SourmashBuilder.capabilities.recommended_max_genomes == 2000
+
+
+def test_sourmash_treebuilder_hard_guard_above_5000(tmp_path):
+    from repgenr.treebuilders.base import TreeParams
+    from repgenr.treebuilders.sourmash import SourmashBuilder
+
+    genomes = [tmp_path / f"g{i}.fasta" for i in range(5001)]
+    with pytest.raises(WorkdirError, match="neighbor joining"):
+        SourmashBuilder().build(genomes, tmp_path / "out", TreeParams(), _LOGGER)
+
+
+# --- target-reps non-convergence warning --------------------------------------
+
+
+class _StepDerep:
+    """Clonal step function: 1 rep below the clone ANI, n at/above."""
+
+    def __init__(self, n: int) -> None:
+        self.n = n
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        genomes = list(genomes)
+        keep = len(genomes) if params.secondary_ani >= 0.9995 else 1
+        reps = genomes[:keep]
+        leftover = [g.name for g in genomes[keep:]]
+        clusters = {r.name: [] for r in reps}
+        clusters[reps[0].name] = leftover
+        status = {r.name: STATUS_REPRESENTATIVE for r in reps}
+        status.update({m: STATUS_CONTAINED for m in leftover})
+        return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
+
+
+def test_target_reps_warns_when_target_unreachable(tmp_path, caplog):
+    genomes = []
+    for i in range(40):
+        p = tmp_path / f"g{i:03d}.fasta"
+        p.write_text(">x\nACGT\n", encoding="utf-8")
+        genomes.append(p)
+    with caplog.at_level(logging.WARNING):
+        _search_target_reps(
+            _StepDerep(40), genomes, tmp_path / "scratch", DerepParams(),
+            DereplicateParams(tool="mock"), target=20, logger=_LOGGER,
+        )
+    warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("20" in m and "target" in m.lower() for m in warnings)
+
+
+def test_target_reps_no_warning_on_exact_hit(tmp_path, caplog):
+    genomes = []
+    for i in range(40):
+        p = tmp_path / f"g{i:03d}.fasta"
+        p.write_text(">x\nACGT\n", encoding="utf-8")
+        genomes.append(p)
+    with caplog.at_level(logging.WARNING):
+        _search_target_reps(
+            _StepDerep(40), genomes, tmp_path / "scratch", DerepParams(),
+            DereplicateParams(tool="mock"), target=40, logger=_LOGGER,
+        )
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+
+
+# --- datasets timeout scales with batch size ----------------------------------
+
+
+def test_datasets_timeout_scales_with_batch():
+    assert _timeout_for(10) == 3600.0          # floor for small batches
+    assert _timeout_for(5000) == 15000.0       # 3 s per accession at full batch
+    assert _timeout_for(0) == 3600.0

@@ -34,12 +34,18 @@ _EST_BYTES_PER_GENOME = 5_000_000  # rough peak-disk estimate (zip + extract + f
 _MIN_FREE_BYTES = 1_000_000_000  # hard floor: refuse to start a batch under ~1 GB free
 
 
-_DATASETS_TIMEOUT = 3600.0  # per-invocation cap; a hung transfer must not block forever
+_DATASETS_TIMEOUT = 3600.0  # floor; a hung transfer must not block forever
+_PER_ACCESSION_TIMEOUT = 3.0  # a full 5000-accession batch gets ~4 h on a slow link
 
 
-def _run_cmd(cmd, **kwargs):
+def _timeout_for(n_items: int) -> float:
+    """Per-invocation timeout scaled to the batch size (floor for small calls)."""
+    return max(_DATASETS_TIMEOUT, n_items * _PER_ACCESSION_TIMEOUT)
+
+
+def _run_cmd(cmd, n_items: int = 0, **kwargs):
     """Run the datasets CLI with retries and a timeout (it has neither built in)."""
-    return run_tool_with_retries(DATASETS_CAPS, cmd, timeout=_DATASETS_TIMEOUT, **kwargs)
+    return run_tool_with_retries(DATASETS_CAPS, cmd, timeout=_timeout_for(n_items), **kwargs)
 
 
 @dataclass
@@ -211,11 +217,13 @@ def _download_one_batch(
             "datasets", "download", "genome", "accession",
             "--dehydrated", "--inputfile", acc_file, "--filename", zip_path,
         ],
+        n_items=len(batch),
         logger=logger, log_prefix="datasets",
     )
     process.unzip(zip_path, extract)
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
+        n_items=len(batch),
         logger=logger, log_prefix="datasets",
     )
 
