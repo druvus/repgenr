@@ -63,9 +63,9 @@ class _FakeAligner(Aligner):
 def fake_phylo_tools():
     tb_registry._load()
     aligner_registry._load()
-    tb_registry._classes["faketree_genomes"] = _GenomesTreeBuilder
-    tb_registry._classes["faketree_msa"] = _MsaTreeBuilder
-    aligner_registry._classes["fakealigner"] = _FakeAligner
+    tb_registry.register("faketree_genomes", _GenomesTreeBuilder, replace=True)
+    tb_registry.register("faketree_msa", _MsaTreeBuilder, replace=True)
+    aligner_registry.register("fakealigner", _FakeAligner, replace=True)
     yield
     for n in ("faketree_genomes", "faketree_msa"):
         tb_registry._classes.pop(n, None)

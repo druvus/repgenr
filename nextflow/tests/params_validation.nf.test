@@ -17,16 +17,19 @@ nextflow_pipeline {
         }
     }
 
-    test("an unknown dereplicator tool fails validation") {
+    test("a third-party dereplicator name passes schema validation") {
+        // The enum was dropped so pip-installed plugins are usable from
+        // Nextflow; RepGenR's own registry validation rejects unknown names
+        // at stage start instead. With --help the pipeline exits before any
+        // stage runs, proving the schema no longer blocks the name.
         when {
             params {
-                derep_tool = 'nosuchtool'
+                derep_tool = 'thirdpartytool'
+                help = true
             }
         }
         then {
-            assert !workflow.success
-            assert workflow.stdout.join('\n').contains('derep_tool') ||
-                   workflow.stderr.join('\n').contains('derep_tool')
+            assert workflow.success
         }
     }
 }

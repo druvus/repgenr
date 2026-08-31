@@ -285,6 +285,13 @@ def _build_msa(
         inputs.append(outgroup_file)
 
     if params.msa_source == "aligner":
+        warn = scale_warning(aligner_registry, params.aligner, len(inputs))
+        if warn:
+            limit, alts = warn
+            logger.warning(
+                "Aligner '%s' is tuned for <=%d genomes but you have %d; consider: %s",
+                params.aligner, limit, len(inputs), ", ".join(alts) or "none",
+            )
         aligner = aligner_registry.create(params.aligner)
         versions = aligner.preflight()
         reference = _resolve_reference(params.reference, genomes, outgroup_file)

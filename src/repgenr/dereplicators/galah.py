@@ -37,7 +37,6 @@ class GalahDereplicator(Dereplicator):
         required_binaries=(BinarySpec("galah", version_args=("--version",)),),
         recommended_max_genomes=None,
         supports_native_scaling=True,
-        threads_param="--threads",
     )
 
     def dereplicate(

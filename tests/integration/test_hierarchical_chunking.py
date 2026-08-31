@@ -67,8 +67,8 @@ def _make_genomes(workdir: Path, n: int) -> None:
 @pytest.fixture
 def reg():
     registry._load()
-    registry._classes["halver"] = _Halver
-    registry._classes["norep2"] = _NoRep
+    registry.register("halver", _Halver, replace=True)
+    registry.register("norep2", _NoRep, replace=True)
     yield
     registry._classes.pop("halver", None)
     registry._classes.pop("norep2", None)

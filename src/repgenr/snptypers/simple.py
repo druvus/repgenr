@@ -32,7 +32,6 @@ _CAPABILITIES = ToolCapabilities(
                    strict_version=True),
     ),
     recommended_max_genomes=2000,
-    threads_param=None,
     # multi-tool: resolved to one image via Wave (or pin an explicit container)
     conda=("bioconda::minimap2", "bioconda::samtools", "bioconda::bcftools"),
 )

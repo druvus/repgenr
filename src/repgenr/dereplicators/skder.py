@@ -56,7 +56,6 @@ class SkderDereplicator(Dereplicator):
         default_params={"mode": "greedy"},
         recommended_max_genomes=None,  # scales natively
         supports_native_scaling=True,
-        threads_param="-c",
         conda=("bioconda::skder",),
         accepted_extras=frozenset({"mode"}),
     )

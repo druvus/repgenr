@@ -267,3 +267,28 @@ def test_run_viral_injects_virus_extra_only_when_accepted(dispatched, tmp_path) 
     assert result.exit_code == 0, result.output
     derep = {s: p for s, p, _ in dispatched}["dereplicate"]
     assert derep.extra == {"virus": True}  # drep reads it
+
+
+def test_tool_arg_reaches_extra(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, [
+        "dereplicate", "-wd", str(tmp_path), "--tool", "skder",
+        "--tool-arg", "mode=greedy",
+    ])
+    assert result.exit_code == 0, result.output
+    params = {s: p for s, p, _ in dispatched}["dereplicate"]
+    assert params.extra == {"mode": "greedy"}
+
+
+def test_help_lists_registered_tools() -> None:
+    import re
+
+    from repgenr.dereplicators.base import registry as derep_registry
+
+    result = _runner.invoke(app, ["dereplicate", "--help"])
+    assert result.exit_code == 0
+    # Rich wraps the help panel mid-token and may color it; compare against
+    # the text with ANSI codes and all whitespace removed.
+    # (box-drawing borders can interrupt a wrapped token, so keep word chars only)
+    plain = re.sub(r"[^A-Za-z0-9/]", "", re.sub(r"\x1b\[[0-9;]*m", "", result.output))
+    for name in derep_registry.names():
+        assert name in plain

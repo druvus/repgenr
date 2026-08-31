@@ -24,7 +24,6 @@ class RaxmlNgBuilder(TreeBuilder):
             BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),
         ),
         recommended_max_genomes=1000,
-        threads_param="--threads",
     )
     input_kind = InputKind.MSA_FASTA
 

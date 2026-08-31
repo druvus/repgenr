@@ -50,7 +50,7 @@ def taxo_workdir(workdir: Path):
     for _acc, fn, _g, _s in _GENOMES:
         (gdir / fn).write_text(">x\nACGT\n")
     registry._load()
-    registry._classes["norep"] = _NoRep
+    registry.register("norep", _NoRep, replace=True)
     ctx = WorkdirContext(workdir, create=True)
     ctx.manifest.upsert_many(
         [GenomeRecord(accession=a, filename=fn, genus=g, species=s) for a, fn, g, s in _GENOMES]

@@ -28,7 +28,6 @@ class SourmashBuilder(TreeBuilder):
         ),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=10000,
-        threads_param=None,
     )
     input_kind = InputKind.GENOMES
 

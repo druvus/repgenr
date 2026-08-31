@@ -20,7 +20,6 @@ class FasttreeBuilder(TreeBuilder):
         conda=("bioconda::fasttree",),
         required_binaries=(BinarySpec("FastTree", version_args=()),),
         recommended_max_genomes=5000,
-        threads_param=None,
     )
     input_kind = InputKind.MSA_FASTA
 

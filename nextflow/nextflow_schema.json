@@ -84,8 +84,7 @@
                 "derep_tool": {
                     "type": "string",
                     "default": "skder",
-                    "enum": ["skder", "drep", "galah", "sourmash"],
-                    "description": "Dereplicator used by the scatter-gather subworkflow.",
+                    "description": "Dereplicator used by the scatter-gather subworkflow. Any registered adapter name (built-in: skder/drep/galah/sourmash, plus pip-installed plugins); RepGenR validates the name at stage start.",
                     "fa_icon": "fas fa-compress-arrows-alt"
                 },
                 "derep_primary_ani": {

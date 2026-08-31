@@ -15,10 +15,10 @@ class _Tool:
 
 def _make_registry(specs: dict[str, ToolCapabilities]) -> Registry:
     reg: Registry = Registry("test.group")
-    reg._loaded = True
+    reg._loaded = True  # bare registry: skip entry-point discovery
     for name, caps in specs.items():
         cls = type(f"Tool_{name}", (_Tool,), {"capabilities": caps})
-        reg._classes[name] = cls
+        reg.register(name, cls, replace=True)
     return reg
 
 

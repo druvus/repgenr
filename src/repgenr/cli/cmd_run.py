@@ -20,7 +20,10 @@ from .base import (
     DEFAULT_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_VIRAL,
+    _aligner_help,
+    _derep_help,
     _run,
+    _tree_help,
     app,
     stage_errors,
 )
@@ -64,14 +67,14 @@ def run(
     viral_source: str = typer.Option("ncbi_virus", "--viral-source", help="ncbi_virus or bvbrc."),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- dereplication ---
-    derep_tool: str = typer.Option("skder", "--tool", help="auto/skder/drep/galah/sourmash."),
+    derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
     primary_ani: float = typer.Option(0.90, "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
     # --- phylogeny ---
-    treebuilder: str = typer.Option("iqtree", "--treebuilder"),
+    treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
-    aligner: str = typer.Option("progressivemauve", "--aligner"),
+    aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
     # --- taxonomy output ---

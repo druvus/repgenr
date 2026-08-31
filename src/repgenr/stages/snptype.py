@@ -24,6 +24,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
+from ..core.plugins import scale_warning
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -68,6 +69,13 @@ def snptype_core(
     if not genomes:
         raise WorkdirError("No genomes found for SNP typing. Run the genome (and derep) stages.")
 
+    warn = scale_warning(snp_registry, params.tool, len(genomes))
+    if warn:
+        limit, alts = warn
+        logger.warning(
+            "SNP typer '%s' is tuned for <=%d genomes but you have %d; consider: %s",
+            params.tool, limit, len(genomes), ", ".join(alts) or "none",
+        )
     typer = snp_registry.create(params.tool)
     versions = typer.preflight()
 
