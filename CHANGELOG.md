@@ -7,6 +7,25 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- **Crash/restart hardening (stage audit)**: a stage that crashes while
+  re-running is no longer silently skipped on restart (the resume record is
+  dirtied before the stage body runs; `repgenr status` shows `[interrupted]`);
+  deliverable writes are atomic (a failing tree builder can no longer truncate
+  a previous `tree/tree.nwk`); downloads are validated before landing in
+  `genomes/` and stages refuse incomplete input sets (`--allow-incomplete` to
+  override); the manifest is reconciled on re-selection instead of accumulating
+  stale rows; stale outgroups are pruned and resolved by exact accession.
+- **Pluggability**: tool lists in `--help` are generated from the registries;
+  `--tool-arg key=value` provides tool tuning on dereplicate/snptype and the
+  data-channel steps; `auto` selection is container-aware and prefers the
+  tightest-fitting tool (its picks change); the Nextflow `derep_tool` enum is
+  dropped so pip-installed dereplicators work from the pipeline; recombination
+  masking is a plugin family (`repgenr.maskers`, `phylo` gains a real
+  `--mask`); `repgenr glance` gains `--tool` via a `Dereplicator.compare`
+  hook and the viral outgroup builder is selectable via
+  `--outgroup-treebuilder` (a `TreeBuilder.distance_matrix` hook); public
+  `Registry.register/unregister`; the dead `threads_param` and
+  `Aligner.output_kind` capability fields are removed.
 - **Breaking: resume fingerprints are input-aware.** A completed stage is now
   skipped only when its parameters, the digests of its inputs (upstream stage
   outputs, digested from file metadata for genome directories and content for
