@@ -11,7 +11,10 @@ nextflow_pipeline {
                 genomes_dir = "$projectDir/nextflow/tests/data/e2e_genomes"
                 empty_accession = "$projectDir/nextflow/tests/data/empty.txt"
                 derep_tool = "sourmash"
-                derep_secondary_ani = 0.8
+                // ANI-scale threshold (sourmash thresholds ANI estimates since
+                // the Jaccard fix): within-cluster near-identical genomes sit
+                // above 0.95, unrelated 12 kb test genomes well below it.
+                derep_secondary_ani = 0.95
                 derep_process_size = 4
                 phylo_args = "--treebuilder mashtree"
             }

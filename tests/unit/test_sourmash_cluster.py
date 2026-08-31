@@ -162,23 +162,33 @@ def test_sparse_matches_dense_on_same_graph() -> None:
 # --- threshold semantics on the tool invocations ------------------------------
 
 
-def test_dense_compare_requests_ani(tmp_path, monkeypatch) -> None:
-    """The dense matrix must hold ANI estimates, not raw Jaccard."""
+def test_dense_thresholds_ani_derived_from_jaccard(tmp_path, monkeypatch) -> None:
+    """The dense path must convert the Jaccard matrix to ANI estimates.
+
+    The measured 99.57 percent ANI pair has k=31 Jaccard 0.796 -> ANI estimate
+    0.9961, so it must merge at threshold 0.99 although its Jaccard is far
+    below 0.99. A Jaccard-1.0 (identical) pair must survive conversion too --
+    sourmash's own ``compare --ani`` reports 0 for tiny sketches, which is why
+    the adapter converts locally instead.
+    """
     import logging
 
     from repgenr.dereplicators import sourmash as sm
 
     genomes = []
-    for name in ("g1.fasta", "g2.fasta"):
+    for name in ("g1.fasta", "g2.fasta", "g3.fasta"):
         p = tmp_path / name
         p.write_text(">x\nACGT\n")
         genomes.append(p)
 
-    calls: list[list[str]] = []
-
     def fake_run_tool(caps, argv, **kwargs):
-        calls.append([str(a) for a in argv])
+        return None
 
+    jaccard = [
+        [1.0, 0.796, 0.0],    # g1-g2: the measured 99.57 pct ANI pair
+        [0.796, 1.0, 0.0],
+        [0.0, 0.0, 1.0],      # g3 unrelated
+    ]
     monkeypatch.setattr(sm, "run_tool", fake_run_tool)
     monkeypatch.setattr(
         sm, "_find_signatures",
@@ -186,16 +196,23 @@ def test_dense_compare_requests_ani(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         sm, "_read_compare_csv",
-        lambda path: (["g1.fasta", "g2.fasta"], [[1.0, 0.995], [0.995, 1.0]]),
+        lambda path: (["g1.fasta", "g2.fasta", "g3.fasta"], jaccard),
     )
 
     adapter = sm.SourmashDereplicator()
     clusters, _status = adapter._dense_dereplicate(
         genomes, tmp_path / "out", 31, 1000, 0.99, logging.getLogger("t")
     )
-    compare_argv = next(argv for argv in calls if "compare" in argv)
-    assert "--ani" in compare_argv
-    assert len(clusters) == 1  # 0.995 ANI >= 0.99 threshold merges the pair
+    assert set(clusters) == {"g1.fasta", "g3.fasta"}  # g2 merged under g1
+
+
+def test_jaccard_to_ani_matrix_values() -> None:
+    from repgenr.dereplicators.sourmash import _jaccard_to_ani_matrix
+
+    ani = _jaccard_to_ani_matrix(np.array([[1.0, 0.796, 0.0]]), 31)
+    assert ani[0, 0] == 1.0                     # identical content stays 1.0
+    assert abs(ani[0, 1] - 0.9961) < 5e-4       # matches compare --ani
+    assert ani[0, 2] == 0.0                     # disjoint stays 0
 
 
 def test_sparse_pairwise_prefilter_is_containment_scaled(tmp_path, monkeypatch) -> None:
