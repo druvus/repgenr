@@ -120,3 +120,15 @@ and emits them as a channel feeding the scatter-gather dereplication; `phylo` an
 `tree2tax` run in task-local working directories and emit `tree.nwk`,
 `tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
 quick wiring check without external tools.
+
+## Viral length filtering and over-represented species
+
+The viral selection step keeps records whose genome length falls inside a
+window around a center value. The default center, `--length-method
+median_of_medians`, is a deliberate defense against over-sequenced species:
+the median length is computed per species first, and the window center is the
+median of those per-species medians, so a species with 900 outbreak records
+carries exactly one vote. Switching to `--length-method mean` averages every
+record and lets the most-sequenced species set the window -- use it only when
+the selection is known to be balanced. `--length-range` overrides the window
+entirely and `--length-all` disables the filter.

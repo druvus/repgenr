@@ -154,6 +154,10 @@ def _length_range_records(selected, params: VgenomeParams, logger) -> tuple[int,
     all_lens = [r.length for r in selected]
     if params.length_all:
         return min(all_lens), max(all_lens)
+    # median_of_medians is a deliberate over-representation defense: one
+    # median per species, then the median of those, so 900 outbreak records
+    # of one species carry a single vote. The 'mean' alternative averages
+    # every record and lets the most-sequenced species set the window.
     medians = [int(median(v)) for v in by_species.values()]
     midpoint = median(medians) if params.length_method == "median_of_medians" else mean(all_lens)
     dev = params.length_deviation / 100
