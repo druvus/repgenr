@@ -93,7 +93,20 @@ def run(
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)
     limit = timeout if timeout is not None else _default_timeout()
 
-    out_handle = open(stdout_path, "w", encoding="utf-8") if stdout_path is not None else None
+    # stdout goes to a temp sibling first and is published only when the tool
+    # did not fail: several adapters point stdout_path at a final deliverable
+    # (e.g. tree/tree.nwk), and opening that in "w" mode would truncate the
+    # previous good file the moment a doomed rebuild starts. os.devnull is
+    # written directly (it has no meaningful siblings).
+    out_target: Path | None = None
+    out_tmp: Path | None = None
+    if stdout_path is not None:
+        if str(stdout_path) == os.devnull:
+            out_tmp = Path(os.devnull)
+        else:
+            out_target = Path(stdout_path)
+            out_tmp = out_target.with_name(out_target.name + ".part")
+    out_handle = open(out_tmp, "w", encoding="utf-8") if out_tmp is not None else None
     timer: threading.Timer | None = None
     timed_out = False
     try:
@@ -129,12 +142,23 @@ def run(
                 tail.append(line)
                 logger.info("%s%s", prefix, line)
         returncode = proc.wait()
+    except BaseException:
+        if out_target is not None and out_tmp is not None:
+            out_tmp.unlink(missing_ok=True)
+        raise
     finally:
         if timer is not None:
             timer.cancel()
         if out_handle is not None:
             out_handle.close()
 
+    failed = timed_out or (check and returncode != 0)
+    if out_target is not None and out_tmp is not None:
+        if failed:
+            # Discard the partial capture; a previous good file stays intact.
+            out_tmp.unlink(missing_ok=True)
+        else:
+            os.replace(out_tmp, out_target)
     if timed_out:
         tail.append(f"[killed after {limit}s timeout]")
         raise ToolExecutionError(cmd, returncode, output="\n".join(tail))

@@ -20,9 +20,13 @@ This module owns the writers/readers so producers (adapters) and consumers
 from __future__ import annotations
 
 import csv
+import os
 from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
 
 CLUSTERS_TSV = "clusters.tsv"
 GENOME_STATUS_TSV = "genome_status.tsv"
@@ -108,10 +112,49 @@ class SelectionRow:
     filename: str
 
 
+@contextmanager
+def atomic_replace(
+    path: Path, *, mode: str = "w", encoding: str | None = "utf-8", newline: str | None = None
+) -> Iterator[IO]:
+    """Open a temp sibling of ``path`` for writing; publish it atomically.
+
+    On clean exit the temp file replaces ``path`` (``os.replace``); on any
+    exception the temp is removed and a previous ``path`` is left untouched, so
+    a crash mid-write can never truncate a deliverable. Same pattern as
+    ``Config.save``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, mode, encoding=encoding, newline=newline) as fo:
+            yield fo
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+@contextmanager
+def atomic_path(path: Path) -> Iterator[Path]:
+    """Yield a temp sibling path for tools/copies that need a filename.
+
+    On clean exit the temp (if written) replaces ``path``; on exception it is
+    removed and the previous ``path`` survives.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        yield tmp
+        if tmp.exists():
+            os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def write_selection(path: Path, rows: list[SelectionRow]) -> None:
     """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as fo:
+    with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["accession", "family", "genus", "species", "is_outgroup", "filename"])
         for r in rows:
@@ -142,8 +185,7 @@ def read_selection(path: Path) -> list[SelectionRow]:
 
 def write_clusters(path: Path, clusters: dict[str, list[str]]) -> None:
     """Write representative -> members. Each representative also lists itself."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as fo:
+    with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["representative", "member"])
         for rep, members in clusters.items():
@@ -170,8 +212,7 @@ def read_clusters(path: Path) -> dict[str, list[str]]:
 
 
 def write_genome_status(path: Path, status: dict[str, str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as fo:
+    with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["genome", "status"])
         for genome, value in sorted(status.items()):
@@ -181,7 +222,7 @@ def write_genome_status(path: Path, status: dict[str, str]) -> None:
 def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
     """Write child -> parent edges (FlexTaxD), de-duplicated, order preserved."""
     seen: set[tuple[str, str]] = set()
-    with open(path, "w", encoding="utf-8", newline="") as fo:
+    with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         writer.writerow(["child", "parent"])
         for child, parent in edges:
@@ -193,7 +234,7 @@ def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
 
 def write_genomes_map(path: Path, mapping: list[tuple[str, str]]) -> None:
     """Write accession -> leaf rows."""
-    with open(path, "w", encoding="utf-8", newline="") as fo:
+    with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
         for accession, leaf in mapping:
             writer.writerow([accession, leaf])

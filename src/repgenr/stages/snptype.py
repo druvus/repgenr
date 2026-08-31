@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CORE_SNP_FASTA, list_fasta
+from ..core.contracts import CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
@@ -81,17 +81,21 @@ def snptype_core(
         from ..snptypers.gubbins import mask_recombination
 
         filtered = mask_recombination(result.core_snp_fasta, scratch / "gubbins", logger)
-        shutil.copy2(filtered, core)
+        with atomic_path(core) as tmp:
+            shutil.copy2(filtered, tmp)
         masked = True
     elif params.mask not in ("none", ""):
         raise UserInputError(f"Unknown mask '{params.mask}' (none|gubbins)")
     else:
-        shutil.copy2(result.core_snp_fasta, core)
+        with atomic_path(core) as tmp:
+            shutil.copy2(result.core_snp_fasta, tmp)
 
     if result.vcf is not None:
-        shutil.copy2(result.vcf, snp_dir / "variants.vcf")
+        with atomic_path(snp_dir / "variants.vcf") as tmp:
+            shutil.copy2(result.vcf, tmp)
     if result.snp_distance_matrix is not None:
-        shutil.copy2(result.snp_distance_matrix, snp_dir / "snp_distance_matrix.tsv")
+        with atomic_path(snp_dir / "snp_distance_matrix.tsv") as tmp:
+            shutil.copy2(result.snp_distance_matrix, tmp)
 
     return (
         SnpResult(
