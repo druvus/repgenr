@@ -9,6 +9,7 @@ import typer
 from .base import (
     DEFAULT_THREADS,
     _aligner_help,
+    _mask_help,
     _parse_key_values,
     _require_choice,
     _run,
@@ -24,7 +25,7 @@ def snptype(
     tool: str = typer.Option("simple", "--tool", help=_snp_help()),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
-    mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),
+    mask: str = typer.Option("none", "--mask", help=_mask_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
@@ -73,6 +74,9 @@ def phylo(
         "or seed_weight=11 (progressivemauve).",
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    mask: str = typer.Option(
+        "none", "--mask", help="Recombination masking for --msa-source snptype.",
+    ),
     allow_incomplete: bool = typer.Option(
         False, "--allow-incomplete",
         help="Proceed with a warning when the input genome set is incomplete.",
@@ -92,7 +96,10 @@ def phylo(
             bootstrap=bootstrap,
             reference=reference,
             threads=threads,
-            extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+            extra={
+                **_parse_key_values(aligner_arg, "--aligner-arg"),
+                **({"mask": mask} if mask != "none" else {}),
+            },
             allow_incomplete=allow_incomplete,
         )
 

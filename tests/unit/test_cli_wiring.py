@@ -292,3 +292,13 @@ def test_help_lists_registered_tools() -> None:
     plain = re.sub(r"[^A-Za-z0-9/]", "", re.sub(r"\x1b\[[0-9;]*m", "", result.output))
     for name in derep_registry.names():
         assert name in plain
+
+
+def test_phylo_mask_option_feeds_extra(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, [
+        "phylo", "-wd", str(tmp_path), "--msa-source", "snptype",
+        "--snptyper", "simple", "--mask", "gubbins",
+    ])
+    assert result.exit_code == 0, result.output
+    params = {s: p for s, p, _ in dispatched}["phylo"]
+    assert params.extra["mask"] == "gubbins"
