@@ -277,9 +277,18 @@ def _search_target_reps(
             hi = mid  # too many reps -> looser threshold
     if best is None:  # the search loop always runs at least one iteration
         raise RuntimeError("target-reps search finished without evaluating any threshold.")
+    achieved = len(best.representatives)
+    if achieved != target:
+        logger.warning(
+            "target-reps: requested %d representatives but the closest "
+            "achievable count is %d (secondary-ani=%.5f). On low-diversity "
+            "sets the count is a step function of the threshold and "
+            "intermediate targets cannot be reached.",
+            target, achieved, best_ani,
+        )
     logger.info(
         "target-reps: chose secondary-ani=%.5f -> %d representatives (target %d)",
-        best_ani, len(best.representatives), target,
+        best_ani, achieved, target,
     )
     return best
 

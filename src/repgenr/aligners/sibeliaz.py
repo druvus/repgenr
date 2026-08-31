@@ -18,6 +18,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import get_config, run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import warn_argv_bytes
 from .base import Aligner, AlignParams, AlignResult
 
 # SibeliaZ's bash wrapper uses GNU/Linux-only constructs in its alignment step
@@ -76,15 +77,17 @@ class SibeliazAligner(Aligner):
         for key, flag in (("kmer", "-k"), ("abundance", "-a"), ("bubble", "-b")):
             if key in params.extra:
                 tuning += [flag, str(params.extra[key])]
+        sib_argv: list[str | Path] = [
+            *sibeliaz_cmd,
+            *tuning,
+            "-f", str(filtermemory),
+            "-t", str(params.threads),
+            "-o", out_dir,
+            *[str(g.resolve()) for g in genomes],
+        ]
+        warn_argv_bytes("sibeliaz", sib_argv, logger)
         run_tool(self.capabilities,
-            [
-                *sibeliaz_cmd,
-                *tuning,
-                "-f", str(filtermemory),
-                "-t", str(params.threads),
-                "-o", out_dir,
-                *[str(g.resolve()) for g in genomes],
-            ],
+            sib_argv,
             logger=logger,
             log_prefix="sibeliaz",
         )

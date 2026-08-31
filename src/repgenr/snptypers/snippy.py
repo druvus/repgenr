@@ -10,6 +10,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import warn_argv_bytes
 from .base import SnpParams, SnpResult, SnpTyper
 
 
@@ -55,8 +56,12 @@ class SnippyTyper(SnpTyper):
             sample_dirs.append(sdir)
 
         core_prefix = out_dir / "core"
-        run_tool(self.capabilities, 
-            ["snippy-core", "--ref", reference.resolve(), "--prefix", core_prefix, *sample_dirs],
+        core_cmd: list[str | Path] = [
+            "snippy-core", "--ref", reference.resolve(), "--prefix", core_prefix, *sample_dirs
+        ]
+        warn_argv_bytes("snippy-core", core_cmd, logger)
+        run_tool(self.capabilities,
+            core_cmd,
             logger=logger,
             log_prefix="snippy-core",
         )

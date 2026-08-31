@@ -9,6 +9,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
+from ..core.process import warn_argv_bytes
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
 
@@ -37,6 +38,7 @@ class MashtreeBuilder(TreeBuilder):
         if genomesize is not None:
             cmd += ["--genomesize", str(int(genomesize))]
         cmd += ["--mindepth", "0", "--outmatrix", matrix, *genomes]
+        warn_argv_bytes("mashtree", cmd, logger)
         run_tool(self.capabilities, cmd,
             logger=logger, log_prefix="mashtree",
             stdout_path=out_dir / "mashtree.dnd",
@@ -53,8 +55,10 @@ class MashtreeBuilder(TreeBuilder):
         genomes = as_genome_list(msa_or_genomes)
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
-        run_tool(self.capabilities, 
-            ["mashtree", "--numcpus", str(params.threads), *genomes],
+        cmd: list[str | Path] = ["mashtree", "--numcpus", str(params.threads), *genomes]
+        warn_argv_bytes("mashtree", cmd, logger)
+        run_tool(self.capabilities,
+            cmd,
             logger=logger,
             log_prefix="mashtree",
             stdout_path=tree,
