@@ -80,7 +80,10 @@ three are unchanged (it logs that it skipped). Re-running an upstream stage
 (e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
 downstream stage re-runs automatically the next time it is invoked. Change a
 parameter, switch `--container`, or pass `--force` to re-run explicitly. A
-stage that crashed mid-run has no completion stamp and so always re-runs.
+stage that crashed mid-run has no completion stamp and so always re-runs. `repgenr
+doctor -wd <wd>` verifies a workdir's outputs against its records (missing or
+corrupt genomes, manifest drift, truncated deliverables, interrupted stages)
+and exits non-zero on failures.
 
 Two limitations, both covered by `--force`: input directories are digested from
 file metadata (name, size, mtime), so an in-place edit that preserves size and
