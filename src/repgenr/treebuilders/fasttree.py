@@ -34,7 +34,14 @@ class FasttreeBuilder(TreeBuilder):
         msa = as_msa_path(msa_or_genomes)
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
-        binary = "FastTree" if shutil.which("FastTree") else "fasttree"
+        # Only consult the host PATH when running natively; inside a container
+        # the image's canonical lowercase name applies regardless of host state.
+        from ..core.containers import get_config
+
+        if get_config().active:
+            binary = "fasttree"
+        else:
+            binary = "FastTree" if shutil.which("FastTree") else "fasttree"
         run_tool(self.capabilities, 
             [binary, "-nt", "-gtr", msa],
             logger=logger,

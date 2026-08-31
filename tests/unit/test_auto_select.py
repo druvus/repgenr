@@ -42,13 +42,61 @@ def test_auto_prefers_unbounded_native_tool() -> None:
     assert auto_select(reg, 5000) == "skder"
 
 
-def test_auto_picks_fitting_bounded_when_no_unbounded() -> None:
+def test_auto_picks_tightest_fitting_tool() -> None:
     reg = _make_registry({
         "iqtree": _caps("iqtree", 500),
         "fasttree": _caps("fasttree", 5000),
     })
-    assert auto_select(reg, 300) == "fasttree"   # both fit; larger headroom wins
-    assert auto_select(reg, 3000) == "fasttree"  # only fasttree fits
+    # both fit at 300: the TIGHTEST limit wins (higher-quality tools declare
+    # tighter recommended scales); at 3000 only fasttree fits
+    assert auto_select(reg, 300) == "iqtree"
+    assert auto_select(reg, 3000) == "fasttree"
+
+
+def test_auto_prefers_bounded_fit_over_unbounded() -> None:
+    reg = _make_registry({
+        "mashtree": _caps("mashtree", 10000),
+        "iqtree": _caps("iqtree", 500),
+        "skder": _caps("skder", None, native=True),
+    })
+    assert auto_select(reg, 100) == "iqtree"     # tightest fitting
+    assert auto_select(reg, 8000) == "mashtree"  # iqtree out; bounded beats unbounded
+    assert auto_select(reg, 50000) == "skder"    # only unbounded accommodates
+
+
+def test_auto_tiebreak_follows_documented_defaults() -> None:
+    # galah sorts before skder alphabetically; both unbounded -> the documented
+    # default (skder) must win the tie.
+    reg = _make_registry({
+        "galah": _caps("galah", None, native=True),
+        "skder": _caps("skder", None, native=True),
+    })
+    assert auto_select(reg, 100) == "skder"
+
+
+def test_auto_availability_is_container_aware(monkeypatch) -> None:
+    """Under an active container backend, a tool with an image/conda spec is
+    available even when nothing is installed on the host."""
+    from repgenr.core import containers, plugins
+
+    reg = _make_registry({
+        "hosttool": ToolCapabilities(
+            name="hosttool", required_binaries=(BinarySpec("python"),),
+        ),
+        "imagetool": ToolCapabilities(
+            name="imagetool",
+            required_binaries=(BinarySpec("definitely-missing-xyz"),),
+            container="quay.io/x/imagetool:1",
+            recommended_max_genomes=10,  # tighter fit than hosttool
+        ),
+    })
+    try:
+        containers.configure_container("docker")
+        assert plugins.auto_select(reg, 5) == "imagetool"
+    finally:
+        containers.configure_container("none")
+    # natively, the missing binary disqualifies imagetool
+    assert plugins.auto_select(reg, 5) == "hosttool"
 
 
 def test_auto_skips_tools_with_missing_binaries() -> None:

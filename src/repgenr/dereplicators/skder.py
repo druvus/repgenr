@@ -58,6 +58,7 @@ class SkderDereplicator(Dereplicator):
         supports_native_scaling=True,
         threads_param="-c",
         conda=("bioconda::skder",),
+        accepted_extras=frozenset({"mode"}),
     )
 
     # skDER takes genome paths on argv (no fofn-style input); warn when the

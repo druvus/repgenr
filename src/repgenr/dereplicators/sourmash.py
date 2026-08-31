@@ -53,6 +53,7 @@ class SourmashDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="sourmash",
         conda=("bioconda::sourmash",),
+        accepted_extras=frozenset({"ksize", "scaled", "sketch_cache", "dense_fallback"}),
         required_binaries=(
             BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
         ),

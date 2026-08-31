@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
-from repgenr.cli import cmd_bacterial, cmd_misc, cmd_phylo, cmd_viral
+from repgenr.cli import cmd_bacterial, cmd_misc, cmd_phylo, cmd_run, cmd_viral
 from repgenr.cli.main import app
 
 _runner = CliRunner()
@@ -23,7 +23,7 @@ def dispatched(monkeypatch) -> list[tuple]:
     def fake_run(stage, workdir, build, *, create=False):
         calls.append((stage, build(), create))
 
-    for mod in (cmd_bacterial, cmd_viral, cmd_phylo, cmd_misc):
+    for mod in (cmd_bacterial, cmd_viral, cmd_phylo, cmd_misc, cmd_run):
         monkeypatch.setattr(mod, "_run", fake_run)
     return calls
 
@@ -248,3 +248,22 @@ def test_tree2tax_relations_step_wiring(step_calls, tmp_path) -> None:
     (params,) = step_calls
     assert params.tree == tree
     assert params.node_basename == "NODE" and params.remove_outgroup is True
+
+
+def test_run_viral_injects_virus_extra_only_when_accepted(dispatched, tmp_path) -> None:
+    """--viral must not fingerprint-churn tools that ignore extra['virus']."""
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "--viral", "-t", "adeno", "--tool", "skder",
+    ])
+    assert result.exit_code == 0, result.output
+    derep = {s: p for s, p, _ in dispatched}["dereplicate"]
+    assert derep.extra == {}  # skder ignores 'virus'
+    dispatched.clear()
+
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "--viral", "-t", "adeno", "--tool", "drep",
+    ])
+    assert result.exit_code == 0, result.output
+    derep = {s: p for s, p, _ in dispatched}["dereplicate"]
+    assert derep.extra == {"virus": True}  # drep reads it

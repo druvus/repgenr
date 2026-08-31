@@ -56,6 +56,9 @@ class ToolCapabilities:
     # explicit image is set and Wave is enabled.
     container: str | None = None
     conda: tuple[str, ...] = ()
+    # Extra-dict keys this adapter actually reads; used to warn on (and avoid
+    # injecting) tuning that a tool would silently ignore.
+    accepted_extras: frozenset[str] = frozenset()
 
 
 class Registry[T]:
@@ -143,19 +146,45 @@ def _capabilities_of(registry: Registry, name: str) -> ToolCapabilities | None:
         return None
 
 
-def _binaries_available(cap: ToolCapabilities) -> bool:
+def _tool_available(cap: ToolCapabilities) -> bool:
+    """Is this adapter runnable in the CURRENT execution environment?
+
+    Under an active container backend the tool lives in an image, not on the
+    host, so a declared ``container`` or ``conda`` spec counts as available
+    (resolution itself happens at preflight); natively, the required binaries
+    must be on PATH.
+    """
+    from .containers import get_config
+
+    if get_config().active:
+        return cap.container is not None or bool(cap.conda)
     return all(shutil.which(spec.name) is not None for spec in cap.required_binaries)
 
 
-def auto_select(registry: Registry, n_items: int) -> str | None:
-    """Pick the best-scaling *available* registered tool for ``n_items`` inputs.
+# Tie-break order for auto-selection, matching the documented per-family
+# defaults; unlisted tools rank after these, alphabetically.
+_PREFERRED_ORDER = ("skder", "iqtree", "progressivemauve", "simple")
 
-    Preference order: required binaries present, then fits the recommended scale,
-    then natively-scaling, then the largest (or unbounded) recommended limit,
-    then alphabetical for determinism. Preferring installed tools avoids
-    auto-selecting an adapter whose binary is missing.
+
+def _preference_rank(name: str) -> int:
+    try:
+        return _PREFERRED_ORDER.index(name)
+    except ValueError:
+        return len(_PREFERRED_ORDER)
+
+
+def auto_select(registry: Registry, n_items: int) -> str | None:
+    """Pick the best *available* registered tool for ``n_items`` inputs.
+
+    Preference order: runnable in the current environment (container-aware),
+    then fits the recommended scale, then the TIGHTEST fitting limit --
+    higher-quality tools declare tighter recommended scales, so the loosest
+    tool must not win small inputs -- with unbounded tools last among the
+    fitting ones. Ties follow the documented defaults, then alphabetical.
+    When nothing fits, the largest-capacity tool is chosen.
     """
-    best: tuple[tuple[int, int, int, float], str] | None = None
+    inf = float("inf")
+    best: tuple[tuple, str] | None = None
     for name in registry.names():
         cap = _capabilities_of(registry, name)
         if cap is None:
@@ -165,13 +194,19 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
             )
             continue
         limit = cap.recommended_max_genomes
-        available = 1 if _binaries_available(cap) else 0
-        fits = 1 if (limit is None or limit >= n_items) else 0
-        native = 1 if cap.supports_native_scaling else 0
-        headroom = float("inf") if limit is None else float(limit)
-        score = (available, fits, native, headroom)
-        if best is None or score > best[0] or (score == best[0] and name < best[1]):
-            best = (score, name)
+        limit_value = inf if limit is None else float(limit)
+        fits = limit is None or limit >= n_items
+        # Among fitting tools smaller limits sort first (tightest fit); when
+        # nothing fits, larger capacity sorts first.
+        key = (
+            0 if _tool_available(cap) else 1,
+            0 if fits else 1,
+            limit_value if fits else -limit_value,
+            _preference_rank(name),
+            name,
+        )
+        if best is None or key < best[0]:
+            best = (key, name)
     return best[1] if best else None
 
 
