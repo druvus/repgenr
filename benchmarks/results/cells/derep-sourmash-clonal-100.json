@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "dereplicate-chunk",
+  "--genomes-fofn",
+  "/Volumes/sekvens2/repgenr/work/derep-sourmash-clonal-100/genomes.fofn",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/derep-sourmash-clonal-100/derep_out",
+  "--tool",
+  "sourmash",
+  "-t",
+  "8"
+ ],
+ "ari_vs_truth": 0.5445,
+ "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+ "exit_code": 0,
+ "id": "derep-sourmash-clonal-100",
+ "kind": "derep_step",
+ "max_rss_mb": 328.8,
+ "n": 100,
+ "n_representatives": 61,
+ "set": "clonal_100_clustered",
+ "status": "ok",
+ "tool": "sourmash",
+ "wall_s": 11.11
+}

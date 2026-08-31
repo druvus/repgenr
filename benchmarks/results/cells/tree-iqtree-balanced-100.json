@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "phylo-build",
+  "--genomes-dir",
+  "/Volumes/sekvens2/repgenr/work/tree-iqtree-balanced-100/genomes_subset",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/tree-iqtree-balanced-100/phylo_out",
+  "--treebuilder",
+  "iqtree",
+  "--no-outgroup",
+  "-t",
+  "8",
+  "--aligner",
+  "sibeliaz"
+ ],
+ "exit_code": null,
+ "id": "tree-iqtree-balanced-100",
+ "kind": "tree_step",
+ "max_rss_mb": null,
+ "n": 100,
+ "set": "balanced_1000_clustered",
+ "status": "timeout",
+ "tool": "iqtree",
+ "wall_s": 7200
+}

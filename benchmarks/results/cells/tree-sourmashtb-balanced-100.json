@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "phylo-build",
+  "--genomes-dir",
+  "/Volumes/sekvens2/repgenr/work/tree-sourmashtb-balanced-100/genomes_subset",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/tree-sourmashtb-balanced-100/phylo_out",
+  "--treebuilder",
+  "sourmash",
+  "--no-outgroup",
+  "-t",
+  "8"
+ ],
+ "exit_code": 0,
+ "id": "tree-sourmashtb-balanced-100",
+ "kind": "tree_step",
+ "max_rss_mb": 170.3,
+ "n": 100,
+ "set": "balanced_1000_clustered",
+ "status": "ok",
+ "tool": "sourmash",
+ "tree_leaves": 100,
+ "tree_ok": true,
+ "wall_s": 24.89
+}
