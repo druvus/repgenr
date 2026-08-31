@@ -63,7 +63,12 @@ def vgenome(
     target_custom: str | None = typer.Option(None, "-tc", "--target-custom", help="key:value."),
     length_all: bool = typer.Option(False, "--length-all"),
     length_deviation: int = typer.Option(10, "--length-deviation", min=0),
-    length_method: str = typer.Option("median_of_medians", "--length-method"),
+    length_method: str = typer.Option(
+        "median_of_medians", "--length-method",
+        help="Center of the length window: median_of_medians (default) gives "
+        "one vote per species, so an over-sequenced outbreak species cannot "
+        "shift the window; mean averages every record and loses that defense.",
+    ),
     length_range: str | None = typer.Option(None, "--length-range", help="e.g. 25000-35000."),
     discard: str | None = typer.Option(None, "--discard", help="Comma-separated header tags."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),

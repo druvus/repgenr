@@ -81,7 +81,16 @@ def snptype_core(
 
     ref = None
     if typer.requires_reference:
-        ref = reference if reference is not None else genomes[0]
+        if reference is not None:
+            ref = reference
+        else:
+            ref = genomes[0]
+            logger.warning(
+                "No --reference given; SNP calling against the alphabetically "
+                "first genome '%s'. Reference-private errors bias every SNP "
+                "distance; pass --reference to choose deliberately.",
+                ref.name,
+            )
 
     snp_dir.mkdir(parents=True, exist_ok=True)
     if scratch.exists():

@@ -127,6 +127,7 @@ def build_tree(
     else:
         msa, source_versions = _build_msa(genomes, outgroup_file, dirs, params, logger)
         versions = {**versions, **source_versions}
+        _warn_low_diversity(msa, logger)
         logger.info("Building tree with %s from MSA %s", treebuilder, msa)
         tree = builder.build(msa, dirs.tree_dir, tree_params, logger)
 
@@ -294,7 +295,7 @@ def _build_msa(
             )
         aligner = aligner_registry.create(params.aligner)
         versions = aligner.preflight()
-        reference = _resolve_reference(params.reference, genomes, outgroup_file)
+        reference = _resolve_reference(params.reference, genomes, outgroup_file, logger)
         _warn_divergence(params.aligner, inputs, logger)
         align_params = AlignParams(
             threads=params.threads, reference=reference, extra=dict(params.extra),
@@ -314,7 +315,7 @@ def _build_msa(
             mask=params.extra.get("mask", "none"),
         )
         snp_reference: Path | None = (
-            _resolve_reference(params.reference, genomes, outgroup_file)
+            _resolve_reference(params.reference, genomes, outgroup_file, logger)
             if params.reference
             else None
         )
@@ -327,7 +328,10 @@ def _build_msa(
 
 
 def _resolve_reference(
-    reference_name: str | None, genomes: Sequence[Path], outgroup_file: Path | None
+    reference_name: str | None,
+    genomes: Sequence[Path],
+    outgroup_file: Path | None,
+    logger: logging.Logger,
 ) -> Path:
     """Resolve a named reference by basename against the genome set (else genomes[0])."""
     if reference_name:
@@ -336,8 +340,17 @@ def _resolve_reference(
             pool.append(outgroup_file)
         for p in pool:
             if p.name == reference_name:
+                logger.info("Using reference genome %s", p.name)
                 return p
         raise UserInputError(f"Reference genome not found: {reference_name}")
+    logger.warning(
+        "No --reference given; projecting onto the alphabetically first genome "
+        "'%s'. Every aligner builds the MSA relative to this choice, which can "
+        "bias the tree -- on sets with an over-represented genotype the first "
+        "filename is usually one of its members. Pass --reference to choose "
+        "deliberately.",
+        genomes[0].name,
+    )
     return genomes[0]
 
 
@@ -354,6 +367,56 @@ def _taxonomic_spread(genomes: Sequence[Path]) -> tuple[int, int]:
             genera.add(genus.lower())
             species.add((genus.lower(), sp.lower()))
     return len(genera), len(species)
+
+
+_LOW_DIVERSITY_SITES = 10  # fewer variable columns than this makes a meaningless tree
+
+
+def _warn_low_diversity(msa_path: Path, logger: logging.Logger) -> None:
+    """Warn when an MSA is (near-)invariant, mirroring _warn_divergence.
+
+    A clone-only input produces an alignment with essentially no variable
+    columns; every builder then emits a star-like tree with near-zero branch
+    lengths, silently. Streams sequences one at a time and compares each to
+    the first, stopping as soon as enough variable sites are seen, so the
+    diverse (common) case exits early.
+    """
+    first: list[str] | None = None
+    variable: set[int] = set()
+    current: list[str] = []
+
+    def _consume(seq: str) -> bool:
+        nonlocal first
+        if first is None:
+            first = list(seq)
+            return False
+        for i, (a, b) in enumerate(zip(first, seq, strict=False)):
+            if a != b:
+                variable.add(i)
+                if len(variable) >= _LOW_DIVERSITY_SITES:
+                    return True
+        return False
+
+    try:
+        with open(msa_path, encoding="utf-8") as fo:
+            for line in fo:
+                if line.startswith(">"):
+                    if current and _consume("".join(current)):
+                        return
+                    current = []
+                else:
+                    current.append(line.strip())
+            if current and _consume("".join(current)):
+                return
+    except OSError:
+        return  # diagnostics must never fail the stage
+    logger.warning(
+        "The MSA at %s has only %d variable site(s): the input genomes are "
+        "nearly identical, and the resulting tree will be star-like with "
+        "near-zero branch lengths. Check whether the set is a single clone "
+        "before interpreting the topology.",
+        msa_path.name, len(variable),
+    )
 
 
 def _warn_divergence(aligner_name: str, genomes: Sequence[Path], logger) -> None:

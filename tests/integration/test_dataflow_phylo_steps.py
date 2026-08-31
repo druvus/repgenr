@@ -91,10 +91,11 @@ def test_resolve_reference(tmp_path: Path) -> None:
     g2 = tmp_path / "Fam_Gen_sp_GCA_2.fasta"
     for g in (g1, g2):
         g.write_text(">x\nAC\n")
-    assert _resolve_reference(None, [g1, g2], None) == g1  # default: first
-    assert _resolve_reference("Fam_Gen_sp_GCA_2.fasta", [g1, g2], None) == g2
+    logger = logging.getLogger("test-resolve-reference")
+    assert _resolve_reference(None, [g1, g2], None, logger) == g1  # default: first
+    assert _resolve_reference("Fam_Gen_sp_GCA_2.fasta", [g1, g2], None, logger) == g2
     with pytest.raises(UserInputError):
-        _resolve_reference("nope.fasta", [g1, g2], None)
+        _resolve_reference("nope.fasta", [g1, g2], None, logger)
 
 
 def test_resolve_outgroup_files(tmp_path: Path) -> None:
