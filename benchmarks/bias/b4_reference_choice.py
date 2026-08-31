@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 
 from benchmarks.metrics import load_truth
-from benchmarks.run_bench import RESULTS, STORAGE, _env, _repgenr
+from benchmarks.run_bench import RESULTS, STORAGE, _repgenr, run_group
 
 SET = "mixed_50_clustered"
 
@@ -43,7 +42,7 @@ def run_one(label: str, reference: str | None, aligner: str, threads: int) -> di
             "--no-outgroup", "-t", str(threads)]
     if reference:
         argv += ["--reference", reference]
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=14400, env=_env())
+    proc = run_group(argv, timeout_s=5400)
     row: dict = {"label": label, "reference": reference, "status": "ok"}
     if proc.returncode != 0:
         return {"label": label, "reference": reference, "status": "failed",

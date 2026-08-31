@@ -120,12 +120,14 @@ def _env() -> dict[str, str]:
     return {**os.environ, "PATH": f"{env_bin}:{os.environ.get('PATH', '')}"}
 
 
-def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
-    start = time.monotonic()
-    # start_new_session puts the tool and all its children in one process
-    # group, so a timeout kills the whole tree (sibeliaz et al. spawn deep).
+def run_group(argv: list[str], timeout_s: int) -> subprocess.CompletedProcess:
+    """Run argv in its own process group; a timeout kills the whole tree.
+
+    Deep-spawning tools (sibeliaz et al.) survive a plain subprocess timeout,
+    which kills only the direct child and leaves orphans competing for cores.
+    """
     with subprocess.Popen(
-        ["/usr/bin/time", "-l", *argv],
+        argv,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         env=_env(), start_new_session=True,
     ) as popen:
@@ -135,7 +137,12 @@ def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
             os.killpg(popen.pid, signal.SIGKILL)
             popen.wait()
             raise
-    proc = subprocess.CompletedProcess(argv, popen.returncode, stdout, stderr)
+    return subprocess.CompletedProcess(argv, popen.returncode, stdout, stderr)
+
+
+def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
+    start = time.monotonic()
+    proc = run_group(["/usr/bin/time", "-l", *argv], timeout_s)
     wall = time.monotonic() - start
     log_path.write_text(proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:],
                         encoding="utf-8")
