@@ -26,6 +26,23 @@ from .base import (
 )
 
 
+def _virus_extra(derep_tool: str, viral: bool) -> dict:
+    """Virus-tuned extras, injected only when the tool actually reads them.
+
+    Passing extra["virus"] to a tool that ignores it would silently change the
+    resume fingerprint for nothing (and imply tuning that never happened).
+    """
+    if not viral:
+        return {}
+    from ..dereplicators.base import registry as _derep_registry
+
+    if derep_tool != "auto":
+        caps = _derep_registry.get(derep_tool).capabilities
+        if "virus" not in caps.accepted_extras:
+            return {}
+    return {"virus": True}
+
+
 @app.command()
 def run(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
@@ -138,7 +155,7 @@ def run(
     _run("dereplicate", workdir, lambda: dereplicate_params(
         tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
         aligned_fraction=aligned_fraction, threads=threads,
-        extra={"virus": True} if viral else {},
+        extra=_virus_extra(derep_tool, viral),
     ))
     _run("phylo", workdir, lambda: phylo_params(
         treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,

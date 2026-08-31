@@ -75,7 +75,9 @@ def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
     for args in (
         ["vmetadata", "-wd", wd, "-t", "adenoviridae"],
         ["vgenome", "-wd", wd, "-tg", "mastadenovirus"],
-        ["dereplicate", "-wd", wd, "--tool", "skder", "--virus"],
+        # skder ignores extra["virus"], so `run --viral` no longer injects it;
+        # the equivalent manual invocation omits --virus.
+        ["dereplicate", "-wd", wd, "--tool", "skder"],
         ["phylo", "-wd", wd, "--treebuilder", "mashtree"],
         ["tree2tax", "-wd", wd],
     ):

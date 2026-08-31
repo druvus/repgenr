@@ -298,6 +298,11 @@ def run_tool(
     config = _CONFIG
     image = resolve_image(caps, config) if config.active else None
     if image is None:
+        if config.active:
+            logger.warning(
+                "Tool '%s' declares no container/conda image; running on the "
+                "host despite --container %s.", caps.name, config.backend,
+            )
         return process.run(
             command, logger=logger, cwd=cwd, env=env, check=check,
             stdout_path=stdout_path, log_prefix=log_prefix, timeout=timeout,

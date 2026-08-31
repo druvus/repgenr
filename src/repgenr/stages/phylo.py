@@ -111,7 +111,7 @@ def build_tree(
         threads=params.threads,
         outgroup=None if params.no_outgroup else outgroup_leaf,
         bootstrap=params.bootstrap,
-        extra=dict(params.extra),
+        extra={**builder.capabilities.default_params, **params.extra},
     )
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 

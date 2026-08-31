@@ -37,6 +37,7 @@ class DrepDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="drep",
         conda=("bioconda::drep",),
+        accepted_extras=frozenset({"virus", "S_algorithm", "length"}),
         required_binaries=(BinarySpec("dRep", version_args=("--version",)),),
         default_params={"S_algorithm": "fastANI"},
         recommended_max_genomes=2000,

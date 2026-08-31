@@ -22,6 +22,7 @@ class SourmashBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="sourmash",
         conda=("bioconda::sourmash",),
+        accepted_extras=frozenset({"ksize", "scaled"}),
         required_binaries=(
             BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
         ),

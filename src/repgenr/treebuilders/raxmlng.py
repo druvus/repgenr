@@ -19,6 +19,7 @@ class RaxmlNgBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="raxmlng",
         conda=("bioconda::raxml-ng",),
+        accepted_extras=frozenset({"model"}),
         required_binaries=(
             BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),
         ),

@@ -90,12 +90,20 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     versions = adapter.preflight()
     logger.info("Dereplicating %d genomes with %s", len(genomes), tool)
 
+    caps = adapter.capabilities
+    extra = {**caps.default_params, **(params.extra or {})}
+    unconsumed = set(params.extra or {}) - caps.accepted_extras
+    if unconsumed:
+        logger.warning(
+            "Dereplicator '%s' ignores extra parameter(s): %s",
+            tool, ", ".join(sorted(unconsumed)),
+        )
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
-        extra=dict(params.extra or {}),
+        extra=extra,
     )
 
     scratch = ctx.scratch_dir / "dereplicate"
