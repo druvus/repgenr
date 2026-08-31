@@ -1,9 +1,15 @@
 """sourmash dereplication adapter (k-mer / MinHash ANI clustering).
 
 Sketches each genome and greedily picks representatives: walk genomes ordered by
-connectivity, and absorb any genome whose Jaccard similarity to a chosen
+connectivity, and absorb any genome whose *estimated ANI* to a chosen
 representative is above the threshold. Fast and low-memory, useful as a scalable
 alternative to alignment-based ANI.
+
+The threshold is on sourmash's ANI estimate, the same scale skder and galah
+use — not on raw sketch similarity. At k=31 a genome pair at 99.6 percent ANI
+has Jaccard only ~0.8, so thresholding the raw similarity at an ANI-style 0.99
+would leave nearly everything a singleton (verified against skani on synthetic
+sets; see docs/scaling-audit.md).
 
 Two back-ends compute the pairwise similarities, picked automatically:
 
@@ -178,10 +184,13 @@ class SourmashDereplicator(Dereplicator):
         sig_files = sorted(sig_by_genome[g] for g in genomes)
         # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
         compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
+        # --ani converts the matrix to ANI estimates, matching the threshold's
+        # unit (raw Jaccard at k=31 sits far below ANI: ~0.8 at 99.6 pct ANI).
         run_tool(self.capabilities,
             [
                 "sourmash", "compare",
                 "-k", str(ksize),
+                "--ani",
                 "--csv", matrix_csv,
                 "--from-file", compare_fofn,
             ],
@@ -207,9 +216,12 @@ class SourmashDereplicator(Dereplicator):
         """Branchwater manysketch + pairwise: emit only above-threshold edges.
 
         ``pairwise -t`` is a *containment* threshold for which pairs to report.
-        Containment is always >= Jaccard, so reporting at the Jaccard ``threshold``
-        yields a superset of the edges we want; we then keep only pairs whose
-        Jaccard column is >= ``threshold``, matching the dense ``compare`` graph.
+        An ANI of ``threshold`` corresponds to containment ``threshold ** ksize``
+        (ANI estimate = containment^(1/k)), and average containment never exceeds
+        max containment, so prefiltering at ``threshold ** ksize`` yields a
+        superset of the wanted edges; the parser then keeps pairs whose
+        containment-derived ANI is >= ``threshold``, matching the dense
+        ``compare --ani`` graph.
         """
         threads = str(params.threads)
         if sketch_cache is not None:
@@ -259,7 +271,7 @@ class SourmashDereplicator(Dereplicator):
             [
                 "sourmash", "scripts", "pairwise", sigs_zip,
                 "-o", pairwise_csv,
-                "-t", f"{threshold:g}",
+                "-t", f"{threshold ** ksize:g}",
                 "-k", str(ksize),
                 "-c", threads,
             ],
@@ -272,7 +284,7 @@ class SourmashDereplicator(Dereplicator):
         # a mutually-similar group becomes the representative) matches the dense
         # ``compare`` path, whose label order is the sorted signature-file glob.
         labels = [g.stem for g in sorted(genomes, key=lambda g: g.name)]
-        neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels))
+        neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels), ksize)
         return _sparse_greedy_cluster(labels, neighbors, name_by_label)
 
 
@@ -345,14 +357,18 @@ def _branchwater_available(caps: ToolCapabilities, logger: logging.Logger) -> bo
 
 
 def _parse_pairwise_csv(
-    path: Path, threshold: float, known: set[str]
+    path: Path, threshold: float, known: set[str], ksize: int
 ) -> dict[str, set[str]]:
     """Parse a branchwater ``pairwise`` edge list into a symmetric neighbour map.
 
-    Keeps pairs whose Jaccard is >= ``threshold`` (mirroring the dense graph) and
-    drops self-edges. Only labels in ``known`` are kept, so a stray name cannot
-    introduce a phantom node.
+    Keeps pairs whose containment-derived ANI estimate (containment^(1/k), the
+    quantity ``sourmash compare --ani`` reports) is >= ``threshold``, mirroring
+    the dense graph. Rows without an ``average_containment`` column fall back to
+    the containment equivalent of Jaccard, 2j/(1+j). Self-edges are dropped, and
+    only labels in ``known`` are kept, so a stray name cannot introduce a
+    phantom node.
     """
+    min_containment = threshold ** ksize
     neighbors: dict[str, set[str]] = {}
     with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo)
@@ -362,10 +378,15 @@ def _parse_pairwise_csv(
             if q == m or q not in known or m not in known:
                 continue
             try:
-                jaccard = float(row.get("jaccard", "") or "nan")
-            except ValueError:
+                raw = row.get("average_containment")
+                if raw:
+                    containment = float(raw)
+                else:
+                    jaccard = float(row.get("jaccard", "") or "nan")
+                    containment = 2 * jaccard / (1 + jaccard)
+            except (ValueError, ZeroDivisionError):
                 continue
-            if jaccard < threshold:
+            if not containment >= min_containment:  # NaN also fails here
                 continue
             neighbors.setdefault(q, set()).add(m)
             neighbors.setdefault(m, set()).add(q)
