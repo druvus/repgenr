@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import atomic_path
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
@@ -53,5 +54,6 @@ class IqtreeBuilder(TreeBuilder):
         if not treefile.exists():
             raise WorkdirError("IQ-TREE did not produce a .treefile")
         tree = out_dir / "tree.nwk"
-        shutil.copy2(treefile, tree)
+        with atomic_path(tree) as tmp:
+            shutil.copy2(treefile, tmp)
         return tree

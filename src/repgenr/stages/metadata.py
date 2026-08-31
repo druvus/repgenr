@@ -28,6 +28,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import (
     SELECTION_TSV,
     SelectionRow,
+    atomic_path,
     genome_filename,
     write_selection,
 )
@@ -190,7 +191,7 @@ def _open_metadata(path: Path, workdir: Path):
             source = tar.extractfile(member)
             if source is None:
                 raise WorkdirError("Could not read .tsv from GTDB tarball")
-            with source, gzip.open(tsv_gz, "wb") as fo:
+            with atomic_path(tsv_gz) as tmp, source, gzip.open(tmp, "wb") as fo:
                 shutil.copyfileobj(source, fo)
         path = tsv_gz
     return gzip.open(path, "rt")

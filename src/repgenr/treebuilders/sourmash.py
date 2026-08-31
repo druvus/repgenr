@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import atomic_replace
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
@@ -83,7 +84,8 @@ class SourmashBuilder(TreeBuilder):
         newick = neighbor_joining(clean_labels, dist)
 
         tree = out_dir / "tree.nwk"
-        tree.write_text(newick + "\n")
+        with atomic_replace(tree) as fo:
+            fo.write(newick + "\n")
         return tree
 
 

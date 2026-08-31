@@ -21,6 +21,7 @@ from pathlib import Path
 from ..core import process
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool_with_retries
+from ..core.contracts import atomic_path
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 
@@ -156,7 +157,8 @@ def fetch(
             "or loosen the filters (--complete-only/--host/--released-after)."
         )
     records = parse_report(report.read_text().splitlines())
-    shutil.copyfile(fna, out_dir / "download.fa")
+    with atomic_path(out_dir / "download.fa") as tmp:
+        shutil.copyfile(fna, tmp)
     zip_path.unlink(missing_ok=True)
     shutil.rmtree(extract, ignore_errors=True)
     logger.info("NCBI Virus: %d sequences for taxon '%s'", len(records), target)
