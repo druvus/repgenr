@@ -17,11 +17,11 @@ detailed per-stage SWOT and gap analyses are in [swot-derep.md](swot-derep.md),
 | Step / tool | 1000 genomes | 5000 genomes | Notes |
 |---|---|---|---|
 | dereplicate: skder | yes (~7 min, 1.1-1.5 GB) | PENDING | ARI 1.0 on both scenarios |
-| dereplicate: galah | yes (~6 min, 1.3 GB) | PENDING | ARI 1.0 on both scenarios |
-| dereplicate: sourmash | runs, but see finding 1 | PENDING | threshold is not ANI-scaled |
+| dereplicate: galah | yes (~4-6 min, 1.2-1.3 GB) | PENDING | ARI 1.0 on both scenarios |
+| dereplicate: sourmash | runs (~2 min) but see finding 1 | PENDING | threshold is not ANI-scaled |
 | dereplicate: chunked (--process-size) | n/a | PENDING (B2) | result depends on input order |
-| phylo: mashtree | PENDING | PENDING | 9 s at n=100 |
-| phylo: sourmash NJ | PENDING | never (O(n^3) Python) | declared limit 10000 is implausible |
+| phylo: mashtree | yes (~2 min, 0.5 GB) | PENDING | 9 s at n=100 |
+| phylo: sourmash NJ | yes (~2.4 min) | extrapolated ~1.5-2 h | declared 10000 limit extrapolates to ~12 h of pure-Python NJ |
 | phylo: sibeliaz -> fasttree/iqtree | no | no | times out (>2 h) already at n=100 |
 | snptype: simple | untested at scale | untested | serial, O(n^2 S) RAM (see swot-phylo) |
 
@@ -64,28 +64,41 @@ tools. All numbers below are from `benchmarks/results/cells/*.json`.
 | sourmash (dense), balanced 100 | 28 s | 170 MB | 100 | 2 | 0.00 |
 | sourmash (dense), clonal 100 | 9 s | 176 MB | 61 | 3 | 0.54 |
 | sourmash (dense), balanced 1000 | 83 s | 234 MB | 1000 | 20 | 0.00 |
+| galah, clonal 1000 | 208 s | 1164 MB | 13 | 13 | 1.00 |
+| sourmash (sparse), clonal 1000 | 120 s | 248 MB | 601 | 13 | 0.90 |
+| sourmash (dense), clonal 1000 | 98 s | 189 MB | 601 | 13 | 0.90 |
 
 n=5000 rows and the chunked-vs-single comparison: PENDING (heavy tier).
 
 ### Findings
 
-1. **The sourmash adapter's `--secondary-ani` is not ANI.** At the same
-   nominal 0.99 threshold, skder and galah recover the true clustering
-   exactly (ARI 1.00 in every cell), while sourmash leaves every genome a
-   singleton on the balanced sets (ARI 0.00) and only merges the
-   near-identical clone block on the clonal sets (ARI 0.54). The threshold is
-   applied to sketch similarity (Jaccard-derived), which at k=31 falls far
-   below the corresponding ANI: genomes at 99.8 percent ANI have k-mer
-   similarity around 0.94 and never reach a 0.99 cut. Users switching tools
-   at a fixed threshold silently get a completely different granularity.
-   Fix direction: convert the threshold to sourmash's ANI estimate, or
-   document the unit clearly and pick a matching default.
-2. **Representative identity is tool- and backend-dependent on clone blocks.**
-   On clonal_100, galah and sourmash-sparse crown the alphabetically first
-   clone member; skder crowns a different member (g000039), and
-   sourmash-dense yet another (g000034). Same data, four different
-   "representative genomes". Order-sensitivity across the three accession
-   orderings: PENDING (B1, `benchmarks/results/bias_b1.json`).
+1. **Confirmed bug: the sourmash adapter's `--secondary-ani` thresholds
+   Jaccard similarity, not ANI.** At the same nominal 0.99 threshold, skder
+   and galah recover the true clustering exactly (ARI 1.00 in every cell),
+   while sourmash leaves every genome a singleton on the balanced sets
+   (ARI 0.00) and merges only the near-identical clone block on the clonal
+   sets (ARI 0.54-0.90). Verified directly: a genome pair at 99.57 percent
+   ANI (skani) has k=31 Jaccard 0.796 — far below the 0.99 cut — while
+   sourmash's own ANI estimate for the pair is 0.9961 (`compare --ani`).
+   Re-clustering the full balanced_100 set with the adapter's unchanged
+   greedy code but an `--ani` matrix yields 2 representatives and ARI 1.0
+   at the same threshold. Fix (both paths): dense — add `--ani` to
+   `sourmash compare`; sparse — branchwater's pairwise CSV carries
+   containment columns and `containment^(1/k)` reproduces the ANI estimate
+   to four decimals, with `-t threshold^k` preserving edge sparsity.
+2. **Representative identity is tool- and backend-dependent on clone blocks**
+   (B1, `benchmarks/results/bias_b1.json`; clonal_50 under three accession
+   orderings). galah crowns the alphabetically first clone member in all
+   three orderings — its choice tracks filename sort position exactly.
+   sourmash-sparse crowns the alphabetically first member in two of three
+   orderings (greedy first-seen assignment). skder picks by its own
+   aggregate-ANI criterion (a different member in each ordering; within a
+   near-identical clone block that choice is effectively arbitrary). The
+   sparse and dense sourmash backends crown different members on the same
+   input (clonal_100: g000000 vs g000034; clonal_1000: g000010 vs g000384).
+   Practical consequence: which outbreak genome becomes "the representative"
+   depends on the tool, the backend, and the accession naming — not on
+   content quality.
 3. **Chunked dereplication is input-order dependent by construction** — the
    sorted genome list is sliced into contiguous chunks
    (src/repgenr/stages/dereplicate.py), so a clone block that sorts together
@@ -112,13 +125,18 @@ n=5000 rows and the chunked-vs-single comparison: PENDING (heavy tier).
 | Cell | wall | peak RSS | outcome |
 |---|---|---|---|
 | mashtree, 100 genomes | 9 s | 69 MB | 100-leaf tree |
+| mashtree, 1000 genomes | 117 s | 487 MB | 1000-leaf tree |
 | sourmash NJ, 100 genomes | 25 s | 170 MB | 100-leaf tree |
+| sourmash NJ, 500 genomes | 55 s | 182 MB | 500-leaf tree |
+| sourmash NJ, 1000 genomes | 142 s | 294 MB | 1000-leaf tree |
 | sibeliaz -> fasttree, 100 genomes | >2 h | — | timeout, no tree |
 | sibeliaz -> iqtree, 100 genomes | >2 h | — | timeout, no tree |
 
-mashtree/sourmash-NJ at 1000 (and the O(n^3) fit against the declared 10000
-limit), mashtree at 5000, and the reduced fasttree/iqtree curve at n=20/50:
-PENDING.
+Fitting the sourmash NJ curve as linear (sketch/compare) plus cubic (the
+pure-Python NJ) gives roughly t = 0.1 s x n + 4.3e-8 s x n^3: about 1.6
+hours at n=5000 and about 12 hours at the declared 10000 limit — the
+cubic term is ~30 s of the 142 s at n=1000 and dominates beyond ~2000.
+mashtree at 5000 and the fasttree/iqtree curve at n=20/50: PENDING.
 
 ### Findings
 
