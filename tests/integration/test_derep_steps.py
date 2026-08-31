@@ -53,7 +53,7 @@ class _Halver(Dereplicator):
 @pytest.fixture
 def reg():
     registry._load()
-    registry._classes["halver"] = _Halver
+    registry.register("halver", _Halver, replace=True)
     yield
     registry._classes.pop("halver", None)
 

@@ -37,8 +37,7 @@ class ProgressiveMauveAligner(Aligner):
         container="quay.io/biocontainers/mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4",
         conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
-        recommended_max_genomes=500,
-        threads_param=None,  # progressiveMauve is single-threaded per alignment
+        recommended_max_genomes=500,  # progressiveMauve is single-threaded per alignment
     )
 
     def align(

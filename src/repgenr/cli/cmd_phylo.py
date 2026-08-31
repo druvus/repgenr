@@ -6,17 +6,29 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, _parse_key_values, _require_choice, _run, app
+from .base import (
+    DEFAULT_THREADS,
+    _aligner_help,
+    _parse_key_values,
+    _require_choice,
+    _run,
+    _snp_help,
+    _tree_help,
+    app,
+)
 
 
 @app.command()
 def snptype(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    tool: str = typer.Option("simple", "--tool", help="SNP typer: simple/snippy/parsnp."),
+    tool: str = typer.Option("simple", "--tool", help=_snp_help()),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help="Recombination masking: none or gubbins."),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
+    ),
     allow_incomplete: bool = typer.Option(
         False, "--allow-incomplete",
         help="Proceed with a warning when the input genome set is incomplete.",
@@ -36,6 +48,7 @@ def snptype(
             all_genomes=all_genomes,
             mask=mask,
             allow_incomplete=allow_incomplete,
+            extra=_parse_key_values(tool_arg, "--tool-arg"),
         )
 
     _run("snptype", workdir, build)
@@ -44,14 +57,10 @@ def snptype(
 @app.command()
 def phylo(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    treebuilder: str = typer.Option(
-        "iqtree", "--treebuilder", help="auto/iqtree/fasttree/raxmlng/mashtree/sourmash."
-    ),
+    treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
-    aligner: str = typer.Option(
-        "progressivemauve", "--aligner", help="progressivemauve, cactus, sibeliaz."
-    ),
-    snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
+    aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
+    snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
     bootstrap: int = typer.Option(

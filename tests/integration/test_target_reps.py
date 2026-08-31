@@ -47,7 +47,7 @@ def anidep_workdir(workdir: Path):
     for i in range(10):
         (gdir / f"Fam_g_s_GCA_{i:06d}.1.fasta").write_text(">x\nACGT\n")
     registry._load()
-    registry._classes["anidep"] = _AniDep
+    registry.register("anidep", _AniDep, replace=True)
     yield WorkdirContext(workdir, create=True)
     registry._classes.pop("anidep", None)
 

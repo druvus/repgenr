@@ -20,7 +20,6 @@ class MashtreeBuilder(TreeBuilder):
             BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),
         ),
         recommended_max_genomes=10000,
-        threads_param="--numcpus",
     )
     input_kind = InputKind.GENOMES
 

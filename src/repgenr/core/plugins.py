@@ -50,7 +50,6 @@ class ToolCapabilities:
     default_params: dict = field(default_factory=dict)
     recommended_max_genomes: int | None = None
     supports_native_scaling: bool = False
-    threads_param: str | None = None
     # Container execution: a pinned image URI (BioContainer or Wave-minted) for
     # single-tool adapters, or a conda spec resolved to an image via Wave when no
     # explicit image is set and Wave is enabled.
@@ -88,6 +87,25 @@ class Registry[T]:
     def names(self) -> list[str]:
         self._load()
         return sorted(self._classes)
+
+    def register(self, name: str, cls: type[T], *, replace: bool = False) -> None:
+        """Register an adapter class under ``name`` (tests, embedding callers).
+
+        Entry points remain the discovery path for installed packages; this is
+        the public API for programmatic registration, replacing direct mutation
+        of the private class table.
+        """
+        self._load()
+        if name in self._classes and not replace:
+            raise PluginError(
+                f"Tool '{name}' is already registered for {self.group} "
+                "(pass replace=True to override)."
+            )
+        self._classes[name] = cls
+
+    def unregister(self, name: str) -> None:
+        self._load()
+        self._classes.pop(name, None)
 
     def is_broken(self, name: str) -> bool:
         """True when ``name`` is registered but its adapter failed to import."""
@@ -137,6 +155,19 @@ def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
 
 
 AUTO = "auto"
+
+
+def tool_choices_help(registry: Registry, *, auto: bool = True, prefix: str = "") -> str:
+    """Help text naming the currently registered tools for a CLI option.
+
+    Generated from the registry so third-party adapters appear in --help and
+    the text can never drift from the actual choices.
+    """
+    names = registry.names()
+    choices = (["auto"] if auto else []) + names
+    # Comma-space separators so Rich can wrap the list in a narrow help
+    # panel instead of ellipsizing one long slash-joined token.
+    return f"{prefix}{', '.join(choices) or '(none registered)'}."
 
 
 def _capabilities_of(registry: Registry, name: str) -> ToolCapabilities | None:

@@ -64,9 +64,9 @@ class _RecordingDereplicator(_FakeDereplicator):
 @pytest.fixture
 def fake_tool() -> None:
     registry._load()
-    registry._classes["fake"] = _FakeDereplicator
-    registry._classes["chunky"] = _NonScalingDereplicator
-    registry._classes["recording"] = _RecordingDereplicator
+    registry.register("fake", _FakeDereplicator, replace=True)
+    registry.register("chunky", _NonScalingDereplicator, replace=True)
+    registry.register("recording", _RecordingDereplicator, replace=True)
     _RecordingDereplicator.calls = []
     yield
     registry._classes.pop("fake", None)

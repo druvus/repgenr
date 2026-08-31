@@ -12,16 +12,11 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 
 from ..core.plugins import Registry, ToolCapabilities, preflight
 
 registry: Registry[Aligner] = Registry("repgenr.aligners")
-
-
-class OutputKind(Enum):
-    MSA_FASTA = "msa_fasta"
 
 
 @dataclass
@@ -39,7 +34,6 @@ class AlignResult:
 
 class Aligner(ABC):
     capabilities: ToolCapabilities
-    output_kind: OutputKind = OutputKind.MSA_FASTA
 
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)

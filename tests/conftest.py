@@ -37,3 +37,18 @@ def genome_files(workdir: Path) -> list[Path]:
         p.write_text(f">seq{i}\n{'ACGT' * 10}\n")
         out.append(p)
     return out
+
+
+@pytest.fixture()
+def register_tool():
+    """Register an adapter class on a registry for one test, restoring after."""
+    registered: list[tuple] = []
+
+    def _register(registry, name, cls):
+        registry.register(name, cls, replace=True)
+        registered.append((registry, name))
+        return cls
+
+    yield _register
+    for registry, name in registered:
+        registry.unregister(name)

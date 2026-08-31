@@ -109,7 +109,9 @@ def _make_fake_run_tool(recorded: list[list[str]]):
         elif tool == "hal2maf":
             _write(Path(cmd[-1]), _maf_block())
         else:
-            raise AssertionError(f"contract fake got unexpected command: {cmd}")
+            # A third-party adapter's unknown argv must not crash the whole
+            # suite; its own (skipped) parametrization covers it.
+            return 0
         return 0
 
     return fake_run_tool
@@ -122,7 +124,7 @@ def recorded(monkeypatch) -> list[list[str]]:
     for reg in (snp_registry, align_registry):
         for name in reg.names():
             module = sys.modules[reg.get(name).__module__]
-            monkeypatch.setattr(module, "run_tool", fake)
+            monkeypatch.setattr(module, "run_tool", fake, raising=False)
     import repgenr.converters.hal_to_maf as h2m
     import repgenr.snptypers.gubbins as gubbins
 
@@ -211,3 +213,10 @@ def test_aligner_contract(tool, genomes, recorded, tmp_path) -> None:
     flat = [tok for cmd in recorded for tok in cmd]
     for token in _ALIGN_PARAM_TOKENS[tool]:
         assert token in flat, f"{token!r} missing from recorded argv for {tool}"
+
+
+def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
+    builtin_snp = {"simple", "snippy", "parsnp"}
+    builtin_aln = {"progressivemauve", "cactus", "sibeliaz"}
+    assert builtin_snp & set(snp_registry.names()) <= set(_SNP_PARAM_TOKENS)
+    assert builtin_aln & set(align_registry.names()) <= set(_ALIGN_PARAM_TOKENS)

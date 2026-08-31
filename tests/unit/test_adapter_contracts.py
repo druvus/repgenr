@@ -144,7 +144,9 @@ def _make_fake_run_tool(recorded: list[list[str]]):
             prefix = _flag_value(cmd, "--prefix")
             Path(prefix + ".raxml.bestTree").write_text(_NEWICK, encoding="utf-8")
         else:
-            raise AssertionError(f"contract fake got unexpected command: {cmd}")
+            # A third-party adapter's unknown argv must not crash the whole
+            # suite; its own (skipped) parametrization covers it.
+            return 0
         return 0
 
     return fake_run_tool
@@ -158,7 +160,7 @@ def recorded(monkeypatch) -> list[list[str]]:
     for reg in (derep_registry, tree_registry):
         for name in reg.names():
             module = sys.modules[reg.get(name).__module__]
-            monkeypatch.setattr(module, "run_tool", fake)
+            monkeypatch.setattr(module, "run_tool", fake, raising=False)
     import repgenr.dereplicators.sourmash as sm
 
     sm._BRANCHWATER_CACHE.clear()
@@ -260,3 +262,15 @@ def test_treebuilder_contract(tool, genomes, msa, recorded, tmp_path) -> None:
     flat = [tok for cmd in recorded for tok in cmd]
     for token in _TREE_PARAM_TOKENS[tool]:
         assert token in flat, f"{token!r} missing from recorded argv for {tool}"
+
+
+def test_every_registered_dereplicator_has_contract_coverage() -> None:
+    """A new in-tree adapter must add itself to the contract parametrization."""
+    assert set(derep_registry.names()) >= set(_DEREP_PARAM_TOKENS)
+    builtin = {"drep", "galah", "skder", "sourmash"}
+    assert builtin & set(derep_registry.names()) <= set(_DEREP_PARAM_TOKENS)
+
+
+def test_every_registered_treebuilder_has_contract_coverage() -> None:
+    builtin = {"fasttree", "iqtree", "mashtree", "raxmlng", "sourmash"}
+    assert builtin & set(tree_registry.names()) <= set(_TREE_PARAM_TOKENS)

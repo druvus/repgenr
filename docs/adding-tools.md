@@ -60,6 +60,6 @@ Third parties add the same entry point in their own package's metadata. After
 Unit-test by patching `repgenr.core.process.run` to assert the exact argument
 vector and to drop canned tool output, then assert the returned dataclass.
 Integration-test the owning stage with the adapter registered into the family
-registry (`registry._classes["mytool"] = MyDereplicator`). See
+registry (`registry.register("mytool", MyDereplicator)`). See
 `tests/integration/` for examples. Gate any test that needs the real binary with
 `@pytest.mark.requires_binary`.

@@ -23,7 +23,6 @@ class ParsnpTyper(SnpTyper):
             BinarySpec("harvesttools", version_args=("--version",)),
         ),
         recommended_max_genomes=2000,
-        threads_param="-p",
     )
     requires_reference = True
 

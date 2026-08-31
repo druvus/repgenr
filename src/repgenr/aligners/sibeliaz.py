@@ -48,7 +48,6 @@ class SibeliazAligner(Aligner):
         conda=("bioconda::sibeliaz",),
         required_binaries=(BinarySpec("sibeliaz", version_args=("-v",)),),
         recommended_max_genomes=2000,
-        threads_param="-t",
     )
 
     def align(

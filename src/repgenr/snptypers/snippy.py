@@ -22,7 +22,6 @@ class SnippyTyper(SnpTyper):
             BinarySpec("snippy-core", version_args=("--version",)),
         ),
         recommended_max_genomes=1000,
-        threads_param="--cpus",
     )
     requires_reference = True
 

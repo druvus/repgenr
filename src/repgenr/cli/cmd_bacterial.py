@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, _run, app
+from .base import DEFAULT_THREADS, _derep_help, _parse_key_values, _run, app
 
 
 @app.command()
@@ -62,7 +62,7 @@ def genome(
 @app.command()
 def dereplicate(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    tool: str = typer.Option("skder", "--tool", help="auto/skder/drep/galah/sourmash."),
+    tool: str = typer.Option("skder", "--tool", help=_derep_help()),
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
@@ -95,6 +95,9 @@ def dereplicate(
         "(0 = off; re-runs dereplication per search step).",
     ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Tool tuning as key=value (repeatable), e.g. mode=greedy."
+    ),
     allow_incomplete: bool = typer.Option(
         False, "--allow-incomplete",
         help="Proceed with a warning when genomes/ is missing selected genomes.",
@@ -116,7 +119,10 @@ def dereplicate(
             pre_secondary_ani=pre_secondary_ani,
             reduce=reduce,
             target_reps=target_reps,
-            extra={"virus": virus} if virus else {},
+            extra={
+                **_parse_key_values(tool_arg, "--tool-arg"),
+                **({"virus": True} if virus else {}),
+            },
             allow_incomplete=allow_incomplete,
         )
 

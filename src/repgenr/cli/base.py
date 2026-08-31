@@ -136,6 +136,34 @@ def _env_fragment() -> dict[str, Any]:
     return {"container": [config.backend, config.platform, config.wave_enabled]}
 
 
+def _derep_help(*, auto: bool = True) -> str:
+    from ..core.plugins import tool_choices_help
+    from ..dereplicators.base import registry
+
+    return tool_choices_help(registry, auto=auto)
+
+
+def _tree_help(*, auto: bool = True) -> str:
+    from ..core.plugins import tool_choices_help
+    from ..treebuilders.base import registry
+
+    return tool_choices_help(registry, auto=auto)
+
+
+def _aligner_help() -> str:
+    from ..aligners.base import registry
+    from ..core.plugins import tool_choices_help
+
+    return tool_choices_help(registry, auto=False)
+
+
+def _snp_help() -> str:
+    from ..core.plugins import tool_choices_help
+    from ..snptypers.base import registry
+
+    return tool_choices_help(registry, auto=False, prefix="SNP typer: ")
+
+
 def _require_choice(value: str, choices: set[str], label: str) -> None:
     if value not in choices:
         raise UserInputError(

@@ -31,8 +31,7 @@ class CactusAligner(Aligner):
             BinarySpec("cactus-pangenome", version_args=("--version",)),
             BinarySpec("hal2maf", version_args=()),
         ),
-        recommended_max_genomes=2000,
-        threads_param=None,  # Toil manages its own parallelism
+        recommended_max_genomes=2000,  # Toil manages its own parallelism
     )
 
     def align(

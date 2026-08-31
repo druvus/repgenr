@@ -16,10 +16,14 @@ from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
+    _aligner_help,
+    _derep_help,
     _parse_key_values,
     _read_path_fofn,
     _require_choice,
     _require_unit_interval,
+    _snp_help,
+    _tree_help,
     app,
     stage_errors,
 )
@@ -56,12 +60,15 @@ def dereplicate_chunk_cmd(
         ..., "--genomes-fofn", help="File of genome FASTA paths, one per line."
     ),
     out_dir: Path = typer.Option(..., "-o", "--out", help="Output directory for the chunk result."),
-    tool: str = typer.Option("skder", "--tool", help="skder/drep/galah/sourmash."),
+    tool: str = typer.Option("skder", "--tool", help=_derep_help(auto=False)),
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -83,7 +90,10 @@ def dereplicate_chunk_cmd(
                 tool=tool, genomes=genomes, out_dir=out_dir,
                 primary_ani=primary_ani, secondary_ani=secondary_ani,
                 aligned_fraction=aligned_fraction, threads=threads,
-                extra={"virus": virus} if virus else {},
+                extra={
+                    **_parse_key_values(tool_arg, "--tool-arg"),
+                    **({"virus": True} if virus else {}),
+                },
                 versions_out=versions_out,
             ),
             logger,
@@ -102,14 +112,10 @@ def phylo_build_cmd(
     outgroup_accession: Path | None = typer.Option(
         None, "--outgroup-accession", help="File naming the outgroup accession."
     ),
-    treebuilder: str = typer.Option(
-        "iqtree", "--treebuilder", help="auto/iqtree/fasttree/raxmlng/mashtree/sourmash."
-    ),
+    treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
-    aligner: str = typer.Option(
-        "progressivemauve", "--aligner", help="progressivemauve, cactus, sibeliaz."
-    ),
-    snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
+    aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
+    snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
     bootstrap: int = typer.Option(
         0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000)."
@@ -204,12 +210,15 @@ def dereplicate_merge_cmd(
     chunk_fofn: Path | None = typer.Option(
         None, "--chunk-fofn", help="File listing chunk result directories, one per line."
     ),
-    tool: str = typer.Option("skder", "--tool", help="skder/drep/galah/sourmash."),
+    tool: str = typer.Option("skder", "--tool", help=_derep_help(auto=False)),
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -234,7 +243,10 @@ def dereplicate_merge_cmd(
                 tool=tool, chunk_dirs=chunk_dirs, out_dir=out_dir,
                 primary_ani=primary_ani, secondary_ani=secondary_ani,
                 aligned_fraction=aligned_fraction, threads=threads,
-                extra={"virus": virus} if virus else {},
+                extra={
+                    **_parse_key_values(tool_arg, "--tool-arg"),
+                    **({"virus": True} if virus else {}),
+                },
                 versions_out=versions_out,
             ),
             logger,

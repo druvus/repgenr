@@ -21,7 +21,6 @@ class IqtreeBuilder(TreeBuilder):
         conda=("bioconda::iqtree",),
         required_binaries=(BinarySpec("iqtree", version_args=("--version",)),),
         recommended_max_genomes=500,
-        threads_param="-T",
     )
     input_kind = InputKind.MSA_FASTA
 

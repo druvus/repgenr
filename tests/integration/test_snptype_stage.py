@@ -29,7 +29,7 @@ class _FakeTyper(SnpTyper):
 @pytest.fixture
 def fake_typer():
     registry._load()
-    registry._classes["faketyper"] = _FakeTyper
+    registry.register("faketyper", _FakeTyper, replace=True)
     yield
     registry._classes.pop("faketyper", None)
 

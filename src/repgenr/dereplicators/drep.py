@@ -42,7 +42,6 @@ class DrepDereplicator(Dereplicator):
         default_params={"S_algorithm": "fastANI"},
         recommended_max_genomes=2000,
         supports_native_scaling=False,
-        threads_param="--processors",
     )
 
     def dereplicate(

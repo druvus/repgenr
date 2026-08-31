@@ -31,7 +31,17 @@ class _BadEP:
 
 @pytest.fixture()
 def registry(monkeypatch) -> Registry:
-    monkeypatch.setattr(plugins, "entry_points", lambda group: [_GoodEP(), _BadEP()])
+    # Scope the fake entry points to this test group only: a test that loads
+    # the REAL registries while this patch is active (e.g. list-tools) must not
+    # cache fake adapters into them for the rest of the pytest process.
+    real_entry_points = plugins.entry_points
+
+    def fake_entry_points(group):
+        if group == "repgenr.test_tools":
+            return [_GoodEP(), _BadEP()]
+        return real_entry_points(group=group)
+
+    monkeypatch.setattr(plugins, "entry_points", fake_entry_points)
     return Registry("repgenr.test_tools")
 
 
@@ -76,3 +86,51 @@ def test_list_tools_marks_broken_entries(registry, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "badtool (broken)" in result.output
     assert "goodtool" in result.output
+
+
+def test_register_and_unregister_roundtrip(register_tool) -> None:
+    from repgenr.core.errors import PluginError
+    from repgenr.core.plugins import Registry, ToolCapabilities
+
+    reg: Registry = Registry("repgenr.test_register")
+    reg._loaded = True  # bare registry: skip entry-point discovery
+
+    class Adapter:
+        capabilities = ToolCapabilities(name="mytool")
+
+    register_tool(reg, "mytool", Adapter)
+    assert "mytool" in reg.names()
+    assert reg.get("mytool") is Adapter
+    with pytest.raises(PluginError, match="already registered"):
+        reg.register("mytool", Adapter)
+    reg.register("mytool", Adapter, replace=True)  # explicit override allowed
+
+
+def test_third_party_adapter_without_run_tool_survives_contract_fixture(
+    register_tool, monkeypatch, tmp_path
+) -> None:
+    """An external adapter module lacking a module-level run_tool symbol must
+    not break the contract suite's patching (raising=False)."""
+    import types
+
+    from repgenr.dereplicators.base import Dereplicator, registry
+
+    mod = types.ModuleType("thirdparty_derep")
+
+    class ThirdParty(Dereplicator):
+        from repgenr.core.plugins import ToolCapabilities
+        capabilities = ToolCapabilities(name="thirdparty")
+
+        def dereplicate(self, genomes, out_dir, params, logger):
+            raise NotImplementedError
+
+    ThirdParty.__module__ = "thirdparty_derep"
+    import sys
+
+    monkeypatch.setitem(sys.modules, "thirdparty_derep", mod)
+    register_tool(registry, "thirdparty", ThirdParty)
+
+    # mimic the contract fixture's patch loop over every registered adapter
+    for name in registry.names():
+        module = sys.modules[registry.get(name).__module__]
+        monkeypatch.setattr(module, "run_tool", lambda *a, **k: 0, raising=False)
