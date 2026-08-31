@@ -7,16 +7,16 @@
   "/Volumes/sekvens2/repgenr/work/derep-sourmashdense-balanced-100/derep_out",
   "8"
  ],
- "ari_vs_truth": 0.0,
+ "ari_vs_truth": 1.0,
  "clone_representative": null,
  "exit_code": 0,
  "id": "derep-sourmashdense-balanced-100",
  "kind": "derep_dense",
- "max_rss_mb": 169.8,
+ "max_rss_mb": 159.0,
  "n": 100,
- "n_representatives": 100,
+ "n_representatives": 2,
  "set": "balanced_100_clustered",
  "status": "ok",
  "tool": "sourmash",
- "wall_s": 28.05
+ "wall_s": 5.49
 }

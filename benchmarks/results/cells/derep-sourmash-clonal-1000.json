@@ -11,16 +11,16 @@
   "-t",
   "8"
  ],
- "ari_vs_truth": 0.898,
- "clone_representative": "Benchfam_Benchgen_g000010_GCF9000010.1.fasta",
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
  "exit_code": 0,
  "id": "derep-sourmash-clonal-1000",
  "kind": "derep_step",
- "max_rss_mb": 248.3,
+ "max_rss_mb": 204.2,
  "n": 1000,
- "n_representatives": 601,
+ "n_representatives": 13,
  "set": "clonal_1000_clustered",
  "status": "ok",
  "tool": "sourmash",
- "wall_s": 119.99
+ "wall_s": 61.56
 }

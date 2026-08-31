@@ -11,16 +11,16 @@
   "-t",
   "8"
  ],
- "ari_vs_truth": 0.0,
+ "ari_vs_truth": 1.0,
  "clone_representative": null,
  "exit_code": 0,
  "id": "derep-sourmash-balanced-100",
  "kind": "derep_step",
- "max_rss_mb": 205.1,
+ "max_rss_mb": 348.8,
  "n": 100,
- "n_representatives": 100,
+ "n_representatives": 2,
  "set": "balanced_100_clustered",
  "status": "ok",
  "tool": "sourmash",
- "wall_s": 21.72
+ "wall_s": 3.48
 }

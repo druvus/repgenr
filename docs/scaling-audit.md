@@ -18,7 +18,7 @@ detailed per-stage SWOT and gap analyses are in [swot-derep.md](swot-derep.md),
 |---|---|---|---|
 | dereplicate: skder | yes (~7 min, 1.1-1.5 GB) | PENDING | ARI 1.0 on both scenarios |
 | dereplicate: galah | yes (~4-6 min, 1.2-1.3 GB) | PENDING | ARI 1.0 on both scenarios |
-| dereplicate: sourmash | runs (~2 min) but see finding 1 | PENDING | threshold is not ANI-scaled |
+| dereplicate: sourmash (post-#127) | yes (~1 min, ~0.2 GB) | yes (~5.5 min sparse, ~0.3-0.7 GB) | ARI 1.0 everywhere after the threshold fix |
 | dereplicate: chunked (--process-size) | n/a | PENDING (B2) | result depends on input order |
 | phylo: mashtree | yes (~2 min, 0.5 GB) | PENDING | 9 s at n=100 |
 | phylo: sourmash NJ | yes (~2.4 min) | extrapolated ~1.5-2 h | declared 10000 limit extrapolates to ~12 h of pure-Python NJ |
@@ -58,34 +58,41 @@ tools. All numbers below are from `benchmarks/results/cells/*.json`.
 | galah, balanced 100 | 10 s | 151 MB | 2 | 2 | 1.00 |
 | galah, clonal 100 | 3 s | 199 MB | 3 | 3 | 1.00 |
 | galah, balanced 1000 | 360 s | 1286 MB | 20 | 20 | 1.00 |
-| sourmash (sparse), balanced 100 | 22 s | 205 MB | 100 | 2 | 0.00 |
-| sourmash (sparse), clonal 100 | 11 s | 329 MB | 61 | 3 | 0.54 |
-| sourmash (sparse), balanced 1000 | 142 s | 257 MB | 1000 | 20 | 0.00 |
-| sourmash (dense), balanced 100 | 28 s | 170 MB | 100 | 2 | 0.00 |
-| sourmash (dense), clonal 100 | 9 s | 176 MB | 61 | 3 | 0.54 |
-| sourmash (dense), balanced 1000 | 83 s | 234 MB | 1000 | 20 | 0.00 |
 | galah, clonal 1000 | 208 s | 1164 MB | 13 | 13 | 1.00 |
-| sourmash (sparse), clonal 1000 | 120 s | 248 MB | 601 | 13 | 0.90 |
-| sourmash (dense), clonal 1000 | 98 s | 189 MB | 601 | 13 | 0.90 |
+| sourmash (sparse), balanced 100 | 3 s | 349 MB | 2 | 2 | 1.00 |
+| sourmash (sparse), clonal 100 | 9 s | 194 MB | 3 | 3 | 1.00 |
+| sourmash (sparse), balanced 1000 | 62 s | 201 MB | 20 | 20 | 1.00 |
+| sourmash (sparse), clonal 1000 | 62 s | 204 MB | 13 | 13 | 1.00 |
+| sourmash (sparse), balanced 5000 | 319 s | 302 MB | 100 | 100 | 1.00 |
+| sourmash (sparse), clonal 5000 | 335 s | 692 MB | 61 | 61 | 1.00 |
+| sourmash (dense), balanced 1000 | 60 s | 179 MB | 20 | 20 | 1.00 |
+| sourmash (dense), balanced 5000 | 634 s | 908 MB | 100 | 100 | 1.00 |
+| sourmash (dense), clonal 5000 | 619 s | 969 MB | 61 | 61 | 1.00 |
 
-n=5000 rows and the chunked-vs-single comparison: PENDING (heavy tier).
+sourmash rows are post-fix (#127/#128; the dense 100/1000 clonal cells match
+the sparse rows). Before the fix the same cells scored ARI 0.00 on balanced
+sets (100 and 1000 singletons) and 0.54-0.90 on clonal — those pre-fix
+numbers are the bug record for finding 1. skder/galah n=5000 rows and the
+chunked-vs-single comparison: PENDING (heavy tier).
 
 ### Findings
 
-1. **Confirmed bug: the sourmash adapter's `--secondary-ani` thresholds
-   Jaccard similarity, not ANI.** At the same nominal 0.99 threshold, skder
-   and galah recover the true clustering exactly (ARI 1.00 in every cell),
-   while sourmash leaves every genome a singleton on the balanced sets
-   (ARI 0.00) and merges only the near-identical clone block on the clonal
-   sets (ARI 0.54-0.90). Verified directly: a genome pair at 99.57 percent
-   ANI (skani) has k=31 Jaccard 0.796 — far below the 0.99 cut — while
-   sourmash's own ANI estimate for the pair is 0.9961 (`compare --ani`).
-   Re-clustering the full balanced_100 set with the adapter's unchanged
-   greedy code but an `--ani` matrix yields 2 representatives and ARI 1.0
-   at the same threshold. Fix (both paths): dense — add `--ani` to
-   `sourmash compare`; sparse — branchwater's pairwise CSV carries
-   containment columns and `containment^(1/k)` reproduces the ANI estimate
-   to four decimals, with `-t threshold^k` preserving edge sparsity.
+1. **Found and fixed (#127, #128): the sourmash adapter's `--secondary-ani`
+   thresholded Jaccard similarity, not ANI.** At the same nominal 0.99
+   threshold, skder and galah recovered the true clustering exactly
+   (ARI 1.00 in every cell) while sourmash left every genome a singleton on
+   the balanced sets (ARI 0.00) and merged only the near-identical clone
+   block on the clonal sets (ARI 0.54-0.90). Verified directly: a genome
+   pair at 99.57 percent ANI (skani) has k=31 Jaccard 0.796 — far below the
+   0.99 cut — while the ANI estimate for the pair is 0.9961. The fix
+   converts both back-ends to the ANI scale with one formula: sparse keeps
+   pairs by `containment^(1/k)` from branchwater's edge list (prefiltered
+   at `threshold^k` to stay sparse), dense converts the Jaccard matrix via
+   `(2j/(1+j))^(1/k)` — computed in the adapter rather than with `compare
+   --ani`, which reports 0 for tiny sketches. Post-fix, all 12 sourmash
+   cells score ARI 1.00 (table above), sparse and dense agree at every
+   size, and sourmash-sparse is the fastest correct dereplicator measured
+   at n=5000 (335 s, 0.7 GB).
 2. **Representative identity is tool- and backend-dependent on clone blocks**
    (B1, `benchmarks/results/bias_b1.json`; clonal_50 under three accession
    orderings). galah crowns the alphabetically first clone member in all
