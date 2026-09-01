@@ -178,7 +178,7 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
     class FakeMasker(Masker):
         capabilities = ToolCapabilities(name="fakemask")
 
-        def mask(self, core_snp_fasta, out_dir, logger):
+        def mask(self, full_alignment, out_dir, params, logger):
             out_dir.mkdir(parents=True, exist_ok=True)
             out = out_dir / "filtered.fasta"
             out.write_text(">m\nAC\n", encoding="utf-8")
@@ -195,8 +195,10 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
 
         def call(self, genomes, ref, out_dir, params, logger):
             core = out_dir / "raw.fasta"
+            full = out_dir / "full.fasta"
             core.write_text(">a\nACGT\n", encoding="utf-8")
-            return SnpResult(core_snp_fasta=core)
+            full.write_text(">a\nACGTACGT\n", encoding="utf-8")
+            return SnpResult(core_snp_fasta=core, full_alignment=full)
 
     monkeypatch.setattr(
         snptype_mod.snp_registry, "create", lambda name: FakeTyper()

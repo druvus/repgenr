@@ -67,6 +67,11 @@ class SimpleSnpTyper(SnpTyper):
                 continue
             consensuses[genome.stem] = _call_one(genome, ref, per_genome_dir, params, logger)
 
+        full_fasta = out_dir / "full_alignment.fasta"
+        with open(full_fasta, "w", encoding="utf-8") as fo:
+            for name, seq in consensuses.items():
+                fo.write(f">{name}\n{seq}\n")
+
         core_fasta = out_dir / "core_snp.fasta"
         snp_matrix = out_dir / "snp_distance_matrix.tsv"
         n_sites = _write_core_snps(consensuses, core_fasta, snp_matrix)
@@ -80,6 +85,7 @@ class SimpleSnpTyper(SnpTyper):
             core_snp_fasta=core_fasta,
             snp_distance_matrix=snp_matrix,
             masked=False,
+            full_alignment=full_fasta,
         )
 
 

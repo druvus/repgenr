@@ -16,6 +16,8 @@ processes as staged channel files and publishes the key deliverables (the tree,
 | `genomes/` | genome | Downloaded genome FASTAs, one per selected accession. |
 | `outgroup/` | genome | Outgroup genome for rooting. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
+| `snp/core_snp.fasta` | snptype | Core-SNP (variable-site) alignment; masked in place when `--mask` is set. |
+| `snp/full_alignment.fasta` | snptype | Whole-genome alignment in reference coordinates, when the SNP typer produces one (snippy, parsnp, simple); required input for `--mask`. |
 | `tree/` | phylo | Phylogeny (`tree.nwk`) and aligner/tree-builder intermediates. |
 | `genomes_map.tsv` | tree2tax | Map from each representative to its dereplicated members. |
 | `tree2tax.tsv` | tree2tax | FlexTaxD-compatible taxonomy derived from the tree. |

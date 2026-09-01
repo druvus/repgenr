@@ -101,7 +101,6 @@ def snptype_core(
     snp_params = SnpParams(
         threads=params.threads,
         reference=ref,
-        mask=params.mask,
         extra=dict(params.extra),
     )
     logger.info("SNP typing %d genomes with %s", len(genomes), params.tool)
@@ -110,12 +109,19 @@ def snptype_core(
     core = snp_dir / CORE_SNP_FASTA
     masked = False
     if params.mask not in ("none", ""):
+        from ..maskers.base import MaskParams
         from ..maskers.base import registry as masker_registry
 
         masker = masker_registry.create(params.mask)
+        if result.full_alignment is None:
+            raise UserInputError(
+                f"--mask {params.mask} needs a whole-genome alignment, which SNP typer "
+                f"'{params.tool}' does not produce. Use snippy, parsnp or simple, or drop --mask."
+            )
         versions.update(masker.preflight())
         filtered = masker.mask(
-            result.core_snp_fasta, scratch / params.mask, logger
+            result.full_alignment, scratch / params.mask,
+            MaskParams(threads=params.threads), logger,
         )
         with atomic_path(core) as tmp:
             shutil.copy2(filtered, tmp)
@@ -130,6 +136,11 @@ def snptype_core(
     if result.snp_distance_matrix is not None:
         with atomic_path(snp_dir / "snp_distance_matrix.tsv") as tmp:
             shutil.copy2(result.snp_distance_matrix, tmp)
+    full_alignment_out: Path | None = None
+    if result.full_alignment is not None:
+        full_alignment_out = snp_dir / "full_alignment.fasta"
+        with atomic_path(full_alignment_out) as tmp:
+            shutil.copy2(result.full_alignment, tmp)
 
     return (
         SnpResult(
@@ -139,6 +150,7 @@ def snptype_core(
             if result.snp_distance_matrix
             else None,
             masked=masked,
+            full_alignment=full_alignment_out,
         ),
         versions,
     )

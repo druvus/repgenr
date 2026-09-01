@@ -23,7 +23,6 @@ registry: Registry[SnpTyper] = Registry("repgenr.snptypers")
 class SnpParams:
     threads: int = 16
     reference: Path | None = None
-    mask: str = "none"  # none | gubbins
     extra: dict = field(default_factory=dict)
 
 
@@ -33,6 +32,10 @@ class SnpResult:
     vcf: Path | None = None
     snp_distance_matrix: Path | None = None
     masked: bool = False
+    # Whole-genome alignment in reference coordinates (one record per genome,
+    # equal lengths). Required input for recombination maskers; None when the
+    # typer only produces variable sites.
+    full_alignment: Path | None = None
 
 
 class SnpTyper(ABC):

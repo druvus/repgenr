@@ -1,4 +1,4 @@
-"""Gubbins recombination masking of a core-SNP alignment."""
+"""Gubbins recombination masking of a whole-genome alignment."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from .base import Masker
+from .base import Masker, MaskParams
 
 
 class GubbinsMasker(Masker):
@@ -21,16 +21,22 @@ class GubbinsMasker(Masker):
 
     def mask(
         self,
-        core_snp_fasta: Path,
+        full_alignment: Path,
         out_dir: Path,
+        params: MaskParams,
         logger: logging.Logger,
     ) -> Path:
-        """Run Gubbins; return the recombination-filtered polymorphic-sites FASTA."""
+        """Run Gubbins on the whole-genome alignment; return the
+        recombination-filtered polymorphic-sites FASTA."""
         out_dir.mkdir(parents=True, exist_ok=True)
         prefix = out_dir / "gubbins"
+        argv: list[str | Path] = [
+            "run_gubbins.py", "--threads", str(params.threads),
+            "--prefix", prefix, full_alignment,
+        ]
         run_tool(
             self.capabilities,
-            ["run_gubbins.py", "--prefix", prefix, core_snp_fasta],
+            argv,
             logger=logger,
             cwd=out_dir,
             log_prefix="gubbins",

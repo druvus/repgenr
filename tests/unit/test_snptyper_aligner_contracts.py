@@ -95,7 +95,10 @@ def _make_fake_run_tool(recorded: list[list[str]]):
         elif tool == "parsnp":
             _write(Path(_flag_value(cmd, "-o")) / "parsnp.ggr", "GGR")
         elif tool == "harvesttools":
-            _write(Path(_flag_value(cmd, "-S")), _CANNED_MSA)
+            if "-S" in cmd:
+                _write(Path(_flag_value(cmd, "-S")), _CANNED_MSA)
+            elif "-M" in cmd:
+                _write(Path(_flag_value(cmd, "-M")), _CANNED_MSA)
         elif tool == "run_gubbins.py":
             prefix = _flag_value(cmd, "--prefix")
             _write(Path(prefix + ".filtered_polymorphic_sites.fasta"), _CANNED_MSA)
@@ -171,11 +174,12 @@ def test_snptyper_contract(tool, genomes, recorded, tmp_path) -> None:
 
 
 def test_gubbins_masking_returns_filtered_fasta(genomes, recorded, tmp_path) -> None:
+    from repgenr.maskers.base import MaskParams
     from repgenr.maskers.gubbins import GubbinsMasker
 
-    core = tmp_path / "core_snp.fasta"
-    core.write_text(_CANNED_MSA, encoding="utf-8")
-    filtered = GubbinsMasker().mask(core, tmp_path / "gubbins_out", _LOG)
+    full = tmp_path / "full_alignment.fasta"
+    full.write_text(_CANNED_MSA, encoding="utf-8")
+    filtered = GubbinsMasker().mask(full, tmp_path / "gubbins_out", MaskParams(threads=7), _LOG)
     assert filtered.exists()
     assert filtered.name.endswith(".filtered_polymorphic_sites.fasta")
     assert any(Path(c[0]).name == "run_gubbins.py" for c in recorded)

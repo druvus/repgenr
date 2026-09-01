@@ -70,4 +70,11 @@ class SnippyTyper(SnpTyper):
             raise WorkdirError("snippy-core did not produce a core alignment (.aln)")
         core_fasta = out_dir / "core_snp.fasta"
         core_fasta.write_text(core_aln.read_text(encoding="utf-8"))
-        return SnpResult(core_snp_fasta=core_fasta, masked=False)
+
+        full_aln = Path(str(core_prefix) + ".full.aln")
+        full: Path | None = None
+        if full_aln.exists():
+            full = out_dir / "full_alignment.fasta"
+            full.write_text(full_aln.read_text(encoding="utf-8"), encoding="utf-8")
+
+        return SnpResult(core_snp_fasta=core_fasta, masked=False, full_alignment=full)
