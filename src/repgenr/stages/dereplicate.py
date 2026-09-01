@@ -28,7 +28,7 @@ from ..core.contracts import (
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
 from ..core.integrity import check_genome_completeness
-from ..core.plugins import auto_select, scale_warning
+from ..core.plugins import auto_select, scale_warning, warn_unconsumed_extras
 from ..core.process import link_or_copy
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 
@@ -92,12 +92,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     caps = adapter.capabilities
     extra = {**caps.default_params, **(params.extra or {})}
-    unconsumed = set(params.extra or {}) - caps.accepted_extras
-    if unconsumed:
-        logger.warning(
-            "Dereplicator '%s' ignores extra parameter(s): %s",
-            tool, ", ".join(sorted(unconsumed)),
-        )
+    warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,

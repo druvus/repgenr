@@ -24,7 +24,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import scale_warning
+from ..core.plugins import scale_warning, warn_unconsumed_extras
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -77,6 +77,7 @@ def snptype_core(
             params.tool, limit, len(genomes), ", ".join(alts) or "none",
         )
     typer = snp_registry.create(params.tool)
+    warn_unconsumed_extras(typer.capabilities, params.extra, logger, family="SNP typer")
     versions = typer.preflight()
 
     ref = None

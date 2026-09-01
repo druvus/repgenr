@@ -204,7 +204,22 @@ def test_dereplicate_chunk_step_wiring(step_calls, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert (params.tool, params.secondary_ani, params.threads) == ("galah", 0.97, 2)
-    assert params.genomes == [g] and params.extra == {"virus": True}
+    assert params.genomes == [g] and params.extra == {}  # galah ignores 'virus'
+
+
+def test_dereplicate_chunk_step_injects_virus_for_reader(step_calls, tmp_path) -> None:
+    g = tmp_path / "g1.fasta"
+    g.write_text(">g1\nACGT\n", encoding="utf-8")
+    fofn = tmp_path / "genomes.fofn"
+    fofn.write_text(f"{g}\n", encoding="utf-8")
+    result = _runner.invoke(app, [
+        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
+        "--tool", "drep", "-t", "2", "--virus",
+    ])
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.tool == "drep"
+    assert params.extra == {"virus": True}  # drep reads it
 
 
 def test_dereplicate_merge_step_requires_chunks(step_calls, tmp_path) -> None:

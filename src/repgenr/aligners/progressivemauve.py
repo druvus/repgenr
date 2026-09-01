@@ -38,6 +38,7 @@ class ProgressiveMauveAligner(Aligner):
         conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
         recommended_max_genomes=500,  # progressiveMauve is single-threaded per alignment
+        accepted_extras=frozenset({"seed_weight"}),
     )
 
     def align(

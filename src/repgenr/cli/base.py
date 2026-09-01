@@ -399,6 +399,20 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
         ctx.save_config()
 
 
+def gated_extra(registry, tool: str, key: str, value: object) -> dict:
+    """Return ``{key: value}`` only when ``tool`` reads that extra.
+
+    Injecting a key a tool ignores would change the resume fingerprint without
+    changing the result. ``auto`` passes the key through; the stage warns after
+    it has picked a concrete tool.
+    """
+    if tool != "auto":
+        caps = registry.get(tool).capabilities
+        if key not in caps.accepted_extras:
+            return {}
+    return {key: value}
+
+
 def _parse_key_values(items: list[str], label: str) -> dict[str, str]:
     """Parse repeated ``key=value`` options into a dict (used for tool extras)."""
     out: dict[str, str] = {}

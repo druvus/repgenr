@@ -25,6 +25,7 @@ from .base import (
     _snp_help,
     _tree_help,
     app,
+    gated_extra,
     stage_errors,
 )
 
@@ -92,7 +93,7 @@ def dereplicate_chunk_cmd(
                 aligned_fraction=aligned_fraction, threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
-                    **({"virus": True} if virus else {}),
+                    **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
                 },
                 versions_out=versions_out,
             ),
@@ -245,7 +246,7 @@ def dereplicate_merge_cmd(
                 aligned_fraction=aligned_fraction, threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
-                    **({"virus": True} if virus else {}),
+                    **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
                 },
                 versions_out=versions_out,
             ),

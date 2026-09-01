@@ -25,6 +25,7 @@ from .base import (
     _run,
     _tree_help,
     app,
+    gated_extra,
     stage_errors,
 )
 
@@ -39,11 +40,7 @@ def _virus_extra(derep_tool: str, viral: bool) -> dict:
         return {}
     from ..dereplicators.base import registry as _derep_registry
 
-    if derep_tool != "auto":
-        caps = _derep_registry.get(derep_tool).capabilities
-        if "virus" not in caps.accepted_extras:
-            return {}
-    return {"virus": True}
+    return gated_extra(_derep_registry, derep_tool, "virus", True)
 
 
 @app.command()

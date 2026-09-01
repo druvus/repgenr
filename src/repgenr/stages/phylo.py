@@ -30,12 +30,19 @@ from ..core.contracts import (
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import auto_select, scale_warning
+from ..core.plugins import auto_select, scale_warning, warn_unconsumed_extras
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
 # Re-exported so the data-channel step helpers stay importable from this module.
 __all__ = ["PhyloParams", "PhyloBuildParams", "build_tree", "phylo_build", "run", "list_fasta"]
+
+# Keys the phylo stage reads itself; never forwarded to an adapter.
+_STAGE_EXTRA_KEYS = frozenset({"mask"})
+
+
+def _adapter_extra(extra: dict) -> dict:
+    return {k: v for k, v in extra.items() if k not in _STAGE_EXTRA_KEYS}
 
 
 @dataclass
@@ -107,11 +114,14 @@ def build_tree(
     builder = treebuilder_registry.create(treebuilder)
     versions = builder.preflight()
 
+    warn_unconsumed_extras(
+        builder.capabilities, _adapter_extra(params.extra), logger, family="Tree builder"
+    )
     tree_params = TreeParams(
         threads=params.threads,
         outgroup=None if params.no_outgroup else outgroup_leaf,
         bootstrap=params.bootstrap,
-        extra={**builder.capabilities.default_params, **params.extra},
+        extra={**builder.capabilities.default_params, **_adapter_extra(params.extra)},
     )
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 
@@ -297,8 +307,11 @@ def _build_msa(
         versions = aligner.preflight()
         reference = _resolve_reference(params.reference, genomes, outgroup_file, logger)
         _warn_divergence(params.aligner, inputs, logger)
+        warn_unconsumed_extras(
+            aligner.capabilities, _adapter_extra(params.extra), logger, family="Aligner"
+        )
         align_params = AlignParams(
-            threads=params.threads, reference=reference, extra=dict(params.extra),
+            threads=params.threads, reference=reference, extra=_adapter_extra(params.extra),
         )
         result = aligner.align(inputs, reference, dirs.align_dir, align_params, logger)
         return result.msa_fasta, versions
@@ -313,6 +326,7 @@ def _build_msa(
             reference=params.reference,
             all_genomes=params.all_genomes,
             mask=params.extra.get("mask", "none"),
+            extra=_adapter_extra(params.extra),
         )
         snp_reference: Path | None = (
             _resolve_reference(params.reference, genomes, outgroup_file, logger)

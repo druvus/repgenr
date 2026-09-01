@@ -58,9 +58,10 @@ capabilities = ToolCapabilities(
   nothing bounded fits.
 * `accepted_extras` names the `params.extra` keys the adapter reads. Users set
   them with `--tool-arg key=value` (dereplicate/snptype and the data-channel
-  steps) or `--aligner-arg key=value` (phylo); the stage warns when a key no
-  adapter reads is passed, and reserved core keys (`virus`, `sketch_cache`,
-  `mask`, `dense_fallback`) are injected only for tools that accept them.
+  steps) or `--aligner-arg key=value` (phylo). Every stage warns, by name,
+  about extra keys the chosen adapter does not declare in `accepted_extras`,
+  and the CLI does not inject stage-level flags (such as `--virus`) into the
+  extras of a tool that does not read them.
   Parse integer extras with `repgenr.core.plugins.parse_extra_int` so a bad
   value raises a clean `UserInputError`.
 

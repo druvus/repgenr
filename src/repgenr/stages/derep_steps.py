@@ -36,6 +36,7 @@ from ..core.contracts import (
     write_genome_status,
 )
 from ..core.errors import WorkdirError
+from ..core.plugins import warn_unconsumed_extras
 from ..core.process import link_or_copy
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
@@ -86,6 +87,8 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         )
 
     adapter = registry.create(params.tool)
+    caps = adapter.capabilities
+    warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     versions = adapter.preflight()
     _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
@@ -93,7 +96,7 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
-        extra=dict(params.extra or {}),
+        extra={**caps.default_params, **(params.extra or {})},
     )
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
@@ -119,6 +122,8 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         raise WorkdirError("dereplicate-merge: the chunk directories hold no representatives.")
 
     adapter = registry.create(params.tool)
+    caps = adapter.capabilities
+    warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     versions = adapter.preflight()
     _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
@@ -126,7 +131,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
-        extra=dict(params.extra or {}),
+        extra={**caps.default_params, **(params.extra or {})},
     )
     scratch = _fresh(params.out_dir / "scratch")
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)

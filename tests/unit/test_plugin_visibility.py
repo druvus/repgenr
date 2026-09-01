@@ -188,6 +188,7 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
 
     class FakeTyper:
         requires_reference = False
+        capabilities = ToolCapabilities(name="faketyper")
 
         def preflight(self):
             return {}
@@ -212,12 +213,14 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
 
 def test_unknown_masker_lists_available(tmp_path, monkeypatch) -> None:
     from repgenr.core.errors import PluginError
+    from repgenr.core.plugins import ToolCapabilities
     from repgenr.snptypers.base import SnpResult
     from repgenr.stages import snptype as snptype_mod
     from repgenr.stages.snptype import SnptypeParams, snptype_core
 
     class FakeTyper:
         requires_reference = False
+        capabilities = ToolCapabilities(name="faketyper")
 
         def preflight(self):
             return {}

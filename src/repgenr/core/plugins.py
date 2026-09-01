@@ -60,6 +60,25 @@ class ToolCapabilities:
     accepted_extras: frozenset[str] = frozenset()
 
 
+def warn_unconsumed_extras(
+    caps: ToolCapabilities,
+    extra: Mapping[str, object],
+    logger: logging.Logger,
+    *,
+    family: str,
+) -> None:
+    """Warn once, by name, about extra keys the adapter never reads.
+
+    Keys that are also in ``default_params`` are the adapter's own defaults and
+    are not reported.
+    """
+    unread = sorted(set(extra) - caps.accepted_extras - set(caps.default_params))
+    if unread:
+        logger.warning(
+            "%s '%s' ignores extra parameter(s): %s", family, caps.name, ", ".join(unread)
+        )
+
+
 class Registry[T]:
     """Lazily-loaded registry of adapter classes for one entry-point group."""
 
