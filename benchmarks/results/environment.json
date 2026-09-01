@@ -1,0 +1,15 @@
+{
+ "platform": "macOS-26.2-arm64-arm-64bit",
+ "cpu_count": 11,
+ "python": "Python 3.12.13",
+ "skder": "Version of skDER being used is: 1.3.6",
+ "galah": "galah 0.4.2",
+ "sourmash": "sourmash 4.9.4",
+ "mashtree": "Mashtree 1.4.6",
+ "fasttree": "FastTree 2.2.0 Double precision:",
+ "iqtree": "IQ-TREE version 3.1.2 for MacOS ARM 64-bit built May 17 2026",
+ "sibeliaz": "sibeliaz 1.2.7 (bioconda; --version wrapper needs nproc, absent on macOS)",
+ "skani": "skani 0.3.2",
+ "storage": "exFAT external volume /Volumes/sekvens2 (no hardlinks/symlinks)",
+ "threads_per_cell": 8
+}

@@ -12,11 +12,10 @@ Usage: python -m benchmarks.bias.b5_zero_snp
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 
 from benchmarks.genomegen import generate_set
-from benchmarks.run_bench import RESULTS, STORAGE, _env, _repgenr
+from benchmarks.run_bench import RESULTS, STORAGE, _repgenr, run_group
 
 
 def main() -> None:
@@ -31,7 +30,7 @@ def main() -> None:
     argv = [_repgenr(), "phylo-build", "--genomes-dir", str(set_dir),
             "-o", str(out), "--treebuilder", "fasttree", "--aligner", "sibeliaz",
             "--no-outgroup", "-t", "8"]
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=14400, env=_env())
+    proc = run_group(argv, timeout_s=5400)
 
     row: dict = {"exit_code": proc.returncode}
     stderr = proc.stderr[-4000:]

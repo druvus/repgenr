@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "dereplicate-chunk",
+  "--genomes-fofn",
+  "/Volumes/sekvens2/repgenr/work/derep-galah-balanced-5000/genomes.fofn",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/derep-galah-balanced-5000/derep_out",
+  "--tool",
+  "galah",
+  "-t",
+  "8"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": null,
+ "exit_code": 0,
+ "id": "derep-galah-balanced-5000",
+ "kind": "derep_step",
+ "max_rss_mb": 7437.0,
+ "n": 5000,
+ "n_representatives": 100,
+ "set": "balanced_5000_clustered",
+ "status": "ok",
+ "tool": "galah",
+ "wall_s": 3813.52
+}

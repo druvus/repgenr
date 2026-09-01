@@ -178,3 +178,7 @@ work/
 # nf-test
 .nf-test/
 .nf-test.log
+
+# Benchmark measurements are committed evidence (scaling audit)
+!benchmarks/results/
+!benchmarks/results/**

@@ -1,0 +1,22 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/python",
+  "-m",
+  "benchmarks.dense_driver",
+  "/Volumes/sekvens2/repgenr/work/derep-sourmashdense-clonal-5000/genomes.fofn",
+  "/Volumes/sekvens2/repgenr/work/derep-sourmashdense-clonal-5000/derep_out",
+  "8"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g001064_GCF9001064.1.fasta",
+ "exit_code": 0,
+ "id": "derep-sourmashdense-clonal-5000",
+ "kind": "derep_dense",
+ "max_rss_mb": 969.0,
+ "n": 5000,
+ "n_representatives": 61,
+ "set": "clonal_5000_clustered",
+ "status": "ok",
+ "tool": "sourmash",
+ "wall_s": 618.8
+}

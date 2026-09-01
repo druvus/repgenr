@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "phylo-build",
+  "--genomes-dir",
+  "/Volumes/sekvens2/repgenr/work/tree-fasttree-balanced-50/genomes_subset",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/tree-fasttree-balanced-50/phylo_out",
+  "--treebuilder",
+  "fasttree",
+  "--no-outgroup",
+  "-t",
+  "8",
+  "--aligner",
+  "sibeliaz"
+ ],
+ "exit_code": null,
+ "id": "tree-fasttree-balanced-50",
+ "kind": "tree_step",
+ "max_rss_mb": null,
+ "n": 50,
+ "set": "balanced_1000_clustered",
+ "status": "timeout",
+ "tool": "fasttree",
+ "wall_s": 3600
+}

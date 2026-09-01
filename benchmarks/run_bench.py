@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -119,12 +120,29 @@ def _env() -> dict[str, str]:
     return {**os.environ, "PATH": f"{env_bin}:{os.environ.get('PATH', '')}"}
 
 
+def run_group(argv: list[str], timeout_s: int) -> subprocess.CompletedProcess:
+    """Run argv in its own process group; a timeout kills the whole tree.
+
+    Deep-spawning tools (sibeliaz et al.) survive a plain subprocess timeout,
+    which kills only the direct child and leaves orphans competing for cores.
+    """
+    with subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=_env(), start_new_session=True,
+    ) as popen:
+        try:
+            stdout, stderr = popen.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            os.killpg(popen.pid, signal.SIGKILL)
+            popen.wait()
+            raise
+    return subprocess.CompletedProcess(argv, popen.returncode, stdout, stderr)
+
+
 def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
     start = time.monotonic()
-    proc = subprocess.run(
-        ["/usr/bin/time", "-l", *argv],
-        capture_output=True, text=True, timeout=timeout_s, env=_env(),
-    )
+    proc = run_group(["/usr/bin/time", "-l", *argv], timeout_s)
     wall = time.monotonic() - start
     log_path.write_text(proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:],
                         encoding="utf-8")

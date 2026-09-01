@@ -1,0 +1,83 @@
+[
+ {
+  "tool": "skder",
+  "order": "clustered",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000019_GCF9000019.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": false,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "skder",
+  "order": "interleaved",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000040_GCF9000040.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": false,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "skder",
+  "order": "random",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000048_GCF9000048.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": false,
+  "first_clone_member": "Benchfam_Benchgen_g000001_GCF9000001.1.fasta"
+ },
+ {
+  "tool": "galah",
+  "order": "clustered",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": true,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "galah",
+  "order": "interleaved",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": true,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "galah",
+  "order": "random",
+  "status": "ok",
+  "n_representatives": 3,
+  "clone_representative": "Benchfam_Benchgen_g000001_GCF9000001.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": true,
+  "first_clone_member": "Benchfam_Benchgen_g000001_GCF9000001.1.fasta"
+ },
+ {
+  "tool": "sourmash",
+  "order": "clustered",
+  "status": "ok",
+  "n_representatives": 31,
+  "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": true,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "sourmash",
+  "order": "interleaved",
+  "status": "ok",
+  "n_representatives": 31,
+  "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": true,
+  "first_clone_member": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta"
+ },
+ {
+  "tool": "sourmash",
+  "order": "random",
+  "status": "ok",
+  "n_representatives": 31,
+  "clone_representative": "Benchfam_Benchgen_g000004_GCF9000004.1.fasta",
+  "clone_rep_is_alphabetically_first_clone": false,
+  "first_clone_member": "Benchfam_Benchgen_g000001_GCF9000001.1.fasta"
+ }
+]

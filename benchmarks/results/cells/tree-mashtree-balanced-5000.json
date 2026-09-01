@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "phylo-build",
+  "--genomes-dir",
+  "/Volumes/sekvens2/repgenr/sets/balanced_5000_clustered",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/tree-mashtree-balanced-5000/phylo_out",
+  "--treebuilder",
+  "mashtree",
+  "--no-outgroup",
+  "-t",
+  "8"
+ ],
+ "exit_code": 0,
+ "id": "tree-mashtree-balanced-5000",
+ "kind": "tree_step",
+ "max_rss_mb": 7610.8,
+ "n": 5000,
+ "set": "balanced_5000_clustered",
+ "status": "ok",
+ "tool": "mashtree",
+ "tree_leaves": 5000,
+ "tree_ok": true,
+ "wall_s": 3152.53
+}

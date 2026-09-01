@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "dereplicate-chunk",
+  "--genomes-fofn",
+  "/Volumes/sekvens2/repgenr/work/derep-skder-clonal-5000/genomes.fofn",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/derep-skder-clonal-5000/derep_out",
+  "--tool",
+  "skder",
+  "-t",
+  "8"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g001999_GCF9001999.1.fasta",
+ "exit_code": 0,
+ "id": "derep-skder-clonal-5000",
+ "kind": "derep_step",
+ "max_rss_mb": 8247.9,
+ "n": 5000,
+ "n_representatives": 61,
+ "set": "clonal_5000_clustered",
+ "status": "ok",
+ "tool": "skder",
+ "wall_s": 4127.01
+}
