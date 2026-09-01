@@ -7,7 +7,9 @@
 nextflow.enable.dsl = 2
 
 include { BACTERIAL_DATAFLOW } from '../subworkflows/local/bacterial_dataflow'
+include { PUBLISH_VERSIONS   } from '../subworkflows/local/publish_versions'
 
 workflow {
     BACTERIAL_DATAFLOW()
+    PUBLISH_VERSIONS(BACTERIAL_DATAFLOW.out.versions)
 }

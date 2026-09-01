@@ -29,10 +29,10 @@ tree/                  Newick + neighbor-joining
 
 ## Pluggable tool families
 
-Four families, each an ABC plus a `Registry` bound to an entry-point group:
+Five families, each an ABC plus a `Registry` bound to an entry-point group:
 `repgenr.dereplicators`, `repgenr.aligners`, `repgenr.snptypers`,
-`repgenr.treebuilders`. In-tree and third-party adapters are discovered the same
-way, so the core never imports a concrete adapter.
+`repgenr.treebuilders`, `repgenr.maskers`. In-tree and third-party adapters are
+discovered the same way, so the core never imports a concrete adapter.
 
 Adapters return normalized dataclasses (`DerepResult`, `AlignResult`,
 `SnpResult`, or a Newick path); the owning stage writes the canonical contract

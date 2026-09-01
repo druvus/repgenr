@@ -12,6 +12,7 @@ nextflow.enable.dsl = 2
 include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 include { PHYLO               } from '../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../modules/local/dataflow/tree2tax'
+include { PUBLISH_VERSIONS    } from '../subworkflows/local/publish_versions'
 
 params.genomes_dir = null
 params.empty_accession = "${projectDir}/tests/data/empty.txt"
@@ -32,4 +33,8 @@ workflow {
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+
+    ch_versions = DEREPLICATE_SCATTER.out.versions
+        .mix(PHYLO.out.versions, TREE2TAX.out.versions)
+    PUBLISH_VERSIONS(ch_versions)
 }

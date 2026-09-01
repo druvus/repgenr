@@ -31,6 +31,8 @@ reports:
 - `execution_timeline_*.html` -- task timeline.
 - `execution_trace_*.txt` -- machine-readable trace of every task.
 - `pipeline_dag_*.html` -- the workflow DAG.
+- `software_versions.yml` -- every process's resolved tool versions, collected
+  and de-duplicated from each process's `versions.yml` fragment.
 
 These are useful for diagnosing resource limits (the retry strategy scales
 memory and time per attempt) and for provenance.
