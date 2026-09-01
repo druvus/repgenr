@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from repgenr.cli.main import app
 from repgenr.core.config import Config
 from repgenr.core.contracts import SelectionRow, write_clusters, write_selection
 from repgenr.core.doctor import diagnose
+from repgenr.core.errors import WorkdirError
 from repgenr.core.manifest import GenomeRecord, Manifest
 
 _runner = CliRunner()
@@ -229,6 +232,30 @@ def test_open_readonly_refuses_writes(workdir: Path) -> None:
             ro.upsert(GenomeRecord(accession="GCA_2"))
     finally:
         ro.close()
+
+
+def test_open_readonly_missing_file_raises_workdir_error(tmp_path: Path) -> None:
+    with pytest.raises(WorkdirError):
+        Manifest.open_readonly(tmp_path / "absent.sqlite")
+
+
+def test_open_readonly_unwritable_dir_raises_workdir_error(workdir: Path) -> None:
+    """A WAL manifest needs a writable directory for its -shm file even to be
+    opened read-only; that failure must surface as WorkdirError, not a raw
+    sqlite3.OperationalError, so doctor's callers get the documented contract."""
+    if os.geteuid() == 0:
+        pytest.skip("root bypasses directory permissions")
+    workdir.mkdir(parents=True)
+    with Manifest.open(workdir) as m:
+        m.upsert(GenomeRecord(accession="GCA_1"))
+    manifest_path = workdir / "manifest.sqlite"
+    original_mode = stat.S_IMODE(workdir.stat().st_mode)
+    workdir.chmod(0o555)
+    try:
+        with pytest.raises(WorkdirError):
+            Manifest.open_readonly(manifest_path)
+    finally:
+        workdir.chmod(original_mode)
 
 
 def test_cli_doctor_exit_codes(tmp_path: Path) -> None:

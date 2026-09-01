@@ -83,10 +83,24 @@ class Manifest:
         if readonly:
             if not self.path.exists():
                 raise WorkdirError(f"Manifest not found: {self.path}")
-            self._conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
-            self._conn.row_factory = sqlite3.Row
-            self._conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-            self._check_version()
+            conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+            try:
+                conn.row_factory = sqlite3.Row
+                conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+                self._conn = conn
+                self._check_version()
+            except sqlite3.OperationalError as exc:
+                conn.close()
+                # Every manifest is WAL-mode, and even a read-only connection
+                # must create a "-shm" index file for it on first query -- so
+                # a directory that is not writable (an archived or
+                # permission-locked workdir, exactly where doctor is likely to
+                # run) surfaces here as a write failure, not a missing file.
+                raise WorkdirError(
+                    f"Manifest at {self.path} cannot be opened read-only: {exc}. "
+                    "A WAL-mode database needs a writable directory for its "
+                    "-shm file; copy the workdir or make the directory writable."
+                ) from exc
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
@@ -105,14 +119,19 @@ class Manifest:
         self._migrate()
         self._conn.commit()
 
-    def _check_version(self) -> None:
-        """Reject a manifest written by a newer, incompatible RepGenR."""
+    def _check_version(self) -> int:
+        """Reject a manifest written by a newer, incompatible RepGenR.
+
+        Returns the current ``user_version`` so callers that need it (e.g.
+        ``_migrate``) do not have to issue a second ``PRAGMA`` query.
+        """
         version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
         if version > SCHEMA_VERSION:
             raise WorkdirError(
                 f"Manifest at {self.path} has schema version {version}, newer than this "
                 f"RepGenR supports ({SCHEMA_VERSION}). Upgrade RepGenR or use a new workdir."
             )
+        return version
 
     def _migrate(self) -> None:
         """Apply schema migrations keyed on ``PRAGMA user_version``.
@@ -121,8 +140,7 @@ class Manifest:
         already matches v1, so they are adopted as v1. Future schema changes add
         a numbered migration step and bump SCHEMA_VERSION.
         """
-        self._check_version()
-        version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
+        version = self._check_version()
         # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
         # Future: while version < SCHEMA_VERSION: apply step; version += 1
         if version != SCHEMA_VERSION:
@@ -139,6 +157,13 @@ class Manifest:
         Raises ``WorkdirError`` if the file does not exist. Intended for
         read-only callers such as ``repgenr doctor``, which must not create,
         upgrade, or otherwise touch the workdir.
+
+        Every manifest is WAL-mode, and SQLite must create (or open) a
+        "-shm" index file for it even for a read-only connection's first
+        query. If the manifest's directory is not writable (an archived or
+        permission-locked workdir), that fails, and this raises
+        ``WorkdirError`` rather than a raw ``sqlite3.OperationalError`` --
+        copy the workdir or make the directory writable first.
         """
         return cls(path, readonly=True)
 
