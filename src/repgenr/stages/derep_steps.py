@@ -38,7 +38,7 @@ from ..core.contracts import (
 from ..core.errors import WorkdirError
 from ..core.process import link_or_copy
 from ..core.versions import write_versions_fragment
-from ..dereplicators.base import DerepParams, DerepResult, registry
+from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 from .dereplicate import _compose_two_stage
 
 _REPRESENTATIVES_DIR = "representatives"
@@ -98,6 +98,7 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
 
+    check_result_complete(result, [g.name for g in params.genomes])
     fallbacks = sorted({g.parent for g in params.genomes})
     _write_step_contract(params.out_dir, result, fallbacks)
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
@@ -130,6 +131,14 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     scratch = _fresh(params.out_dir / "scratch")
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
+
+    all_names = [
+        name
+        for r in stage1
+        for rep, members in r.clusters.items()
+        for name in (rep, *members)
+    ]
+    check_result_complete(final, all_names)
 
     # The final representatives are stage-2 representative paths, which live in the
     # chunk representatives/ directories; fall back to those when resolving files.

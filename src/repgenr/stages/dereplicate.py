@@ -30,7 +30,7 @@ from ..core.executors import parallel_map
 from ..core.integrity import check_genome_completeness
 from ..core.plugins import auto_select, scale_warning
 from ..core.process import link_or_copy
-from ..dereplicators.base import DerepParams, DerepResult, registry
+from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 
 
 @dataclass
@@ -126,6 +126,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             params.reduce, before, len(result.representatives),
         )
 
+    check_result_complete(result, [g.name for g in genomes])
     _write_contract(ctx, result)
     _update_manifest(ctx, result)
 
