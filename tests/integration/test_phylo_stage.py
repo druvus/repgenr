@@ -10,6 +10,8 @@ from repgenr.aligners.base import Aligner, AlignResult
 from repgenr.aligners.base import registry as aligner_registry
 from repgenr.core.context import WorkdirContext
 from repgenr.core.plugins import ToolCapabilities
+from repgenr.snptypers.base import SnpResult, SnpTyper
+from repgenr.snptypers.base import registry as snp_registry
 from repgenr.stages.phylo import PhyloParams, run
 from repgenr.treebuilders.base import InputKind, TreeBuilder
 from repgenr.treebuilders.base import registry as tb_registry
@@ -33,11 +35,13 @@ class _GenomesTreeBuilder(TreeBuilder):
 class _MsaTreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(name="faketree_msa")
     input_kind = InputKind.MSA_FASTA
+    seen_extra: dict | None = None
 
     def preflight(self):
         return {"faketree": "1.0"}
 
     def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        type(self).seen_extra = dict(params.extra)
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
         tree.write_text("(from_msa);\n")
@@ -59,6 +63,22 @@ class _FakeAligner(Aligner):
         return AlignResult(msa_fasta=msa)
 
 
+class _FakeSnpTyper(SnpTyper):
+    capabilities = ToolCapabilities(name="fakesnptyper", accepted_extras=frozenset({"kmer"}))
+    requires_reference = False
+    seen_extra: dict | None = None
+
+    def preflight(self):
+        return {"fakesnptyper": "1.0"}
+
+    def call(self, genomes, reference, out_dir, params, logger) -> SnpResult:
+        type(self).seen_extra = dict(params.extra)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        core = out_dir / "core.fasta"
+        core.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
+        return SnpResult(core_snp_fasta=core)
+
+
 @pytest.fixture
 def fake_phylo_tools():
     tb_registry._load()
@@ -70,6 +90,14 @@ def fake_phylo_tools():
     for n in ("faketree_genomes", "faketree_msa"):
         tb_registry._classes.pop(n, None)
     aligner_registry._classes.pop("fakealigner", None)
+
+
+@pytest.fixture
+def fake_snptyper():
+    snp_registry._load()
+    snp_registry.register("fakesnptyper", _FakeSnpTyper, replace=True)
+    yield
+    snp_registry._classes.pop("fakesnptyper", None)
 
 
 def _make_reps(workdir: Path) -> None:
@@ -119,3 +147,48 @@ def test_aligner_receives_extra(workdir: Path, fake_phylo_tools) -> None:
         ),
     )
     assert _FakeAligner.seen_extra == {"kmer": "15"}
+
+
+def test_mask_key_stripped_before_aligner_and_treebuilder(
+    workdir: Path, fake_phylo_tools
+) -> None:
+    """'mask' is a phylo-stage-owned key: the aligner and tree builder must
+    never see it, even though it rides along in params.extra."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    _FakeAligner.seen_extra = None
+    _MsaTreeBuilder.seen_extra = None
+    run(
+        ctx,
+        PhyloParams(
+            treebuilder="faketree_msa",
+            msa_source="aligner",
+            aligner="fakealigner",
+            no_outgroup=True,
+            extra={"seed_weight": 11, "mask": "gubbins"},
+        ),
+    )
+    assert _FakeAligner.seen_extra == {"seed_weight": 11}
+    assert _MsaTreeBuilder.seen_extra == {"seed_weight": 11}
+
+
+def test_snptype_receives_extra_without_mask(
+    workdir: Path, fake_phylo_tools, fake_snptyper
+) -> None:
+    """A non-mask extra key (e.g. from --aligner-arg) must reach the SNP
+    typer's params.extra when msa_source=snptype; 'mask' must not (it is
+    consumed by the phylo stage itself, via SnptypeParams.mask)."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    _FakeSnpTyper.seen_extra = None
+    run(
+        ctx,
+        PhyloParams(
+            treebuilder="faketree_msa",
+            msa_source="snptype",
+            snptyper="fakesnptyper",
+            no_outgroup=True,
+            extra={"kmer": "15", "mask": "none"},
+        ),
+    )
+    assert _FakeSnpTyper.seen_extra == {"kmer": "15"}
