@@ -78,8 +78,39 @@ class Manifest:
     timeout cover concurrency across *processes* (Nextflow scatter), not threads.
     """
 
-    def __init__(self, path: str | os.PathLike[str]):
+    def __init__(self, path: str | os.PathLike[str], *, readonly: bool = False):
         self.path = Path(path)
+        if readonly:
+            if not self.path.exists():
+                raise WorkdirError(f"Manifest not found: {self.path}")
+            conn = None
+            try:
+                conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+                conn.row_factory = sqlite3.Row
+                conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+                self._conn = conn
+                self._check_version()
+            except WorkdirError:
+                # A rejected schema version must not leak the open handle.
+                if conn is not None:
+                    conn.close()
+                raise
+            except sqlite3.OperationalError as exc:
+                if conn is not None:
+                    conn.close()
+                # Every manifest is WAL-mode, and even a read-only connection
+                # must create a "-shm" index file for it on first query -- so
+                # a directory that is not writable (an archived or
+                # permission-locked workdir, exactly where doctor is likely to
+                # run), or a manifest file that is itself unreadable, surfaces
+                # here as a raw sqlite error, not a missing file.
+                raise WorkdirError(
+                    f"Manifest at {self.path} cannot be opened read-only: {exc}. "
+                    "A WAL-mode database needs a readable file and a writable "
+                    "directory for its -shm file; copy the workdir or fix its "
+                    "permissions."
+                ) from exc
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
@@ -97,12 +128,11 @@ class Manifest:
         self._migrate()
         self._conn.commit()
 
-    def _migrate(self) -> None:
-        """Apply schema migrations keyed on ``PRAGMA user_version``.
+    def _check_version(self) -> int:
+        """Reject a manifest written by a newer, incompatible RepGenR.
 
-        Existing pre-versioning databases report user_version=0; their layout
-        already matches v1, so they are adopted as v1. Future schema changes add
-        a numbered migration step and bump SCHEMA_VERSION.
+        Returns the current ``user_version`` so callers that need it (e.g.
+        ``_migrate``) do not have to issue a second ``PRAGMA`` query.
         """
         version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
         if version > SCHEMA_VERSION:
@@ -110,6 +140,16 @@ class Manifest:
                 f"Manifest at {self.path} has schema version {version}, newer than this "
                 f"RepGenR supports ({SCHEMA_VERSION}). Upgrade RepGenR or use a new workdir."
             )
+        return version
+
+    def _migrate(self) -> None:
+        """Apply schema migrations keyed on ``PRAGMA user_version``.
+
+        Existing pre-versioning databases report user_version=0; their layout
+        already matches v1, so they are adopted as v1. Future schema changes add
+        a numbered migration step and bump SCHEMA_VERSION.
+        """
+        version = self._check_version()
         # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
         # Future: while version < SCHEMA_VERSION: apply step; version += 1
         if version != SCHEMA_VERSION:
@@ -118,6 +158,24 @@ class Manifest:
     @classmethod
     def open(cls, workdir: str | os.PathLike[str]) -> Manifest:
         return cls(Path(workdir) / MANIFEST_FILENAME)
+
+    @classmethod
+    def open_readonly(cls, path: str | os.PathLike[str]) -> Manifest:
+        """Open an existing manifest without creating, migrating or journaling it.
+
+        Raises ``WorkdirError`` if the file does not exist. Intended for
+        read-only callers such as ``repgenr doctor``, which must not create,
+        upgrade, or otherwise touch the workdir.
+
+        Every manifest is WAL-mode, and SQLite must create (or open) a
+        "-shm" index file for it even for a read-only connection's first
+        query. If the manifest's directory is not writable (an archived or
+        permission-locked workdir), or the manifest file itself is not
+        readable, that fails -- and this raises ``WorkdirError`` rather than
+        a raw ``sqlite3.OperationalError``. Copy the workdir or fix its
+        permissions first.
+        """
+        return cls(path, readonly=True)
 
     def close(self) -> None:
         self._conn.close()

@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..core.errors import WorkdirError
 from ..core.plugins import Registry, ToolCapabilities, preflight
 
 registry: Registry[Dereplicator] = Registry("repgenr.dereplicators")
@@ -60,6 +61,59 @@ class DerepResult:
     clusters: dict[str, list[str]]  # representative filename -> contained filenames
     genome_status: dict[str, str]  # genome filename -> status
     genome_information: list[dict] | None = None  # optional checkM-like QC rows
+
+
+_VALID_STATUS = frozenset({STATUS_REPRESENTATIVE, STATUS_CONTAINED, STATUS_FAIL_QC})
+
+
+def check_result_complete(result: DerepResult, genome_names: Collection[str]) -> None:
+    """Refuse a result that silently drops genomes.
+
+    Every input genome must carry a known status; every representative must be
+    marked as such; every contained genome must belong to exactly one cluster.
+    Adapters that parse tool tables can otherwise return an empty membership
+    (e.g. after an upstream column-layout change) and the stage would complete
+    with genomes missing from every deliverable.
+    """
+    names = set(genome_names)
+    status = result.genome_status
+    missing = sorted(names - status.keys())
+    if missing:
+        raise WorkdirError(
+            f"Dereplication left {len(missing)} of {len(names)} genome(s) without a "
+            f"status (e.g. {', '.join(missing[:3])}). The dereplication result is incomplete."
+        )
+    bad = sorted(f"{g}={s}" for g, s in status.items() if s not in _VALID_STATUS)
+    if bad:
+        raise WorkdirError(f"Unknown dereplication status value(s): {', '.join(bad[:3])}")
+
+    rep_names = {p.name for p in result.representatives}
+    unmarked = sorted(r for r in rep_names if status.get(r) != STATUS_REPRESENTATIVE)
+    if unmarked:
+        raise WorkdirError(
+            f"{len(unmarked)} representative(s) are not marked as such in genome_status "
+            f"(e.g. {', '.join(unmarked[:3])})."
+        )
+
+    home: dict[str, int] = {}
+    for rep, members in result.clusters.items():
+        for m in members:
+            if m != rep:
+                home[m] = home.get(m, 0) + 1
+    orphans = sorted(
+        g for g, s in status.items() if s == STATUS_CONTAINED and home.get(g, 0) == 0
+    )
+    if orphans:
+        raise WorkdirError(
+            f"{len(orphans)} contained genome(s) have no representative "
+            f"(e.g. {', '.join(orphans[:3])}). The adapter returned an empty cluster table."
+        )
+    doubled = sorted(g for g, n in home.items() if n > 1)
+    if doubled:
+        raise WorkdirError(
+            f"{len(doubled)} genome(s) appear in more than one cluster "
+            f"(e.g. {', '.join(doubled[:3])})."
+        )
 
 
 class Dereplicator(ABC):

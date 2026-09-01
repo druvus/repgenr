@@ -62,9 +62,17 @@ class ParsnpTyper(SnpTyper):
             raise WorkdirError("ParSNP did not produce parsnp.ggr")
 
         core_fasta = out_dir / "core_snp.fasta"
-        run_tool(self.capabilities, 
+        run_tool(self.capabilities,
             ["harvesttools", "-i", ggr, "-S", core_fasta],
             logger=logger,
             log_prefix="harvesttools",
         )
-        return SnpResult(core_snp_fasta=core_fasta, masked=False)
+
+        full_fasta = out_dir / "full_alignment.fasta"
+        run_tool(self.capabilities,
+            ["harvesttools", "-i", ggr, "-M", full_fasta],
+            logger=logger,
+            log_prefix="harvesttools",
+        )
+
+        return SnpResult(core_snp_fasta=core_fasta, masked=False, full_alignment=full_fasta)

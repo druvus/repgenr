@@ -13,6 +13,7 @@ include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
 
 include { BACTERIAL_DATAFLOW } from './subworkflows/local/bacterial_dataflow'
 include { VIRAL_DATAFLOW     } from './subworkflows/local/viral_dataflow'
+include { PUBLISH_VERSIONS   } from './subworkflows/local/publish_versions'
 
 workflow {
     // Print usage and exit before validation, so `--help` needs no other params.
@@ -27,7 +28,7 @@ workflow {
           --outdir <DIR>         Published results (default: results)
           --mode bacterial|viral Lineage pipeline to run (default: bacterial)
           --metadata_args '<str>'  GTDB selection (bacterial)
-          --vmetadata_args / --vgenome_args '<str>'  BV-BRC selection (viral)
+          --vmetadata_args / --vgenome_args '<str>'  NCBI Virus selection (viral)
           --derep_tool <tool>    Dereplicator for the scatter-gather step
           --derep_process_size N Genomes per dereplication chunk (large inputs)
           --phylo_args '<str>'   Aligner or tree builder for the phylogeny
@@ -38,10 +39,15 @@ workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
 
+    ch_versions = Channel.empty()
     if (params.mode == 'viral') {
         VIRAL_DATAFLOW()
+        ch_versions = VIRAL_DATAFLOW.out.versions
     }
     else {
         BACTERIAL_DATAFLOW()
+        ch_versions = BACTERIAL_DATAFLOW.out.versions
     }
+
+    PUBLISH_VERSIONS(ch_versions)
 }

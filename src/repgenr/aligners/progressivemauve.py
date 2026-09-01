@@ -38,6 +38,7 @@ class ProgressiveMauveAligner(Aligner):
         conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
         recommended_max_genomes=500,  # progressiveMauve is single-threaded per alignment
+        accepted_extras=frozenset({"seed_weight"}),
     )
 
     def align(
@@ -82,7 +83,7 @@ class ProgressiveMauveAligner(Aligner):
                 logger=logger,
                 log_prefix=f"progressivemauve:{stem}",
             )
-            xmfa_to_fasta(xmfa, ref_arg, 0, fa)
+            xmfa_to_fasta(xmfa, ref_arg, fa)
             return fa
 
         per_query_fastas = parallel_map(align_query, queries, params.threads, logger=logger)

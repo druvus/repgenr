@@ -7,10 +7,16 @@ from pathlib import Path
 import pytest
 
 from repgenr.core.context import WorkdirContext
-from repgenr.core.contracts import CLUSTERS_TSV, GENOME_STATUS_TSV, read_clusters
+from repgenr.core.contracts import (
+    CLUSTERS_TSV,
+    GENOME_STATUS_TSV,
+    read_clusters,
+    read_genome_status,
+)
 from repgenr.core.plugins import ToolCapabilities
 from repgenr.dereplicators.base import (
     STATUS_CONTAINED,
+    STATUS_FAIL_QC,
     STATUS_REPRESENTATIVE,
     Dereplicator,
     DerepResult,
@@ -50,12 +56,34 @@ class _Halver(Dereplicator):
         return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
 
 
+class _QcHalver(_Halver):
+    """Halver that rejects the genomes in ``fail_names`` on QC before clustering."""
+
+    capabilities = ToolCapabilities(name="qchalver", supports_native_scaling=True)
+    fail_names: frozenset[str] = frozenset()
+
+    def preflight(self) -> dict[str, str]:
+        return {"qchalver": "1.0"}
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        genomes = list(genomes)
+        failed = [g for g in genomes if g.name in type(self).fail_names]
+        kept = [g for g in genomes if g.name not in type(self).fail_names]
+        result = super().dereplicate(kept, out_dir, params, logger)
+        for g in failed:
+            result.genome_status[g.name] = STATUS_FAIL_QC
+        return result
+
+
 @pytest.fixture
 def reg():
     registry._load()
     registry.register("halver", _Halver, replace=True)
+    registry.register("qchalver", _QcHalver, replace=True)
     yield
     registry._classes.pop("halver", None)
+    registry._classes.pop("qchalver", None)
+    _QcHalver.fail_names = frozenset()
 
 
 def _make_genomes(gdir: Path, n: int) -> list[Path]:
@@ -150,6 +178,45 @@ def test_discrete_matches_in_process_chunked(workdir: Path, reg) -> None:
 
     assert {r.name for r in final.representatives} == {r.name for r in ref.representatives}
     assert membership(final) == membership(ref)
+
+
+def test_fail_qc_genome_survives_chunk_merge(tmp_path: Path, reg) -> None:
+    """A chunk's QC-rejected genome keeps its status through the merge step.
+
+    The genome is in no cluster, so a merge that reads only clusters.tsv loses it
+    from both the composed status and the checked name list.
+    """
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    bad = genomes[3].name
+    _QcHalver.fail_names = frozenset({bad})
+
+    c0 = dereplicate_chunk(
+        ChunkParams(tool="qchalver", genomes=genomes[:4], out_dir=tmp_path / "c0"), _LOG
+    )
+    assert c0.genome_status[bad] == STATUS_FAIL_QC
+    assert read_genome_status(tmp_path / "c0" / GENOME_STATUS_TSV)[bad] == STATUS_FAIL_QC
+    dereplicate_chunk(
+        ChunkParams(tool="qchalver", genomes=genomes[4:], out_dir=tmp_path / "c1"), _LOG
+    )
+
+    final = dereplicate_merge(
+        MergeParams(
+            tool="qchalver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+        ),
+        _LOG,
+    )
+
+    assert final.genome_status[bad] == STATUS_FAIL_QC
+    assert len(final.genome_status) == 8
+    on_disk = read_genome_status(tmp_path / "merged" / GENOME_STATUS_TSV)
+    assert on_disk[bad] == STATUS_FAIL_QC
+    assert len(on_disk) == 8
+    # the rejected genome is in no cluster
+    clusters = read_clusters(tmp_path / "merged" / CLUSTERS_TSV)
+    assert bad not in {m for members in clusters.values() for m in members}
+    assert bad not in clusters
 
 
 def test_chunk_rejects_missing_genome(tmp_path: Path, reg) -> None:

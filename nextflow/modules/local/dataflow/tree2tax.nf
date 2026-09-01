@@ -8,7 +8,7 @@
 process TREE2TAX {
     label 'process_low'
     tag "tree2tax"
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${params.outdir}", mode: 'copy', pattern: '*.tsv'
 
     input:
     path tree

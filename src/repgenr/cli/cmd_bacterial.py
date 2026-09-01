@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, _derep_help, _parse_key_values, _run, app
+from .base import DEFAULT_THREADS, _derep_help, _parse_key_values, _run, app, gated_extra
 
 
 @app.command()
@@ -104,6 +104,7 @@ def dereplicate(
     ),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
+    from ..dereplicators.base import registry as _derep_registry
     from .param_builders import dereplicate_params
 
     def build():
@@ -121,7 +122,7 @@ def dereplicate(
             target_reps=target_reps,
             extra={
                 **_parse_key_values(tool_arg, "--tool-arg"),
-                **({"virus": True} if virus else {}),
+                **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
             },
             allow_incomplete=allow_incomplete,
         )

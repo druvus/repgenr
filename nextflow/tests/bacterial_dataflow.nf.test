@@ -19,6 +19,9 @@ nextflow_pipeline {
             assert path("$outputDir/tree2tax.tsv").exists()
             assert path("$outputDir/genomes_map.tsv").exists()
             assert path("$outputDir/phylo/tree/tree.nwk").exists()
+            // every process's versions.yml fragment is collected and published
+            assert path("$outputDir/pipeline_info/software_versions.yml").exists()
+            assert path("$outputDir/pipeline_info/software_versions.yml").text.contains("repgenr")
         }
     }
 }

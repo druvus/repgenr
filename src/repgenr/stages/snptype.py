@@ -2,9 +2,11 @@
 
 Selects a SNP typer, runs it against a reference (or reference-free),
 optionally masks recombination with Gubbins, and writes the canonical SNP
-outputs: ``snp/core_snp.fasta`` (+ optional VCF and SNP distance matrix). The
-core-SNP alignment is both a standalone typing deliverable and an MSA source for
-the phylo stage.
+outputs: ``snp/core_snp.fasta`` (+ optional VCF and SNP distance matrix, and
+``snp/full_alignment.fasta`` when the typer produces a whole-genome alignment).
+The core-SNP alignment is both a standalone typing deliverable and an MSA
+source for the phylo stage; the whole-genome alignment is the required input
+for recombination maskers.
 
 The compute is factored into :func:`snptype_core`, a stateless engine that takes
 explicit input/output directories and never touches the run config or manifest.
@@ -24,7 +26,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import scale_warning
+from ..core.plugins import scale_warning, warn_unconsumed_extras
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -59,12 +61,18 @@ def snptype_core(
     scratch: Path,
     params: SnptypeParams,
     logger: logging.Logger,
+    *,
+    warn_extras: bool = True,
 ) -> tuple[SnpResult, dict[str, str]]:
     """Run a SNP typer over ``genomes`` into ``snp_dir`` (stateless; no config).
 
     ``reference`` is the already-resolved reference path (or None). For a
     reference-requiring typer a None reference falls back to ``genomes[0]``;
     reference-free typers ignore it. Returns the SNP result and tool versions.
+
+    ``warn_extras`` reports extras this typer does not read. Callers that drive
+    several adapters from one extras dict (the phylo stage) warn once themselves
+    and pass False, so a key the tree builder reads is not flagged here.
     """
     if not genomes:
         raise WorkdirError("No genomes found for SNP typing. Run the genome (and derep) stages.")
@@ -77,6 +85,8 @@ def snptype_core(
             params.tool, limit, len(genomes), ", ".join(alts) or "none",
         )
     typer = snp_registry.create(params.tool)
+    if warn_extras:
+        warn_unconsumed_extras(typer.capabilities, params.extra, logger, family="SNP typer")
     versions = typer.preflight()
 
     ref = None
@@ -100,7 +110,6 @@ def snptype_core(
     snp_params = SnpParams(
         threads=params.threads,
         reference=ref,
-        mask=params.mask,
         extra=dict(params.extra),
     )
     logger.info("SNP typing %d genomes with %s", len(genomes), params.tool)
@@ -109,12 +118,19 @@ def snptype_core(
     core = snp_dir / CORE_SNP_FASTA
     masked = False
     if params.mask not in ("none", ""):
+        from ..maskers.base import MaskParams
         from ..maskers.base import registry as masker_registry
 
         masker = masker_registry.create(params.mask)
+        if result.full_alignment is None:
+            raise UserInputError(
+                f"--mask {params.mask} needs a whole-genome alignment, which SNP typer "
+                f"'{params.tool}' does not produce. Use snippy, parsnp or simple, or drop --mask."
+            )
         versions.update(masker.preflight())
         filtered = masker.mask(
-            result.core_snp_fasta, scratch / params.mask, logger
+            result.full_alignment, scratch / params.mask,
+            MaskParams(threads=params.threads), logger,
         )
         with atomic_path(core) as tmp:
             shutil.copy2(filtered, tmp)
@@ -129,6 +145,11 @@ def snptype_core(
     if result.snp_distance_matrix is not None:
         with atomic_path(snp_dir / "snp_distance_matrix.tsv") as tmp:
             shutil.copy2(result.snp_distance_matrix, tmp)
+    full_alignment_out: Path | None = None
+    if result.full_alignment is not None:
+        full_alignment_out = snp_dir / "full_alignment.fasta"
+        with atomic_path(full_alignment_out) as tmp:
+            shutil.copy2(result.full_alignment, tmp)
 
     return (
         SnpResult(
@@ -138,6 +159,7 @@ def snptype_core(
             if result.snp_distance_matrix
             else None,
             masked=masked,
+            full_alignment=full_alignment_out,
         ),
         versions,
     )

@@ -7,6 +7,7 @@ from pathlib import Path
 from repgenr.core.contracts import (
     list_fasta,
     read_clusters,
+    read_genome_status,
     strip_fasta_suffix,
     write_clusters,
     write_genome_status,
@@ -59,6 +60,21 @@ def test_genome_status_sorted(tmp_path: Path) -> None:
     write_genome_status(path, {"z.fasta": "contained", "a.fasta": "representative"})
     rows = [line.split("\t") for line in path.read_text().splitlines()[1:]]
     assert rows == [["a.fasta", "representative"], ["z.fasta", "contained"]]
+
+
+def test_genome_status_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "genome_status.tsv"
+    status = {
+        "a.fasta": "representative",
+        "b.fasta": "contained",
+        "c.fasta": "fail_qc",
+    }
+    write_genome_status(path, status)
+    assert read_genome_status(path) == status
+
+
+def test_read_genome_status_missing_file(tmp_path: Path) -> None:
+    assert read_genome_status(tmp_path / "absent.tsv") == {}
 
 
 def test_tree2tax_dedupes(tmp_path: Path) -> None:

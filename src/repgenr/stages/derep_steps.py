@@ -32,13 +32,15 @@ from ..core.contracts import (
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
     read_clusters,
+    read_genome_status,
     write_clusters,
     write_genome_status,
 )
 from ..core.errors import WorkdirError
+from ..core.plugins import warn_unconsumed_extras
 from ..core.process import link_or_copy
 from ..core.versions import write_versions_fragment
-from ..dereplicators.base import DerepParams, DerepResult, registry
+from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 from .dereplicate import _compose_two_stage
 
 _REPRESENTATIVES_DIR = "representatives"
@@ -86,6 +88,8 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         )
 
     adapter = registry.create(params.tool)
+    caps = adapter.capabilities
+    warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     versions = adapter.preflight()
     _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
@@ -93,11 +97,12 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
-        extra=dict(params.extra or {}),
+        extra={**caps.default_params, **(params.extra or {})},
     )
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
 
+    check_result_complete(result, [g.name for g in params.genomes])
     fallbacks = sorted({g.parent for g in params.genomes})
     _write_step_contract(params.out_dir, result, fallbacks)
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
@@ -118,6 +123,8 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         raise WorkdirError("dereplicate-merge: the chunk directories hold no representatives.")
 
     adapter = registry.create(params.tool)
+    caps = adapter.capabilities
+    warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     versions = adapter.preflight()
     _maybe_write_versions(params.versions_out, versions)
     derep_params = DerepParams(
@@ -125,11 +132,23 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
-        extra=dict(params.extra or {}),
+        extra={**caps.default_params, **(params.extra or {})},
     )
     scratch = _fresh(params.out_dir / "scratch")
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
+
+    # Every genome the chunks saw: cluster members plus the genomes that carry a
+    # status without a cluster (QC rejects), so the completeness check covers the
+    # whole input set rather than only the clustered part of it.
+    all_names = {
+        name
+        for r in stage1
+        for rep, members in r.clusters.items()
+        for name in (rep, *members)
+    }
+    all_names |= {genome for r in stage1 for genome in r.genome_status}
+    check_result_complete(final, all_names)
 
     # The final representatives are stage-2 representative paths, which live in the
     # chunk representatives/ directories; fall back to those when resolving files.
@@ -144,11 +163,17 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
 
 
 def _load_chunk(chunk_dir: Path) -> DerepResult:
-    """Read a chunk result directory back into a DerepResult (clusters + rep paths)."""
+    """Read a chunk result directory back into a DerepResult.
+
+    Reads the per-genome statuses as well as the clusters: genomes the chunk
+    rejected on QC appear only in ``genome_status.tsv``, and dropping them here
+    would lose them from the merged contract.
+    """
     clusters_path = chunk_dir / CLUSTERS_TSV
     if not clusters_path.exists():
         raise WorkdirError(f"dereplicate-merge: {clusters_path} not found (not a chunk result).")
     clusters = read_clusters(clusters_path)
+    status = read_genome_status(chunk_dir / GENOME_STATUS_TSV)
     rep_dir = chunk_dir / _REPRESENTATIVES_DIR
     reps: list[Path] = []
     for rep_name in clusters:
@@ -158,7 +183,7 @@ def _load_chunk(chunk_dir: Path) -> DerepResult:
                 f"dereplicate-merge: representative file missing in chunk: {rep_path}"
             )
         reps.append(rep_path)
-    return DerepResult(representatives=reps, clusters=clusters, genome_status={})
+    return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
 
 
 def _write_step_contract(

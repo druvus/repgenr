@@ -121,6 +121,14 @@ and emits them as a channel feeding the scatter-gather dereplication; `phylo` an
 `tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
 quick wiring check without external tools.
 
+### SNP typing and masking
+
+The `repgenr snptype` command (and `phylo-build --msa-source snptype`) call a
+SNP typer to produce a core-SNP alignment. Recombination masking (`--mask
+gubbins`) runs on the typer's whole-genome alignment and replaces the
+core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
+emit variable sites cannot be masked.
+
 ## Viral length filtering and over-represented species
 
 The viral selection step keeps records whose genome length falls inside a

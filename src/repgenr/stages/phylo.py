@@ -13,7 +13,7 @@ Outgroup rooting is handled here once, regardless of the tools chosen.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,12 +30,53 @@ from ..core.contracts import (
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import auto_select, scale_warning
+from ..core.plugins import ToolCapabilities, auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
 # Re-exported so the data-channel step helpers stay importable from this module.
 __all__ = ["PhyloParams", "PhyloBuildParams", "build_tree", "phylo_build", "run", "list_fasta"]
+
+# Keys the phylo stage reads itself; never forwarded to an adapter.
+_STAGE_EXTRA_KEYS = frozenset({"mask"})
+
+
+def _adapter_extra(extra: dict) -> dict:
+    return {k: v for k, v in extra.items() if k not in _STAGE_EXTRA_KEYS}
+
+
+def _warn_stage_extras(
+    caps: Sequence[ToolCapabilities], extra: Mapping[str, object], logger: logging.Logger
+) -> None:
+    """Warn once about extras that none of the participating adapters reads.
+
+    The phylo stage drives two adapters from one extras dict (an MSA source and
+    a tree builder), so warning per adapter reports a key the other one consumes.
+    A key is unused only when no participating tool declares it.
+    """
+    known: set[str] = set()
+    for cap in caps:
+        known |= set(cap.accepted_extras) | set(cap.default_params)
+    unread = sorted(set(extra) - known)
+    if unread:
+        logger.warning(
+            "No selected phylo tool (%s) reads extra parameter(s): %s",
+            ", ".join(cap.name for cap in caps), ", ".join(unread),
+        )
+
+
+def _msa_source_capabilities(params: PhyloParams) -> ToolCapabilities | None:
+    """Capabilities of the adapter that will build the MSA (aligner or SNP typer).
+
+    None when the source is unknown; ``_build_msa`` raises for that case.
+    """
+    if params.msa_source == "aligner":
+        return aligner_registry.get(params.aligner).capabilities
+    if params.msa_source == "snptype":
+        from ..snptypers.base import registry as snp_registry
+
+        return snp_registry.get(params.snptyper).capabilities
+    return None
 
 
 @dataclass
@@ -107,11 +148,20 @@ def build_tree(
     builder = treebuilder_registry.create(treebuilder)
     versions = builder.preflight()
 
+    # One warning for the whole stage: the tree builder and the MSA source share
+    # a single extras dict, so a key is unread only when neither declares it.
+    participating = [builder.capabilities]
+    if builder.input_kind != InputKind.GENOMES:
+        source_caps = _msa_source_capabilities(params)
+        if source_caps is not None:
+            participating.append(source_caps)
+    _warn_stage_extras(participating, _adapter_extra(params.extra), logger)
+
     tree_params = TreeParams(
         threads=params.threads,
         outgroup=None if params.no_outgroup else outgroup_leaf,
         bootstrap=params.bootstrap,
-        extra={**builder.capabilities.default_params, **params.extra},
+        extra={**builder.capabilities.default_params, **_adapter_extra(params.extra)},
     )
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 
@@ -298,7 +348,7 @@ def _build_msa(
         reference = _resolve_reference(params.reference, genomes, outgroup_file, logger)
         _warn_divergence(params.aligner, inputs, logger)
         align_params = AlignParams(
-            threads=params.threads, reference=reference, extra=dict(params.extra),
+            threads=params.threads, reference=reference, extra=_adapter_extra(params.extra),
         )
         result = aligner.align(inputs, reference, dirs.align_dir, align_params, logger)
         return result.msa_fasta, versions
@@ -313,6 +363,7 @@ def _build_msa(
             reference=params.reference,
             all_genomes=params.all_genomes,
             mask=params.extra.get("mask", "none"),
+            extra=_adapter_extra(params.extra),
         )
         snp_reference: Path | None = (
             _resolve_reference(params.reference, genomes, outgroup_file, logger)
@@ -320,7 +371,10 @@ def _build_msa(
             else None
         )
         snp_result, versions = snptype_core(
-            genomes, snp_reference, dirs.snp_dir, dirs.scratch_dir / "snptype", snp_params, logger
+            genomes, snp_reference, dirs.snp_dir, dirs.scratch_dir / "snptype", snp_params, logger,
+            # build_tree already warned once for the typer and the tree builder
+            # together; a second per-typer warning would name keys the builder reads.
+            warn_extras=False,
         )
         return snp_result.core_snp_fasta, versions
 

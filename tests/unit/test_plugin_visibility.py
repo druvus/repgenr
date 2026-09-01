@@ -178,7 +178,7 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
     class FakeMasker(Masker):
         capabilities = ToolCapabilities(name="fakemask")
 
-        def mask(self, core_snp_fasta, out_dir, logger):
+        def mask(self, full_alignment, out_dir, params, logger):
             out_dir.mkdir(parents=True, exist_ok=True)
             out = out_dir / "filtered.fasta"
             out.write_text(">m\nAC\n", encoding="utf-8")
@@ -188,14 +188,17 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
 
     class FakeTyper:
         requires_reference = False
+        capabilities = ToolCapabilities(name="faketyper")
 
         def preflight(self):
             return {}
 
         def call(self, genomes, ref, out_dir, params, logger):
             core = out_dir / "raw.fasta"
+            full = out_dir / "full.fasta"
             core.write_text(">a\nACGT\n", encoding="utf-8")
-            return SnpResult(core_snp_fasta=core)
+            full.write_text(">a\nACGTACGT\n", encoding="utf-8")
+            return SnpResult(core_snp_fasta=core, full_alignment=full)
 
     monkeypatch.setattr(
         snptype_mod.snp_registry, "create", lambda name: FakeTyper()
@@ -212,12 +215,14 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
 
 def test_unknown_masker_lists_available(tmp_path, monkeypatch) -> None:
     from repgenr.core.errors import PluginError
+    from repgenr.core.plugins import ToolCapabilities
     from repgenr.snptypers.base import SnpResult
     from repgenr.stages import snptype as snptype_mod
     from repgenr.stages.snptype import SnptypeParams, snptype_core
 
     class FakeTyper:
         requires_reference = False
+        capabilities = ToolCapabilities(name="faketyper")
 
         def preflight(self):
             return {}

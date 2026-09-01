@@ -7,9 +7,11 @@ from pathlib import Path
 import pytest
 
 from repgenr.core.context import WorkdirContext
+from repgenr.core.contracts import GENOME_STATUS_TSV, read_genome_status
 from repgenr.core.manifest import GenomeRecord
 from repgenr.core.plugins import ToolCapabilities
 from repgenr.dereplicators.base import (
+    STATUS_FAIL_QC,
     STATUS_REPRESENTATIVE,
     Dereplicator,
     DerepResult,
@@ -43,6 +45,25 @@ class _NoRep(Dereplicator):
         )
 
 
+class _QcNoRep(_NoRep):
+    """NoRep that rejects one genome on QC (as dRep's checkM filter does)."""
+
+    capabilities = ToolCapabilities(name="qcnorep", supports_native_scaling=True)
+    fail_names: frozenset[str] = frozenset()
+
+    def preflight(self) -> dict[str, str]:
+        return {"qcnorep": "1.0"}
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        genomes = list(genomes)
+        failed = [g for g in genomes if g.name in type(self).fail_names]
+        kept = [g for g in genomes if g.name not in type(self).fail_names]
+        result = super().dereplicate(kept, out_dir, params, logger)
+        for g in failed:
+            result.genome_status[g.name] = STATUS_FAIL_QC
+        return result
+
+
 @pytest.fixture
 def taxo_workdir(workdir: Path):
     gdir = workdir / "genomes"
@@ -51,12 +72,15 @@ def taxo_workdir(workdir: Path):
         (gdir / fn).write_text(">x\nACGT\n")
     registry._load()
     registry.register("norep", _NoRep, replace=True)
+    registry.register("qcnorep", _QcNoRep, replace=True)
     ctx = WorkdirContext(workdir, create=True)
     ctx.manifest.upsert_many(
         [GenomeRecord(accession=a, filename=fn, genus=g, species=s) for a, fn, g, s in _GENOMES]
     )
     yield ctx
     registry._classes.pop("norep", None)
+    registry._classes.pop("qcnorep", None)
+    _QcNoRep.fail_names = frozenset()
 
 
 def test_reduce_none_keeps_all(taxo_workdir) -> None:
@@ -77,3 +101,19 @@ def test_reduce_genus(taxo_workdir) -> None:
     # genus aaa (3) -> 1, genus bbb (1) -> 1  => 2 representatives
     assert len(res.representatives) == 2
     assert len(res.genome_status) == 4
+
+
+def test_reduce_keeps_fail_qc_genomes(taxo_workdir) -> None:
+    """A QC-rejected genome belongs to no cluster; reduction must still keep it."""
+    bad = _GENOMES[3][1]
+    _QcNoRep.fail_names = frozenset({bad})
+
+    res = run(taxo_workdir, DereplicateParams(tool="qcnorep", reduce="species"))
+
+    # aaa-sp1 (2) collapses to 1, aaa-sp2 stays => 2 representatives
+    assert len(res.representatives) == 2
+    assert res.genome_status[bad] == STATUS_FAIL_QC
+    assert len(res.genome_status) == 4
+    on_disk = read_genome_status(taxo_workdir.derep_dir / GENOME_STATUS_TSV)
+    assert on_disk[bad] == STATUS_FAIL_QC
+    assert len(on_disk) == 4

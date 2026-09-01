@@ -17,7 +17,7 @@ Each family defines an ABC and a normalized result type:
 | Aligner | `repgenr.aligners.base.Aligner` | `align(genomes, reference, out_dir, params, logger)` | `AlignResult` |
 | SnpTyper | `repgenr.snptypers.base.SnpTyper` | `call(genomes, reference, out_dir, params, logger)` | `SnpResult` |
 | TreeBuilder | `repgenr.treebuilders.base.TreeBuilder` | `build(msa_or_genomes, out_dir, params, logger)` | Newick `Path` |
-| Masker | `repgenr.maskers.base.Masker` | `mask(core_snp_fasta, out_dir, logger)` | filtered FASTA `Path` |
+| Masker | `repgenr.maskers.base.Masker` | `mask(full_alignment, out_dir, params: MaskParams, logger)` | masked variable-site FASTA `Path` |
 
 Per-family class attributes the stages branch on -- set them or inherit the
 default deliberately:
@@ -28,6 +28,11 @@ default deliberately:
   `as_msa_path` from `treebuilders.base`.
 * `SnpTyper.requires_reference`: when True (default) the stage resolves a
   reference genome before calling you.
+* A `Masker` reads the **whole-genome** alignment, not the SNP alignment, and
+  returns the masked variable-site FASTA that replaces the typer's core-SNP
+  output. A `SnpTyper` should therefore set `SnpResult.full_alignment`
+  whenever it can produce one; `--mask` is refused with a clear error when the
+  chosen typer leaves it None.
 * Optional capability hooks: `Dereplicator.compare(...)` (all-vs-all
   similarity for `repgenr glance`; return a `CompareResult` whose CSV has
   `genome1`/`genome2`/`similarity` columns) and
@@ -58,9 +63,12 @@ capabilities = ToolCapabilities(
   nothing bounded fits.
 * `accepted_extras` names the `params.extra` keys the adapter reads. Users set
   them with `--tool-arg key=value` (dereplicate/snptype and the data-channel
-  steps) or `--aligner-arg key=value` (phylo); the stage warns when a key no
-  adapter reads is passed, and reserved core keys (`virus`, `sketch_cache`,
-  `mask`, `dense_fallback`) are injected only for tools that accept them.
+  steps) or `--aligner-arg key=value` (phylo). Every stage warns, by name,
+  about extra keys no adapter it runs declares in `accepted_extras` -- phylo
+  drives two adapters (the MSA source and the tree builder) from one dict, so
+  it warns only about keys neither of them reads -- and the CLI does not
+  inject stage-level flags (such as `--virus`) into the extras of a tool that
+  does not read them.
   Parse integer extras with `repgenr.core.plugins.parse_extra_int` so a bad
   value raises a clean `UserInputError`.
 

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
+from repgenr.core import manifest as manifest_module
 from repgenr.core.errors import WorkdirError
 from repgenr.core.manifest import (
     BUSY_TIMEOUT_MS,
@@ -48,6 +50,34 @@ def test_rejects_newer_schema(tmp_path: Path) -> None:
     m.close()
     with pytest.raises(WorkdirError, match="newer than this"):
         Manifest(p)
+
+
+def test_readonly_rejects_newer_schema_without_leaking_the_connection(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A version rejection in the read-only branch must still close the handle."""
+    p = tmp_path / "manifest.sqlite"
+    m = Manifest(p)
+    m._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION + 1}")
+    m._conn.commit()
+    m.close()
+
+    opened: list[sqlite3.Connection] = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(manifest_module.sqlite3, "connect", tracking_connect)
+    with pytest.raises(WorkdirError, match="newer than this"):
+        Manifest.open_readonly(p)
+
+    assert opened, "the read-only branch never opened a connection"
+    for conn in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")  # a closed connection refuses further use
 
 
 def test_wal_mode_enabled(tmp_path: Path) -> None:
