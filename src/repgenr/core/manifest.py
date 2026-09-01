@@ -83,23 +83,27 @@ class Manifest:
         if readonly:
             if not self.path.exists():
                 raise WorkdirError(f"Manifest not found: {self.path}")
-            conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+            conn = None
             try:
+                conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
                 conn.row_factory = sqlite3.Row
                 conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
                 self._conn = conn
                 self._check_version()
             except sqlite3.OperationalError as exc:
-                conn.close()
+                if conn is not None:
+                    conn.close()
                 # Every manifest is WAL-mode, and even a read-only connection
                 # must create a "-shm" index file for it on first query -- so
                 # a directory that is not writable (an archived or
                 # permission-locked workdir, exactly where doctor is likely to
-                # run) surfaces here as a write failure, not a missing file.
+                # run), or a manifest file that is itself unreadable, surfaces
+                # here as a raw sqlite error, not a missing file.
                 raise WorkdirError(
                     f"Manifest at {self.path} cannot be opened read-only: {exc}. "
-                    "A WAL-mode database needs a writable directory for its "
-                    "-shm file; copy the workdir or make the directory writable."
+                    "A WAL-mode database needs a readable file and a writable "
+                    "directory for its -shm file; copy the workdir or fix its "
+                    "permissions."
                 ) from exc
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,9 +165,10 @@ class Manifest:
         Every manifest is WAL-mode, and SQLite must create (or open) a
         "-shm" index file for it even for a read-only connection's first
         query. If the manifest's directory is not writable (an archived or
-        permission-locked workdir), that fails, and this raises
-        ``WorkdirError`` rather than a raw ``sqlite3.OperationalError`` --
-        copy the workdir or make the directory writable first.
+        permission-locked workdir), or the manifest file itself is not
+        readable, that fails -- and this raises ``WorkdirError`` rather than
+        a raw ``sqlite3.OperationalError``. Copy the workdir or fix its
+        permissions first.
         """
         return cls(path, readonly=True)
 

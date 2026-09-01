@@ -258,6 +258,24 @@ def test_open_readonly_unwritable_dir_raises_workdir_error(workdir: Path) -> Non
         workdir.chmod(original_mode)
 
 
+def test_open_readonly_unreadable_file_raises_workdir_error(workdir: Path) -> None:
+    """Even connect() itself can fail (manifest file unreadable, e.g. chmod
+    0o000); that must also surface as WorkdirError, not a raw sqlite error."""
+    if os.geteuid() == 0:
+        pytest.skip("root bypasses file permissions")
+    workdir.mkdir(parents=True)
+    with Manifest.open(workdir) as m:
+        m.upsert(GenomeRecord(accession="GCA_1"))
+    manifest_path = workdir / "manifest.sqlite"
+    original_mode = stat.S_IMODE(manifest_path.stat().st_mode)
+    manifest_path.chmod(0o000)
+    try:
+        with pytest.raises(WorkdirError):
+            Manifest.open_readonly(manifest_path)
+    finally:
+        manifest_path.chmod(original_mode)
+
+
 def test_cli_doctor_exit_codes(tmp_path: Path) -> None:
     wd = _base_workdir(tmp_path)
     result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
