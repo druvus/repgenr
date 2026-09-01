@@ -124,15 +124,29 @@ def _select_via_tsv(
     selected = _select(accessions, target_levels, params.limit)
     outgroup_acc, outgroup_data = _pick_outgroup(accessions, selected, target_levels, params)
 
-    records = [_record_from_tax(acc, data["tax"]) for acc, data in selected.items()]
-    outgroup = _record_from_tax(outgroup_acc, outgroup_data["tax"], is_outgroup=True)
+    records = [
+        _record_from_tax(
+            acc, data["tax"],
+            completeness=data.get("completeness"), contamination=data.get("contamination"),
+        )
+        for acc, data in selected.items()
+    ]
+    outgroup = _record_from_tax(
+        outgroup_acc, outgroup_data["tax"], is_outgroup=True,
+        completeness=outgroup_data.get("completeness"),
+        contamination=outgroup_data.get("contamination"),
+    )
     return records, outgroup
 
 
-def _record_from_tax(accession: str, tax: dict, is_outgroup: bool = False) -> GenomeRecord:
+def _record_from_tax(
+    accession: str, tax: dict, is_outgroup: bool = False,
+    completeness: float | None = None, contamination: float | None = None,
+) -> GenomeRecord:
     return GenomeRecord(
         accession=accession, source="gtdb", is_outgroup=is_outgroup,
         family=tax["family"], genus=tax["genus"], species=tax["species"],
+        completeness=completeness, contamination=contamination,
     )
 
 
@@ -217,14 +231,38 @@ def _parse_metadata(path: Path, params: MetadataParams, logger) -> dict[str, dic
                     continue
 
             tax = _parse_taxonomy(fields[idx["gtdb_taxonomy"]])
+            completeness = _opt_column(
+                fields, idx, "checkm2_completeness", "checkm_completeness"
+            )
+            contamination = _opt_column(
+                fields, idx, "checkm2_contamination", "checkm_contamination"
+            )
             accessions[accession] = {
                 "accession": accession,
                 "accession_ncbi": fields[idx.get("ncbi_genbank_assembly_accession", 0)],
                 "tax": tax,
                 "is_rep": is_rep,
+                "completeness": completeness,
+                "contamination": contamination,
             }
     logger.info("Parsed %d accessions", len(accessions))
     return accessions
+
+
+def _opt_column(fields: list[str], idx: dict[str, int], *names: str) -> float | None:
+    """First present, non-empty, numeric column among ``names``; else None."""
+    for name in names:
+        i = idx.get(name)
+        if i is None or i >= len(fields):
+            continue
+        raw = fields[i].strip()
+        if not raw or raw.lower() in {"none", "na", "n/a"}:
+            continue
+        try:
+            return float(raw)
+        except ValueError:
+            continue
+    return None
 
 
 def _parse_taxonomy(raw: str) -> dict[str, str]:
@@ -314,6 +352,7 @@ def _write_selection(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) 
                 accession=r.accession, family=family, genus=genus, species=species,
                 is_outgroup=r.is_outgroup,
                 filename=genome_filename(family, genus, species, r.accession),
+                completeness=r.completeness, contamination=r.contamination,
             )
         )
     write_selection(ctx.workdir / SELECTION_TSV, rows)
@@ -347,6 +386,20 @@ def _capitalize_taxon(name: str) -> str:
         return name
     parts[0] = parts[0].capitalize()
     return " ".join(parts)
+
+
+def _api_quality(row: dict) -> tuple[float | None, float | None]:
+    """CheckM quality from an API row; None unless it carries checkm2_* fields."""
+    def val(key: str) -> float | None:
+        raw = row.get(key)
+        if raw is None or raw == "":
+            return None
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+
+    return val("checkm2_completeness"), val("checkm2_contamination")
 
 
 def _normalize_api_tax(row: dict) -> dict:
@@ -385,7 +438,13 @@ def _select_via_api(
     selected_acc: set[str] = set()
     for row in rows:
         acc = row["gid"]
-        records.append(_record_from_tax(acc, _normalize_api_tax(row)))
+        completeness, contamination = _api_quality(row)
+        records.append(
+            _record_from_tax(
+                acc, _normalize_api_tax(row),
+                completeness=completeness, contamination=contamination,
+            )
+        )
         selected_acc.add(acc)
 
     outgroup = _select_outgroup_via_api(params, rows, selected_acc, logger)
@@ -405,8 +464,10 @@ def _select_outgroup_via_api(
     if params.outgroup_accession:
         card = _api_get(f"/genome/{urllib.parse.quote(params.outgroup_accession, safe='')}/card")
         tax_row = card.get("metadataTaxonomy", {})
+        completeness, contamination = _api_quality(card)
         return _record_from_tax(
-            params.outgroup_accession, _normalize_api_tax(tax_row), is_outgroup=True
+            params.outgroup_accession, _normalize_api_tax(tax_row), is_outgroup=True,
+            completeness=completeness, contamination=contamination,
         )
 
     # Otherwise pick a representative from the parent taxon (one rank up) that is
@@ -427,7 +488,11 @@ def _select_outgroup_via_api(
         # must be outside the selected sub-taxon
         if row.get(_rank_field(params.level)) == rows[0].get(_rank_field(params.level)):
             continue
-        return _record_from_tax(row["gid"], _normalize_api_tax(row), is_outgroup=True)
+        completeness, contamination = _api_quality(row)
+        return _record_from_tax(
+            row["gid"], _normalize_api_tax(row), is_outgroup=True,
+            completeness=completeness, contamination=contamination,
+        )
     raise WorkdirError(
         "Could not determine an outgroup via the API; specify --outgroup-accession."
     )

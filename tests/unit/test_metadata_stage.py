@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import logging
 from pathlib import Path
 
 import pytest
@@ -212,6 +213,53 @@ def test_api_no_rows_raises(tmp_path, monkeypatch) -> None:
     )
     with pytest.raises(UserInputError, match="no genomes"):
         metadata.run(ctx, params)
+
+
+# --- CheckM quality columns (checkm2_* preferred, checkm_* fallback) ----------
+
+
+def _write_quality_tsv(
+    path: Path, quality_cols: tuple[str, str], quality_values: dict[str, tuple[str, str]]
+) -> None:
+    """A copy of the ``gtdb_tsv`` fixture layout with two extra quality columns."""
+    header = (
+        "accession\tgtdb_genome_representative\tgtdb_taxonomy\t"
+        f"ncbi_genbank_assembly_accession\t{quality_cols[0]}\t{quality_cols[1]}"
+    )
+    lines = [header]
+    for acc, rep, tax in _ROWS:
+        comp, cont = quality_values.get(acc, ("", ""))
+        lines.append(f"RS_{acc}\tRS_{rep}\t{tax}\t{acc}\t{comp}\t{cont}")
+    with gzip.open(path, "wt", encoding="utf-8") as fo:
+        fo.write("\n".join(lines) + "\n")
+
+
+def test_parse_metadata_carries_checkm2_quality(tmp_path) -> None:
+    path = tmp_path / "quality_checkm2.tsv.gz"
+    _write_quality_tsv(
+        path, ("checkm2_completeness", "checkm2_contamination"),
+        {"GCF_000001.1": ("99.0", "0.5")},
+    )
+    accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))
+    assert accessions["GCF_000001.1"]["completeness"] == 99.0
+    assert accessions["GCF_000001.1"]["contamination"] == 0.5
+
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(path))
+    rec = next(g for g in ctx.manifest.all_genomes() if g.accession == "GCF_000001.1")
+    assert rec.completeness == 99.0
+    assert rec.contamination == 0.5
+
+
+def test_parse_metadata_falls_back_to_checkm_quality(tmp_path) -> None:
+    path = tmp_path / "quality_checkm.tsv.gz"
+    _write_quality_tsv(
+        path, ("checkm_completeness", "checkm_contamination"),
+        {"GCF_000001.1": ("98.0", "1.2")},
+    )
+    accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))
+    assert accessions["GCF_000001.1"]["completeness"] == 98.0
+    assert accessions["GCF_000001.1"]["contamination"] == 1.2
 
 
 def test_narrower_reselection_shrinks_manifest(tmp_path, gtdb_tsv) -> None:
