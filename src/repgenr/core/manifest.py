@@ -90,6 +90,11 @@ class Manifest:
                 conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
                 self._conn = conn
                 self._check_version()
+            except WorkdirError:
+                # A rejected schema version must not leak the open handle.
+                if conn is not None:
+                    conn.close()
+                raise
             except sqlite3.OperationalError as exc:
                 if conn is not None:
                     conn.close()

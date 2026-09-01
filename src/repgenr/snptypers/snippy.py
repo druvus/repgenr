@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -74,7 +75,9 @@ class SnippyTyper(SnpTyper):
         full_aln = Path(str(core_prefix) + ".full.aln")
         full: Path | None = None
         if full_aln.exists():
+            # The whole-genome alignment is the largest artifact snippy-core
+            # writes; copy the file instead of reading it into memory as text.
             full = out_dir / "full_alignment.fasta"
-            full.write_text(full_aln.read_text(encoding="utf-8"), encoding="utf-8")
+            shutil.copy2(full_aln, full)
 
         return SnpResult(core_snp_fasta=core_fasta, masked=False, full_alignment=full)
