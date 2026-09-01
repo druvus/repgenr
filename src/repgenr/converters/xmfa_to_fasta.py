@@ -3,10 +3,10 @@
 Port of ``x2fa.py`` v9 by Adrian Larkeryd (GPLv3), originally invoked as a
 Python 2 subprocess by the old ``phylo.py``. Behaviour is preserved: the
 reference sequence defines the coordinate system, reference gaps are removed,
-optional deletion flanks are screened, and every sequence is projected onto the
-reference coordinates. Strings are handled as ``bytearray`` / ``bytes``
-throughout (the original relied on Python 2 ``str``/``bytearray`` equivalence);
-regex scanning uses a latin-1 view so byte positions are 1:1 with characters.
+and every sequence is projected onto the reference coordinates. Strings are
+handled as ``bytearray`` / ``bytes`` throughout (the original relied on Python 2
+``str``/``bytearray`` equivalence); regex scanning uses a latin-1 view so byte
+positions are 1:1 with characters.
 """
 
 from __future__ import annotations
