@@ -360,7 +360,7 @@ def _dereplicate_chunked(
 
 
 def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepResult:
-    from ..dereplicators.base import STATUS_CONTAINED, STATUS_REPRESENTATIVE
+    from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
 
     # Each stage-1 representative -> every original genome in its cluster (the rep
     # itself plus its members). Built once; lets composition run in O(N) instead
@@ -371,7 +371,16 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
             s1rep_to_members[rep] = [rep, *members]
 
     final_clusters: dict[str, list[str]] = {}
-    status: dict[str, str] = {}
+    # Genomes a stage-1 pass rejected on QC belong to no cluster, so rebuilding
+    # the status from cluster membership alone would drop them entirely and the
+    # completeness check would then refuse the whole result. Seed the status with
+    # them; the cluster-derived entries below take precedence on any overlap.
+    status: dict[str, str] = {
+        genome: state
+        for r in stage1
+        for genome, state in r.genome_status.items()
+        if state == STATUS_FAIL_QC
+    }
 
     for final_rep, s1reps_contained in stage2.clusters.items():
         status[final_rep] = STATUS_REPRESENTATIVE
@@ -405,7 +414,7 @@ def _reduce_by_taxonomy(
     taxon is unknown/empty are kept as-is (each its own group), so reduction never
     silently drops an un-annotated genome.
     """
-    from ..dereplicators.base import STATUS_CONTAINED, STATUS_REPRESENTATIVE
+    from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
 
     taxon_of = _taxon_lookup(ctx, level)
 
@@ -420,7 +429,13 @@ def _reduce_by_taxonomy(
     rep_by_name = {rep.name: rep for rep in result.representatives}
     new_reps: list = []
     new_clusters: dict[str, list[str]] = {}
-    status: dict[str, str] = {}
+    # QC-rejected genomes are in no cluster; carry their status across the
+    # reduction instead of losing them with the old membership.
+    status: dict[str, str] = {
+        genome: state
+        for genome, state in result.genome_status.items()
+        if state == STATUS_FAIL_QC
+    }
 
     for members in groups.values():
         # keeper: largest existing cluster, tie-break by name (deterministic)

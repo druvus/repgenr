@@ -81,7 +81,7 @@ def check_result_complete(result: DerepResult, genome_names: Collection[str]) ->
     if missing:
         raise WorkdirError(
             f"Dereplication left {len(missing)} of {len(names)} genome(s) without a "
-            f"status (e.g. {', '.join(missing[:3])}). The adapter output is incomplete."
+            f"status (e.g. {', '.join(missing[:3])}). The dereplication result is incomplete."
         )
     bad = sorted(f"{g}={s}" for g, s in status.items() if s not in _VALID_STATUS)
     if bad:

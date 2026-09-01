@@ -32,6 +32,7 @@ from ..core.contracts import (
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
     read_clusters,
+    read_genome_status,
     write_clusters,
     write_genome_status,
 )
@@ -137,12 +138,16 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
 
-    all_names = [
+    # Every genome the chunks saw: cluster members plus the genomes that carry a
+    # status without a cluster (QC rejects), so the completeness check covers the
+    # whole input set rather than only the clustered part of it.
+    all_names = {
         name
         for r in stage1
         for rep, members in r.clusters.items()
         for name in (rep, *members)
-    ]
+    }
+    all_names |= {genome for r in stage1 for genome in r.genome_status}
     check_result_complete(final, all_names)
 
     # The final representatives are stage-2 representative paths, which live in the
@@ -158,11 +163,17 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
 
 
 def _load_chunk(chunk_dir: Path) -> DerepResult:
-    """Read a chunk result directory back into a DerepResult (clusters + rep paths)."""
+    """Read a chunk result directory back into a DerepResult.
+
+    Reads the per-genome statuses as well as the clusters: genomes the chunk
+    rejected on QC appear only in ``genome_status.tsv``, and dropping them here
+    would lose them from the merged contract.
+    """
     clusters_path = chunk_dir / CLUSTERS_TSV
     if not clusters_path.exists():
         raise WorkdirError(f"dereplicate-merge: {clusters_path} not found (not a chunk result).")
     clusters = read_clusters(clusters_path)
+    status = read_genome_status(chunk_dir / GENOME_STATUS_TSV)
     rep_dir = chunk_dir / _REPRESENTATIVES_DIR
     reps: list[Path] = []
     for rep_name in clusters:
@@ -172,7 +183,7 @@ def _load_chunk(chunk_dir: Path) -> DerepResult:
                 f"dereplicate-merge: representative file missing in chunk: {rep_path}"
             )
         reps.append(rep_path)
-    return DerepResult(representatives=reps, clusters=clusters, genome_status={})
+    return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
 
 
 def _write_step_contract(

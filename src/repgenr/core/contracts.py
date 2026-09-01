@@ -222,6 +222,27 @@ def write_genome_status(path: Path, status: dict[str, str]) -> None:
             writer.writerow([genome, value])
 
 
+def read_genome_status(path: Path) -> dict[str, str]:
+    """Read genome -> status. A missing file yields an empty mapping.
+
+    The counterpart of :func:`write_genome_status`, so a step that consumes a
+    contract directory (Nextflow scatter-gather) recovers the statuses of
+    genomes that belong to no cluster -- ``fail_qc`` genomes would otherwise be
+    invisible to the consumer.
+    """
+    status: dict[str, str] = {}
+    if not path.exists():
+        return status
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.reader(fo, delimiter="\t")
+        next(reader, None)  # skip header
+        for row in reader:
+            if len(row) < 2:
+                continue
+            status[row[0]] = row[1]
+    return status
+
+
 def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
     """Write child -> parent edges (FlexTaxD), de-duplicated, order preserved."""
     seen: set[tuple[str, str]] = set()
