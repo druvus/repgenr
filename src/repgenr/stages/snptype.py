@@ -2,9 +2,11 @@
 
 Selects a SNP typer, runs it against a reference (or reference-free),
 optionally masks recombination with Gubbins, and writes the canonical SNP
-outputs: ``snp/core_snp.fasta`` (+ optional VCF and SNP distance matrix). The
-core-SNP alignment is both a standalone typing deliverable and an MSA source for
-the phylo stage.
+outputs: ``snp/core_snp.fasta`` (+ optional VCF and SNP distance matrix, and
+``snp/full_alignment.fasta`` when the typer produces a whole-genome alignment).
+The core-SNP alignment is both a standalone typing deliverable and an MSA
+source for the phylo stage; the whole-genome alignment is the required input
+for recombination maskers.
 
 The compute is factored into :func:`snptype_core`, a stateless engine that takes
 explicit input/output directories and never touches the run config or manifest.

@@ -21,6 +21,8 @@ registry: Registry[Masker] = Registry("repgenr.maskers")
 
 @dataclass
 class MaskParams:
+    """Tuning passed to every ``Masker.mask`` call."""
+
     threads: int = 16
 
 

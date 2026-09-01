@@ -91,7 +91,9 @@ def _make_fake_run_tool(recorded: list[list[str]]):
         elif tool == "snippy":
             Path(_flag_value(cmd, "--outdir")).mkdir(parents=True, exist_ok=True)
         elif tool == "snippy-core":
-            _write(Path(_flag_value(cmd, "--prefix") + ".aln"), _CANNED_MSA)
+            prefix = _flag_value(cmd, "--prefix")
+            _write(Path(prefix + ".aln"), _CANNED_MSA)
+            _write(Path(prefix + ".full.aln"), _CANNED_MSA)
         elif tool == "parsnp":
             _write(Path(_flag_value(cmd, "-o")) / "parsnp.ggr", "GGR")
         elif tool == "harvesttools":
@@ -168,9 +170,47 @@ def test_snptyper_contract(tool, genomes, recorded, tmp_path) -> None:
     if result.snp_distance_matrix is not None:
         assert result.snp_distance_matrix.exists()
 
+    # Every built-in typer must supply a whole-genome alignment for maskers
+    # (snippy: core.full.aln; parsnp: harvesttools -M; simple: its consensuses).
+    assert result.full_alignment is not None, f"{tool} did not return a full_alignment"
+    assert result.full_alignment.exists()
+    full_headers = _read_headers(result.full_alignment)
+    assert full_headers >= set(_STEMS), (
+        f"full alignment must name all genomes, got {full_headers}"
+    )
+
     flat = [tok for cmd in recorded for tok in cmd]
     for token in _SNP_PARAM_TOKENS[tool]:
         assert token in flat, f"{token!r} missing from recorded argv for {tool}"
+
+
+def test_snippy_without_full_aln_returns_none_full_alignment(
+    genomes, tmp_path, monkeypatch
+) -> None:
+    """snippy-core sometimes omits the whole-genome alignment (older
+    versions, or --no-fullaln-like configurations); the typer must not
+    fabricate one, so masking downstream is correctly refused."""
+    if "snippy" not in snp_registry.names():
+        pytest.skip("snippy not registered")
+
+    import repgenr.snptypers.snippy as snippy_mod
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        tool = Path(cmd[0]).name
+        if tool == "snippy":
+            Path(_flag_value(cmd, "--outdir")).mkdir(parents=True, exist_ok=True)
+        elif tool == "snippy-core":
+            # Deliberately write only the core alignment, not .full.aln.
+            _write(Path(_flag_value(cmd, "--prefix") + ".aln"), _CANNED_MSA)
+        return 0
+
+    monkeypatch.setattr(snippy_mod, "run_tool", fake_run_tool)
+    typer_ = snp_registry.create("snippy")
+    result = typer_.call(
+        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=7), _LOG
+    )
+    assert result.full_alignment is None
 
 
 def test_gubbins_masking_returns_filtered_fasta(genomes, recorded, tmp_path) -> None:
