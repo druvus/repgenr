@@ -41,8 +41,8 @@ def test_contained_without_cluster_raises() -> None:
 
 def test_representative_without_status_raises() -> None:
     r = _ok()
-    r.genome_status = {"b.fasta": STATUS_CONTAINED}
-    with pytest.raises(WorkdirError, match="a.fasta"):
+    r.genome_status = {"a.fasta": STATUS_CONTAINED, "b.fasta": STATUS_CONTAINED}
+    with pytest.raises(WorkdirError, match="not marked as such"):
         check_result_complete(r, ["a.fasta", "b.fasta"])
 
 
@@ -51,6 +51,20 @@ def test_unknown_status_value_raises() -> None:
     r.genome_status["b.fasta"] = "weird"
     with pytest.raises(WorkdirError, match="weird"):
         check_result_complete(r, ["a.fasta", "b.fasta"])
+
+
+def test_doubled_membership_raises() -> None:
+    r = DerepResult(
+        representatives=[Path("a.fasta"), Path("c.fasta")],
+        clusters={"a.fasta": ["b.fasta"], "c.fasta": ["b.fasta"]},
+        genome_status={
+            "a.fasta": STATUS_REPRESENTATIVE,
+            "c.fasta": STATUS_REPRESENTATIVE,
+            "b.fasta": STATUS_CONTAINED,
+        },
+    )
+    with pytest.raises(WorkdirError, match="more than one cluster"):
+        check_result_complete(r, ["a.fasta", "b.fasta", "c.fasta"])
 
 
 def test_fail_qc_needs_no_cluster() -> None:

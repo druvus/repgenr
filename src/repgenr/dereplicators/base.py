@@ -15,6 +15,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..core.errors import WorkdirError
 from ..core.plugins import Registry, ToolCapabilities, preflight
 
 registry: Registry[Dereplicator] = Registry("repgenr.dereplicators")
@@ -74,8 +75,6 @@ def check_result_complete(result: DerepResult, genome_names: Collection[str]) ->
     (e.g. after an upstream column-layout change) and the stage would complete
     with genomes missing from every deliverable.
     """
-    from ..core.errors import WorkdirError
-
     names = set(genome_names)
     status = result.genome_status
     missing = sorted(names - status.keys())
