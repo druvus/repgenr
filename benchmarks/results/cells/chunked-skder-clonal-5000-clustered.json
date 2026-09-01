@@ -1,0 +1,27 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "--force",
+  "dereplicate",
+  "-wd",
+  "/Volumes/sekvens2/repgenr/work/chunked-skder-clonal-5000-clustered/wd",
+  "--tool",
+  "skder",
+  "-t",
+  "8",
+  "--process-size",
+  "1000"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g001999_GCF9001999.1.fasta",
+ "exit_code": 0,
+ "id": "chunked-skder-clonal-5000-clustered",
+ "kind": "derep_stage",
+ "max_rss_mb": 1092.1,
+ "n": 5000,
+ "n_representatives": 61,
+ "set": "clonal_5000_clustered",
+ "status": "ok",
+ "tool": "skder",
+ "wall_s": 874.35
+}

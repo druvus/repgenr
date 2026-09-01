@@ -1,0 +1,27 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "--force",
+  "dereplicate",
+  "-wd",
+  "/Volumes/sekvens2/repgenr/work/chunked-sourmash-clonal-5000-random/wd",
+  "--tool",
+  "sourmash",
+  "-t",
+  "8",
+  "--process-size",
+  "1000"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g000001_GCF9000001.1.fasta",
+ "exit_code": 0,
+ "id": "chunked-sourmash-clonal-5000-random",
+ "kind": "derep_stage",
+ "max_rss_mb": 246.2,
+ "n": 5000,
+ "n_representatives": 61,
+ "set": "clonal_5000_random",
+ "status": "ok",
+ "tool": "sourmash",
+ "wall_s": 321.48
+}

@@ -1,0 +1,26 @@
+{
+ "argv": [
+  "/Users/andreassjodin/miniforge3/envs/repgenr_dev/bin/repgenr",
+  "dereplicate-chunk",
+  "--genomes-fofn",
+  "/Volumes/sekvens2/repgenr/work/derep-galah-clonal-5000/genomes.fofn",
+  "-o",
+  "/Volumes/sekvens2/repgenr/work/derep-galah-clonal-5000/derep_out",
+  "--tool",
+  "galah",
+  "-t",
+  "8"
+ ],
+ "ari_vs_truth": 1.0,
+ "clone_representative": "Benchfam_Benchgen_g000000_GCF9000000.1.fasta",
+ "exit_code": 0,
+ "id": "derep-galah-clonal-5000",
+ "kind": "derep_step",
+ "max_rss_mb": 8251.9,
+ "n": 5000,
+ "n_representatives": 61,
+ "set": "clonal_5000_clustered",
+ "status": "ok",
+ "tool": "galah",
+ "wall_s": 3796.0
+}
