@@ -61,12 +61,18 @@ def snptype_core(
     scratch: Path,
     params: SnptypeParams,
     logger: logging.Logger,
+    *,
+    warn_extras: bool = True,
 ) -> tuple[SnpResult, dict[str, str]]:
     """Run a SNP typer over ``genomes`` into ``snp_dir`` (stateless; no config).
 
     ``reference`` is the already-resolved reference path (or None). For a
     reference-requiring typer a None reference falls back to ``genomes[0]``;
     reference-free typers ignore it. Returns the SNP result and tool versions.
+
+    ``warn_extras`` reports extras this typer does not read. Callers that drive
+    several adapters from one extras dict (the phylo stage) warn once themselves
+    and pass False, so a key the tree builder reads is not flagged here.
     """
     if not genomes:
         raise WorkdirError("No genomes found for SNP typing. Run the genome (and derep) stages.")
@@ -79,7 +85,8 @@ def snptype_core(
             params.tool, limit, len(genomes), ", ".join(alts) or "none",
         )
     typer = snp_registry.create(params.tool)
-    warn_unconsumed_extras(typer.capabilities, params.extra, logger, family="SNP typer")
+    if warn_extras:
+        warn_unconsumed_extras(typer.capabilities, params.extra, logger, family="SNP typer")
     versions = typer.preflight()
 
     ref = None

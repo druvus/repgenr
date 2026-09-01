@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -49,7 +50,7 @@ class _MsaTreeBuilder(TreeBuilder):
 
 
 class _FakeAligner(Aligner):
-    capabilities = ToolCapabilities(name="fakealigner")
+    capabilities = ToolCapabilities(name="fakealigner", accepted_extras=frozenset({"kmer"}))
     seen_extra: dict | None = None
 
     def preflight(self):
@@ -170,6 +171,73 @@ def test_mask_key_stripped_before_aligner_and_treebuilder(
     )
     assert _FakeAligner.seen_extra == {"seed_weight": 11}
     assert _MsaTreeBuilder.seen_extra == {"seed_weight": 11}
+
+
+def _extras_warnings(caplog, key: str) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.levelno == logging.WARNING and key in r.getMessage()
+    ]
+
+
+def test_aligner_key_does_not_warn_from_the_tree_builder(
+    workdir: Path, fake_phylo_tools, caplog
+) -> None:
+    """An extra the aligner reads is consumed by the stage, so the tree builder
+    (which declares no extras of its own) must not report it as ignored."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_msa",
+                msa_source="aligner",
+                aligner="fakealigner",
+                no_outgroup=True,
+                extra={"kmer": "15"},
+            ),
+        )
+    assert _extras_warnings(caplog, "kmer") == []
+
+
+def test_extra_read_by_no_tool_warns_once(workdir: Path, fake_phylo_tools, caplog) -> None:
+    """A key neither the aligner nor the tree builder declares is reported once."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_msa",
+                msa_source="aligner",
+                aligner="fakealigner",
+                no_outgroup=True,
+                extra={"nosuchkey": "1"},
+            ),
+        )
+    assert len(_extras_warnings(caplog, "nosuchkey")) == 1
+
+
+def test_snptyper_key_does_not_warn_from_the_tree_builder(
+    workdir: Path, fake_phylo_tools, fake_snptyper, caplog
+) -> None:
+    """Same for the snptype MSA source: the typer's key is consumed, not ignored."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_msa",
+                msa_source="snptype",
+                snptyper="fakesnptyper",
+                no_outgroup=True,
+                extra={"kmer": "15"},
+            ),
+        )
+    assert _extras_warnings(caplog, "kmer") == []
 
 
 def test_snptype_receives_extra_without_mask(

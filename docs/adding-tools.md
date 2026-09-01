@@ -59,9 +59,11 @@ capabilities = ToolCapabilities(
 * `accepted_extras` names the `params.extra` keys the adapter reads. Users set
   them with `--tool-arg key=value` (dereplicate/snptype and the data-channel
   steps) or `--aligner-arg key=value` (phylo). Every stage warns, by name,
-  about extra keys the chosen adapter does not declare in `accepted_extras`,
-  and the CLI does not inject stage-level flags (such as `--virus`) into the
-  extras of a tool that does not read them.
+  about extra keys no adapter it runs declares in `accepted_extras` -- phylo
+  drives two adapters (the MSA source and the tree builder) from one dict, so
+  it warns only about keys neither of them reads -- and the CLI does not
+  inject stage-level flags (such as `--virus`) into the extras of a tool that
+  does not read them.
   Parse integer extras with `repgenr.core.plugins.parse_extra_int` so a bad
   value raises a clean `UserInputError`.
 
