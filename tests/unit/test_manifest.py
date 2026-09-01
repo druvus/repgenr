@@ -196,3 +196,31 @@ def test_v1_database_is_migrated(tmp_path):
     assert m.quality() == {}
     assert m.all_genomes()[0].completeness is None
     m.close()
+
+
+def test_quality_on_readonly_v1_database_returns_empty(tmp_path):
+    """quality() must not raise on a v1 file opened read-only (never migrated)."""
+    import sqlite3
+
+    from repgenr.core.manifest import Manifest
+
+    path = tmp_path / "old.sqlite"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        "CREATE TABLE genomes (accession TEXT PRIMARY KEY, filename TEXT, source TEXT, "
+        "family TEXT, genus TEXT, species TEXT, is_outgroup INTEGER DEFAULT 0, "
+        "derep_status TEXT, representative TEXT); PRAGMA user_version=1;"
+    )
+    conn.execute("INSERT INTO genomes (accession, filename) VALUES ('A', 'a.fasta')")
+    conn.commit()
+    conn.close()
+
+    m = Manifest.open_readonly(path)
+    assert m.quality() == {}
+    assert [g.accession for g in m.all_genomes()] == ["A"]
+    m.close()
+
+    # never migrated: user_version is still 1 on reopen
+    reopened = sqlite3.connect(path)
+    assert int(reopened.execute("PRAGMA user_version").fetchone()[0]) == 1
+    reopened.close()

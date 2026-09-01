@@ -268,7 +268,16 @@ class Manifest:
         return [_row_to_record(row) for row in cur.fetchall()]
 
     def quality(self) -> dict[str, tuple[float, float]]:
-        """filename -> (completeness, contamination) for genomes with both values."""
+        """filename -> (completeness, contamination) for genomes with both values.
+
+        A manifest opened read-only never runs ``_migrate``, so a pre-v2 file
+        genuinely lacks these columns; querying them would raise
+        ``sqlite3.OperationalError``. Check for the columns first and return an
+        empty mapping rather than fail, mirroring ``_row_to_record``'s tolerance.
+        """
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
+        if "completeness" not in cols or "contamination" not in cols:
+            return {}
         rows = self._conn.execute(
             "SELECT filename, completeness, contamination FROM genomes "
             "WHERE filename IS NOT NULL AND completeness IS NOT NULL AND contamination IS NOT NULL"
