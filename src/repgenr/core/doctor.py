@@ -131,7 +131,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
     if not selection.exists() or not manifest_path.exists():
         return []
     selected = {row.accession for row in read_selection(selection)}
-    manifest = Manifest(manifest_path)
+    manifest = Manifest.open_readonly(manifest_path)
     try:
         recorded = {g.accession for g in manifest.all_genomes(include_outgroup=True)}
     finally:
@@ -271,7 +271,7 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
         if name in _MANIFEST_INPUT_STAGES:
             manifest_path = workdir / MANIFEST_FILENAME
             if manifest_path.exists():
-                manifest = Manifest(manifest_path)
+                manifest = Manifest.open_readonly(manifest_path)
                 try:
                     digests["manifest"] = manifest_digest(manifest)
                 finally:

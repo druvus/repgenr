@@ -78,8 +78,16 @@ class Manifest:
     timeout cover concurrency across *processes* (Nextflow scatter), not threads.
     """
 
-    def __init__(self, path: str | os.PathLike[str]):
+    def __init__(self, path: str | os.PathLike[str], *, readonly: bool = False):
         self.path = Path(path)
+        if readonly:
+            if not self.path.exists():
+                raise WorkdirError(f"Manifest not found: {self.path}")
+            self._conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+            self._check_version()
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
@@ -97,6 +105,15 @@ class Manifest:
         self._migrate()
         self._conn.commit()
 
+    def _check_version(self) -> None:
+        """Reject a manifest written by a newer, incompatible RepGenR."""
+        version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
+        if version > SCHEMA_VERSION:
+            raise WorkdirError(
+                f"Manifest at {self.path} has schema version {version}, newer than this "
+                f"RepGenR supports ({SCHEMA_VERSION}). Upgrade RepGenR or use a new workdir."
+            )
+
     def _migrate(self) -> None:
         """Apply schema migrations keyed on ``PRAGMA user_version``.
 
@@ -104,12 +121,8 @@ class Manifest:
         already matches v1, so they are adopted as v1. Future schema changes add
         a numbered migration step and bump SCHEMA_VERSION.
         """
+        self._check_version()
         version = int(self._conn.execute("PRAGMA user_version").fetchone()[0])
-        if version > SCHEMA_VERSION:
-            raise WorkdirError(
-                f"Manifest at {self.path} has schema version {version}, newer than this "
-                f"RepGenR supports ({SCHEMA_VERSION}). Upgrade RepGenR or use a new workdir."
-            )
         # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
         # Future: while version < SCHEMA_VERSION: apply step; version += 1
         if version != SCHEMA_VERSION:
@@ -118,6 +131,16 @@ class Manifest:
     @classmethod
     def open(cls, workdir: str | os.PathLike[str]) -> Manifest:
         return cls(Path(workdir) / MANIFEST_FILENAME)
+
+    @classmethod
+    def open_readonly(cls, path: str | os.PathLike[str]) -> Manifest:
+        """Open an existing manifest without creating, migrating or journaling it.
+
+        Raises ``WorkdirError`` if the file does not exist. Intended for
+        read-only callers such as ``repgenr doctor``, which must not create,
+        upgrade, or otherwise touch the workdir.
+        """
+        return cls(path, readonly=True)
 
     def close(self) -> None:
         self._conn.close()

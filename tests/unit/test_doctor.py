@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from repgenr.cli.main import app
@@ -186,6 +187,48 @@ def test_diagnose_is_read_only(tmp_path: Path) -> None:
 
 
 # --- CLI ----------------------------------------------------------------------
+
+
+def _non_wal_listing(workdir: Path) -> list[str]:
+    # A WAL-mode database opened read-only may cause sqlite to create a
+    # "-shm" (and sometimes "-wal") sidecar purely to read the wal-index;
+    # a read-only connection cannot check those back in on close. They are
+    # not a write to the manifest itself, so they are excluded here -- the
+    # mtime assertion below is what actually proves the manifest untouched.
+    return sorted(
+        p.name for p in workdir.iterdir()
+        if not (p.name.endswith("-shm") or p.name.endswith("-wal"))
+    )
+
+
+def test_doctor_leaves_manifest_untouched(workdir: Path) -> None:
+    workdir.mkdir(parents=True)
+    with Manifest.open(workdir) as m:
+        m.upsert(GenomeRecord(accession="GCA_1", filename="x.fasta"))
+    (workdir / "selection.tsv").write_text("accession\tfilename\nGCA_1\tx.fasta\n")
+    Config().save(workdir)  # so diagnose() reaches the manifest-drift check
+    manifest = workdir / "manifest.sqlite"
+    before = (manifest.stat().st_mtime_ns, _non_wal_listing(workdir))
+
+    diagnose(workdir)
+
+    after = (manifest.stat().st_mtime_ns, _non_wal_listing(workdir))
+    assert before == after
+
+
+def test_open_readonly_refuses_writes(workdir: Path) -> None:
+    import sqlite3
+
+    workdir.mkdir(parents=True)
+    with Manifest.open(workdir) as m:
+        m.upsert(GenomeRecord(accession="GCA_1"))
+    ro = Manifest.open_readonly(workdir / "manifest.sqlite")
+    try:
+        assert [g.accession for g in ro.all_genomes()] == ["GCA_1"]
+        with pytest.raises(sqlite3.OperationalError):
+            ro.upsert(GenomeRecord(accession="GCA_2"))
+    finally:
+        ro.close()
 
 
 def test_cli_doctor_exit_codes(tmp_path: Path) -> None:
