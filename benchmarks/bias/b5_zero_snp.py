@@ -6,11 +6,12 @@ warning anywhere except the `simple` snptyper's zero-SNP guard.
 
 Writes benchmarks/results/bias_b5.json.
 
-Usage: python -m benchmarks.bias.b5_zero_snp
+Usage: python -m benchmarks.bias.b5_zero_snp [--aligner sibeliaz]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 
@@ -19,6 +20,10 @@ from benchmarks.run_bench import RESULTS, STORAGE, _repgenr, run_group
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--aligner", default="sibeliaz")
+    args = parser.parse_args()
+
     set_dir = STORAGE / "sets" / "pureclone_20"
     if not (set_dir / "truth.json").exists():
         generate_set(set_dir, scenario="clonal", n=20, seed=1, clone_fraction=1.0)
@@ -28,11 +33,11 @@ def main() -> None:
     work.mkdir(parents=True, exist_ok=True)
     out = work / "phylo_out"
     argv = [_repgenr(), "phylo-build", "--genomes-dir", str(set_dir),
-            "-o", str(out), "--treebuilder", "fasttree", "--aligner", "sibeliaz",
+            "-o", str(out), "--treebuilder", "fasttree", "--aligner", args.aligner,
             "--no-outgroup", "-t", "8"]
     proc = run_group(argv, timeout_s=5400)
 
-    row: dict = {"exit_code": proc.returncode}
+    row: dict = {"aligner": args.aligner, "exit_code": proc.returncode}
     stderr = proc.stderr[-4000:]
     row["warned_low_diversity"] = "diverg" in stderr.lower() or "warning" in stderr.lower()
     tree = out / "tree" / "tree.nwk"

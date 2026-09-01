@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from benchmarks.metrics import (
     adjusted_rand_index,
     clone_representative,
     load_truth,
+    newick_splits,
     partition_from_clusters_tsv,
+    robinson_foulds,
 )
 
 
@@ -69,3 +73,45 @@ def test_clone_representative_none_without_clone_cluster():
     truth = {"a": "c1", "b": "c2"}
     partition = {"a": "a", "b": "b"}
     assert clone_representative(partition, truth) is None
+
+
+def test_newick_splits_leaves_and_bipartitions():
+    # unrooted 5-leaf tree with two non-trivial splits: {a,b} and {d,e}
+    tree = "((a:0.1,b:0.2)0.9:0.05,c:0.3,(d:0.1,e:0.1)0.8:0.02);"
+    leaves, splits = newick_splits(tree)
+    assert leaves == frozenset("abcde")
+    # splits are canonicalized to the side containing the first leaf "a"
+    assert splits == {frozenset("ab"), frozenset("abc")}
+
+
+def test_newick_splits_ignores_support_and_lengths():
+    with_annotations = "((a:0.1,b:0.2)0.95:0.01,(c:0.3,d:0.4)0.5:0.02,e:0.5);"
+    bare = "((a,b),(c,d),e);"
+    assert newick_splits(with_annotations) == newick_splits(bare)
+
+
+def test_robinson_foulds_identical_topologies():
+    a = "((a:0.1,b:0.2):0.1,c:0.3,(d:0.1,e:0.2):0.1);"
+    b = "((b,a),c,(e,d));"  # same topology, rotated
+    result = robinson_foulds(a, b)
+    assert result["rf_distance"] == 0
+    assert result["normalized_rf"] == 0.0
+    assert result["shared_splits"] == 2
+
+
+def test_robinson_foulds_disjoint_topologies():
+    a = "((a,b),(c,d),(e,f));"
+    b = "((a,c),(b,e),(d,f));"
+    result = robinson_foulds(a, b)
+    assert result["shared_splits"] == 0
+    assert result["normalized_rf"] == 1.0
+
+
+def test_robinson_foulds_rejects_different_leaf_sets():
+    with pytest.raises(ValueError, match="leaf sets"):
+        robinson_foulds("((a,b),c,d);", "((a,b),c,e);")
+
+
+def test_newick_splits_rejects_malformed_input():
+    with pytest.raises(ValueError, match="malformed"):
+        newick_splits("((a,b,c);")
