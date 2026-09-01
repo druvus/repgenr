@@ -29,7 +29,7 @@ def test_basic_conversion(tmp_path: Path) -> None:
     xmfa = tmp_path / "aln.xmfa"
     xmfa.write_text(_XMFA)
     out = tmp_path / "out.fasta"
-    xmfa_to_fasta(xmfa, "genomeA.fasta", 0, out)
+    xmfa_to_fasta(xmfa, "genomeA.fasta", out)
 
     records = _read_fasta(out)
     # reference is written first
@@ -55,13 +55,21 @@ def test_reference_gap_removed(tmp_path: Path) -> None:
         "=\n"
     )
     out = tmp_path / "out.fasta"
-    xmfa_to_fasta(xmfa, "ref.fasta", 0, out)
+    xmfa_to_fasta(xmfa, "ref.fasta", out)
     records = _read_fasta(out)
     # reference has no gap characters once its own gaps are removed
     assert "-" not in records["ref.fasta"]
     assert records["ref.fasta"] == "ACGTACGT"
     # query loses the columns aligned to reference gaps
     assert records["qry.fasta"] == "ACGTACGT"
+
+
+def test_flank_parameter_removed() -> None:
+    import inspect
+
+    from repgenr.converters.xmfa_to_fasta import xmfa_to_fasta
+
+    assert "flank" not in inspect.signature(xmfa_to_fasta).parameters
 
 
 def _read_fasta(path: Path) -> dict[str, str]:

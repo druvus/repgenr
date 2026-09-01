@@ -43,7 +43,7 @@ def test_xmfa_to_fasta_projects_two_sequences(tmp_path: Path) -> None:
         "> 2:1-8 + qry.fa\nACGTACGT\n"
         "=\n"
     )
-    out = xmfa_to_fasta(xmfa, "ref.fa", 0, tmp_path / "msa.fasta")
+    out = xmfa_to_fasta(xmfa, "ref.fa", tmp_path / "msa.fasta")
     recs = _read_fasta(out)
     assert set(recs) == {"ref.fa", "qry.fa"}
     assert recs["ref.fa"] == "ACGTACGT"
@@ -59,7 +59,7 @@ def test_xmfa_reverse_strand_block(tmp_path: Path) -> None:
         "> 2:1-4 - qry.fa\nACGT\n"
         "=\n"
     )
-    out = xmfa_to_fasta(xmfa, "ref.fa", 0, tmp_path / "rc.fasta")
+    out = xmfa_to_fasta(xmfa, "ref.fa", tmp_path / "rc.fasta")
     recs = _read_fasta(out)
     assert recs["ref.fa"] == "ACGT"
     assert recs["qry.fa"] == "ACGT"  # ACGT is its own reverse complement
