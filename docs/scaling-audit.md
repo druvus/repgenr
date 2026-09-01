@@ -1,10 +1,10 @@
 # Scaling and bias audit
 
-Status: measurements complete for the full cell matrix (39 cells) and bias
-experiments B1 and B2. B4 and B5 were not measured: the benchmark host was
-interrupted three times during the audit and the remaining bias runs were not
-restarted; those two questions are marked NOT MEASURED below with the shipped
-mitigations noted.
+Status: measurements complete for the full cell matrix (39 cells) and all
+four bias experiments (B1, B2, B4, B5). B4 and B5 were run with the
+progressivemauve aligner (containerized) after the sibeliaz path proved
+unmeasurable at every tested size; raw results are in
+`benchmarks/results/bias_b4.json` and `bias_b5.json`.
 
 This document reports, per pipeline step: the available tool alternatives, how
 each scales with genome count (measured wall time and peak memory), whether a
@@ -26,6 +26,7 @@ detailed per-stage SWOT and gap analyses are in [swot-derep.md](swot-derep.md),
 | phylo: mashtree | yes (~2 min, 0.5 GB) | yes (~53 min, 7.6 GB) | 9 s at n=100 |
 | phylo: sourmash NJ | yes (~2.4 min) | extrapolated ~1.5-2 h | pure-Python NJ; measured n^3 fit below |
 | phylo: sibeliaz -> fasttree/iqtree | no | no | times out (>1 h) already at n=20 |
+| phylo: progressivemauve -> fasttree | not measured | not measured | ~10 min at n=20, ~22 min at n=50 per build (B4/B5 runs, Docker on Rosetta); adapter recommends at most 500 genomes |
 | snptype: simple | untested at scale | untested | serial, O(n^2 S) RAM (see swot-phylo) |
 
 ## Benchmark design
@@ -186,15 +187,29 @@ limit to 2000 and added a hard refusal at 5000.
    aligner, not the tree builder, and is a small-n path for the
    post-dereplication representative set only. The distance-based
    builders are the only measured option beyond ~100 genomes; mashtree
-   is confirmed to n=5000 (3153 s, 7.6 GB).
+   is confirmed to n=5000 (3153 s, 7.6 GB). The timeout is specific to
+   sibeliaz: the B4/B5 runs completed the same path with the
+   progressivemauve aligner in about 10 min at n=20 and about 22 min
+   per build at n=50 (containerized, fasttree included), so the small-n
+   ML path is usable when that aligner is selected.
 2. **All aligners project onto a single reference defaulting to
    `genomes[0]`** — the alphabetically first file, in five places (see
    swot-phylo.md for citations). On a clonal set that is a clone member.
-   Measured topology effect (B4): NOT MEASURED — the benchmark host was
-   interrupted before the B4 run; the experiment script
-   (`benchmarks/bias/b4_reference_choice.py`) remains runnable. The
-   mechanism-level mitigation shipped regardless: #130 logs the
-   auto-selected reference loudly in both phylo and snptype.
+   Measured topology effect (B4, mixed 50-genome set, two 25-genome
+   truth clusters, progressivemauve + fasttree): swapping the reference
+   changes most of the topology. Against the default-reference tree,
+   a same-cluster reference swap changes 72 of 94 splits (normalized
+   RF 0.77) and a cross-cluster swap changes 68 of 94 (RF 0.72); the
+   same-cluster comparison reproduced exactly across two independent
+   runs. The deep structure is stable: the bipartition separating the
+   two truth clusters is present in all three trees. The instability
+   is confined to the shallow, near-clonal part of the tree, where
+   branch support is weakest — so within-cluster branching order from
+   a single-reference projection alignment should not be
+   over-interpreted, and the reference default materially shapes it.
+   The mechanism-level mitigation shipped in #130: the auto-selected
+   reference is logged loudly in both phylo and snptype. Raw trees and
+   RF numbers: `benchmarks/results/bias_b4.json`.
 3. **The sourmash tree builder is a pure-Python O(n^3) neighbor joining**
    (src/repgenr/tree/newick.py); its distance is `1 - Jaccard`, which is
    not an evolutionary distance and compresses exactly in the clonal
@@ -203,10 +218,15 @@ limit to 2000 and added a hard refusal at 5000.
    at 5000.
 4. **Near-zero-diversity input produces a degenerate tree with no warning**
    in every path except the `simple` snptyper's zero-SNP guard. Measured
-   confirmation (B5, pure-clone set): NOT MEASURED — same interruption;
-   the script (`benchmarks/bias/b5_zero_snp.py`) remains runnable. The
-   mitigation shipped regardless: #130 adds a low-diversity warning
-   (<10 variable alignment columns) to the phylo stage.
+   (B5, pure-clone n=20 set at 0.005 percent divergence, progressivemauve
+   + fasttree): the run completes cleanly and the tree honestly reports
+   the near-zero divergence (maximum branch length 5.0e-05). The #130
+   low-diversity warning (<10 variable alignment columns) correctly did
+   not fire: the 2 Mb alignment still contains 1999 variable columns at
+   this divergence, which is real signal rather than noise. The warning
+   threshold therefore only catches (near-)identical inputs; that case
+   is pinned by unit tests (`tests/unit/test_bias_guards.py`). Raw
+   result: `benchmarks/results/bias_b5.json`.
 
 ## Tool alternatives
 
@@ -265,9 +285,9 @@ above 0.05 between accession orders in B2; the measured gap is 0.0
 (both orders ARI 1.00 for both skder and sourmash at n=5000).
 
 Backlog (larger items, report-only): decenttree/rapidNJ NJ replacement, ska2
-snptyper adapter, VeryFastTree adapter, quality-aware representative
-selection (finding 2 — the highest-value remaining item), stratified
-`--limit` sampling, distance-aware bacterial outgroup selection,
-`S_`-panel diversification in the viral outgroup, and the B4/B5 bias
-measurements themselves (scripts in `benchmarks/bias/`, runnable when
-benchmark time is available).
+snptyper adapter (the B4 result strengthens this case: a reference-free
+snptyper removes the measured reference sensitivity exactly where it is
+largest), VeryFastTree adapter, quality-aware representative selection
+(finding 2 — the highest-value remaining item), stratified `--limit`
+sampling, distance-aware bacterial outgroup selection, and `S_`-panel
+diversification in the viral outgroup.
