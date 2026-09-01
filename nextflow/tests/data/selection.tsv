@@ -1,4 +1,4 @@
-accession	family	genus	species	is_outgroup	filename
-GCF_000001.1	Fam	Gen	sp1	0	Fam_Gen_sp1_GCF_000001.1.fasta
-GCF_000002.1	Fam	Gen	sp2	0	Fam_Gen_sp2_GCF_000002.1.fasta
-GCF_000009.1	Fam	Out	grp	1	Fam_Out_grp_GCF_000009.1.fasta
+accession	family	genus	species	is_outgroup	filename	completeness	contamination
+GCF_000001.1	Fam	Gen	sp1	0	Fam_Gen_sp1_GCF_000001.1.fasta	99.10	0.40
+GCF_000002.1	Fam	Gen	sp2	0	Fam_Gen_sp2_GCF_000002.1.fasta		
+GCF_000009.1	Fam	Out	grp	1	Fam_Out_grp_GCF_000009.1.fasta		

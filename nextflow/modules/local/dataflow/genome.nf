@@ -37,7 +37,7 @@ END_VERSIONS
     stub:
     """
     mkdir -p out/genomes out/outgroup
-    tail -n +2 ${selection} | while IFS=\$'\\t' read -r acc fam gen sp og fname; do
+    tail -n +2 ${selection} | while IFS=\$'\\t' read -r acc fam gen sp og fname completeness contamination; do
         [ -z "\$fname" ] && continue
         if [ "\$og" = "1" ]; then
             printf '>x\\nACGT\\n' > out/outgroup/\$fname
