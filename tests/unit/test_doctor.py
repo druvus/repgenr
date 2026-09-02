@@ -14,6 +14,7 @@ from repgenr.core.config import Config
 from repgenr.core.contracts import SelectionRow, write_clusters, write_selection
 from repgenr.core.doctor import diagnose
 from repgenr.core.errors import WorkdirError
+from repgenr.core.inputs import dir_stat_digest, manifest_digest_for_stage
 from repgenr.core.manifest import GenomeRecord, Manifest
 
 _runner = CliRunner()
@@ -177,6 +178,56 @@ def test_changed_inputs_are_a_warning(tmp_path: Path) -> None:
         f.level == "warn" and f.area == "dereplicate" and "changed" in f.message
         for f in findings
     )
+
+
+def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -> None:
+    """doctor's stale-input check must use the same per-stage manifest digest
+    dereplicate's own resume fingerprint stamps (include_derep=False, since
+    dereplicate WRITES derep_status/representative itself) -- otherwise every
+    dereplicated workdir falsely reports "input(s) changed" for dereplicate on
+    every run, forever, since the two digests can never agree."""
+    wd = _base_workdir(tmp_path)
+    manifest = Manifest(wd / "manifest.sqlite")
+    manifest.set_derep_status_many([
+        ("GCF_1.1", "representative", None),
+        ("GCF_2.1", "contained", "Fam_Gen_sp1_GCF_1.1.fasta"),
+    ])
+    manifest.close()
+
+    genomes_digest = dir_stat_digest(wd / "genomes")
+    ro = Manifest.open_readonly(wd / "manifest.sqlite")
+    try:
+        manifest_digest_value = manifest_digest_for_stage("dereplicate", ro)
+    finally:
+        ro.close()
+
+    cfg = Config.load(wd)
+    cfg.record_stage(
+        "dereplicate", tool="skder", params={},
+        completed="2026-01-01T00:02:00", fingerprint="f",
+        inputs={"genomes": genomes_digest, "manifest": manifest_digest_value},
+    )
+    cfg.save(wd)
+
+    findings = diagnose(wd)
+    assert not any(f.area == "dereplicate" and f.level == "warn" for f in findings)
+
+    # A real quality-only manifest edit must still be caught as stale.
+    manifest2 = Manifest(wd / "manifest.sqlite")
+    manifest2.upsert_many([
+        GenomeRecord(
+            accession="GCF_1.1", filename="Fam_Gen_sp1_GCF_1.1.fasta",
+            completeness=98.0, contamination=0.5,
+        )
+    ])
+    manifest2.close()
+
+    findings2 = diagnose(wd)
+    dereplicate_warnings = [
+        f for f in findings2 if f.area == "dereplicate" and f.level == "warn"
+    ]
+    assert len(dereplicate_warnings) == 1
+    assert "manifest" in dereplicate_warnings[0].message
 
 
 def test_diagnose_is_read_only(tmp_path: Path) -> None:

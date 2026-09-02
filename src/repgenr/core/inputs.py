@@ -104,3 +104,27 @@ def manifest_digest(manifest: Manifest, *, include_derep: bool = True) -> str:
     for row in rows:
         digest.update(("\0".join(row) + "\n").encode())
     return digest.hexdigest()
+
+
+# Whether a stage's manifest digest includes derep_status/representative.
+# "dereplicate" WRITES those columns itself (_update_manifest), so including
+# them would invalidate its own resume on every first re-run (see
+# manifest_digest's docstring). Every other manifest-input stage (tree2tax,
+# which only READS derep status) keeps the default True.
+_MANIFEST_DIGEST_INCLUDE_DEREP: dict[str, bool] = {"dereplicate": False}
+
+
+def manifest_digest_for_stage(stage: str, manifest: Manifest) -> str:
+    """manifest_digest() with the per-stage include_derep decision applied.
+
+    This is the single source of truth for that decision: both the resume
+    fingerprint (cli/base.py's _stage_input_digests, which stamps a stage's
+    completion record) and `repgenr doctor`'s stale-input check
+    (core/doctor.py's _check_stale_inputs, which recomputes the same digest to
+    compare against that record) must call this instead of manifest_digest
+    directly. Calling manifest_digest with a hardcoded or differing
+    include_derep in only one of the two places means the two digests can
+    never agree, so a completed stage (or a healthy one, on every future
+    invocation) would falsely and permanently report as stale.
+    """
+    return manifest_digest(manifest, include_derep=_MANIFEST_DIGEST_INCLUDE_DEREP.get(stage, True))
