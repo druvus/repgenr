@@ -16,7 +16,8 @@ include { DEREP_MERGE } from '../../modules/local/derep_merge'
 
 workflow DEREPLICATE_SCATTER {
     take:
-    ch_genomes   // channel: individual genome FASTA paths
+    ch_genomes    // channel: individual genome FASTA paths
+    ch_selection  // channel: selection.tsv (quality columns) or Channel.value([])
 
     main:
     ch_versions = Channel.empty()
@@ -43,7 +44,7 @@ workflow DEREPLICATE_SCATTER {
         .collect()
         .map { dirs -> tuple([id: 'merged'], dirs) }
 
-    DEREP_MERGE(ch_merge_in)
+    DEREP_MERGE(ch_merge_in, ch_selection)
     ch_versions = ch_versions.mix(DEREP_MERGE.out.versions)
 
     emit:

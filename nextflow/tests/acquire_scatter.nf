@@ -12,7 +12,7 @@ include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 
 workflow {
     ACQUIRE()
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes)
+    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
 
     DEREPLICATE_SCATTER.out.reps
         .map { meta, dir -> dir }

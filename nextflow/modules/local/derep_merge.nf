@@ -11,6 +11,7 @@ process DEREP_MERGE {
 
     input:
     tuple val(meta), path(chunks, stageAs: 'chunks/*')
+    path selection, stageAs: 'selection.tsv'
 
     output:
     tuple val(meta), path("${meta.id}"), emit: reps
@@ -29,6 +30,12 @@ process DEREP_MERGE {
         args="\$args --chunk-dir \$d"
     done
 
+    # selection.tsv is optional: no bacterial ACQUIRE selection (viral path, or
+    # a harness with no metadata front) stages nothing under that name, so the
+    # quality-aware keeper is skipped rather than passed a missing file.
+    sel=""
+    [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
+
     repgenr ${params.repgenr_opts} dereplicate-merge \\
         \$args \\
         --out ${meta.id} \\
@@ -36,6 +43,8 @@ process DEREP_MERGE {
         --primary-ani ${params.derep_primary_ani} \\
         --secondary-ani ${params.derep_secondary_ani} \\
         --aligned-fraction ${params.derep_aligned_fraction} \\
+        --keeper ${params.derep_keeper} \\
+        \$sel \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
 

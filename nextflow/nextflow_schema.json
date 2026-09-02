@@ -104,6 +104,13 @@
                     "default": 0.50,
                     "description": "Aligned-fraction threshold for the scatter-gather subworkflow (0-1).",
                     "fa_icon": "fas fa-percent"
+                },
+                "derep_keeper": {
+                    "type": "string",
+                    "default": "quality",
+                    "enum": ["quality", "tool"],
+                    "description": "Merge-step representative choice: 'quality' picks by manifest CheckM completeness/contamination (only when a selection.tsv reaches the merge step); 'tool' keeps the adapter's own pick.",
+                    "fa_icon": "fas fa-star"
                 }
             }
         },

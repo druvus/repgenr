@@ -14,6 +14,7 @@ nextflow_process {
                     [id: 'merged'],
                     [ file("${projectDir}/nextflow/tests/data/chunk_0") ]
                 )
+                input[1] = []
                 """
             }
         }
@@ -31,6 +32,31 @@ nextflow_process {
                 def status = path("${dir}/genome_status.tsv").readLines().drop(1)
                 assert status.size() == 2
                 assert status.every { it.endsWith('\trepresentative') }
+            }
+        }
+    }
+
+    test("accepts a selection.tsv (quality-aware keeper input) alongside the chunks") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'merged'],
+                    [ file("${projectDir}/nextflow/tests/data/chunk_0") ]
+                )
+                input[1] = file("${projectDir}/nextflow/tests/data/selection.tsv")
+                """
+            }
+        }
+        then {
+            // The stub script never reads selection.tsv (no repgenr call), so this
+            // exercises only the wiring: the process must accept the staged file
+            // and still succeed.
+            assert process.success
+            with(process.out.reps.get(0)) {
+                def dir = get(1)
+                def reps = path("${dir}/representatives").list().collect { it.fileName.toString() }.sort()
+                assert reps == ['Fam_g_s_GCA_000001.1.fasta', 'Fam_g_s_GCA_000002.1.fasta']
             }
         }
     }

@@ -16,7 +16,9 @@ workflow VIRAL_DATAFLOW {
     VACQUIRE()
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
-    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten())
+    // No selection.tsv exists on the viral front (BV-BRC/NCBI Virus front-end
+    // does not produce one); the merge step's quality-aware keeper is skipped.
+    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), Channel.value([]))
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }

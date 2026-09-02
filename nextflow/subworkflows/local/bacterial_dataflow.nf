@@ -17,7 +17,7 @@ workflow BACTERIAL_DATAFLOW {
     ACQUIRE()
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
 
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes)
+    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }

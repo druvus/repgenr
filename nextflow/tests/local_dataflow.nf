@@ -25,7 +25,7 @@ workflow {
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
         .filter { !it.name.startsWith('._') }
 
-    DEREPLICATE_SCATTER(ch_genomes)
+    DEREPLICATE_SCATTER(ch_genomes, Channel.value([]))
 
     ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
     ch_outgroup = Channel.value([])                       // no outgroup in the test
