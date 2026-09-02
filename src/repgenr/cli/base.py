@@ -97,6 +97,14 @@ STAGE_INPUTS: dict[str, Any] = {
 # still invalidate a prior resume.
 _MANIFEST_INPUT_STAGES = frozenset({"tree2tax", "dereplicate"})
 
+# Whether a stage's manifest digest includes derep_status/representative.
+# "dereplicate" WRITES those columns itself (_update_manifest), so including
+# them would invalidate its own resume on every first re-run -- the digest
+# computed before the stage runs would never match the one computed after,
+# since the run just changed the very columns being hashed. tree2tax only
+# READS derep status, so it keeps the default (True, via manifest_digest).
+_MANIFEST_DIGEST_INCLUDE_DEREP: dict[str, bool] = {"dereplicate": False}
+
 # Param flags that turn a stage invocation into a pure query (list/preview
 # modes that write no pipeline outputs). Such invocations bypass the resume
 # machinery entirely: no skip check, no dirty marker, no fingerprint stamp --
@@ -122,7 +130,8 @@ def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> d
         return {}
     digests = inputs_digest(ctx.workdir, spec(ctx, params))
     if stage_name in _MANIFEST_INPUT_STAGES:
-        digests["manifest"] = manifest_digest(ctx.manifest)
+        include_derep = _MANIFEST_DIGEST_INCLUDE_DEREP.get(stage_name, True)
+        digests["manifest"] = manifest_digest(ctx.manifest, include_derep=include_derep)
     return digests
 
 

@@ -76,20 +76,26 @@ def inputs_digest(workdir: Path, paths: Iterable[Path]) -> dict[str, str]:
     return out
 
 
-def manifest_digest(manifest: Manifest) -> str:
+def manifest_digest(manifest: Manifest, *, include_derep: bool = True) -> str:
     """sha256 of the manifest's genome rows, independent of insertion order.
 
     Hashes ordered query results, never the SQLite file bytes (which are not
     byte-stable across identical logical content). Includes CheckM completeness
-    and contamination (consumed by the dereplicate keeper) alongside taxonomy
-    and derep status, so an edit to any of them invalidates a resume.
+    and contamination (consumed by the dereplicate keeper) alongside taxonomy.
+
+    ``include_derep`` adds derep_status/representative to the hash; it must be
+    False for a stage that WRITES those columns itself (dereplicate), or the
+    stage would invalidate its own resume on every first re-run: the digest
+    computed before the stage runs would never match the one computed after,
+    since the run just changed the very columns being hashed. tree2tax (which
+    only READS derep status) keeps the default True.
     """
     digest = hashlib.sha256()
     rows = sorted(
         (
             r.accession, r.filename or "", r.family or "", r.genus or "",
-            r.species or "", str(r.is_outgroup), r.derep_status or "",
-            r.representative or "",
+            r.species or "", str(r.is_outgroup),
+            *((r.derep_status or "", r.representative or "") if include_derep else ()),
             "" if r.completeness is None else repr(r.completeness),
             "" if r.contamination is None else repr(r.contamination),
         )

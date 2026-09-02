@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +11,14 @@ from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, TREE_NWK
 from repgenr.core.inputs import ABSENT
 from repgenr.core.manifest import GenomeRecord
+from repgenr.core.plugins import ToolCapabilities
+from repgenr.dereplicators.base import (
+    STATUS_REPRESENTATIVE,
+    Dereplicator,
+    DerepResult,
+    registry,
+)
+from repgenr.stages.dereplicate import DereplicateParams
 
 
 def _digests(ctx: WorkdirContext, stage: str, params) -> dict[str, str]:
@@ -57,6 +66,116 @@ def test_dereplicate_inputs_track_manifest_quality_and_taxonomy(tmp_path: Path) 
     )
     after_taxonomy = _digests(ctx, "dereplicate", params)
     assert after_taxonomy["manifest"] != after_quality["manifest"]
+
+
+def test_dereplicate_manifest_digest_excludes_derep_status_and_representative(
+    tmp_path: Path,
+) -> None:
+    """dereplicate itself writes derep_status/representative back into the
+    manifest (_update_manifest); if its own manifest digest hashed those
+    fields, every workdir would pay one spurious re-dereplication on its first
+    resume (the digest computed before the run would never match the one
+    computed after, since the run just changed them). dereplicate must only be
+    invalidated by what it reads (taxonomy, quality), not what it writes."""
+    ctx = WorkdirContext(tmp_path, create=True)
+    ctx.genomes_dir.mkdir()
+    (ctx.genomes_dir / "g1.fasta").write_text(">g1\nACGT\n", encoding="utf-8")
+    ctx.manifest.upsert_many([GenomeRecord(accession="GCF_1", filename="g1.fasta")])
+    params = SimpleNamespace()
+    before = _digests(ctx, "dereplicate", params)
+
+    # Simulate what dereplicate.run()'s _update_manifest does after a run.
+    ctx.manifest.set_derep_status_many([("GCF_1", "representative", None)])
+    after = _digests(ctx, "dereplicate", params)
+
+    assert after["manifest"] == before["manifest"]
+
+    # tree2tax, in contrast, reads derep status, so it must still be tracked there.
+    ctx.tree_dir.mkdir()
+    (ctx.tree_dir / TREE_NWK).write_text("(a,b);\n", encoding="utf-8")
+    tt_params = SimpleNamespace(include_dereplicated=False)
+    tt_before = _digests(ctx, "tree2tax", tt_params)
+    ctx.manifest.set_derep_status_many([("GCF_1", "contained", "other.fasta")])
+    tt_after = _digests(ctx, "tree2tax", tt_params)
+    assert tt_after["manifest"] != tt_before["manifest"]
+
+
+def test_dereplicate_resume_skips_then_reruns_on_quality_edit(tmp_path: Path, monkeypatch) -> None:
+    """End-to-end resume parity for the real dereplicate stage: an identical
+    second invocation is skipped, and a quality-only manifest edit between
+    invocations forces a rerun (catches the self-invalidation regression: if
+    derep_status leaked into the digest, run 2 would rerun instead of skip)."""
+
+    class _ResumeNoRep(Dereplicator):
+        """Keeps every input genome as its own representative (no clustering)."""
+
+        capabilities = ToolCapabilities(name="resumenorep", supports_native_scaling=True)
+
+        def preflight(self) -> dict[str, str]:
+            return {"resumenorep": "1.0"}
+
+        def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+            genomes = list(genomes)
+            return DerepResult(
+                representatives=list(genomes),
+                clusters={g.name: [] for g in genomes},
+                genome_status={g.name: STATUS_REPRESENTATIVE for g in genomes},
+            )
+
+    registry._load()
+    registry.register("resumenorep", _ResumeNoRep, replace=True)
+    try:
+        gdir = tmp_path / "genomes"
+        gdir.mkdir(parents=True)
+        for i in range(2):
+            (gdir / f"Fam_g_s_GCF_10000{i}.1.fasta").write_text(">x\nACGT\n", encoding="utf-8")
+
+        seed = WorkdirContext(tmp_path, create=True)
+        seed.manifest.upsert_many(
+            [
+                GenomeRecord(accession=f"GCF_10000{i}.1", filename=f"Fam_g_s_GCF_10000{i}.1.fasta")
+                for i in range(2)
+            ]
+        )
+        seed.close()
+
+        def _flush_and_read_log() -> str:
+            for h in logging.getLogger("repgenr").handlers:
+                h.flush()
+            return (tmp_path / "repgenr.log").read_text(encoding="utf-8")
+
+        build_params = lambda: DereplicateParams(tool="resumenorep")  # noqa: E731
+        monkeypatch.setitem(cli._RUN_STATE, "force", False)
+        monkeypatch.setitem(cli._RUN_STATE, "log_level", logging.INFO)
+
+        cli._run("dereplicate", tmp_path, build_params, create=True)  # run 1: cold
+        log1 = _flush_and_read_log()
+        assert log1.count("Dereplicating 2 genomes") == 1
+        assert "already completed" not in log1
+
+        cli._run("dereplicate", tmp_path, build_params, create=True)  # run 2: identical -> skip
+        log2 = _flush_and_read_log()
+        assert log2.count("already completed") == 1
+        assert log2.count("Dereplicating 2 genomes") == 1  # did not rerun
+
+        edit = WorkdirContext(tmp_path)
+        edit.manifest.upsert_many(
+            [
+                GenomeRecord(
+                    accession="GCF_100000.1", filename="Fam_g_s_GCF_100000.1.fasta",
+                    completeness=98.0, contamination=0.5,
+                )
+            ]
+        )
+        edit.close()
+
+        # run 3: quality changed -> rerun
+        cli._run("dereplicate", tmp_path, build_params, create=True)
+        log3 = _flush_and_read_log()
+        assert log3.count("already completed") == 1  # unchanged: run 3 did not skip
+        assert log3.count("Dereplicating 2 genomes") == 2  # reran
+    finally:
+        registry._classes.pop("resumenorep", None)
 
 
 def test_phylo_inputs_never_include_own_outputs(tmp_path: Path) -> None:
