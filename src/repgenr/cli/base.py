@@ -91,8 +91,11 @@ STAGE_INPUTS: dict[str, Any] = {
 }
 
 # Stages whose result also depends on the manifest's genome rows (taxonomy,
-# derep status), digested from ordered query results.
-_MANIFEST_INPUT_STAGES = frozenset({"tree2tax"})
+# derep status, CheckM quality), digested from ordered query results.
+# "dereplicate" reads the manifest for the quality-aware keeper and --reduce
+# taxonomy grouping, so a manifest-only edit (no genome file touched) must
+# still invalidate a prior resume.
+_MANIFEST_INPUT_STAGES = frozenset({"tree2tax", "dereplicate"})
 
 # Param flags that turn a stage invocation into a pure query (list/preview
 # modes that write no pipeline outputs). Such invocations bypass the resume

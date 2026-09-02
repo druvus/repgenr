@@ -9,6 +9,7 @@ from repgenr.cli import base as cli
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, TREE_NWK
 from repgenr.core.inputs import ABSENT
+from repgenr.core.manifest import GenomeRecord
 
 
 def _digests(ctx: WorkdirContext, stage: str, params) -> dict[str, str]:
@@ -21,11 +22,41 @@ def test_dereplicate_inputs_track_genomes_dir(tmp_path: Path) -> None:
     (ctx.genomes_dir / "g1.fasta").write_text(">g1\nACGT\n", encoding="utf-8")
     params = SimpleNamespace()
     before = _digests(ctx, "dereplicate", params)
-    assert set(before) == {"genomes"}
+    assert set(before) == {"genomes", "manifest"}
 
     (ctx.genomes_dir / "g2.fasta").write_text(">g2\nACGT\n", encoding="utf-8")
     after = _digests(ctx, "dereplicate", params)
     assert after["genomes"] != before["genomes"]
+
+
+def test_dereplicate_inputs_track_manifest_quality_and_taxonomy(tmp_path: Path) -> None:
+    """A manifest-only change (CheckM quality or taxonomy, no genome files
+    touched) must still invalidate a prior dereplicate resume, since keeper
+    and --reduce both read the manifest."""
+    ctx = WorkdirContext(tmp_path, create=True)
+    ctx.genomes_dir.mkdir()
+    (ctx.genomes_dir / "g1.fasta").write_text(">g1\nACGT\n", encoding="utf-8")
+    ctx.manifest.upsert_many([GenomeRecord(accession="GCF_1", filename="g1.fasta")])
+    params = SimpleNamespace()
+    before = _digests(ctx, "dereplicate", params)
+    assert "manifest" in before
+
+    ctx.manifest.upsert_many(
+        [GenomeRecord(accession="GCF_1", filename="g1.fasta", completeness=98.0, contamination=0.5)]
+    )
+    after_quality = _digests(ctx, "dereplicate", params)
+    assert after_quality["manifest"] != before["manifest"]
+
+    ctx.manifest.upsert_many(
+        [
+            GenomeRecord(
+                accession="GCF_1", filename="g1.fasta",
+                completeness=98.0, contamination=0.5, genus="g", species="s",
+            )
+        ]
+    )
+    after_taxonomy = _digests(ctx, "dereplicate", params)
+    assert after_taxonomy["manifest"] != after_quality["manifest"]
 
 
 def test_phylo_inputs_never_include_own_outputs(tmp_path: Path) -> None:

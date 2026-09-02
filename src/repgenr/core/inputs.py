@@ -80,7 +80,9 @@ def manifest_digest(manifest: Manifest) -> str:
     """sha256 of the manifest's genome rows, independent of insertion order.
 
     Hashes ordered query results, never the SQLite file bytes (which are not
-    byte-stable across identical logical content).
+    byte-stable across identical logical content). Includes CheckM completeness
+    and contamination (consumed by the dereplicate keeper) alongside taxonomy
+    and derep status, so an edit to any of them invalidates a resume.
     """
     digest = hashlib.sha256()
     rows = sorted(
@@ -88,6 +90,8 @@ def manifest_digest(manifest: Manifest) -> str:
             r.accession, r.filename or "", r.family or "", r.genus or "",
             r.species or "", str(r.is_outgroup), r.derep_status or "",
             r.representative or "",
+            "" if r.completeness is None else repr(r.completeness),
+            "" if r.contamination is None else repr(r.contamination),
         )
         for r in manifest.all_genomes(include_outgroup=True)
     )
