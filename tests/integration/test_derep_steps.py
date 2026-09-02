@@ -314,6 +314,123 @@ def test_merge_keeper_tool_ignores_selection_tsv(tmp_path: Path, reg) -> None:
     assert {r.name for r in final.representatives} == {genomes[0].name, genomes[4].name}
 
 
+def test_chunk_promotes_best_quality_contained_member(tmp_path: Path, reg) -> None:
+    """A selection.tsv with quality columns lets the chunk step's keeper
+    replace the tool's pick with a better-scoring cluster member. Every genome
+    in the chunk has a real file (params.genomes), so any promotion here is
+    always resolvable -- unlike at the merge step (see the deep-member test
+    below)."""
+    genomes = _make_genomes(tmp_path / "genomes", 4)  # halver: reps [g0, g2]; g0's member g1
+
+    selection = tmp_path / "selection.tsv"
+    write_selection(
+        selection,
+        [
+            SelectionRow(
+                accession="GCF_000000.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[0].name,
+                completeness=70.0, contamination=5.0,
+            ),
+            SelectionRow(
+                accession="GCF_000001.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[1].name,
+                completeness=99.0, contamination=0.2,
+            ),
+        ],
+    )
+
+    result = dereplicate_chunk(
+        ChunkParams(
+            tool="halver", genomes=genomes, out_dir=tmp_path / "c0", selection_tsv=selection,
+        ),
+        _LOG,
+    )
+
+    # genomes[1] (99.0/0.2, score 98.0) outscores the tool's pick genomes[0]
+    # (70.0/5.0, score 45.0) and is promoted.
+    assert {r.name for r in result.representatives} == {genomes[1].name, genomes[2].name}
+    assert (tmp_path / "c0" / "representatives" / genomes[1].name).exists()
+    assert not (tmp_path / "c0" / "representatives" / genomes[0].name).exists()
+    clusters = read_clusters(tmp_path / "c0" / CLUSTERS_TSV)
+    assert clusters[genomes[1].name] == [genomes[0].name]
+
+
+def test_chunk_keeper_tool_ignores_selection_tsv(tmp_path: Path, reg) -> None:
+    """keeper='tool' (the chunk default's counterpart) keeps the adapter's own
+    pick even with a selection.tsv."""
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    selection = tmp_path / "selection.tsv"
+    write_selection(
+        selection,
+        [
+            SelectionRow(
+                accession="GCF_000001.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[1].name,
+                completeness=99.0, contamination=0.2,
+            ),
+        ],
+    )
+
+    result = dereplicate_chunk(
+        ChunkParams(
+            tool="halver", genomes=genomes, out_dir=tmp_path / "c0",
+            selection_tsv=selection, keeper="tool",
+        ),
+        _LOG,
+    )
+
+    assert {r.name for r in result.representatives} == {genomes[0].name, genomes[2].name}
+
+
+def test_merge_ignores_quality_for_unresolvable_chunk_member(tmp_path: Path, reg) -> None:
+    """A selection.tsv scoring a chunk-level CONTAINED member (never staged at
+    the merge step -- only chunk representatives/ files are) must not be
+    promoted there: _compose_two_stage's expanded membership includes such
+    genomes in final.clusters, but their files live nowhere the merge step can
+    see. Reproduces the crash the reviewer found (rescore_representatives would
+    pick this genome, then _write_step_contract raised "Representative genome
+    file missing") and proves the merge-level resolvable-name filter fixes it
+    by leaving the stage-2 pick in place instead."""
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[:4], out_dir=tmp_path / "c0"), _LOG
+    )
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[4:], out_dir=tmp_path / "c1"), _LOG
+    )
+
+    selection = tmp_path / "selection.tsv"
+    write_selection(
+        selection,
+        [
+            SelectionRow(
+                # genomes[1]: contained under genomes[0] inside chunk c0 --
+                # never a chunk representative, so no file reaches the merge step.
+                accession="GCF_000001.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[1].name,
+                completeness=99.9, contamination=0.0,  # best possible score
+            ),
+        ],
+    )
+
+    final = dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+        ),
+        _LOG,
+    )
+
+    # genomes[1] cannot be promoted (unresolvable at merge time); the stage-2
+    # pick (genomes[0]) stands, and the merge completes without error.
+    assert {r.name for r in final.representatives} == {genomes[0].name, genomes[4].name}
+    clusters = read_clusters(tmp_path / "merged" / CLUSTERS_TSV)
+    assert genomes[1].name in clusters[genomes[0].name]
+    assert (tmp_path / "merged" / "representatives" / genomes[0].name).exists()
+
+
 def test_merge_rejects_chunk_missing_genome_status(tmp_path: Path, reg) -> None:
     """_load_chunk must refuse a chunk directory missing genome_status.tsv, the
     same way it already refuses one missing clusters.tsv."""

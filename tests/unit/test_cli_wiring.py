@@ -237,6 +237,22 @@ def test_dereplicate_chunk_step_injects_virus_for_reader(step_calls, tmp_path) -
     assert params.extra == {"virus": True}  # drep reads it
 
 
+def test_dereplicate_chunk_step_wiring_selection_and_keeper(step_calls, tmp_path) -> None:
+    g = tmp_path / "g1.fasta"
+    g.write_text(">g1\nACGT\n", encoding="utf-8")
+    fofn = tmp_path / "genomes.fofn"
+    fofn.write_text(f"{g}\n", encoding="utf-8")
+    sel = tmp_path / "selection.tsv"
+    sel.write_text("accession\n", encoding="utf-8")
+    result = _runner.invoke(app, [
+        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
+        "--selection-tsv", str(sel), "--keeper", "tool",
+    ])
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.selection_tsv == sel and params.keeper == "tool"
+
+
 def test_dereplicate_merge_step_requires_chunks(step_calls, tmp_path) -> None:
     result = _runner.invoke(app, ["dereplicate-merge", "-o", str(tmp_path / "out")])
     assert result.exit_code != 0
