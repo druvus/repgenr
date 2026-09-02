@@ -10,8 +10,10 @@ from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import (
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    SelectionRow,
     read_clusters,
     read_genome_status,
+    write_selection,
 )
 from repgenr.core.plugins import ToolCapabilities
 from repgenr.dereplicators.base import (
@@ -226,4 +228,103 @@ def test_chunk_rejects_missing_genome(tmp_path: Path, reg) -> None:
     with pytest.raises(WorkdirError):
         dereplicate_chunk(
             ChunkParams(tool="halver", genomes=bogus, out_dir=tmp_path / "x"), _LOG
+        )
+
+
+def _write_two_genome_selection(path: Path, genomes: list[Path]) -> None:
+    """A minimal selection.tsv giving quality only to ``genomes[0]`` and
+    ``genomes[2]`` -- exactly the two chunk-0 halver representatives -- with
+    genomes[2] scoring better, so a quality keeper should prefer it."""
+    write_selection(
+        path,
+        [
+            SelectionRow(
+                accession="GCF_000000.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[0].name,
+                completeness=80.0, contamination=5.0,
+            ),
+            SelectionRow(
+                accession="GCF_000002.1", family="Fam", genus="g", species="s",
+                is_outgroup=False, filename=genomes[2].name,
+                completeness=99.0, contamination=0.5,
+            ),
+        ],
+    )
+
+
+def test_merge_applies_quality_keeper_from_selection_tsv(tmp_path: Path, reg) -> None:
+    """A selection.tsv with quality columns lets the merge step's keeper
+    replace the tool's pick with a better-scoring cluster member."""
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[:4], out_dir=tmp_path / "c0"), _LOG
+    )
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[4:], out_dir=tmp_path / "c1"), _LOG
+    )
+
+    selection = tmp_path / "selection.tsv"
+    _write_two_genome_selection(selection, genomes)
+
+    final = dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+        ),
+        _LOG,
+    )
+
+    # genomes[2] (99.0/0.5, score 96.5) outscores the tool's pick genomes[0]
+    # (80.0/5.0, score 55.0); genomes[4]'s cluster has no quality data, so the
+    # tool's pick stands there.
+    assert {r.name for r in final.representatives} == {genomes[2].name, genomes[4].name}
+    clusters = read_clusters(tmp_path / "merged" / CLUSTERS_TSV)
+    assert sorted(clusters[genomes[2].name]) == sorted(
+        [genomes[0].name, genomes[1].name, genomes[3].name]
+    )
+    assert (tmp_path / "merged" / "representatives" / genomes[2].name).exists()
+
+
+def test_merge_keeper_tool_ignores_selection_tsv(tmp_path: Path, reg) -> None:
+    """keeper='tool' keeps the adapter's own pick even with a selection.tsv."""
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[:4], out_dir=tmp_path / "c0"), _LOG
+    )
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[4:], out_dir=tmp_path / "c1"), _LOG
+    )
+
+    selection = tmp_path / "selection.tsv"
+    _write_two_genome_selection(selection, genomes)
+
+    final = dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+            keeper="tool",
+        ),
+        _LOG,
+    )
+
+    assert {r.name for r in final.representatives} == {genomes[0].name, genomes[4].name}
+
+
+def test_merge_rejects_chunk_missing_genome_status(tmp_path: Path, reg) -> None:
+    """_load_chunk must refuse a chunk directory missing genome_status.tsv, the
+    same way it already refuses one missing clusters.tsv."""
+    from repgenr.core.errors import WorkdirError
+
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes, out_dir=tmp_path / "c0"), _LOG)
+    (tmp_path / "c0" / GENOME_STATUS_TSV).unlink()
+
+    with pytest.raises(WorkdirError):
+        dereplicate_merge(
+            MergeParams(tool="halver", chunk_dirs=[tmp_path / "c0"], out_dir=tmp_path / "merged"),
+            _LOG,
         )

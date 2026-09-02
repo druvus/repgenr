@@ -128,7 +128,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     if params.reduce != "none":
         before = len(result.representatives)
-        result = _reduce_by_taxonomy(ctx, result, params.reduce, logger)
+        result = _reduce_by_taxonomy(ctx, result, params.reduce, params.keeper, logger)
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
             params.reduce, before, len(result.representatives),
@@ -419,19 +419,28 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
 
 
 def _reduce_by_taxonomy(
-    ctx: WorkdirContext, result: DerepResult, level: str, logger
+    ctx: WorkdirContext, result: DerepResult, level: str, keeper_mode: str, logger
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
-    Representatives sharing a manifest taxon are merged into a single keeper (the
-    one with the largest existing cluster, then lexical), and the others -- plus
-    their cluster members -- become contained under it. Representatives whose
-    taxon is unknown/empty are kept as-is (each its own group), so reduction never
-    silently drops an un-annotated genome.
+    Representatives sharing a manifest taxon are merged into a single keeper.
+    When ``keeper_mode`` is "quality", the keeper is chosen by manifest assembly
+    quality first (:func:`~.derep_keeper.quality_score`), falling back to the
+    largest existing cluster and then lexical order for unscored/tied
+    candidates; "tool" skips quality and uses the largest-cluster rule alone.
+    The others -- plus their cluster members -- become contained under the
+    keeper. Representatives whose taxon is unknown/empty are kept as-is (each
+    its own group), so reduction never silently drops an un-annotated genome.
     """
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
+    from .derep_keeper import quality_score
 
     taxon_of = _taxon_lookup(ctx, level)
+    quality = _quality_lookup(ctx) if keeper_mode == "quality" else {}
+
+    def _score_or_min(name: str) -> float:
+        q = quality.get(name)
+        return float("-inf") if q is None else quality_score(*q)
 
     # group rep filename -> taxon key; unknown taxon -> unique per-rep key (kept)
     groups: dict[str, list[str]] = {}
@@ -453,8 +462,11 @@ def _reduce_by_taxonomy(
     }
 
     for members in groups.values():
-        # keeper: largest existing cluster, tie-break by name (deterministic)
-        keeper = max(members, key=lambda n: (len(result.clusters.get(n, [])), n))
+        # keeper: best quality score (when known), then largest existing
+        # cluster, then lexical name (deterministic).
+        keeper = max(
+            members, key=lambda n: (_score_or_min(n), len(result.clusters.get(n, [])), n)
+        )
         new_reps.append(rep_by_name[keeper])
         status[keeper] = STATUS_REPRESENTATIVE
         contained: list[str] = []

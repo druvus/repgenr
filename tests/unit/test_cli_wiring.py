@@ -255,6 +255,32 @@ def test_dereplicate_merge_step_wiring(step_calls, tmp_path) -> None:
     assert params.chunk_dirs == [chunk] and params.tool == "skder"
 
 
+def test_dereplicate_merge_step_wiring_selection_and_keeper(step_calls, tmp_path) -> None:
+    chunk = tmp_path / "chunk0"
+    chunk.mkdir()
+    sel = tmp_path / "selection.tsv"
+    sel.write_text("accession\n", encoding="utf-8")
+    result = _runner.invoke(app, [
+        "dereplicate-merge", "-o", str(tmp_path / "out"),
+        "--chunk-dir", str(chunk), "--tool", "skder",
+        "--selection-tsv", str(sel), "--keeper", "tool",
+    ])
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.selection_tsv == sel and params.keeper == "tool"
+
+
+def test_dereplicate_merge_step_rejects_bad_keeper(step_calls, tmp_path) -> None:
+    chunk = tmp_path / "chunk0"
+    chunk.mkdir()
+    result = _runner.invoke(app, [
+        "dereplicate-merge", "-o", str(tmp_path / "out"),
+        "--chunk-dir", str(chunk), "--keeper", "bogus",
+    ])
+    assert result.exit_code != 0
+    assert step_calls == []
+
+
 def test_phylo_build_step_wiring(step_calls, tmp_path) -> None:
     result = _runner.invoke(app, [
         "phylo-build", "--genomes-dir", str(tmp_path), "-o", str(tmp_path / "out"),

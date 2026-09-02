@@ -45,6 +45,18 @@ def test_better_member_replaces_representative() -> None:
     check_result_complete(out, ["rep.fasta", "solo.fasta", "m1.fasta", "m2.fasta"])
 
 
+def test_scored_member_wins_over_unscored_representative() -> None:
+    """An unscored representative has no quality to defend; any scored member
+    -- even a mediocre one -- must replace it."""
+    quality = {"m1.fasta": (60.0, 2.0)}  # rep.fasta and m2.fasta carry no quality
+    out, swaps = rescore_representatives(_result(), quality, _LOG)
+    assert swaps == 1
+    assert sorted(p.name for p in out.representatives) == ["m1.fasta", "solo.fasta"]
+    assert out.clusters["m1.fasta"] == ["m2.fasta", "rep.fasta"]
+    assert out.genome_status["m1.fasta"] == STATUS_REPRESENTATIVE
+    assert out.genome_status["rep.fasta"] == STATUS_CONTAINED
+
+
 def test_unscored_member_never_wins() -> None:
     quality = {"rep.fasta": (90.0, 3.0)}
     out, swaps = rescore_representatives(_result(), quality, _LOG)
