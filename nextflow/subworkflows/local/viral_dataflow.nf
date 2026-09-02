@@ -16,11 +16,11 @@ workflow VIRAL_DATAFLOW {
     VACQUIRE()
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
-    // VACQUIRE's vmetadata step does write a selection.tsv internally, but it
-    // stays in the task-local workdir -- VACQUIRE emits no selection channel
-    // for it -- and viral genomes carry no CheckM quality in any case
-    // (BV-BRC/NCBI Virus supply no completeness/contamination). The merge
-    // step's quality-aware keeper is skipped on this front either way.
+    // vmetadata writes no selection.tsv (unlike the bacterial metadata stage)
+    // and VACQUIRE emits no selection channel; viral genomes also carry no
+    // CheckM quality (BV-BRC/NCBI Virus supply no completeness/
+    // contamination), so an empty value is passed -- the merge step's
+    // quality-aware keeper is skipped on this front either way.
     DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), Channel.value([]))
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
