@@ -102,6 +102,11 @@ def dereplicate(
         False, "--allow-incomplete",
         help="Proceed with a warning when genomes/ is missing selected genomes.",
     ),
+    keeper: str = typer.Option(
+        "quality", "--keeper",
+        help="Representative choice per cluster: quality (CheckM score from GTDB) "
+        "or tool (adapter's own).",
+    ),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""
     from ..dereplicators.base import registry as _derep_registry
@@ -125,6 +130,7 @@ def dereplicate(
                 **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
             },
             allow_incomplete=allow_incomplete,
+            keeper=keeper,
         )
 
     _run("dereplicate", workdir, build)

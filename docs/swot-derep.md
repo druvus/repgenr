@@ -49,7 +49,7 @@
 ### Gap list
 
 1. **High** -- Per-tool semantic drift of `secondary_ani` (ANI vs Jaccard) and silently ignored `aligned_fraction` (sourmash.py:75-76, galah.py:51-64). Remediation: convert Jaccard to ANI-equivalent (or document per-tool semantics) and warn when a threshold parameter is unused.
-2. **High** -- Quality-blind, clone-block-sensitive representative selection (sourmash.py:446-486; skder.py:142-152; galah.py:58-64). Remediation: optional quality table (GTDB/CheckM2) consumed by a shared keeper-scoring step after adapter output.
+2. **High -- CLOSED** -- Quality-blind, clone-block-sensitive representative selection (sourmash.py:446-486; skder.py:142-152; galah.py:58-64). Remediation: optional quality table (GTDB/CheckM2) consumed by a shared keeper-scoring step after adapter output. Closed by `stages/derep_keeper.py`: after any adapter runs, `rescore_representatives` re-picks each cluster's representative by `completeness - 5 x contamination` from `Manifest.quality()` (GTDB CheckM values), gated by `--keeper quality` (default) / `--keeper tool` to keep the adapter's own pick.
 3. **High** -- skder argv-based invocation breaks past ARG_MAX at 5000+ genomes (skder.py:78-96). Remediation: chunk automatically or use skder's fofn-style input if available.
 4. **Medium** -- Alphabetical chunk slicing biases stage-1 collapse (dereplicate.py:310). Remediation: shuffle with a recorded seed, or interleave by species.
 5. **Medium** -- `--limit` first-N sampling bias (metadata.py:268-275, :381-382). Remediation: seeded random or per-species stratified sampling.

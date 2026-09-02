@@ -59,6 +59,9 @@ class DereplicateParams:
     extra: dict | None = None
     # Proceed on a partial genome set with a warning instead of refusing.
     allow_incomplete: bool = False
+    # Per-cluster representative choice: re-pick by manifest CheckM quality
+    # (completeness - 5 x contamination), or "tool" to keep the adapter's own pick.
+    keeper: str = "quality"  # quality | tool
 
 
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
@@ -113,6 +116,16 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     else:
         result = _dereplicate_to_result(adapter, genomes, scratch, derep_params, params, logger)
 
+    keeper_swaps = 0
+    if params.keeper == "quality":
+        from .derep_keeper import rescore_representatives
+
+        quality = _quality_lookup(ctx)
+        if quality:
+            result, keeper_swaps = rescore_representatives(result, quality, logger)
+        else:
+            logger.info("No assembly quality in the manifest; keeping the tool's representatives")
+
     if params.reduce != "none":
         before = len(result.representatives)
         result = _reduce_by_taxonomy(ctx, result, params.reduce, logger)
@@ -139,6 +152,8 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "pre_secondary_ani": params.pre_secondary_ani,
             "reduce": params.reduce,
             "target_reps": params.target_reps,
+            "keeper": params.keeper,
+            "keeper_swaps": keeper_swaps,
             **(params.extra or {}),
         },
         tool_versions=versions,
@@ -475,6 +490,16 @@ def _taxon_lookup(ctx: WorkdirContext, level: str) -> dict[str, str]:
         taxon = rec.species if level == "species" else rec.genus
         lookup[rec.filename] = taxon or ""
     return lookup
+
+
+def _quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
+    """Map each genome filename to (completeness, contamination) from the manifest."""
+    try:
+        return ctx.manifest.quality()
+    except (sqlite3.OperationalError, OSError):
+        # Manifest absent / not yet initialized (e.g. the data-channel path or
+        # tests) -> no quality data, the adapter's own representative stands.
+        return {}
 
 
 def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:

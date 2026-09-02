@@ -68,6 +68,11 @@ def run(
     primary_ani: float = typer.Option(0.90, "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
+    keeper: str = typer.Option(
+        "quality", "--keeper",
+        help="Representative choice per cluster: quality (CheckM score from GTDB) "
+        "or tool (adapter's own).",
+    ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
@@ -104,7 +109,7 @@ def run(
         # each stage's builder.
         dereplicate_params(
             tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
-            aligned_fraction=aligned_fraction,
+            aligned_fraction=aligned_fraction, keeper=keeper,
         )
         phylo_params(
             treebuilder=treebuilder, msa_source=msa_source,
@@ -155,7 +160,7 @@ def run(
     _run("dereplicate", workdir, lambda: dereplicate_params(
         tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
         aligned_fraction=aligned_fraction, threads=threads,
-        extra=_virus_extra(derep_tool, viral),
+        extra=_virus_extra(derep_tool, viral), keeper=keeper,
     ))
     _run("phylo", workdir, lambda: phylo_params(
         treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,

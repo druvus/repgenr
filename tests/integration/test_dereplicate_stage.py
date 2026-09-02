@@ -133,6 +133,62 @@ def test_native_scaling_can_be_chunked(workdir: Path, genome_files, fake_tool) -
     assert calls[-1][0] == 3  # stage-2 over the 3 chunk representatives
 
 
+def test_keeper_quality_promotes_best_scoring_member(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    # _FakeDereplicator clusters all three genomes under genome_files[0]. Seed the
+    # manifest with quality so the tool's pick (rep) is the worst scorer, and
+    # genome_files[2] the best -- the keeper should promote it to representative.
+    ctx = WorkdirContext(workdir, create=True)
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    quality = {
+        genome_files[0].name: (80.0, 5.0),   # score 55.0 -- worst
+        genome_files[1].name: (95.0, 1.0),   # score 90.0
+        genome_files[2].name: (99.0, 0.2),   # score 98.0 -- best
+    }
+    for filename, (completeness, contamination) in quality.items():
+        ctx.manifest.upsert(GenomeRecord(
+            accession=accession_from_filename(filename), filename=filename,
+            completeness=completeness, contamination=contamination,
+        ))
+
+    result = run(ctx, DereplicateParams(tool="fake", keeper="quality"))
+
+    assert len(result.representatives) == 1
+    assert result.representatives[0].name == genome_files[2].name
+
+    rep_dir = ctx.representatives_dir
+    assert [p.name for p in rep_dir.iterdir()] == [genome_files[2].name]
+
+    assert ctx.config.stages["dereplicate"].params["keeper"] == "quality"
+    assert ctx.config.stages["dereplicate"].params["keeper_swaps"] == 1
+
+
+def test_keeper_tool_keeps_adapter_pick(workdir: Path, genome_files, fake_tool) -> None:
+    ctx = WorkdirContext(workdir, create=True)
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    quality = {
+        genome_files[0].name: (80.0, 5.0),
+        genome_files[1].name: (95.0, 1.0),
+        genome_files[2].name: (99.0, 0.2),
+    }
+    for filename, (completeness, contamination) in quality.items():
+        ctx.manifest.upsert(GenomeRecord(
+            accession=accession_from_filename(filename), filename=filename,
+            completeness=completeness, contamination=contamination,
+        ))
+
+    result = run(ctx, DereplicateParams(tool="fake", keeper="tool"))
+
+    assert result.representatives[0].name == genome_files[0].name
+    assert ctx.config.stages["dereplicate"].params["keeper"] == "tool"
+    assert ctx.config.stages["dereplicate"].params["keeper_swaps"] == 0
+
+
 def test_stage1_uses_pre_thresholds(workdir: Path, genome_files, fake_tool) -> None:
     # 3 genomes, process_size=2 -> trailing singleton merges into one chunk, so
     # only stage 1 runs; bump to >=4 genomes to force a real two-stage pass.

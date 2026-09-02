@@ -59,11 +59,26 @@ def test_dereplicate_wiring(dispatched, tmp_path) -> None:
         "dereplicate", "-wd", str(tmp_path), "--tool", "skder",
         "-sani", "0.98", "-pani", "0.85", "-af", "0.6", "-t", "4",
         "--process-size", "100", "--reduce", "species", "--target-reps", "10",
+        "--keeper", "tool",
     ])
     assert stage == "dereplicate"
     assert (params.tool, params.secondary_ani, params.primary_ani) == ("skder", 0.98, 0.85)
     assert (params.aligned_fraction, params.threads) == (0.6, 4)
     assert (params.process_size, params.reduce, params.target_reps) == (100, "species", 10)
+    assert params.keeper == "tool"
+
+
+def test_dereplicate_keeper_defaults_to_quality(dispatched, tmp_path) -> None:
+    _, params, _ = _invoke(dispatched, ["dereplicate", "-wd", str(tmp_path), "--tool", "skder"])
+    assert params.keeper == "quality"
+
+
+def test_dereplicate_unknown_keeper_fails(dispatched, tmp_path) -> None:
+    result = _runner.invoke(
+        app, ["dereplicate", "-wd", str(tmp_path), "--tool", "skder", "--keeper", "nosuch"]
+    )
+    assert result.exit_code != 0
+    assert dispatched == []
 
 
 def test_dereplicate_unknown_tool_fails(dispatched, tmp_path) -> None:

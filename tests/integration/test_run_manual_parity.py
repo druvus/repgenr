@@ -39,7 +39,7 @@ def test_bacterial_run_matches_manual_commands(dispatched, tmp_path) -> None:
     result = _runner.invoke(app, [
         "run", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
         "-r", "232.0", "--gtdb-version", "bac120",
-        "--tool", "skder", "--treebuilder", "mashtree",
+        "--tool", "skder", "--treebuilder", "mashtree", "--keeper", "tool",
     ])
     assert result.exit_code == 0, result.output
     run_fps = _fingerprints(dispatched)
@@ -49,7 +49,7 @@ def test_bacterial_run_matches_manual_commands(dispatched, tmp_path) -> None:
         ["metadata", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
          "-r", "232.0", "--gtdb-version", "bac120"],
         ["genome", "-wd", wd],
-        ["dereplicate", "-wd", wd, "--tool", "skder"],
+        ["dereplicate", "-wd", wd, "--tool", "skder", "--keeper", "tool"],
         ["phylo", "-wd", wd, "--treebuilder", "mashtree"],
         ["tree2tax", "-wd", wd],
     ):
@@ -134,6 +134,27 @@ def test_run_snptype_msa_source_matches_manual_phylo(dispatched, tmp_path) -> No
     assert result.exit_code == 0, result.output
     manual_fp = _stage_fingerprint("phylo", dict(dispatched)["phylo"], {}, {})
     assert manual_fp == run_fp
+
+
+def test_run_keeper_flag_reaches_dereplicate_params(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(app, [
+        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
+        "--gtdb-version", "bac120", "--keeper", "tool",
+    ])
+    assert result.exit_code == 0, result.output
+    params = dict(dispatched)["dereplicate"]
+    assert params.keeper == "tool"
+
+
+def test_run_keeper_defaults_to_quality(dispatched, tmp_path) -> None:
+    result = _runner.invoke(app, [
+        "run", "-wd", str(tmp_path), "-l", "genus", "-tg", "x", "-r", "232.0",
+        "--gtdb-version", "bac120",
+    ])
+    assert result.exit_code == 0, result.output
+    params = dict(dispatched)["dereplicate"]
+    assert params.keeper == "quality"
 
 
 def test_run_bad_msa_source_fails(dispatched, tmp_path) -> None:
