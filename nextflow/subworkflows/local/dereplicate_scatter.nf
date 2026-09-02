@@ -35,7 +35,22 @@ workflow DEREPLICATE_SCATTER {
             }
         }
 
-    DEREP_CHUNK(ch_chunks)
+    // .first() turns ch_selection into a genuine value channel that replays
+    // for every consumer, whether it started as one (Channel.value([])) or as
+    // a one-item queue channel (ACQUIRE.out.selection): passed unconverted as
+    // a plain second process argument, a queue channel would pair with only
+    // the first chunk and silently starve the rest (DEREP_CHUNK would then
+    // run once instead of once per chunk). Note: .combine() is NOT used here
+    // -- it spreads a List-valued item (Channel.value([]) emits the empty
+    // list `[]`) into zero elements instead of appending it as a tuple
+    // element, which breaks DEREP_CHUNK's tuple arity; a plain second
+    // argument bound to a `path ..., stageAs: ...` input is the documented
+    // idiom for an optional single file/no-file input (as DEREP_MERGE already
+    // does with ch_selection directly, since its own chunk-gather channel has
+    // exactly one emission regardless).
+    ch_selection_bc = ch_selection.first()
+
+    DEREP_CHUNK(ch_chunks, ch_selection_bc)
     ch_versions = ch_versions.mix(DEREP_CHUNK.out.versions.first())
 
     // Gather every chunk result directory into a single merge input.
