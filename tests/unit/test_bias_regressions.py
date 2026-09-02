@@ -125,7 +125,7 @@ def test_taxonomy_reduce_keeper_is_the_overrepresented_genotype(tmp_path):
     }
     ctx = SimpleNamespace(manifest=_FakeManifest(species))
 
-    reduced = _reduce_by_taxonomy(ctx, result, "species", "tool", _LOGGER)
+    reduced = _reduce_by_taxonomy(ctx, result, "species", {}, _LOGGER)
 
     assert [r.name for r in reduced.representatives] == ["clone_rep.fasta"]
     assert "diverse_rep.fasta" in reduced.clusters["clone_rep.fasta"]
@@ -142,5 +142,5 @@ def test_taxonomy_reduce_keeps_unannotated_genomes(tmp_path):
         genome_status={"unknown_rep.fasta": STATUS_REPRESENTATIVE},
     )
     ctx = SimpleNamespace(manifest=_FakeManifest({}))
-    reduced = _reduce_by_taxonomy(ctx, result, "species", "tool", _LOGGER)
+    reduced = _reduce_by_taxonomy(ctx, result, "species", {}, _LOGGER)
     assert [r.name for r in reduced.representatives] == ["unknown_rep.fasta"]

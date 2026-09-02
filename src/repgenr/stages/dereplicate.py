@@ -117,6 +117,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         result = _dereplicate_to_result(adapter, genomes, scratch, derep_params, params, logger)
 
     keeper_swaps = 0
+    quality: dict[str, tuple[float, float]] = {}
     if params.keeper == "quality":
         from .derep_keeper import rescore_representatives
 
@@ -128,7 +129,8 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     if params.reduce != "none":
         before = len(result.representatives)
-        result = _reduce_by_taxonomy(ctx, result, params.reduce, params.keeper, logger)
+        # Reuse the quality lookup above instead of re-querying the manifest.
+        result = _reduce_by_taxonomy(ctx, result, params.reduce, quality, logger)
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
             params.reduce, before, len(result.representatives),
@@ -419,24 +421,29 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
 
 
 def _reduce_by_taxonomy(
-    ctx: WorkdirContext, result: DerepResult, level: str, keeper_mode: str, logger
+    ctx: WorkdirContext,
+    result: DerepResult,
+    level: str,
+    quality: dict[str, tuple[float, float]],
+    logger,
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
     Representatives sharing a manifest taxon are merged into a single keeper.
-    When ``keeper_mode`` is "quality", the keeper is chosen by manifest assembly
-    quality first (:func:`~.derep_keeper.quality_score`), falling back to the
-    largest existing cluster and then lexical order for unscored/tied
-    candidates; "tool" skips quality and uses the largest-cluster rule alone.
-    The others -- plus their cluster members -- become contained under the
-    keeper. Representatives whose taxon is unknown/empty are kept as-is (each
-    its own group), so reduction never silently drops an un-annotated genome.
+    When ``quality`` is non-empty, the keeper is chosen by manifest assembly
+    quality first (:func:`~.derep_keeper.quality_score`) -- the caller's own
+    manifest lookup, reused here instead of querying the manifest a second
+    time -- falling back to the largest existing cluster and then lexical
+    order for unscored/tied candidates; pass ``{}`` (keeper="tool", or no
+    manifest quality data) to use the largest-cluster rule alone. The others
+    -- plus their cluster members -- become contained under the keeper.
+    Representatives whose taxon is unknown/empty are kept as-is (each its own
+    group), so reduction never silently drops an un-annotated genome.
     """
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
     from .derep_keeper import quality_score
 
     taxon_of = _taxon_lookup(ctx, level)
-    quality = _quality_lookup(ctx) if keeper_mode == "quality" else {}
 
     def _score_or_min(name: str) -> float:
         q = quality.get(name)
