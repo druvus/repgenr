@@ -27,6 +27,7 @@ def dispatched(monkeypatch) -> list[tuple]:
 
     for mod in (cmd_run, cmd_bacterial, cmd_phylo, cmd_viral):
         monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(cmd_run, "_preflight_tools", lambda *a, **k: None)
     return calls
 
 

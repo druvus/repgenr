@@ -43,6 +43,38 @@ def _virus_extra(derep_tool: str, viral: bool) -> dict:
     return gated_extra(_derep_registry, derep_tool, "virus", True)
 
 
+def _preflight_tools(
+    derep_tool: str, treebuilder: str, msa_source: str, aligner: str, snptyper: str,
+) -> None:
+    """Check every external tool the chain will need before the first stage runs.
+
+    Each stage preflights its own adapter, but by then the earlier stages have
+    already downloaded and dereplicated; a missing tree builder should fail in
+    the first second, not after the genome download. ``auto`` choices are
+    resolved from the genome count inside their stage and are skipped here.
+    """
+    from ..dereplicators.base import registry as derep_registry
+    from ..treebuilders.base import InputKind
+    from ..treebuilders.base import registry as tb_registry
+
+    if derep_tool != "auto":
+        derep_registry.create(derep_tool).preflight()
+    if treebuilder == "auto":
+        return
+    builder = tb_registry.create(treebuilder)
+    builder.preflight()
+    if builder.input_kind != InputKind.MSA_FASTA:
+        return
+    if msa_source == "aligner":
+        from ..aligners.base import registry as aligner_registry
+
+        aligner_registry.create(aligner).preflight()
+    elif msa_source == "snptype":
+        from ..snptypers.base import registry as snp_registry
+
+        snp_registry.create(snptyper).preflight()
+
+
 @app.command()
 def run(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
@@ -139,6 +171,9 @@ def run(
         )
         typer.echo("[dry-run] no work done.")
         return
+
+    with stage_errors(logger):
+        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper)
 
     if viral:
         _run("vmetadata", workdir, lambda: vmetadata_params(
