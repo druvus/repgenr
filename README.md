@@ -167,7 +167,9 @@ pytest -q
 ```
 
 See `docs/architecture.md` for the design and `docs/adding-tools.md` for writing
-a new adapter.
+a new adapter. Example figures live in `docs/images/`; the synthetic-genome
+generator is `scripts/fasta_simulate_sequences.py`. The legacy 10 MB mock
+dataset is no longer tracked; generate a test set with `benchmarks/genomegen.py`.
 
 ## License
 

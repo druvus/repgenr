@@ -45,11 +45,13 @@ def _base_workdir(tmp_path: Path) -> Path:
     (wd / "outgroup" / rows[2].filename).write_text(">og\nACGT\n", encoding="utf-8")
     (wd / "outgroup_accession.txt").write_text("GCF_9.1\n", encoding="utf-8")
     manifest = Manifest(wd / "manifest.sqlite")
-    manifest.replace_genomes([
-        GenomeRecord(accession="GCF_1.1", filename=rows[0].filename),
-        GenomeRecord(accession="GCF_2.1", filename=rows[1].filename),
-        GenomeRecord(accession="GCF_9.1", filename=rows[2].filename, is_outgroup=True),
-    ])
+    manifest.replace_genomes(
+        [
+            GenomeRecord(accession="GCF_1.1", filename=rows[0].filename),
+            GenomeRecord(accession="GCF_2.1", filename=rows[1].filename),
+            GenomeRecord(accession="GCF_9.1", filename=rows[2].filename, is_outgroup=True),
+        ]
+    )
     manifest.close()
     cfg = Config()
     cfg.record_stage("metadata", completed="2026-01-01T00:00:00")
@@ -83,9 +85,7 @@ def test_missing_genome_is_a_failure(tmp_path: Path) -> None:
     wd = _base_workdir(tmp_path)
     (wd / "genomes" / "Fam_Gen_sp2_GCF_2.1.fasta").unlink()
     findings = diagnose(wd)
-    assert any(
-        f.level == "fail" and "Fam_Gen_sp2_GCF_2.1.fasta" in f.message for f in findings
-    )
+    assert any(f.level == "fail" and "Fam_Gen_sp2_GCF_2.1.fasta" in f.message for f in findings)
 
 
 def test_excused_missing_accession_is_not_a_failure(tmp_path: Path) -> None:
@@ -102,9 +102,7 @@ def test_non_fasta_genome_is_a_failure(tmp_path: Path) -> None:
         "<html>error</html>", encoding="utf-8"
     )
     findings = diagnose(wd)
-    assert any(
-        f.level == "fail" and "Fam_Gen_sp1_GCF_1.1.fasta" in f.message for f in findings
-    )
+    assert any(f.level == "fail" and "Fam_Gen_sp1_GCF_1.1.fasta" in f.message for f in findings)
 
 
 def test_manifest_selection_drift_is_a_failure(tmp_path: Path) -> None:
@@ -121,14 +119,15 @@ def test_representatives_clusters_mismatch_is_a_failure(tmp_path: Path) -> None:
     reps = wd / "derep" / "representatives"
     reps.mkdir(parents=True)
     (reps / "Fam_Gen_sp1_GCF_1.1.fasta").write_text(">x\nACGT\n", encoding="utf-8")
-    write_clusters(wd / "derep" / "clusters.tsv", {
-        "Fam_Gen_sp1_GCF_1.1.fasta": [],
-        "Fam_Gen_sp2_GCF_2.1.fasta": [],  # listed but absent on disk
-    })
-    findings = diagnose(wd)
-    assert any(
-        f.level == "fail" and "Fam_Gen_sp2_GCF_2.1.fasta" in f.message for f in findings
+    write_clusters(
+        wd / "derep" / "clusters.tsv",
+        {
+            "Fam_Gen_sp1_GCF_1.1.fasta": [],
+            "Fam_Gen_sp2_GCF_2.1.fasta": [],  # listed but absent on disk
+        },
     )
+    findings = diagnose(wd)
+    assert any(f.level == "fail" and "Fam_Gen_sp2_GCF_2.1.fasta" in f.message for f in findings)
 
 
 def test_truncated_tree_is_a_failure(tmp_path: Path) -> None:
@@ -168,15 +167,17 @@ def test_changed_inputs_are_a_warning(tmp_path: Path) -> None:
     wd = _base_workdir(tmp_path)
     cfg = Config.load(wd)
     cfg.record_stage(
-        "dereplicate", tool="skder", params={},
-        completed="2026-01-01T00:02:00", fingerprint="f",
+        "dereplicate",
+        tool="skder",
+        params={},
+        completed="2026-01-01T00:02:00",
+        fingerprint="f",
         inputs={"genomes": "old-digest"},
     )
     cfg.save(wd)
     findings = diagnose(wd)
     assert any(
-        f.level == "warn" and f.area == "dereplicate" and "changed" in f.message
-        for f in findings
+        f.level == "warn" and f.area == "dereplicate" and "changed" in f.message for f in findings
     )
 
 
@@ -188,10 +189,12 @@ def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -
     every run, forever, since the two digests can never agree."""
     wd = _base_workdir(tmp_path)
     manifest = Manifest(wd / "manifest.sqlite")
-    manifest.set_derep_status_many([
-        ("GCF_1.1", "representative", None),
-        ("GCF_2.1", "contained", "Fam_Gen_sp1_GCF_1.1.fasta"),
-    ])
+    manifest.set_derep_status_many(
+        [
+            ("GCF_1.1", "representative", None),
+            ("GCF_2.1", "contained", "Fam_Gen_sp1_GCF_1.1.fasta"),
+        ]
+    )
     manifest.close()
 
     genomes_digest = dir_stat_digest(wd / "genomes")
@@ -203,8 +206,11 @@ def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -
 
     cfg = Config.load(wd)
     cfg.record_stage(
-        "dereplicate", tool="skder", params={},
-        completed="2026-01-01T00:02:00", fingerprint="f",
+        "dereplicate",
+        tool="skder",
+        params={},
+        completed="2026-01-01T00:02:00",
+        fingerprint="f",
         inputs={"genomes": genomes_digest, "manifest": manifest_digest_value},
     )
     cfg.save(wd)
@@ -214,18 +220,20 @@ def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -
 
     # A real quality-only manifest edit must still be caught as stale.
     manifest2 = Manifest(wd / "manifest.sqlite")
-    manifest2.upsert_many([
-        GenomeRecord(
-            accession="GCF_1.1", filename="Fam_Gen_sp1_GCF_1.1.fasta",
-            completeness=98.0, contamination=0.5,
-        )
-    ])
+    manifest2.upsert_many(
+        [
+            GenomeRecord(
+                accession="GCF_1.1",
+                filename="Fam_Gen_sp1_GCF_1.1.fasta",
+                completeness=98.0,
+                contamination=0.5,
+            )
+        ]
+    )
     manifest2.close()
 
     findings2 = diagnose(wd)
-    dereplicate_warnings = [
-        f for f in findings2 if f.area == "dereplicate" and f.level == "warn"
-    ]
+    dereplicate_warnings = [f for f in findings2 if f.area == "dereplicate" and f.level == "warn"]
     assert len(dereplicate_warnings) == 1
     assert "manifest" in dereplicate_warnings[0].message
 
@@ -250,7 +258,8 @@ def _non_wal_listing(workdir: Path) -> list[str]:
     # not a write to the manifest itself, so they are excluded here -- the
     # mtime assertion below is what actually proves the manifest untouched.
     return sorted(
-        p.name for p in workdir.iterdir()
+        p.name
+        for p in workdir.iterdir()
         if not (p.name.endswith("-shm") or p.name.endswith("-wal"))
     )
 

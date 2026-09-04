@@ -63,7 +63,8 @@ def _warn_stage_extras(
     if unread:
         logger.warning(
             "No selected phylo tool (%s) reads extra parameter(s): %s",
-            ", ".join(cap.name for cap in caps), ", ".join(unread),
+            ", ".join(cap.name for cap in caps),
+            ", ".join(unread),
         )
 
 
@@ -130,9 +131,7 @@ def build_tree(
     genome set, so the core needs no working directory.
     """
     if not genomes:
-        raise WorkdirError(
-            "No genomes found for phylo. Run the genome (and derep) stages first."
-        )
+        raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
 
     treebuilder = params.treebuilder
     if treebuilder == "auto":
@@ -144,7 +143,10 @@ def build_tree(
             limit, alts = warn
             logger.warning(
                 "Tree builder '%s' is tuned for <=%d genomes but you have %d; consider: %s",
-                treebuilder, limit, len(genomes), ", ".join(alts) or "none",
+                treebuilder,
+                limit,
+                len(genomes),
+                ", ".join(alts) or "none",
             )
 
     builder = treebuilder_registry.create(treebuilder)
@@ -173,7 +175,8 @@ def build_tree(
             inputs.append(outgroup_file)
         logger.info(
             "Building tree with %s (alignment-free) over %d genomes",
-            treebuilder, len(inputs),
+            treebuilder,
+            len(inputs),
         )
         tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
     else:
@@ -239,19 +242,21 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     logger = ctx.logger
     if params.all_genomes:
         check_genome_completeness(
-            ctx.genomes_dir, ctx.workdir, logger=logger,
+            ctx.genomes_dir,
+            ctx.workdir,
+            logger=logger,
             allow_incomplete=params.allow_incomplete,
         )
     else:
         check_representatives_consistency(
-            ctx.representatives_dir, ctx.derep_dir / CLUSTERS_TSV,
-            logger=logger, allow_incomplete=params.allow_incomplete,
+            ctx.representatives_dir,
+            ctx.derep_dir / CLUSTERS_TSV,
+            logger=logger,
+            allow_incomplete=params.allow_incomplete,
         )
     genomes = _genome_set(ctx, params.all_genomes)
     if not genomes:
-        raise WorkdirError(
-            "No genomes found for phylo. Run the genome (and derep) stages first."
-        )
+        raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
 
     outgroup_file, outgroup_leaf = _resolve_outgroup(ctx, params.no_outgroup, logger)
 
@@ -345,14 +350,19 @@ def _build_msa(
             limit, alts = warn
             logger.warning(
                 "Aligner '%s' is tuned for <=%d genomes but you have %d; consider: %s",
-                params.aligner, limit, len(inputs), ", ".join(alts) or "none",
+                params.aligner,
+                limit,
+                len(inputs),
+                ", ".join(alts) or "none",
             )
         aligner = aligner_registry.create(params.aligner)
         versions = aligner.preflight()
         reference = _resolve_reference(params.reference, genomes, outgroup_file, logger)
         _warn_divergence(params.aligner, inputs, logger)
         align_params = AlignParams(
-            threads=params.threads, reference=reference, extra=_adapter_extra(params.extra),
+            threads=params.threads,
+            reference=reference,
+            extra=_adapter_extra(params.extra),
         )
         result = aligner.align(inputs, reference, dirs.align_dir, align_params, logger)
         return result.msa_fasta, versions
@@ -375,7 +385,12 @@ def _build_msa(
             else None
         )
         snp_result, versions = snptype_core(
-            genomes, snp_reference, dirs.snp_dir, dirs.scratch_dir / "snptype", snp_params, logger,
+            genomes,
+            snp_reference,
+            dirs.snp_dir,
+            dirs.scratch_dir / "snptype",
+            snp_params,
+            logger,
             # build_tree already warned once for the typer and the tree builder
             # together; a second per-typer warning would name keys the builder reads.
             warn_extras=False,
@@ -473,7 +488,8 @@ def _warn_low_diversity(msa_path: Path, logger: logging.Logger) -> None:
         "nearly identical, and the resulting tree will be star-like with "
         "near-zero branch lengths. Check whether the set is a single clone "
         "before interpreting the topology.",
-        msa_path.name, len(variable),
+        msa_path.name,
+        len(variable),
     )
 
 
@@ -495,11 +511,13 @@ def _warn_divergence(aligner_name: str, genomes: Sequence[Path], logger) -> None
             "core shrinks sharply with divergence, so the alignment may be small or fragmentary. "
             "Consider an alignment-free tree builder (mashtree/sourmash), or loosen the aligner "
             "seeds (e.g. --aligner-arg kmer=15 for sibeliaz).",
-            aligner_name, n_genera,
+            aligner_name,
+            n_genera,
         )
     elif n_species > 1:
         logger.info(
             "Whole-genome aligner '%s' on a genus-level set (%d species): expect a reduced core "
             "alignment as divergence increases; alignment-free builders scale better.",
-            aligner_name, n_species,
+            aligner_name,
+            n_species,
         )

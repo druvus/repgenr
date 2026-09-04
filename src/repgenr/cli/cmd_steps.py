@@ -48,7 +48,9 @@ def genome_fetch_cmd(
     with stage_errors(logger):
         genome_fetch(
             GenomeFetchParams(
-                selection_tsv=selection, out_dir=out_dir, keep_files=keep_files,
+                selection_tsv=selection,
+                out_dir=out_dir,
+                keep_files=keep_files,
                 versions_out=versions_out,
             ),
             logger,
@@ -71,11 +73,13 @@ def dereplicate_chunk_cmd(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
     selection_tsv: Path | None = typer.Option(
-        None, "--selection-tsv",
+        None,
+        "--selection-tsv",
         help="selection.tsv with quality columns; enables quality-aware representatives.",
     ),
     keeper: str = typer.Option(
-        "quality", "--keeper",
+        "quality",
+        "--keeper",
         help="Representative choice when --selection-tsv is given: "
         "quality (manifest completeness/contamination) or tool (adapter's own pick).",
     ),
@@ -98,9 +102,13 @@ def dereplicate_chunk_cmd(
         genomes = _read_path_fofn(genomes_fofn)
         dereplicate_chunk(
             ChunkParams(
-                tool=tool, genomes=genomes, out_dir=out_dir,
-                primary_ani=primary_ani, secondary_ani=secondary_ani,
-                aligned_fraction=aligned_fraction, threads=threads,
+                tool=tool,
+                genomes=genomes,
+                out_dir=out_dir,
+                primary_ani=primary_ani,
+                secondary_ani=secondary_ani,
+                aligned_fraction=aligned_fraction,
+                threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
                     **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
@@ -158,15 +166,24 @@ def phylo_build_cmd(
             _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
 
         phylo_params = PhyloParams(
-            treebuilder=treebuilder, msa_source=msa_source, aligner=aligner, snptyper=snptyper,
-            no_outgroup=no_outgroup, bootstrap=bootstrap, reference=reference, threads=threads,
+            treebuilder=treebuilder,
+            msa_source=msa_source,
+            aligner=aligner,
+            snptyper=snptyper,
+            no_outgroup=no_outgroup,
+            bootstrap=bootstrap,
+            reference=reference,
+            threads=threads,
             extra=_parse_key_values(aligner_arg, "--aligner-arg"),
         )
         phylo_build(
             PhyloBuildParams(
-                genomes_dir=genomes_dir, out_dir=out_dir,
-                outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
-                phylo=phylo_params, versions_out=versions_out,
+                genomes_dir=genomes_dir,
+                out_dir=out_dir,
+                outgroup_dir=outgroup_dir,
+                outgroup_accession=outgroup_accession,
+                phylo=phylo_params,
+                versions_out=versions_out,
             ),
             logger,
         )
@@ -204,10 +221,15 @@ def tree2tax_relations_cmd(
     with stage_errors(logger):
         tree2tax_relations(
             Tree2taxStepParams(
-                tree=tree, out_dir=out_dir, clusters=clusters,
-                outgroup_dir=outgroup_dir, outgroup_accession=outgroup_accession,
-                node_basename=node_basename, root_name=root_name,
-                remove_outgroup=remove_outgroup, include_dereplicated=include_dereplicated,
+                tree=tree,
+                out_dir=out_dir,
+                clusters=clusters,
+                outgroup_dir=outgroup_dir,
+                outgroup_accession=outgroup_accession,
+                node_basename=node_basename,
+                root_name=root_name,
+                remove_outgroup=remove_outgroup,
+                include_dereplicated=include_dereplicated,
                 versions_out=versions_out,
             ),
             logger,
@@ -233,11 +255,13 @@ def dereplicate_merge_cmd(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
     selection_tsv: Path | None = typer.Option(
-        None, "--selection-tsv",
+        None,
+        "--selection-tsv",
         help="selection.tsv with quality columns; enables quality-aware representatives.",
     ),
     keeper: str = typer.Option(
-        "quality", "--keeper",
+        "quality",
+        "--keeper",
         help="Representative choice when --selection-tsv is given: "
         "quality (manifest completeness/contamination) or tool (adapter's own pick).",
     ),
@@ -263,9 +287,13 @@ def dereplicate_merge_cmd(
             raise UserInputError("Provide at least one --chunk-dir or a --chunk-fofn.")
         dereplicate_merge(
             MergeParams(
-                tool=tool, chunk_dirs=chunk_dirs, out_dir=out_dir,
-                primary_ani=primary_ani, secondary_ani=secondary_ani,
-                aligned_fraction=aligned_fraction, threads=threads,
+                tool=tool,
+                chunk_dirs=chunk_dirs,
+                out_dir=out_dir,
+                primary_ani=primary_ani,
+                secondary_ani=secondary_ani,
+                aligned_fraction=aligned_fraction,
+                threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
                     **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),

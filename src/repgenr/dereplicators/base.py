@@ -100,9 +100,7 @@ def check_result_complete(result: DerepResult, genome_names: Collection[str]) ->
         for m in members:
             if m != rep:
                 home[m] = home.get(m, 0) + 1
-    orphans = sorted(
-        g for g, s in status.items() if s == STATUS_CONTAINED and home.get(g, 0) == 0
-    )
+    orphans = sorted(g for g, s in status.items() if s == STATUS_CONTAINED and home.get(g, 0) == 0)
     if orphans:
         raise WorkdirError(
             f"{len(orphans)} contained genome(s) have no representative "

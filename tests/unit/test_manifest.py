@@ -104,11 +104,13 @@ def test_upsert_many_batches_and_persists(tmp_path: Path) -> None:
 def test_set_derep_status_many(tmp_path: Path) -> None:
     m = Manifest(tmp_path / "manifest.sqlite")
     m.upsert_many([_rec(i) for i in range(5)])
-    m.set_derep_status_many([
-        ("GCF_000000.1", "representative", None),
-        ("GCF_000001.1", "contained", "GCF_000000.1"),
-        ("GCF_999999.1", "contained", "GCF_000000.1"),  # absent -> no-op, not an error
-    ])
+    m.set_derep_status_many(
+        [
+            ("GCF_000000.1", "representative", None),
+            ("GCF_000001.1", "contained", "GCF_000000.1"),
+            ("GCF_999999.1", "contained", "GCF_000000.1"),  # absent -> no-op, not an error
+        ]
+    )
     reps = {g.accession for g in m.representatives()}
     assert reps == {"GCF_000000.1"}
     by_acc = {g.accession: g for g in m.all_genomes()}
@@ -119,37 +121,47 @@ def test_set_derep_status_many(tmp_path: Path) -> None:
 
 def test_replace_genomes_deletes_deselected(tmp_path: Path) -> None:
     m = Manifest(tmp_path / "m.sqlite")
-    m.upsert_many([
-        GenomeRecord(accession="A1", species="a"),
-        GenomeRecord(accession="A2", species="b"),
-        GenomeRecord(accession="OG", species="og", is_outgroup=True),
-    ])
+    m.upsert_many(
+        [
+            GenomeRecord(accession="A1", species="a"),
+            GenomeRecord(accession="A2", species="b"),
+            GenomeRecord(accession="OG", species="og", is_outgroup=True),
+        ]
+    )
     # re-selection keeps A1, drops A2, new outgroup
-    m.replace_genomes([
-        GenomeRecord(accession="A1", species="a"),
-        GenomeRecord(accession="OG2", species="og2", is_outgroup=True),
-    ])
+    m.replace_genomes(
+        [
+            GenomeRecord(accession="A1", species="a"),
+            GenomeRecord(accession="OG2", species="og2", is_outgroup=True),
+        ]
+    )
     accs = {g.accession for g in m.all_genomes(include_outgroup=True)}
     assert accs == {"A1", "OG2"}
 
 
 def test_set_derep_status_many_clears_stale_rows(tmp_path: Path) -> None:
     m = Manifest(tmp_path / "m.sqlite")
-    m.upsert_many([
-        GenomeRecord(accession="A1"),
-        GenomeRecord(accession="A2"),
-        GenomeRecord(accession="A3"),
-    ])
-    m.set_derep_status_many([
-        ("A1", "representative", None),
-        ("A2", "contained", "A1"),
-        ("A3", "representative", None),
-    ])
+    m.upsert_many(
+        [
+            GenomeRecord(accession="A1"),
+            GenomeRecord(accession="A2"),
+            GenomeRecord(accession="A3"),
+        ]
+    )
+    m.set_derep_status_many(
+        [
+            ("A1", "representative", None),
+            ("A2", "contained", "A1"),
+            ("A3", "representative", None),
+        ]
+    )
     # a narrower re-dereplication: A3 no longer appears in the result at all
-    m.set_derep_status_many([
-        ("A1", "representative", None),
-        ("A2", "contained", "A1"),
-    ])
+    m.set_derep_status_many(
+        [
+            ("A1", "representative", None),
+            ("A2", "contained", "A1"),
+        ]
+    )
     by_acc = {g.accession: g for g in m.all_genomes(include_outgroup=True)}
     assert by_acc["A3"].derep_status is None, "stale representative status cleared"
     assert by_acc["A3"].representative is None

@@ -20,14 +20,29 @@ from repgenr.stages import genome
 from repgenr.stages.genome import GenomeParams
 
 _SELECTED = [
-    GenomeRecord(accession="GCF_000001.1", source="gtdb",
-                 family="Francisellaceae", genus="Francisella", species="tularensis"),
-    GenomeRecord(accession="GCF_000002.1", source="gtdb",
-                 family="Francisellaceae", genus="Francisella", species="tularensis"),
+    GenomeRecord(
+        accession="GCF_000001.1",
+        source="gtdb",
+        family="Francisellaceae",
+        genus="Francisella",
+        species="tularensis",
+    ),
+    GenomeRecord(
+        accession="GCF_000002.1",
+        source="gtdb",
+        family="Francisellaceae",
+        genus="Francisella",
+        species="tularensis",
+    ),
 ]
-_OUTGROUP = GenomeRecord(accession="GCF_000010.1", source="gtdb", is_outgroup=True,
-                         family="Francisellaceae", genus="Francisella",
-                         species="philomiragia")
+_OUTGROUP = GenomeRecord(
+    accession="GCF_000010.1",
+    source="gtdb",
+    is_outgroup=True,
+    family="Francisellaceae",
+    genus="Francisella",
+    species="philomiragia",
+)
 
 
 @pytest.fixture()
@@ -83,9 +98,7 @@ def test_run_downloads_and_organizes(ctx, monkeypatch) -> None:
         "Francisellaceae_Francisella_tularensis_GCF_000002.1.fasta",
     ]
     out = list(ctx.outgroup_dir.iterdir())
-    assert [p.name for p in out] == [
-        "Francisellaceae_Francisella_philomiragia_GCF_000010.1.fasta"
-    ]
+    assert [p.name for p in out] == ["Francisellaceae_Francisella_philomiragia_GCF_000010.1.fasta"]
     # filenames recorded back into the manifest
     by_acc = {g.accession: g for g in ctx.manifest.all_genomes(include_outgroup=False)}
     assert by_acc["GCF_000001.1"].filename == fastas[0]

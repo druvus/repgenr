@@ -101,9 +101,7 @@ def _make_genomes(gdir: Path, n: int) -> list[Path]:
 def test_chunk_writes_a_valid_contract(tmp_path: Path, reg) -> None:
     genomes = _make_genomes(tmp_path / "genomes", 4)
     out = tmp_path / "chunk0"
-    res = dereplicate_chunk(
-        ChunkParams(tool="halver", genomes=genomes, out_dir=out), _LOG
-    )
+    res = dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes, out_dir=out), _LOG)
     # halver of 4 -> reps [g0, g2]
     assert {r.name for r in res.representatives} == {genomes[0].name, genomes[2].name}
     # contract files + representative FASTAs are present on disk
@@ -160,12 +158,8 @@ def test_discrete_matches_in_process_chunked(workdir: Path, reg) -> None:
     ref = dereplicate_run(ctx, DereplicateParams(tool="halver", process_size=4))
 
     # Discrete: two chunks then a merge, with the same final thresholds.
-    dereplicate_chunk(
-        ChunkParams(tool="halver", genomes=genomes[:4], out_dir=workdir / "c0"), _LOG
-    )
-    dereplicate_chunk(
-        ChunkParams(tool="halver", genomes=genomes[4:], out_dir=workdir / "c1"), _LOG
-    )
+    dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes[:4], out_dir=workdir / "c0"), _LOG)
+    dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes[4:], out_dir=workdir / "c1"), _LOG)
     final = dereplicate_merge(
         MergeParams(
             tool="halver",
@@ -226,9 +220,7 @@ def test_chunk_rejects_missing_genome(tmp_path: Path, reg) -> None:
 
     bogus = [tmp_path / "nope.fasta"]
     with pytest.raises(WorkdirError):
-        dereplicate_chunk(
-            ChunkParams(tool="halver", genomes=bogus, out_dir=tmp_path / "x"), _LOG
-        )
+        dereplicate_chunk(ChunkParams(tool="halver", genomes=bogus, out_dir=tmp_path / "x"), _LOG)
 
 
 def _write_two_genome_selection(path: Path, genomes: list[Path]) -> None:
@@ -239,14 +231,24 @@ def _write_two_genome_selection(path: Path, genomes: list[Path]) -> None:
         path,
         [
             SelectionRow(
-                accession="GCF_000000.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[0].name,
-                completeness=80.0, contamination=5.0,
+                accession="GCF_000000.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[0].name,
+                completeness=80.0,
+                contamination=5.0,
             ),
             SelectionRow(
-                accession="GCF_000002.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[2].name,
-                completeness=99.0, contamination=0.5,
+                accession="GCF_000002.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[2].name,
+                completeness=99.0,
+                contamination=0.5,
             ),
         ],
     )
@@ -327,21 +329,34 @@ def test_chunk_promotes_best_quality_contained_member(tmp_path: Path, reg) -> No
         selection,
         [
             SelectionRow(
-                accession="GCF_000000.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[0].name,
-                completeness=70.0, contamination=5.0,
+                accession="GCF_000000.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[0].name,
+                completeness=70.0,
+                contamination=5.0,
             ),
             SelectionRow(
-                accession="GCF_000001.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[1].name,
-                completeness=99.0, contamination=0.2,
+                accession="GCF_000001.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[1].name,
+                completeness=99.0,
+                contamination=0.2,
             ),
         ],
     )
 
     result = dereplicate_chunk(
         ChunkParams(
-            tool="halver", genomes=genomes, out_dir=tmp_path / "c0", selection_tsv=selection,
+            tool="halver",
+            genomes=genomes,
+            out_dir=tmp_path / "c0",
+            selection_tsv=selection,
         ),
         _LOG,
     )
@@ -364,17 +379,25 @@ def test_chunk_keeper_tool_ignores_selection_tsv(tmp_path: Path, reg) -> None:
         selection,
         [
             SelectionRow(
-                accession="GCF_000001.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[1].name,
-                completeness=99.0, contamination=0.2,
+                accession="GCF_000001.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[1].name,
+                completeness=99.0,
+                contamination=0.2,
             ),
         ],
     )
 
     result = dereplicate_chunk(
         ChunkParams(
-            tool="halver", genomes=genomes, out_dir=tmp_path / "c0",
-            selection_tsv=selection, keeper="tool",
+            tool="halver",
+            genomes=genomes,
+            out_dir=tmp_path / "c0",
+            selection_tsv=selection,
+            keeper="tool",
         ),
         _LOG,
     )
@@ -406,9 +429,14 @@ def test_merge_ignores_quality_for_unresolvable_chunk_member(tmp_path: Path, reg
             SelectionRow(
                 # genomes[1]: contained under genomes[0] inside chunk c0 --
                 # never a chunk representative, so no file reaches the merge step.
-                accession="GCF_000001.1", family="Fam", genus="g", species="s",
-                is_outgroup=False, filename=genomes[1].name,
-                completeness=99.9, contamination=0.0,  # best possible score
+                accession="GCF_000001.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=genomes[1].name,
+                completeness=99.9,
+                contamination=0.0,  # best possible score
             ),
         ],
     )

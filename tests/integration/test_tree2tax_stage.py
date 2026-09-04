@@ -13,8 +13,7 @@ def _setup(workdir: Path) -> WorkdirContext:
     tree_dir = workdir / "tree"
     tree_dir.mkdir(parents=True)
     (tree_dir / "tree.nwk").write_text(
-        "((Fam_gen_sp_GCA_000001:0.1,Fam_gen_sp_GCA_000002:0.1):0.2,"
-        "Out_gen_sp_GCA_000099:0.5);\n"
+        "((Fam_gen_sp_GCA_000001:0.1,Fam_gen_sp_GCA_000002:0.1):0.2,Out_gen_sp_GCA_000099:0.5);\n"
     )
     # outgroup metadata
     (workdir / "outgroup_accession.txt").write_text("GCA_000099\n")

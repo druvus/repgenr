@@ -78,7 +78,8 @@ class ProgressiveMauveAligner(Aligner):
             stem = query.stem
             xmfa = xmfa_dir / f"{stem}.xmfa"
             fa = xmfa_dir / f"{stem}.fa"
-            run_tool(self.capabilities,
+            run_tool(
+                self.capabilities,
                 ["progressiveMauve", "--output", xmfa, *seed_opt, ref_arg, str(query.resolve())],
                 logger=logger,
                 log_prefix=f"progressivemauve:{stem}",

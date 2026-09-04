@@ -13,8 +13,16 @@ def test_cell_ids_unique():
 
 def test_cell_n_from_set_name_and_subset():
     assert Cell(id="x", kind="derep_step", tool="skder", set_name="clonal_5000_random").n == 5000
-    assert Cell(id="y", kind="tree_step", tool="fasttree",
-                set_name="balanced_1000_clustered", subset=100).n == 100
+    assert (
+        Cell(
+            id="y",
+            kind="tree_step",
+            tool="fasttree",
+            set_name="balanced_1000_clustered",
+            subset=100,
+        ).n
+        == 100
+    )
 
 
 def test_no_sourmash_treebuilder_cell_at_5000():
@@ -79,8 +87,9 @@ def test_command_tree_step_subset_copies_first_n(tmp_path):
         (set_dir / f"g{i}.fasta").write_text(">x\nACGT\n", encoding="utf-8")
     work = tmp_path / "work"
     work.mkdir()
-    cell = Cell(id="t", kind="tree_step", tool="fasttree",
-                set_name="balanced_1000_clustered", subset=2)
+    cell = Cell(
+        id="t", kind="tree_step", tool="fasttree", set_name="balanced_1000_clustered", subset=2
+    )
     argv, _out = _command(cell, set_dir, work)
     assert "phylo-build" in argv
     assert "--no-outgroup" in argv

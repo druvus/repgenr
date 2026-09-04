@@ -50,8 +50,11 @@ def test_crash_during_save_preserves_previous_config(tmp_path: Path, monkeypatch
 def test_fingerprint_and_inputs_round_trip(tmp_path: Path) -> None:
     cfg = Config(repgenr_version="2.0.0")
     cfg.record_stage(
-        "dereplicate", tool="skder", params={"secondary_ani": 0.99},
-        fingerprint="abc123", inputs={"genomes": "d1", "selection.tsv": "d2"},
+        "dereplicate",
+        tool="skder",
+        params={"secondary_ani": 0.99},
+        fingerprint="abc123",
+        inputs={"genomes": "d1", "selection.tsv": "d2"},
     )
     cfg.save(tmp_path)
 

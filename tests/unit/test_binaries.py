@@ -46,7 +46,8 @@ def test_strict_version_rejects_unparseable(monkeypatch) -> None:
     # the real footgun: ancient samtools answers --version with an error (no
     # digits); a strict_version spec must reject it, not silently pass.
     _fake_env(
-        monkeypatch, present={"samtools"},
+        monkeypatch,
+        present={"samtools"},
         versions={"samtools": "[main] unrecognized command '--version'"},
     )
     with pytest.raises(MissingBinaryError, match="could not read a version"):

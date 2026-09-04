@@ -62,8 +62,12 @@ def test_docker_extra_mounts(tmp_path, monkeypatch) -> None:
     genomes.mkdir()
     cfg = ContainerConfig(backend="docker")
     cmd = wrap_command(
-        "img:1", ["cactus", "seqfile.txt"], config=cfg, cwd="/wd",
-        logger=_LOG, extra_mounts=[str(genomes)],
+        "img:1",
+        ["cactus", "seqfile.txt"],
+        config=cfg,
+        cwd="/wd",
+        logger=_LOG,
+        extra_mounts=[str(genomes)],
     )
     assert any(c == f"{genomes}:{genomes}" for c in cmd)
 
@@ -75,7 +79,7 @@ def test_singularity_wrap_command_no_cache() -> None:
     assert cmd[0] == "singularity" and cmd[1] == "exec"
     assert "--bind" in cmd and "--pwd" in cmd
     assert "docker://img:1" in cmd
-    assert cmd[-len(argv):] == argv
+    assert cmd[-len(argv) :] == argv
 
 
 def test_run_tool_native_when_backend_none(monkeypatch) -> None:

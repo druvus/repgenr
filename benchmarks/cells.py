@@ -20,10 +20,10 @@ SCENARIOS = ("balanced", "clonal")
 @dataclass(frozen=True)
 class Cell:
     id: str
-    kind: str            # derep_step | derep_dense | derep_stage | tree_step
+    kind: str  # derep_step | derep_dense | derep_stage | tree_step
     tool: str
-    set_name: str        # directory name under sets/
-    subset: int | None = None   # run on the first N genomes of the set
+    set_name: str  # directory name under sets/
+    subset: int | None = None  # run on the first N genomes of the set
     extra_args: tuple[str, ...] = field(default=())
     timeout_s: int = 14400
 
@@ -37,16 +37,22 @@ def derep_cells() -> list[Cell]:
     for scenario in SCENARIOS:
         for n in DEREP_SIZES:
             for tool in DEREP_TOOLS:
-                cells.append(Cell(
-                    id=f"derep-{tool}-{scenario}-{n}",
-                    kind="derep_step", tool=tool,
+                cells.append(
+                    Cell(
+                        id=f"derep-{tool}-{scenario}-{n}",
+                        kind="derep_step",
+                        tool=tool,
+                        set_name=f"{scenario}_{n}_clustered",
+                    )
+                )
+            cells.append(
+                Cell(
+                    id=f"derep-sourmashdense-{scenario}-{n}",
+                    kind="derep_dense",
+                    tool="sourmash",
                     set_name=f"{scenario}_{n}_clustered",
-                ))
-            cells.append(Cell(
-                id=f"derep-sourmashdense-{scenario}-{n}",
-                kind="derep_dense", tool="sourmash",
-                set_name=f"{scenario}_{n}_clustered",
-            ))
+                )
+            )
     return cells
 
 
@@ -55,7 +61,8 @@ def chunked_cells() -> list[Cell]:
     return [
         Cell(
             id=f"chunked-{tool}-clonal-5000-{order}",
-            kind="derep_stage", tool=tool,
+            kind="derep_stage",
+            tool=tool,
             set_name=f"clonal_5000_{order}",
             extra_args=("--process-size", "1000"),
         )
@@ -66,31 +73,57 @@ def chunked_cells() -> list[Cell]:
 
 def tree_cells() -> list[Cell]:
     cells = [
-        Cell(id=f"tree-mashtree-balanced-{n}", kind="tree_step",
-             tool="mashtree", set_name=f"balanced_{n}_clustered")
+        Cell(
+            id=f"tree-mashtree-balanced-{n}",
+            kind="tree_step",
+            tool="mashtree",
+            set_name=f"balanced_{n}_clustered",
+        )
         for n in (100, 1000, 5000)
     ]
     # sourmash tree builder: pure-Python O(n^3) NJ -- NEVER schedule 5000;
     # 100/500/1000 give the n^3 fit that tests its declared 10000 limit.
     cells += [
-        Cell(id=f"tree-sourmashtb-balanced-{n}", kind="tree_step",
-             tool="sourmash", set_name="balanced_1000_clustered",
-             subset=(None if n == 1000 else n))
+        Cell(
+            id=f"tree-sourmashtb-balanced-{n}",
+            kind="tree_step",
+            tool="sourmash",
+            set_name="balanced_1000_clustered",
+            subset=(None if n == 1000 else n),
+        )
         for n in (100, 500, 1000)
     ]
     # ML builders need an MSA via the sibeliaz aligner. Measured: n=100 times
     # out at 2 h (whole-genome alignment dominates; recorded as a finding), so
     # the ML curve is sampled at 20/50 genomes with a 1 h cap.
     cells += [
-        Cell(id="tree-fasttree-balanced-20", kind="tree_step", tool="fasttree",
-             set_name="balanced_1000_clustered", subset=20,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
-        Cell(id="tree-fasttree-balanced-50", kind="tree_step", tool="fasttree",
-             set_name="balanced_1000_clustered", subset=50,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
-        Cell(id="tree-iqtree-balanced-20", kind="tree_step", tool="iqtree",
-             set_name="balanced_1000_clustered", subset=20,
-             extra_args=("--aligner", "sibeliaz"), timeout_s=3600),
+        Cell(
+            id="tree-fasttree-balanced-20",
+            kind="tree_step",
+            tool="fasttree",
+            set_name="balanced_1000_clustered",
+            subset=20,
+            extra_args=("--aligner", "sibeliaz"),
+            timeout_s=3600,
+        ),
+        Cell(
+            id="tree-fasttree-balanced-50",
+            kind="tree_step",
+            tool="fasttree",
+            set_name="balanced_1000_clustered",
+            subset=50,
+            extra_args=("--aligner", "sibeliaz"),
+            timeout_s=3600,
+        ),
+        Cell(
+            id="tree-iqtree-balanced-20",
+            kind="tree_step",
+            tool="iqtree",
+            set_name="balanced_1000_clustered",
+            subset=20,
+            extra_args=("--aligner", "sibeliaz"),
+            timeout_s=3600,
+        ),
     ]
     return cells
 

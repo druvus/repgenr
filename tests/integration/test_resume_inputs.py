@@ -59,8 +59,12 @@ def test_dereplicate_inputs_track_manifest_quality_and_taxonomy(tmp_path: Path) 
     ctx.manifest.upsert_many(
         [
             GenomeRecord(
-                accession="GCF_1", filename="g1.fasta",
-                completeness=98.0, contamination=0.5, genus="g", species="s",
+                accession="GCF_1",
+                filename="g1.fasta",
+                completeness=98.0,
+                contamination=0.5,
+                genus="g",
+                species="s",
             )
         ]
     )
@@ -162,8 +166,10 @@ def test_dereplicate_resume_skips_then_reruns_on_quality_edit(tmp_path: Path, mo
         edit.manifest.upsert_many(
             [
                 GenomeRecord(
-                    accession="GCF_100000.1", filename="Fam_g_s_GCF_100000.1.fasta",
-                    completeness=98.0, contamination=0.5,
+                    accession="GCF_100000.1",
+                    filename="Fam_g_s_GCF_100000.1.fasta",
+                    completeness=98.0,
+                    contamination=0.5,
                 )
             ]
         )

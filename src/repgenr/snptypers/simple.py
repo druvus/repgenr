@@ -26,10 +26,12 @@ _CAPABILITIES = ToolCapabilities(
         # samtools/bcftools >= 1.10: an ancient 0.1.x (pulled in by some perl
         # deps) lacks `bcftools mpileup` and breaks the SNP pipeline. strict_version
         # so an ancient build that does not answer --version is rejected, not skipped.
-        BinarySpec("samtools", version_args=("--version",), min_version="1.10",
-                   strict_version=True),
-        BinarySpec("bcftools", version_args=("--version",), min_version="1.10",
-                   strict_version=True),
+        BinarySpec(
+            "samtools", version_args=("--version",), min_version="1.10", strict_version=True
+        ),
+        BinarySpec(
+            "bcftools", version_args=("--version",), min_version="1.10", strict_version=True
+        ),
     ),
     recommended_max_genomes=2000,
     # multi-tool: resolved to one image via Wave (or pin an explicit container)
@@ -128,9 +130,7 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
     seqs = [consensuses[n] for n in names]
     length = min(len(s) for s in seqs) if seqs else 0
 
-    variable_cols = [
-        col for col in range(length) if len({s[col] for s in seqs}) > 1
-    ]
+    variable_cols = [col for col in range(length) if len({s[col] for s in seqs}) > 1]
     with open(core_fasta, "w", encoding="utf-8") as fo:
         for name, seq in zip(names, seqs, strict=True):
             snp_seq = "".join(seq[c] for c in variable_cols)
@@ -139,9 +139,7 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
                 fo.write(snp_seq[pos : pos + 80] + "\n")
 
     # pairwise SNP distance matrix
-    snp_rows = {
-        name: "".join(seqs[i][c] for c in variable_cols) for i, name in enumerate(names)
-    }
+    snp_rows = {name: "".join(seqs[i][c] for c in variable_cols) for i, name in enumerate(names)}
     with open(snp_matrix, "w", encoding="utf-8") as fo:
         fo.write("\t" + "\t".join(names) + "\n")
         for a in names:

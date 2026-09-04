@@ -60,12 +60,8 @@ def _failing_sparse_fake(calls: list[str]):
 
 
 def _dereplicate(tmp_path: Path, extra: dict | None = None):
-    params = DerepParams(
-        primary_ani=0.99, secondary_ani=0.99, threads=1, extra=dict(extra or {})
-    )
-    return SourmashDereplicator().dereplicate(
-        _genomes(tmp_path), tmp_path / "out", params, _LOG
-    )
+    params = DerepParams(primary_ani=0.99, secondary_ani=0.99, threads=1, extra=dict(extra or {}))
+    return SourmashDereplicator().dereplicate(_genomes(tmp_path), tmp_path / "out", params, _LOG)
 
 
 def test_sparse_failure_propagates(tmp_path: Path, monkeypatch) -> None:

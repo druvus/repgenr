@@ -58,4 +58,3 @@ def configure_logging(
             logger.warning("Could not open log file under %s; console only", wd)
 
     return logger
-

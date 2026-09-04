@@ -28,18 +28,34 @@ def run_one(tool: str, order: str) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     out = work / "derep_out"
     fofn = _fofn_for(set_dir, work, None)
-    argv = [_repgenr(), "dereplicate-chunk", "--genomes-fofn", str(fofn),
-            "-o", str(out), "--tool", tool, "-t", "8"]
+    argv = [
+        _repgenr(),
+        "dereplicate-chunk",
+        "--genomes-fofn",
+        str(fofn),
+        "-o",
+        str(out),
+        "--tool",
+        tool,
+        "-t",
+        "8",
+    ]
     proc = subprocess.run(argv, capture_output=True, text=True, timeout=1800, env=_env())
     if proc.returncode != 0:
-        return {"tool": tool, "order": order, "status": "failed",
-                "stderr_tail": proc.stderr[-1500:]}
+        return {
+            "tool": tool,
+            "order": order,
+            "status": "failed",
+            "stderr_tail": proc.stderr[-1500:],
+        }
     truth = load_truth(set_dir)
     partition = partition_from_clusters_tsv(out / "clusters.tsv")
     winner = clone_representative(partition, truth)
     clone_members = sorted(g for g, c in truth.items() if c == "clone")
     return {
-        "tool": tool, "order": order, "status": "ok",
+        "tool": tool,
+        "order": order,
+        "status": "ok",
         "n_representatives": len(set(partition.values())),
         "clone_representative": winner,
         "clone_rep_is_alphabetically_first_clone": winner == clone_members[0],

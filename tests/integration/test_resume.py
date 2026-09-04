@@ -32,11 +32,11 @@ def test_resume_skips_then_force_and_param_change_rerun(tmp_path: Path, monkeypa
     _install_fake_stage(monkeypatch, calls)
 
     monkeypatch.setitem(cli._RUN_STATE, "force", False)
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # runs
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # skipped (same params)
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # runs
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # skipped (same params)
     assert calls == [1]
 
-    monkeypatch.setitem(cli._RUN_STATE, "force", True)           # --force re-runs
+    monkeypatch.setitem(cli._RUN_STATE, "force", True)  # --force re-runs
     cli._run("faketest", tmp_path, lambda: _P(), create=True)
     assert calls == [1, 1]
 
@@ -74,15 +74,15 @@ def test_registered_input_change_reruns(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setitem(cli.STAGE_INPUTS, "faketest", lambda ctx, p: [ctx.genomes_dir])
     monkeypatch.setitem(cli._RUN_STATE, "force", False)
 
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # runs
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # unchanged input -> skip
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # runs
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # unchanged input -> skip
     assert calls == [1]
 
     (input_dir / "g2.fasta").write_text(">g2\nACGT\n", encoding="utf-8")
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # new input file -> rerun
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # new input file -> rerun
     assert calls == [1, 1]
 
-    cli._run("faketest", tmp_path, lambda: _P(), create=True)   # stable again -> skip
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # stable again -> skip
     assert calls == [1, 1]
 
 

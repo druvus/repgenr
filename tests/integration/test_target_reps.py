@@ -54,8 +54,8 @@ def anidep_workdir(workdir: Path):
 
 def test_target_reps_lands_near_target(anidep_workdir) -> None:
     res = run(anidep_workdir, DereplicateParams(tool="anidep", target_reps=9))
-    assert abs(len(res.representatives) - 9) <= 1   # search converges close to 9
-    assert len(res.genome_status) == 10             # all genomes accounted
+    assert abs(len(res.representatives) - 9) <= 1  # search converges close to 9
+    assert len(res.genome_status) == 10  # all genomes accounted
 
 
 def test_target_reps_off_uses_secondary_ani(anidep_workdir) -> None:

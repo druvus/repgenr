@@ -67,10 +67,20 @@ class Ska2Typer(SnpTyper):
         run_tool(
             self.capabilities,
             [
-                "ska", "build", "-f", listing, "-k", str(ksize),
-                "--threads", str(params.threads), "-o", prefix,
+                "ska",
+                "build",
+                "-f",
+                listing,
+                "-k",
+                str(ksize),
+                "--threads",
+                str(params.threads),
+                "-o",
+                prefix,
             ],
-            logger=logger, cwd=out_dir, log_prefix="ska-build",
+            logger=logger,
+            cwd=out_dir,
+            log_prefix="ska-build",
             extra_mounts=genome_dirs,
         )
         skf = Path(str(prefix) + ".skf")
@@ -81,10 +91,21 @@ class Ska2Typer(SnpTyper):
         run_tool(
             self.capabilities,
             [
-                "ska", "align", "--min-freq", min_freq, "--filter", "no-ambig-or-const",
-                "--threads", str(params.threads), "-o", core, skf,
+                "ska",
+                "align",
+                "--min-freq",
+                min_freq,
+                "--filter",
+                "no-ambig-or-const",
+                "--threads",
+                str(params.threads),
+                "-o",
+                core,
+                skf,
             ],
-            logger=logger, cwd=out_dir, log_prefix="ska-align",
+            logger=logger,
+            cwd=out_dir,
+            log_prefix="ska-align",
         )
         if not core.exists() or core.stat().st_size == 0:
             raise WorkdirError(

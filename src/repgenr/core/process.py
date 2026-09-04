@@ -128,6 +128,7 @@ def run(
         )
 
         if limit is not None:
+
             def _kill() -> None:
                 nonlocal timed_out
                 timed_out = True
@@ -135,6 +136,7 @@ def run(
                     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except (ProcessLookupError, PermissionError, OSError):
                     pass
+
             timer = threading.Timer(limit, _kill)
             timer.start()
 
@@ -211,7 +213,9 @@ def warn_argv_bytes(
             "%s receives ~%d KB across %d command-line arguments; the OS "
             "ARG_MAX limit (commonly 1 MB) may be exceeded and the tool may "
             "fail to launch. Reduce the genome set per call.",
-            tool, total // 1000, len(argv),
+            tool,
+            total // 1000,
+            len(argv),
         )
 
 

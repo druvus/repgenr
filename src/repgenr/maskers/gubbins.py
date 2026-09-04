@@ -31,8 +31,12 @@ class GubbinsMasker(Masker):
         out_dir.mkdir(parents=True, exist_ok=True)
         prefix = out_dir / "gubbins"
         argv: list[str | Path] = [
-            "run_gubbins.py", "--threads", str(params.threads),
-            "--prefix", prefix, full_alignment,
+            "run_gubbins.py",
+            "--threads",
+            str(params.threads),
+            "--prefix",
+            prefix,
+            full_alignment,
         ]
         run_tool(
             self.capabilities,

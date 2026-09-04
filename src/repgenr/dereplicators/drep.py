@@ -60,10 +60,21 @@ class DrepDereplicator(Dereplicator):
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
         genome_dirs = sorted({str(g.parent) for g in genomes})
         compare_wd = out_dir / "drep_compare_wd"
-        run_tool(self.capabilities,
-            ["dRep", "compare", "--SkipSecondary", "-g", fofn,
-             "--processors", str(threads), compare_wd],
-            logger=logger, log_prefix="drep", extra_mounts=genome_dirs,
+        run_tool(
+            self.capabilities,
+            [
+                "dRep",
+                "compare",
+                "--SkipSecondary",
+                "-g",
+                fofn,
+                "--processors",
+                str(threads),
+                compare_wd,
+            ],
+            logger=logger,
+            log_prefix="drep",
+            extra_mounts=genome_dirs,
         )
         dendrogram = compare_wd / "figures" / "Primary_clustering_dendrogram.pdf"
         mdb = compare_wd / "data_tables" / "Mdb.csv"
@@ -93,25 +104,43 @@ class DrepDereplicator(Dereplicator):
         # would hit the OS ARG_MAX limit.
         fofn = write_fofn(staged, out_dir / "genomes.fofn")
         cmd: list[str | Path] = [
-            "dRep", "dereplicate", drep_wd,
-            "-g", fofn,
-            "--processors", str(params.threads),
-            "-sa", str(params.secondary_ani),
-            "-pa", str(params.primary_ani),
-            "--S_algorithm", params.extra.get("S_algorithm", "fastANI"),
-            "--length", str(params.extra.get("length", 0)),
+            "dRep",
+            "dereplicate",
+            drep_wd,
+            "-g",
+            fofn,
+            "--processors",
+            str(params.threads),
+            "-sa",
+            str(params.secondary_ani),
+            "-pa",
+            str(params.primary_ani),
+            "--S_algorithm",
+            params.extra.get("S_algorithm", "fastANI"),
+            "--length",
+            str(params.extra.get("length", 0)),
         ]
         if params.extra.get("virus"):
             cmd += [
-                "--S_algorithm", "ANImf",
-                "--cov_thresh", "0.5",
-                "--N50_weight", "0",
-                "--size_weight", "1",
+                "--S_algorithm",
+                "ANImf",
+                "--cov_thresh",
+                "0.5",
+                "--N50_weight",
+                "0",
+                "--size_weight",
+                "1",
                 "--ignoreGenomeQuality",
-                "--clusterAlg", "single",
+                "--clusterAlg",
+                "single",
             ]
-        run_tool(self.capabilities, cmd, logger=logger, log_prefix="drep",
-                 extra_mounts=[str(genomes_dir)])
+        run_tool(
+            self.capabilities,
+            cmd,
+            logger=logger,
+            log_prefix="drep",
+            extra_mounts=[str(genomes_dir)],
+        )
 
         if not drep_wd.exists():
             raise WorkdirError(

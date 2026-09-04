@@ -14,7 +14,8 @@ def test_tool_output_lines_are_debug_and_command_is_info(caplog) -> None:
     with caplog.at_level(logging.DEBUG, logger=_LOG.name):
         process.run(
             [sys.executable, "-c", "import sys; print('step 1/3'); print('done', file=sys.stderr)"],
-            logger=_LOG, log_prefix="fake",
+            logger=_LOG,
+            log_prefix="fake",
         )
     by_level = {(r.levelname, r.message) for r in caplog.records}
     info = [msg for lvl, msg in by_level if lvl == "INFO"]

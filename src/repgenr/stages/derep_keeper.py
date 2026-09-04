@@ -69,7 +69,10 @@ def rescore_representatives(
         status[rep_name] = STATUS_CONTAINED
         logger.info(
             "Keeper: %s replaces %s (score %.2f vs %s)",
-            best_name, rep_name, best, "n/a" if current is None else f"{current:.2f}",
+            best_name,
+            rep_name,
+            best,
+            "n/a" if current is None else f"{current:.2f}",
         )
 
     if swaps:

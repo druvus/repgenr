@@ -82,10 +82,15 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
         "metadata",
         params={
             "source": params.source,
-            "release": params.release, "version": params.version, "dataset": params.dataset,
-            "level": params.level, "target_family": params.target_family,
-            "target_genus": params.target_genus, "target_species": params.target_species,
-            "selected_count": len(selected), "outgroup": outgroup.accession,
+            "release": params.release,
+            "version": params.version,
+            "dataset": params.dataset,
+            "level": params.level,
+            "target_family": params.target_family,
+            "target_genus": params.target_genus,
+            "target_species": params.target_species,
+            "selected_count": len(selected),
+            "outgroup": outgroup.accession,
         },
         completed=datetime.now(UTC).isoformat(),
     )
@@ -128,13 +133,17 @@ def _select_via_tsv(
 
     records = [
         _record_from_tax(
-            acc, data["tax"],
-            completeness=data.get("completeness"), contamination=data.get("contamination"),
+            acc,
+            data["tax"],
+            completeness=data.get("completeness"),
+            contamination=data.get("contamination"),
         )
         for acc, data in selected.items()
     ]
     outgroup = _record_from_tax(
-        outgroup_acc, outgroup_data["tax"], is_outgroup=True,
+        outgroup_acc,
+        outgroup_data["tax"],
+        is_outgroup=True,
         completeness=outgroup_data.get("completeness"),
         contamination=outgroup_data.get("contamination"),
     )
@@ -142,13 +151,21 @@ def _select_via_tsv(
 
 
 def _record_from_tax(
-    accession: str, tax: dict, is_outgroup: bool = False,
-    completeness: float | None = None, contamination: float | None = None,
+    accession: str,
+    tax: dict,
+    is_outgroup: bool = False,
+    completeness: float | None = None,
+    contamination: float | None = None,
 ) -> GenomeRecord:
     return GenomeRecord(
-        accession=accession, source="gtdb", is_outgroup=is_outgroup,
-        family=tax["family"], genus=tax["genus"], species=tax["species"],
-        completeness=completeness, contamination=contamination,
+        accession=accession,
+        source="gtdb",
+        is_outgroup=is_outgroup,
+        family=tax["family"],
+        genus=tax["genus"],
+        species=tax["species"],
+        completeness=completeness,
+        contamination=contamination,
     )
 
 
@@ -233,9 +250,7 @@ def _parse_metadata(path: Path, params: MetadataParams, logger) -> dict[str, dic
                     continue
 
             tax = _parse_taxonomy(fields[idx["gtdb_taxonomy"]])
-            completeness = _opt_column(
-                fields, idx, "checkm2_completeness", "checkm_completeness"
-            )
+            completeness = _opt_column(fields, idx, "checkm2_completeness", "checkm_completeness")
             contamination = _opt_column(
                 fields, idx, "checkm2_contamination", "checkm_contamination"
             )
@@ -351,16 +366,21 @@ def _write_selection(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) 
         family, genus, species = r.family or "", r.genus or "", r.species or ""
         rows.append(
             SelectionRow(
-                accession=r.accession, family=family, genus=genus, species=species,
+                accession=r.accession,
+                family=family,
+                genus=genus,
+                species=species,
                 is_outgroup=r.is_outgroup,
                 filename=genome_filename(family, genus, species, r.accession),
-                completeness=r.completeness, contamination=r.contamination,
+                completeness=r.completeness,
+                contamination=r.contamination,
             )
         )
     write_selection(ctx.workdir / SELECTION_TSV, rows)
 
 
 # --- GTDB API source --------------------------------------------------------
+
 
 def _api_get(path: str, params: dict | None = None) -> dict:
     # Shared retry/backoff session; raises WorkdirError naming the URL on failure.
@@ -458,6 +478,7 @@ def _normalize_api_tax(row: dict) -> dict:
     Strips the rank prefix and applies the same cleanup as the TSV path:
     species has the genus removed, spaces dropped, underscores -> hyphens.
     """
+
     def strip(value: str) -> str:
         return value.split("__", 1)[1] if "__" in value else value
 
@@ -467,13 +488,16 @@ def _normalize_api_tax(row: dict) -> dict:
     species = species.replace(genus, "").replace(" ", "").replace("_", "-")
     genus = genus.replace(" ", "").replace("_", "-")
     family = family.replace(" ", "").replace("_", "-")
-    return {"family": family, "genus": genus, "species": species,
-            "gtdbFamily": row.get("gtdbFamily", ""), "gtdbGenus": row.get("gtdbGenus", "")}
+    return {
+        "family": family,
+        "genus": genus,
+        "species": species,
+        "gtdbFamily": row.get("gtdbFamily", ""),
+        "gtdbGenus": row.get("gtdbGenus", ""),
+    }
 
 
-def _select_via_api(
-    params: MetadataParams, logger
-) -> tuple[list[GenomeRecord], GenomeRecord]:
+def _select_via_api(params: MetadataParams, logger) -> tuple[list[GenomeRecord], GenomeRecord]:
     taxon = _target_taxon(params)
     logger.info("Querying GTDB API for genomes in %s", taxon)
     sp_reps = params.dataset == "rep"
@@ -492,8 +516,10 @@ def _select_via_api(
         completeness, contamination = quality[acc]
         records.append(
             _record_from_tax(
-                acc, _normalize_api_tax(row),
-                completeness=completeness, contamination=contamination,
+                acc,
+                _normalize_api_tax(row),
+                completeness=completeness,
+                contamination=contamination,
             )
         )
         selected_acc.add(acc)
@@ -517,8 +543,11 @@ def _select_outgroup_via_api(
         tax_row = card.get("metadataTaxonomy", {})
         completeness, contamination = _api_quality(card)
         return _record_from_tax(
-            params.outgroup_accession, _normalize_api_tax(tax_row), is_outgroup=True,
-            completeness=completeness, contamination=contamination,
+            params.outgroup_accession,
+            _normalize_api_tax(tax_row),
+            is_outgroup=True,
+            completeness=completeness,
+            contamination=contamination,
         )
 
     # Otherwise pick a representative from the parent taxon (one rank up) that is
@@ -541,12 +570,13 @@ def _select_outgroup_via_api(
             continue
         completeness, contamination = _api_quality_by_accession([row["gid"]], logger)[row["gid"]]
         return _record_from_tax(
-            row["gid"], _normalize_api_tax(row), is_outgroup=True,
-            completeness=completeness, contamination=contamination,
+            row["gid"],
+            _normalize_api_tax(row),
+            is_outgroup=True,
+            completeness=completeness,
+            contamination=contamination,
         )
-    raise WorkdirError(
-        "Could not determine an outgroup via the API; specify --outgroup-accession."
-    )
+    raise WorkdirError("Could not determine an outgroup via the API; specify --outgroup-accession.")
 
 
 def _rank_field(level: str) -> str:

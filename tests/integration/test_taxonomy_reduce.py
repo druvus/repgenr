@@ -154,8 +154,12 @@ def keeper_workdir(workdir: Path):
     ctx.manifest.upsert_many(
         [
             GenomeRecord(
-                accession=a, filename=fn, genus=g, species=s,
-                completeness=comp, contamination=contam,
+                accession=a,
+                filename=fn,
+                genus=g,
+                species=s,
+                completeness=comp,
+                contamination=contam,
             )
             for a, fn, g, s, comp, contam in _KEEPER_GENOMES
         ]

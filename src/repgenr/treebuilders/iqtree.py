@@ -38,7 +38,13 @@ class IqtreeBuilder(TreeBuilder):
             shutil.copy2(msa, work_msa)
 
         cmd: list[str | Path] = [
-            "iqtree", "-T", "auto", "--threads-max", str(params.threads), "-s", work_msa,
+            "iqtree",
+            "-T",
+            "auto",
+            "--threads-max",
+            str(params.threads),
+            "-s",
+            work_msa,
             "-redo",  # overwrite checkpoints from a previous run at this path
         ]
         if params.outgroup:

@@ -51,8 +51,7 @@ def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     # the stage's fingerprint depend on its own output and force a spurious
     # rerun on every second invocation.
     return [
-        ctx.genomes_dir if getattr(params, "all_genomes", False)
-        else ctx.representatives_dir,
+        ctx.genomes_dir if getattr(params, "all_genomes", False) else ctx.representatives_dir,
         ctx.outgroup_dir,
     ]
 
@@ -110,9 +109,7 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 
 
 def _is_query_only(stage_name: str, params: Any) -> bool:
-    return any(
-        getattr(params, flag, False) for flag in QUERY_ONLY_FLAGS.get(stage_name, ())
-    )
+    return any(getattr(params, flag, False) for flag in QUERY_ONLY_FLAGS.get(stage_name, ()))
 
 
 def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> dict[str, str]:
@@ -225,7 +222,8 @@ def _stage_fingerprint(
             "inputs": inputs,
             "env": env,
         },
-        sort_keys=True, default=str,
+        sort_keys=True,
+        default=str,
     )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -239,31 +237,47 @@ def _version_callback(value: bool) -> None:
 @app.callback()
 def main(
     version: bool = typer.Option(
-        False, "--version", callback=_version_callback, is_eager=True,
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
         help="Show version and exit.",
     ),
     container: str = typer.Option(
-        "none", "--container", envvar="REPGENR_CONTAINER",
+        "none",
+        "--container",
+        envvar="REPGENR_CONTAINER",
         help="Run external tools in containers: none, docker, or singularity.",
     ),
     container_engine: str | None = typer.Option(
-        None, "--container-engine", envvar="REPGENR_CONTAINER_ENGINE",
+        None,
+        "--container-engine",
+        envvar="REPGENR_CONTAINER_ENGINE",
         help="Engine binary override (e.g. apptainer, podman).",
     ),
     container_cache: str | None = typer.Option(
-        None, "--container-cache", envvar="REPGENR_CONTAINER_CACHE",
+        None,
+        "--container-cache",
+        envvar="REPGENR_CONTAINER_CACHE",
         help="Directory for Singularity .sif images / Wave cache (large; can be external).",
     ),
     platform: str | None = typer.Option(
-        None, "--platform", envvar="REPGENR_CONTAINER_PLATFORM",
+        None,
+        "--platform",
+        envvar="REPGENR_CONTAINER_PLATFORM",
         help="Container platform, e.g. linux/amd64 for emulated BioContainers on arm64.",
     ),
     wave: bool = typer.Option(
-        False, "--wave/--no-wave", envvar="REPGENR_WAVE",
+        False,
+        "--wave/--no-wave",
+        envvar="REPGENR_WAVE",
         help="Resolve images for multi-tool adapters via the Seqera Wave CLI.",
     ),
     force: bool = typer.Option(
-        False, "--force/--no-force", "-f", envvar="REPGENR_FORCE",
+        False,
+        "--force/--no-force",
+        "-f",
+        envvar="REPGENR_FORCE",
         help="Re-run a stage even if it already completed with the same parameters.",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose (DEBUG) logging."),
@@ -282,8 +296,11 @@ def main(
         level = getattr(logging, env.upper(), logging.INFO) if env else logging.INFO
     _RUN_STATE["log_level"] = level
     configure_container(
-        backend=container, engine=container_engine, platform=platform,
-        cache_dir=container_cache, wave_enabled=wave,
+        backend=container,
+        engine=container_engine,
+        platform=platform,
+        cache_dir=container_cache,
+        wave_enabled=wave,
     )
 
 
@@ -373,17 +390,18 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
         if prior.fingerprint == fingerprint:
             logger.info(
                 "Stage '%s' already completed with the same parameters and "
-                "inputs; skipping (use --force to re-run).", stage_name,
+                "inputs; skipping (use --force to re-run).",
+                stage_name,
             )
             return
         changed = sorted(
-            key for key in {*prior.inputs, *digests}
-            if prior.inputs.get(key) != digests.get(key)
+            key for key in {*prior.inputs, *digests} if prior.inputs.get(key) != digests.get(key)
         )
         if changed and prior.inputs:
             logger.info(
                 "Stage '%s': input %s changed since last completion; re-running.",
-                stage_name, ", ".join(f"'{c}'" for c in changed),
+                stage_name,
+                ", ".join(f"'{c}'" for c in changed),
             )
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage

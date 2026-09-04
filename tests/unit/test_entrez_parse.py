@@ -105,9 +105,7 @@ def test_sublist_failure_keeps_other_sublists(monkeypatch) -> None:
     monkeypatch.setattr(entrez, "_send_query", fake_send)
     monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
 
-    data, missing, _alts = get_taxon_data_from_entrez(
-        ["20001", "20002"], _LOG, num_ids_per_query=1
-    )
+    data, missing, _alts = get_taxon_data_from_entrez(["20001", "20002"], _LOG, num_ids_per_query=1)
     assert not missing
     assert data["20001"]["name"] == "Virus 20001"
     assert data["20002"]["name"] == "Virus 20002"

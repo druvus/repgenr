@@ -150,9 +150,7 @@ def test_aligner_receives_extra(workdir: Path, fake_phylo_tools) -> None:
     assert _FakeAligner.seen_extra == {"kmer": "15"}
 
 
-def test_mask_key_stripped_before_aligner_and_treebuilder(
-    workdir: Path, fake_phylo_tools
-) -> None:
+def test_mask_key_stripped_before_aligner_and_treebuilder(workdir: Path, fake_phylo_tools) -> None:
     """'mask' is a phylo-stage-owned key: the aligner and tree builder must
     never see it, even though it rides along in params.extra."""
     _make_reps(workdir)

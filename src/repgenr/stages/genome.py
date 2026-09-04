@@ -73,8 +73,7 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     # A present file only counts when it plausibly holds FASTA data: an HTML
     # error page left behind by a crashed run must be re-downloaded, not shipped.
     to_download = [
-        acc for acc, name in filenames.items()
-        if not looks_like_fasta(ctx.genomes_dir / name)
+        acc for acc, name in filenames.items() if not looks_like_fasta(ctx.genomes_dir / name)
     ]
     logger.info(
         "%d to download, %d already present", len(to_download), len(selected) - len(to_download)
@@ -89,8 +88,12 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     missing: list[str] = []
     if to_download:
         missing = download_accessions(
-            to_download, filenames, ctx.genomes_dir, ctx.scratch_dir / "genome_download",
-            logger, params.keep_files,
+            to_download,
+            filenames,
+            ctx.genomes_dir,
+            ctx.scratch_dir / "genome_download",
+            logger,
+            params.keep_files,
         )
     # Record accessions NCBI returned nothing for, so downstream completeness
     # checks can excuse them (and a re-run retries them).
@@ -146,7 +149,9 @@ def _check_disk(scratch_dir: Path, n_accessions: int, logger) -> None:
     if free < estimate:
         logger.warning(
             "Low disk: ~%.1f GB free, up to ~%.1f GB may be needed for %d genomes.",
-            free / 1e9, estimate / 1e9, n_accessions,
+            free / 1e9,
+            estimate / 1e9,
+            n_accessions,
         )
 
 
@@ -202,8 +207,13 @@ def download_accessions(
 
 
 def _download_one_batch(
-    batch: list[str], filenames: dict[str, str], dest_dir: Path, scratch_dir: Path,
-    logger, keep_files: bool, bi: int,
+    batch: list[str],
+    filenames: dict[str, str],
+    dest_dir: Path,
+    scratch_dir: Path,
+    logger,
+    keep_files: bool,
+    bi: int,
 ) -> list[str]:
     acc_file = scratch_dir / f"ncbi_acc_batch{bi}.txt"
     acc_file.write_text("\n".join(batch))
@@ -214,17 +224,26 @@ def _download_one_batch(
 
     _run_cmd(
         [
-            "datasets", "download", "genome", "accession",
-            "--dehydrated", "--inputfile", acc_file, "--filename", zip_path,
+            "datasets",
+            "download",
+            "genome",
+            "accession",
+            "--dehydrated",
+            "--inputfile",
+            acc_file,
+            "--filename",
+            zip_path,
         ],
         n_items=len(batch),
-        logger=logger, log_prefix="datasets",
+        logger=logger,
+        log_prefix="datasets",
     )
     process.unzip(zip_path, extract)
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
         n_items=len(batch),
-        logger=logger, log_prefix="datasets",
+        logger=logger,
+        log_prefix="datasets",
     )
 
     produced: set[str] = set()
@@ -248,7 +267,10 @@ def _download_one_batch(
     if missing:
         logger.warning(
             "NCBI returned no genome for %d of %d accessions in batch %d (e.g. %s)",
-            len(missing), len(batch), bi, ", ".join(missing[:3]),
+            len(missing),
+            len(batch),
+            bi,
+            ", ".join(missing[:3]),
         )
 
     if not keep_files:
@@ -263,10 +285,16 @@ def _download_outgroup(ctx, outgroup, logger) -> None:
     zip_path = ctx.workdir / "ncbi_download_outgroup.zip"
     _run_cmd(
         [
-            "datasets", "download", "genome", "accession", outgroup.accession,
-            "--filename", zip_path,
+            "datasets",
+            "download",
+            "genome",
+            "accession",
+            outgroup.accession,
+            "--filename",
+            zip_path,
         ],
-        logger=logger, log_prefix="datasets",
+        logger=logger,
+        log_prefix="datasets",
     )
     name = _output_name(outgroup)
     try:

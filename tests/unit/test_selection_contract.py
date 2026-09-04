@@ -21,8 +21,7 @@ _LOG = logging.getLogger("test")
 
 def test_genome_filename_is_canonical() -> None:
     assert (
-        genome_filename("Fam", "Gen", "spec", "GCF_000001.1")
-        == "Fam_Gen_spec_GCF_000001.1.fasta"
+        genome_filename("Fam", "Gen", "spec", "GCF_000001.1") == "Fam_Gen_spec_GCF_000001.1.fasta"
     )
 
 
@@ -85,8 +84,12 @@ def test_output_name_matches_canonical(tmp_path: Path) -> None:
     from repgenr.core.manifest import GenomeRecord
 
     rec = GenomeRecord(
-        accession="GCF_5.1", source="gtdb", is_outgroup=False,
-        family="Fam", genus="Gen", species="sp",
+        accession="GCF_5.1",
+        source="gtdb",
+        is_outgroup=False,
+        family="Fam",
+        genus="Gen",
+        species="sp",
     )
     assert genome_stage._output_name(rec) == genome_filename("Fam", "Gen", "sp", "GCF_5.1")
 
@@ -96,8 +99,14 @@ def test_selection_quality_columns_round_trip(tmp_path):
 
     rows = [
         SelectionRow(
-            "A", "f", "g", "s", False, "f_g_s_A.fasta",
-            completeness=98.5, contamination=1.0,
+            "A",
+            "f",
+            "g",
+            "s",
+            False,
+            "f_g_s_A.fasta",
+            completeness=98.5,
+            contamination=1.0,
         ),
         SelectionRow("B", "f", "g", "s", True, "f_g_s_B.fasta"),
     ]
@@ -111,5 +120,7 @@ def test_selection_without_quality_columns_still_reads(tmp_path):
     from repgenr.core.contracts import read_selection
 
     p = tmp_path / "s.tsv"
-    p.write_text("accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\nA\tf\tg\ts\t0\tx.fasta\n")
+    p.write_text(
+        "accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\nA\tf\tg\ts\t0\tx.fasta\n"
+    )
     assert read_selection(p)[0].completeness is None

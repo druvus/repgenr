@@ -17,10 +17,7 @@ def test_unpack_clusters(workdir: Path) -> None:
     derep = workdir / "derep"
     derep.mkdir()
     (derep / "clusters.tsv").write_text(
-        "representative\tmember\n"
-        "a.fasta\ta.fasta\n"
-        "a.fasta\tb.fasta\n"
-        "c.fasta\tc.fasta\n"
+        "representative\tmember\na.fasta\ta.fasta\na.fasta\tb.fasta\nc.fasta\tc.fasta\n"
     )
 
     ctx = WorkdirContext(workdir, create=True)

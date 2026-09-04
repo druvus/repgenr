@@ -67,7 +67,9 @@ class DereplicateParams:
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     logger = ctx.logger
     check_genome_completeness(
-        ctx.genomes_dir, ctx.workdir, logger=logger,
+        ctx.genomes_dir,
+        ctx.workdir,
+        logger=logger,
         allow_incomplete=params.allow_incomplete,
     )
     genomes = _list_genomes(ctx.genomes_dir)
@@ -86,7 +88,10 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             limit, alts = warn
             logger.warning(
                 "Dereplicator '%s' is tuned for <=%d genomes but you have %d; consider: %s",
-                tool, limit, len(genomes), ", ".join(alts) or "none",
+                tool,
+                limit,
+                len(genomes),
+                ", ".join(alts) or "none",
             )
 
     adapter = registry.create(tool)
@@ -138,7 +143,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         result = _reduce_by_taxonomy(ctx, result, params.reduce, quality, logger)
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
-            params.reduce, before, len(result.representatives),
+            params.reduce,
+            before,
+            len(result.representatives),
         )
 
     check_result_complete(result, [g.name for g in genomes])
@@ -170,7 +177,8 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     ctx.save_config()
     logger.info(
         "Dereplication complete: %d representatives of %d genomes",
-        len(result.representatives), len(genomes),
+        len(result.representatives),
+        len(genomes),
     )
     return result
 
@@ -188,15 +196,17 @@ def _resolve_pre_thresholds(params: DereplicateParams, secondary: float) -> tupl
     pre_primary = (
         params.pre_primary_ani if params.pre_primary_ani is not None else params.primary_ani
     )
-    pre_secondary = (
-        params.pre_secondary_ani if params.pre_secondary_ani is not None else secondary
-    )
+    pre_secondary = params.pre_secondary_ani if params.pre_secondary_ani is not None else secondary
     return pre_primary, pre_secondary
 
 
 def _dereplicate_to_result(
-    adapter, genomes: list[Path], scratch: Path, derep_params: DerepParams,
-    params: DereplicateParams, logger,
+    adapter,
+    genomes: list[Path],
+    scratch: Path,
+    derep_params: DerepParams,
+    params: DereplicateParams,
+    logger,
 ) -> DerepResult:
     """Produce a DerepResult: chunked (when --process-size is set and exceeded) or
     a single pass. The chunk decision is independent of the search/reduce layers."""
@@ -211,22 +221,31 @@ def _dereplicate_to_result(
         raise RuntimeError("Chunked dereplication reached without --process-size set.")
 
     workers = (
-        params.num_processes if params.num_processes > 0
+        params.num_processes
+        if params.num_processes > 0
         else _auto_num_processes(derep_params.threads)
     )
     pre_primary, pre_secondary = _resolve_pre_thresholds(params, derep_params.secondary_ani)
     native = adapter.capabilities.supports_native_scaling
     logger.info(
         "Chunking %d genomes at size %d (%s)%s",
-        len(genomes), params.process_size,
+        len(genomes),
+        params.process_size,
         "native-scaling tool, explicit chunking" if native else "non-native-scaling tool",
         ""
         if (pre_primary, pre_secondary) == (derep_params.primary_ani, derep_params.secondary_ani)
         else f"; stage-1 ANI pri={pre_primary} sec={pre_secondary}",
     )
     return _dereplicate_chunked(
-        adapter, genomes, scratch, derep_params, params.process_size,
-        workers, pre_primary, pre_secondary, logger,
+        adapter,
+        genomes,
+        scratch,
+        derep_params,
+        params.process_size,
+        workers,
+        pre_primary,
+        pre_secondary,
+        logger,
     )
 
 
@@ -246,8 +265,13 @@ def _auto_num_processes(threads: int) -> int:
 
 
 def _search_target_reps(
-    adapter, genomes: list[Path], scratch: Path, derep_params: DerepParams,
-    params: DereplicateParams, target: int, logger,
+    adapter,
+    genomes: list[Path],
+    scratch: Path,
+    derep_params: DerepParams,
+    params: DereplicateParams,
+    target: int,
+    logger,
 ) -> DerepResult:
     """Binary-search --secondary-ani to land near ``target`` representatives.
 
@@ -284,7 +308,10 @@ def _search_target_reps(
         diff = abs(n - target)
         logger.info(
             "target-reps search [%d]: secondary-ani=%.5f -> %d reps (target %d)",
-            i + 1, mid, n, target,
+            i + 1,
+            mid,
+            n,
+            target,
         )
         if best_diff is None or diff < best_diff:
             best, best_diff, best_ani = res, diff, mid
@@ -303,11 +330,15 @@ def _search_target_reps(
             "achievable count is %d (secondary-ani=%.5f). On low-diversity "
             "sets the count is a step function of the threshold and "
             "intermediate targets cannot be reached.",
-            target, achieved, best_ani,
+            target,
+            achieved,
+            best_ani,
         )
     logger.info(
         "target-reps: chose secondary-ani=%.5f -> %d representatives (target %d)",
-        best_ani, achieved, target,
+        best_ani,
+        achieved,
+        target,
     )
     return best
 
@@ -354,7 +385,10 @@ def _dereplicate_chunked(
     )
     logger.info(
         "Level %d: %d chunks, %d parallel worker(s) at %d threads each",
-        depth, len(chunks), workers, threads_per_worker,
+        depth,
+        len(chunks),
+        workers,
+        threads_per_worker,
     )
 
     def run_chunk(indexed: tuple[int, list[Path]]) -> DerepResult:
@@ -370,11 +404,23 @@ def _dereplicate_chunked(
     # Reduce the union: recurse only if it is still oversized AND actually shrank
     # (else recursing re-chunks the same set forever); otherwise one final pass.
     if len(union) > process_size and len(union) < len(genomes) and depth < _MAX_REDUCE_DEPTH:
-        logger.info("Level %d: union of %d reps still > %d; reducing recursively",
-                    depth, len(union), process_size)
+        logger.info(
+            "Level %d: union of %d reps still > %d; reducing recursively",
+            depth,
+            len(union),
+            process_size,
+        )
         stage2 = _dereplicate_chunked(
-            adapter, union, merge_dir, params, process_size, num_processes,
-            pre_primary_ani, pre_secondary_ani, logger, depth + 1,
+            adapter,
+            union,
+            merge_dir,
+            params,
+            process_size,
+            num_processes,
+            pre_primary_ani,
+            pre_secondary_ani,
+            logger,
+            depth + 1,
         )
     else:
         stage2 = adapter.dereplicate(union, merge_dir, params, logger)
@@ -469,17 +515,13 @@ def _reduce_by_taxonomy(
     # QC-rejected genomes are in no cluster; carry their status across the
     # reduction instead of losing them with the old membership.
     status: dict[str, str] = {
-        genome: state
-        for genome, state in result.genome_status.items()
-        if state == STATUS_FAIL_QC
+        genome: state for genome, state in result.genome_status.items() if state == STATUS_FAIL_QC
     }
 
     for members in groups.values():
         # keeper: best quality score (when known), then largest existing
         # cluster, then lexical name (deterministic).
-        keeper = max(
-            members, key=lambda n: (_score_or_min(n), len(result.clusters.get(n, [])), n)
-        )
+        keeper = max(members, key=lambda n: (_score_or_min(n), len(result.clusters.get(n, [])), n))
         new_reps.append(rep_by_name[keeper])
         status[keeper] = STATUS_REPRESENTATIVE
         contained: list[str] = []

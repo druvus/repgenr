@@ -19,6 +19,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
 
       - name: Install package and dev tools
         run: |
@@ -27,6 +28,9 @@ jobs:
 
       - name: Ruff
         run: ruff check src/ tests/
+
+      - name: Ruff format
+        run: ruff format --check src/ tests/ benchmarks/
 
       - name: Mypy
         run: mypy src/repgenr
@@ -51,9 +55,11 @@ jobs:
           version: "26.04.3"
 
       - name: Install nf-test
+        # Pinned release tarball rather than the piped installer script.
         run: |
-          wget -qO- https://get.nf-test.com | bash -s 0.9.5
-          sudo mv nf-test /usr/local/bin/
+          curl -fsSL -o nf-test.tar.gz https://github.com/askimed/nf-test/releases/download/v0.9.5/nf-test-0.9.5.tar.gz
+          tar -xzf nf-test.tar.gz nf-test nf-test.jar
+          sudo mv nf-test nf-test.jar /usr/local/bin/
 
       # Stub-based tests: they exercise channel wiring and the file contracts
       # without external tools or network, so no repgenr/bioinformatics stack is
@@ -81,6 +87,7 @@ jobs:
         uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: repgenr-e2e
+          cache-environment: true
           create-args: >-
             python=3.12 pip sourmash mashtree dendropy
           condarc: |
@@ -97,9 +104,11 @@ jobs:
           version: "26.04.3"
 
       - name: Install nf-test
+        # Pinned release tarball rather than the piped installer script.
         run: |
-          wget -qO- https://get.nf-test.com | bash -s 0.9.5
-          sudo mv nf-test /usr/local/bin/
+          curl -fsSL -o nf-test.tar.gz https://github.com/askimed/nf-test/releases/download/v0.9.5/nf-test-0.9.5.tar.gz
+          tar -xzf nf-test.tar.gz nf-test nf-test.jar
+          sudo mv nf-test nf-test.jar /usr/local/bin/
 
       - name: Run real end-to-end nf-test
         run: nf-test test --tag e2e --verbose

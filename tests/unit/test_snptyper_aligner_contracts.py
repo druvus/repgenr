@@ -171,8 +171,7 @@ def test_snptyper_contract(tool, genomes, recorded, tmp_path) -> None:
     if tool not in snp_registry.names():
         pytest.skip(f"{tool} not registered")
     typer_ = snp_registry.create(tool)
-    result = typer_.call(genomes, genomes[0], tmp_path / "snp_out",
-                         SnpParams(threads=7), _LOG)
+    result = typer_.call(genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=7), _LOG)
 
     assert result.core_snp_fasta.exists()
     headers = _read_headers(result.core_snp_fasta)
@@ -221,9 +220,7 @@ def test_snippy_without_full_aln_returns_none_full_alignment(
 
     monkeypatch.setattr(snippy_mod, "run_tool", fake_run_tool)
     typer_ = snp_registry.create("snippy")
-    result = typer_.call(
-        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=7), _LOG
-    )
+    result = typer_.call(genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=7), _LOG)
     assert result.full_alignment is None
 
 
@@ -254,8 +251,9 @@ def test_aligner_contract(tool, genomes, recorded, tmp_path) -> None:
     if tool not in align_registry.names():
         pytest.skip(f"{tool} not registered")
     aligner = align_registry.create(tool)
-    result = aligner.align(genomes, genomes[0], tmp_path / "align_out",
-                           AlignParams(threads=7), _LOG)
+    result = aligner.align(
+        genomes, genomes[0], tmp_path / "align_out", AlignParams(threads=7), _LOG
+    )
 
     assert result.msa_fasta.exists()
     headers = _read_headers(result.msa_fasta)

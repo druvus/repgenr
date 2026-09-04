@@ -32,15 +32,15 @@ def test_tree2tax_relations_step(tmp_path: Path) -> None:
     tree = tmp_path / "tree.nwk"
     tree.write_text(_NWK + "\n")
     out = tmp_path / "out"
-    t2t, gmap = tree2tax_relations(
-        Tree2taxStepParams(tree=tree, out_dir=out), _LOG
-    )
+    t2t, gmap = tree2tax_relations(Tree2taxStepParams(tree=tree, out_dir=out), _LOG)
     assert t2t == out / "tree2tax.tsv"
     edges = _edges(t2t)
     leaves = {c for c, _ in edges if c.startswith("Fam_")}
     assert leaves == {
-        "Fam_Gen_sp_GCA_000001.1", "Fam_Gen_sp_GCA_000002.1",
-        "Fam_Gen_sp_GCA_000003.1", "Fam_Gen_sp_GCA_000004.1",
+        "Fam_Gen_sp_GCA_000001.1",
+        "Fam_Gen_sp_GCA_000002.1",
+        "Fam_Gen_sp_GCA_000003.1",
+        "Fam_Gen_sp_GCA_000004.1",
     }
     assert any(p == "root" for _, p in edges)
     accs = {ln.split("\t")[0] for ln in gmap.read_text().splitlines()}
@@ -64,9 +64,13 @@ def test_tree2tax_relations_step_outgroup_and_dereplicated(tmp_path: Path) -> No
     out = tmp_path / "out"
     t2t, gmap = tree2tax_relations(
         Tree2taxStepParams(
-            tree=tree, out_dir=out, clusters=clusters,
-            outgroup_dir=og, outgroup_accession=acc,
-            remove_outgroup=True, include_dereplicated=True,
+            tree=tree,
+            out_dir=out,
+            clusters=clusters,
+            outgroup_dir=og,
+            outgroup_accession=acc,
+            remove_outgroup=True,
+            include_dereplicated=True,
         ),
         _LOG,
     )

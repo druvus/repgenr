@@ -37,18 +37,50 @@ def _fingerprints(calls: list[tuple]) -> dict[str, str]:
 
 def test_bacterial_run_matches_manual_commands(dispatched, tmp_path) -> None:
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
-        "-r", "232.0", "--gtdb-version", "bac120",
-        "--tool", "skder", "--treebuilder", "mashtree", "--keeper", "tool",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "-d",
+            "rep",
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--tool",
+            "skder",
+            "--treebuilder",
+            "mashtree",
+            "--keeper",
+            "tool",
+        ],
+    )
     assert result.exit_code == 0, result.output
     run_fps = _fingerprints(dispatched)
     dispatched.clear()
 
     for args in (
-        ["metadata", "-wd", wd, "-d", "rep", "-l", "genus", "-tg", "francisella",
-         "-r", "232.0", "--gtdb-version", "bac120"],
+        [
+            "metadata",
+            "-wd",
+            wd,
+            "-d",
+            "rep",
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+        ],
         ["genome", "-wd", wd],
         ["dereplicate", "-wd", wd, "--tool", "skder", "--keeper", "tool"],
         ["phylo", "-wd", wd, "--treebuilder", "mashtree"],
@@ -65,10 +97,23 @@ def test_bacterial_run_matches_manual_commands(dispatched, tmp_path) -> None:
 
 def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "--viral", "-t", "adenoviridae", "-tg", "mastadenovirus",
-        "--tool", "skder", "--treebuilder", "mashtree",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "--viral",
+            "-t",
+            "adenoviridae",
+            "-tg",
+            "mastadenovirus",
+            "--tool",
+            "skder",
+            "--treebuilder",
+            "mashtree",
+        ],
+    )
     assert result.exit_code == 0, result.output
     run_fps = _fingerprints(dispatched)
     dispatched.clear()
@@ -93,10 +138,23 @@ def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
 
 def test_run_include_dereplicated_flag(dispatched, tmp_path) -> None:
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
-        "--gtdb-version", "bac120", "--no-include-dereplicated",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--no-include-dereplicated",
+        ],
+    )
     assert result.exit_code == 0, result.output
     params = dict(dispatched)["tree2tax"]
     assert params.include_dereplicated is False
@@ -117,21 +175,48 @@ def test_bacterial_run_requires_level(dispatched, tmp_path) -> None:
 
 def test_run_snptype_msa_source_matches_manual_phylo(dispatched, tmp_path) -> None:
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
-        "--gtdb-version", "bac120",
-        "--msa-source", "snptype", "--snptyper", "simple", "--treebuilder", "iqtree",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--msa-source",
+            "snptype",
+            "--snptyper",
+            "simple",
+            "--treebuilder",
+            "iqtree",
+        ],
+    )
     assert result.exit_code == 0, result.output
     run_phylo = dict(dispatched)["phylo"]
     assert (run_phylo.msa_source, run_phylo.snptyper) == ("snptype", "simple")
     run_fp = _stage_fingerprint("phylo", run_phylo, {}, {})
     dispatched.clear()
 
-    result = _runner.invoke(app, [
-        "phylo", "-wd", wd, "--msa-source", "snptype", "--snptyper", "simple",
-        "--treebuilder", "iqtree",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "phylo",
+            "-wd",
+            wd,
+            "--msa-source",
+            "snptype",
+            "--snptyper",
+            "simple",
+            "--treebuilder",
+            "iqtree",
+        ],
+    )
     assert result.exit_code == 0, result.output
     manual_fp = _stage_fingerprint("phylo", dict(dispatched)["phylo"], {}, {})
     assert manual_fp == run_fp
@@ -139,29 +224,69 @@ def test_run_snptype_msa_source_matches_manual_phylo(dispatched, tmp_path) -> No
 
 def test_run_keeper_flag_reaches_dereplicate_params(dispatched, tmp_path) -> None:
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "-l", "genus", "-tg", "x", "-r", "232.0",
-        "--gtdb-version", "bac120", "--keeper", "tool",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--keeper",
+            "tool",
+        ],
+    )
     assert result.exit_code == 0, result.output
     params = dict(dispatched)["dereplicate"]
     assert params.keeper == "tool"
 
 
 def test_run_keeper_defaults_to_quality(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "-l", "genus", "-tg", "x", "-r", "232.0",
-        "--gtdb-version", "bac120",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+        ],
+    )
     assert result.exit_code == 0, result.output
     params = dict(dispatched)["dereplicate"]
     assert params.keeper == "quality"
 
 
 def test_run_bad_msa_source_fails(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "-l", "genus", "-tg", "x",
-        "-r", "232.0", "--gtdb-version", "bac120", "--msa-source", "nosuch",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--msa-source",
+            "nosuch",
+        ],
+    )
     assert result.exit_code != 0
     assert dispatched == []

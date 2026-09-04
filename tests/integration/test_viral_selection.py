@@ -21,9 +21,16 @@ _LOG = logging.getLogger("test")
 
 def _rec(acc, species, length, *, genus="Mastadenovirus", isolate="", organism=None):
     return VirusRecord(
-        accession=acc, taxid="1", organism=organism or species, family="Adenoviridae",
-        genus=genus, species=species, length=length, completeness="COMPLETE",
-        segment="ANONYMOUS", isolate=isolate,
+        accession=acc,
+        taxid="1",
+        organism=organism or species,
+        family="Adenoviridae",
+        genus=genus,
+        species=species,
+        length=length,
+        completeness="COMPLETE",
+        segment="ANONYMOUS",
+        isolate=isolate,
     )
 
 

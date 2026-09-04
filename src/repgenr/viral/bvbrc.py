@@ -102,8 +102,11 @@ def _read_base(path: Path) -> dict[str, dict]:
         for f in reader:
             taxid = f[0]
             base[taxid] = {
-                "num": int(f[2]), "seq_min": int(f[3]), "seq_max": int(f[4]),
-                "seq_med": int(f[5]), "seq_mean": int(f[6]),
+                "num": int(f[2]),
+                "seq_min": int(f[3]),
+                "seq_max": int(f[4]),
+                "seq_med": int(f[5]),
+                "seq_mean": int(f[6]),
             }
     return base
 
@@ -189,9 +192,7 @@ def _select_by_taxonomy(records: list[_Record], ncbi: dict, targets: dict, logge
         ok = True
         for level, values in targets.items():
             if level == "custom":
-                hit = any(
-                    _matches(ncbi, rec.taxid, key, [val]) for key, val in custom_pairs
-                )
+                hit = any(_matches(ncbi, rec.taxid, key, [val]) for key, val in custom_pairs)
                 if not hit:
                     ok = False
             elif not _matches(ncbi, rec.taxid, level, values):
@@ -288,7 +289,8 @@ def _determine_outgroup(
     outgroup_wd, genomes_dir = _outgroup.prepare_workdir(ctx)
 
     candidates = {
-        taxid for taxid, meta in base.items()
+        taxid
+        for taxid, meta in base.items()
         if taxid not in kept and meta["num"] >= params.outgroup_candidates_taxid_min_genomes
     }
     if not candidates:

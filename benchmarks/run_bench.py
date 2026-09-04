@@ -82,9 +82,19 @@ def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
     if cell.kind == "derep_step":
         fofn = _fofn_for(set_dir, work, cell.subset)
         out = work / "derep_out"
-        argv = [rg, "dereplicate-chunk",
-                "--genomes-fofn", str(fofn), "-o", str(out),
-                "--tool", cell.tool, "-t", "8", *cell.extra_args]
+        argv = [
+            rg,
+            "dereplicate-chunk",
+            "--genomes-fofn",
+            str(fofn),
+            "-o",
+            str(out),
+            "--tool",
+            cell.tool,
+            "-t",
+            "8",
+            *cell.extra_args,
+        ]
         return argv, out
     if cell.kind == "derep_dense":
         fofn = _fofn_for(set_dir, work, cell.subset)
@@ -98,18 +108,38 @@ def _command(cell: Cell, set_dir: Path, work: Path) -> tuple[list[str], Path]:
             genomes.mkdir(parents=True)
             for p in _fastas(set_dir):
                 shutil.copy2(p, genomes / p.name)
-        argv = [rg, "--force", "dereplicate", "-wd", str(wd),
-                "--tool", cell.tool, "-t", "8", *cell.extra_args]
+        argv = [
+            rg,
+            "--force",
+            "dereplicate",
+            "-wd",
+            str(wd),
+            "--tool",
+            cell.tool,
+            "-t",
+            "8",
+            *cell.extra_args,
+        ]
         return argv, wd / "derep"
     if cell.kind == "tree_step":
         genomes_dir = (
             _subset_dir(set_dir, work, cell.subset) if cell.subset is not None else set_dir
         )
         out = work / "phylo_out"
-        argv = [rg, "phylo-build",
-                "--genomes-dir", str(genomes_dir), "-o", str(out),
-                "--treebuilder", cell.tool, "--no-outgroup", "-t", "8",
-                *cell.extra_args]
+        argv = [
+            rg,
+            "phylo-build",
+            "--genomes-dir",
+            str(genomes_dir),
+            "-o",
+            str(out),
+            "--treebuilder",
+            cell.tool,
+            "--no-outgroup",
+            "-t",
+            "8",
+            *cell.extra_args,
+        ]
         return argv, out
     raise ValueError(f"unknown cell kind {cell.kind}")
 
@@ -128,8 +158,11 @@ def run_group(argv: list[str], timeout_s: int) -> subprocess.CompletedProcess:
     """
     with subprocess.Popen(
         argv,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        env=_env(), start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=_env(),
+        start_new_session=True,
     ) as popen:
         try:
             stdout, stderr = popen.communicate(timeout=timeout_s)
@@ -144,8 +177,9 @@ def _measure(argv: list[str], timeout_s: int, log_path: Path) -> dict:
     start = time.monotonic()
     proc = run_group(["/usr/bin/time", "-l", *argv], timeout_s)
     wall = time.monotonic() - start
-    log_path.write_text(proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:],
-                        encoding="utf-8")
+    log_path.write_text(
+        proc.stdout[-20000:] + "\n---stderr---\n" + proc.stderr[-40000:], encoding="utf-8"
+    )
     match = _RSS_RE.search(proc.stderr)
     return {
         "wall_s": round(wall, 2),
@@ -182,13 +216,20 @@ def run_cell(cell: Cell, *, keep_work: bool = False) -> dict:
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     argv, out_dir = _command(cell, set_dir, work)
-    record: dict = {"id": cell.id, "kind": cell.kind, "tool": cell.tool,
-                    "set": cell.set_name, "n": cell.n, "argv": argv}
+    record: dict = {
+        "id": cell.id,
+        "kind": cell.kind,
+        "tool": cell.tool,
+        "set": cell.set_name,
+        "n": cell.n,
+        "argv": argv,
+    }
     try:
         record.update(_measure(argv, cell.timeout_s, log_path))
     except subprocess.TimeoutExpired:
-        record.update({"exit_code": None, "status": "timeout",
-                       "wall_s": cell.timeout_s, "max_rss_mb": None})
+        record.update(
+            {"exit_code": None, "status": "timeout", "wall_s": cell.timeout_s, "max_rss_mb": None}
+        )
     else:
         record["status"] = "ok" if record["exit_code"] == 0 else "failed"
         if record["status"] == "ok":
@@ -213,9 +254,22 @@ def collect() -> Path:
     rows = []
     for path in sorted((RESULTS / "cells").glob("*.json")):
         rows.append(json.loads(path.read_text(encoding="utf-8")))
-    columns = ["id", "kind", "tool", "set", "n", "status", "wall_s", "max_rss_mb",
-               "n_representatives", "ari_vs_truth", "clone_representative",
-               "tree_ok", "tree_leaves", "exit_code"]
+    columns = [
+        "id",
+        "kind",
+        "tool",
+        "set",
+        "n",
+        "status",
+        "wall_s",
+        "max_rss_mb",
+        "n_representatives",
+        "ari_vs_truth",
+        "clone_representative",
+        "tree_ok",
+        "tree_leaves",
+        "exit_code",
+    ]
     out = RESULTS / "summary.tsv"
     with open(out, "w", encoding="utf-8") as fo:
         fo.write("\t".join(columns) + "\n")
@@ -252,9 +306,12 @@ def main() -> None:
     for i, cell in enumerate(cells, 1):
         print(f"[{i}/{len(cells)}] {cell.id} ...", flush=True)
         record = run_cell(cell)
-        print(f"    {record['status']} wall={record.get('wall_s')}s "
-              f"rss={record.get('max_rss_mb')}MB "
-              f"reps={record.get('n_representatives', '-')}", flush=True)
+        print(
+            f"    {record['status']} wall={record.get('wall_s')}s "
+            f"rss={record.get('max_rss_mb')}MB "
+            f"reps={record.get('n_representatives', '-')}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

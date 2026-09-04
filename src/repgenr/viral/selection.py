@@ -95,8 +95,14 @@ def run_records(
         )
         if og is not None:
             selection_rows.append(
-                SelectionRow(og.accession, og.family, og.genus, og.species, True,
-                             genome_filename(og.family, og.genus, og.species, og.accession))
+                SelectionRow(
+                    og.accession,
+                    og.family,
+                    og.genus,
+                    og.species,
+                    True,
+                    genome_filename(og.family, og.genus, og.species, og.accession),
+                )
             )
 
     write_selection(ctx.workdir / "selection.tsv", selection_rows)
@@ -104,8 +110,10 @@ def run_records(
     ctx.config.record_stage(
         "vgenome",
         params={
-            "source": "ncbi_virus", "selected": n_written,
-            "group_segments": params.group_segments, "no_outgroup": params.no_outgroup,
+            "source": "ncbi_virus",
+            "selected": n_written,
+            "group_segments": params.group_segments,
+            "no_outgroup": params.no_outgroup,
         },
         tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),
@@ -130,9 +138,11 @@ def _record_matches(rec, targets: dict[str, list[str]]) -> bool:
         elif level == "serotype":
             ok = any(_norm(v) in _norm(rec.organism) for v in values)
         elif level == "custom":
+
             def _custom_ok(kv: str) -> bool:
                 key, val = parse_custom_filter(kv)
                 return _norm(str(getattr(rec, key, ""))) == _norm(val)
+
             ok = all(_custom_ok(kv) for kv in values)
         else:
             ok = False
@@ -228,7 +238,9 @@ def _write_isolate_groups(genomes_dir, records, seqs, logger):
         rows.append(SelectionRow(r.accession, r.family, r.genus, r.species, False, name))
     logger.info(
         "Grouped %d segment sequences into %d isolate genomes (+ %d single-record genomes)",
-        grouped, len(groups), len(singletons),
+        grouped,
+        len(groups),
+        len(singletons),
     )
     return rows
 
@@ -249,7 +261,8 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
             continue
         cand_by_species.setdefault(r.species, []).append(r)
     candidates = {
-        sp: rs for sp, rs in cand_by_species.items()
+        sp: rs
+        for sp, rs in cand_by_species.items()
         if len(rs) >= params.outgroup_candidates_taxid_min_genomes
     }
     if not candidates:

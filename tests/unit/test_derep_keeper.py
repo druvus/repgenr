@@ -22,8 +22,10 @@ def _result() -> DerepResult:
         representatives=[Path("/g/rep.fasta"), Path("/g/solo.fasta")],
         clusters={"rep.fasta": ["m1.fasta", "m2.fasta"], "solo.fasta": []},
         genome_status={
-            "rep.fasta": STATUS_REPRESENTATIVE, "solo.fasta": STATUS_REPRESENTATIVE,
-            "m1.fasta": STATUS_CONTAINED, "m2.fasta": STATUS_CONTAINED,
+            "rep.fasta": STATUS_REPRESENTATIVE,
+            "solo.fasta": STATUS_REPRESENTATIVE,
+            "m1.fasta": STATUS_CONTAINED,
+            "m2.fasta": STATUS_CONTAINED,
         },
     )
 

@@ -56,11 +56,16 @@ class GalahDereplicator(Dereplicator):
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         cmd: list[str | Path] = [
-            "galah", "cluster",
-            "--genome-fasta-list", fofn,
-            "--ani", f"{ani_pct:g}",
-            "--threads", str(params.threads),
-            "--output-cluster-definition", clusters_file,
+            "galah",
+            "cluster",
+            "--genome-fasta-list",
+            fofn,
+            "--ani",
+            f"{ani_pct:g}",
+            "--threads",
+            str(params.threads),
+            "--output-cluster-definition",
+            clusters_file,
         ]
         run_tool(
             self.capabilities, cmd, logger=logger, log_prefix="galah", extra_mounts=genome_dirs

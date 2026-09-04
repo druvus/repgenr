@@ -53,8 +53,11 @@ def test_env_fragment_tracks_backend_platform_wave_only(tmp_path) -> None:
         with_extras = _env_fragment()
         # engine and cache_dir are plumbing, not result-affecting
         configure_container(
-            backend="docker", platform="linux/amd64", wave_enabled=True,
-            engine="podman", cache_dir=str(tmp_path),
+            backend="docker",
+            platform="linux/amd64",
+            wave_enabled=True,
+            engine="podman",
+            cache_dir=str(tmp_path),
         )
         assert _env_fragment() == with_extras
         configure_container(backend="singularity", platform="linux/amd64", wave_enabled=True)
@@ -68,7 +71,8 @@ def test_v2_hash_never_matches_v1_shape() -> None:
     params = _P()
     v1_blob = json.dumps(
         {"stage": "dereplicate", "params": {"secondary_ani": 0.99}},
-        sort_keys=True, default=str,
+        sort_keys=True,
+        default=str,
     )
     v1 = hashlib.sha256(v1_blob.encode("utf-8")).hexdigest()
     v2 = _stage_fingerprint("dereplicate", params, {}, {})

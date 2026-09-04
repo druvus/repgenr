@@ -88,13 +88,10 @@ def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
                     "version flag may be shadowing it on PATH -- use a modern environment."
                 )
             elif have is not None and want is not None and have < want:
-                problems.append(
-                    f"{spec.name}: version {reported} < required {spec.min_version}"
-                )
+                problems.append(f"{spec.name}: version {reported} < required {spec.min_version}")
 
     if problems:
         raise MissingBinaryError(
-            "Required external tools are missing or outdated:\n  "
-            + "\n  ".join(problems)
+            "Required external tools are missing or outdated:\n  " + "\n  ".join(problems)
         )
     return versions

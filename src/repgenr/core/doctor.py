@@ -72,8 +72,11 @@ def diagnose(workdir: Path) -> list[Finding]:
             findings.extend(check(workdir, config))
         except Exception as exc:  # a broken artifact must not abort the report
             findings.append(
-                Finding("fail", check.__name__.removeprefix("_check_"),
-                        f"Check could not complete: {exc}")
+                Finding(
+                    "fail",
+                    check.__name__.removeprefix("_check_"),
+                    f"Check could not complete: {exc}",
+                )
             )
     if not any(f.level == "fail" for f in findings):
         findings.append(Finding("ok", "summary", "No failures detected."))
@@ -92,36 +95,44 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
         if record.completed:
             out.append(Finding("ok", name, f"completed {record.completed}"))
         elif record.params or record.tool:
-            out.append(Finding(
-                "fail", name,
-                "started a run and never finished (crashed mid-run); its outputs "
-                "may be partial -- re-run the stage.",
-            ))
+            out.append(
+                Finding(
+                    "fail",
+                    name,
+                    "started a run and never finished (crashed mid-run); its outputs "
+                    "may be partial -- re-run the stage.",
+                )
+            )
     return out
 
 
 def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
     genomes_dir = workdir / "genomes"
     out: list[Finding] = []
-    shortfall = check_genome_completeness(
-        genomes_dir, workdir, logger=_LOG, allow_incomplete=True
-    )
+    shortfall = check_genome_completeness(genomes_dir, workdir, logger=_LOG, allow_incomplete=True)
     if shortfall:
-        out.append(Finding(
-            "fail", "genomes",
-            f"{len(shortfall)} selected genome(s) missing from {genomes_dir} "
-            f"(e.g. {_examples(shortfall)}); re-run the genome stage.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "genomes",
+                f"{len(shortfall)} selected genome(s) missing from {genomes_dir} "
+                f"(e.g. {_examples(shortfall)}); re-run the genome stage.",
+            )
+        )
     bad = [p.name for p in list_fasta(genomes_dir) if not looks_like_fasta(p)]
     if bad:
-        out.append(Finding(
-            "fail", "genomes",
-            f"{len(bad)} file(s) under {genomes_dir} are not FASTA "
-            f"(e.g. {_examples(bad)}); delete them and re-run the genome stage.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "genomes",
+                f"{len(bad)} file(s) under {genomes_dir} are not FASTA "
+                f"(e.g. {_examples(bad)}); delete them and re-run the genome stage.",
+            )
+        )
     if not shortfall and not bad and genomes_dir.exists():
-        out.append(Finding("ok", "genomes",
-                           f"{len(list_fasta(genomes_dir))} genome file(s) look sound"))
+        out.append(
+            Finding("ok", "genomes", f"{len(list_fasta(genomes_dir))} genome file(s) look sound")
+        )
     return out
 
 
@@ -140,17 +151,23 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
     missing = sorted(selected - recorded)
     out: list[Finding] = []
     if extra:
-        out.append(Finding(
-            "fail", "manifest",
-            f"manifest holds {len(extra)} genome(s) not in selection.tsv "
-            f"(e.g. {_examples(extra)}); re-run the metadata stage to reconcile.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "manifest",
+                f"manifest holds {len(extra)} genome(s) not in selection.tsv "
+                f"(e.g. {_examples(extra)}); re-run the metadata stage to reconcile.",
+            )
+        )
     if missing:
-        out.append(Finding(
-            "fail", "manifest",
-            f"manifest is missing {len(missing)} selected genome(s) "
-            f"(e.g. {_examples(missing)}); re-run the metadata stage.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "manifest",
+                f"manifest is missing {len(missing)} selected genome(s) "
+                f"(e.g. {_examples(missing)}); re-run the metadata stage.",
+            )
+        )
     if not extra and not missing:
         out.append(Finding("ok", "manifest", "manifest matches selection.tsv"))
     return out
@@ -166,19 +183,22 @@ def _check_outgroup(workdir: Path, config: Config) -> list[Finding]:
     outgroup_dir = workdir / "outgroup"
     candidates = (
         [p for p in sorted(outgroup_dir.iterdir()) if not p.name.startswith(".")]
-        if outgroup_dir.exists() else []
+        if outgroup_dir.exists()
+        else []
     )
     resolved = any(
-        accession_from_filename(f.name) == accession or accession in f.name
-        for f in candidates
+        accession_from_filename(f.name) == accession or accession in f.name for f in candidates
     )
     if resolved:
         return [Finding("ok", "outgroup", f"outgroup {accession} resolves")]
-    return [Finding(
-        "warn", "outgroup",
-        f"recorded outgroup {accession} has no matching file under {outgroup_dir}; "
-        "phylo/tree2tax will proceed unrooted.",
-    )]
+    return [
+        Finding(
+            "warn",
+            "outgroup",
+            f"recorded outgroup {accession} has no matching file under {outgroup_dir}; "
+            "phylo/tree2tax will proceed unrooted.",
+        )
+    ]
 
 
 def _check_representatives(workdir: Path, config: Config) -> list[Finding]:
@@ -191,27 +211,35 @@ def _check_representatives(workdir: Path, config: Config) -> list[Finding]:
         derep_dir / "representatives", clusters, logger=_LOG, allow_incomplete=True
     )
     if shortfall:
-        out.append(Finding(
-            "fail", "dereplicate",
-            f"{len(shortfall)} representative(s) listed in {CLUSTERS_TSV} are "
-            f"absent on disk (e.g. {_examples(shortfall)}); re-run dereplicate.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "dereplicate",
+                f"{len(shortfall)} representative(s) listed in {CLUSTERS_TSV} are "
+                f"absent on disk (e.g. {_examples(shortfall)}); re-run dereplicate.",
+            )
+        )
     extras = sorted(
-        {p.name for p in list_fasta(derep_dir / "representatives")}
-        - set(read_clusters(clusters))
+        {p.name for p in list_fasta(derep_dir / "representatives")} - set(read_clusters(clusters))
     )
     if extras:
-        out.append(Finding(
-            "warn", "dereplicate",
-            f"{len(extras)} file(s) under representatives/ are not in "
-            f"{CLUSTERS_TSV} (e.g. {_examples(extras)}).",
-        ))
+        out.append(
+            Finding(
+                "warn",
+                "dereplicate",
+                f"{len(extras)} file(s) under representatives/ are not in "
+                f"{CLUSTERS_TSV} (e.g. {_examples(extras)}).",
+            )
+        )
     if not (derep_dir / GENOME_STATUS_TSV).exists():
-        out.append(Finding(
-            "fail", "dereplicate",
-            f"{CLUSTERS_TSV} present but {GENOME_STATUS_TSV} missing; the "
-            "dereplicate stage likely crashed mid-write -- re-run it.",
-        ))
+        out.append(
+            Finding(
+                "fail",
+                "dereplicate",
+                f"{CLUSTERS_TSV} present but {GENOME_STATUS_TSV} missing; the "
+                "dereplicate stage likely crashed mid-write -- re-run it.",
+            )
+        )
     if not out:
         out.append(Finding("ok", "dereplicate", "representatives match clusters.tsv"))
     return out
@@ -223,10 +251,13 @@ def _check_tree(workdir: Path, config: Config) -> list[Finding]:
         return []
     content = tree.read_text(encoding="utf-8").strip()
     if not content or not content.endswith(";"):
-        return [Finding(
-            "fail", "phylo",
-            f"{tree} is empty or truncated (no terminating ';'); re-run phylo.",
-        )]
+        return [
+            Finding(
+                "fail",
+                "phylo",
+                f"{tree} is empty or truncated (no terminating ';'); re-run phylo.",
+            )
+        ]
     return [Finding("ok", "phylo", f"{TREE_NWK} looks like a complete tree")]
 
 
@@ -234,16 +265,16 @@ def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
     t2t = workdir / TREE2TAX_TSV
     gmap = workdir / GENOMES_MAP_TSV
     if t2t.exists() == gmap.exists():
-        return (
-            [Finding("ok", "tree2tax", "deliverable pair present")]
-            if t2t.exists() else []
-        )
+        return [Finding("ok", "tree2tax", "deliverable pair present")] if t2t.exists() else []
     missing = GENOMES_MAP_TSV if t2t.exists() else TREE2TAX_TSV
-    return [Finding(
-        "fail", "tree2tax",
-        f"deliverables are mismatched: {missing} is missing while its partner "
-        "exists; the tree2tax stage likely crashed mid-write -- re-run it.",
-    )]
+    return [
+        Finding(
+            "fail",
+            "tree2tax",
+            f"deliverables are mismatched: {missing} is missing while its partner "
+            "exists; the tree2tax stage likely crashed mid-write -- re-run it.",
+        )
+    ]
 
 
 def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
@@ -277,15 +308,17 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
                 finally:
                     manifest.close()
         changed = sorted(
-            key for key in {*record.inputs, *digests}
-            if record.inputs.get(key) != digests.get(key)
+            key for key in {*record.inputs, *digests} if record.inputs.get(key) != digests.get(key)
         )
         if changed:
-            out.append(Finding(
-                "warn", name,
-                f"input(s) changed since completion ({_examples(changed)}); "
-                "the stage will re-run on its next invocation.",
-            ))
+            out.append(
+                Finding(
+                    "warn",
+                    name,
+                    f"input(s) changed since completion ({_examples(changed)}); "
+                    "the stage will re-run on its next invocation.",
+                )
+            )
     return out
 
 
@@ -298,8 +331,11 @@ def _check_leftovers(workdir: Path, config: Config) -> list[Finding]:
     )
     if not leftovers:
         return []
-    return [Finding(
-        "warn", "leftovers",
-        f"{len(leftovers)} temp file(s) from an interrupted write "
-        f"(e.g. {_examples(leftovers)}); safe to delete.",
-    )]
+    return [
+        Finding(
+            "warn",
+            "leftovers",
+            f"{len(leftovers)} temp file(s) from an interrupted write "
+            f"(e.g. {_examples(leftovers)}); safe to delete.",
+        )
+    ]

@@ -119,6 +119,7 @@ def test_third_party_adapter_without_run_tool_survives_contract_fixture(
 
     class ThirdParty(Dereplicator):
         from repgenr.core.plugins import ToolCapabilities
+
         capabilities = ToolCapabilities(name="thirdparty")
 
         def dereplicate(self, genomes, out_dir, params, logger):
@@ -200,14 +201,16 @@ def test_snptype_dispatches_masker_via_registry(tmp_path, monkeypatch, register_
             full.write_text(">a\nACGTACGT\n", encoding="utf-8")
             return SnpResult(core_snp_fasta=core, full_alignment=full)
 
-    monkeypatch.setattr(
-        snptype_mod.snp_registry, "create", lambda name: FakeTyper()
-    )
+    monkeypatch.setattr(snptype_mod.snp_registry, "create", lambda name: FakeTyper())
     genomes = [tmp_path / "g1.fasta"]
     genomes[0].write_text(">g1\nACGT\n", encoding="utf-8")
     result, versions = snptype_core(
-        genomes, None, tmp_path / "snp", tmp_path / "scratch",
-        SnptypeParams(tool="whatever", mask="fakemask"), logging.getLogger("test"),
+        genomes,
+        None,
+        tmp_path / "snp",
+        tmp_path / "scratch",
+        SnptypeParams(tool="whatever", mask="fakemask"),
+        logging.getLogger("test"),
     )
     assert result.masked is True
     assert (tmp_path / "snp" / "core_snp.fasta").read_text(encoding="utf-8") == ">m\nAC\n"
@@ -237,6 +240,10 @@ def test_unknown_masker_lists_available(tmp_path, monkeypatch) -> None:
     genomes[0].write_text(">g1\nACGT\n", encoding="utf-8")
     with pytest.raises(PluginError, match="gubbins"):
         snptype_core(
-            genomes, None, tmp_path / "snp", tmp_path / "scratch",
-            SnptypeParams(tool="x", mask="nosuchmask"), logging.getLogger("test"),
+            genomes,
+            None,
+            tmp_path / "snp",
+            tmp_path / "scratch",
+            SnptypeParams(tool="x", mask="nosuchmask"),
+            logging.getLogger("test"),
         )

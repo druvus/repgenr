@@ -111,8 +111,13 @@ def test_target_reps_warns_when_target_unreachable(tmp_path, caplog):
         genomes.append(p)
     with caplog.at_level(logging.WARNING):
         _search_target_reps(
-            _StepDerep(40), genomes, tmp_path / "scratch", DerepParams(),
-            DereplicateParams(tool="mock"), target=20, logger=_LOGGER,
+            _StepDerep(40),
+            genomes,
+            tmp_path / "scratch",
+            DerepParams(),
+            DereplicateParams(tool="mock"),
+            target=20,
+            logger=_LOGGER,
         )
     warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
     assert any("20" in m and "target" in m.lower() for m in warnings)
@@ -126,8 +131,13 @@ def test_target_reps_no_warning_on_exact_hit(tmp_path, caplog):
         genomes.append(p)
     with caplog.at_level(logging.WARNING):
         _search_target_reps(
-            _StepDerep(40), genomes, tmp_path / "scratch", DerepParams(),
-            DereplicateParams(tool="mock"), target=40, logger=_LOGGER,
+            _StepDerep(40),
+            genomes,
+            tmp_path / "scratch",
+            DerepParams(),
+            DereplicateParams(tool="mock"),
+            target=40,
+            logger=_LOGGER,
         )
     assert not [r for r in caplog.records if r.levelno == logging.WARNING]
 
@@ -136,8 +146,8 @@ def test_target_reps_no_warning_on_exact_hit(tmp_path, caplog):
 
 
 def test_datasets_timeout_scales_with_batch():
-    assert _timeout_for(10) == 3600.0          # floor for small batches
-    assert _timeout_for(5000) == 15000.0       # 3 s per accession at full batch
+    assert _timeout_for(10) == 3600.0  # floor for small batches
+    assert _timeout_for(5000) == 15000.0  # 3 s per accession at full batch
     assert _timeout_for(0) == 3600.0
 
 
@@ -148,9 +158,7 @@ def _mashtree_commands(monkeypatch):
     from repgenr.treebuilders import mashtree as mt
 
     seen: list[list[str]] = []
-    monkeypatch.setattr(
-        mt, "run_tool", lambda caps, cmd, **k: seen.append([str(c) for c in cmd])
-    )
+    monkeypatch.setattr(mt, "run_tool", lambda caps, cmd, **k: seen.append([str(c) for c in cmd]))
     return mt, seen
 
 

@@ -18,11 +18,7 @@ from repgenr.viral.bvbrc import _Record
 
 _LOG = logging.getLogger("test")
 
-_MATRIX = (
-    "\tS_S1\tO_O1\n"
-    "S_S1\t0\t0.5\n"
-    "O_O1\t0.5\t0\n"
-)
+_MATRIX = "\tS_S1\tO_O1\nS_S1\t0\t0.5\nO_O1\t0.5\t0\n"
 
 
 def _fake_run_tool(calls: list):
@@ -50,8 +46,16 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
 
     def rec(acc: str, species: str) -> VirusRecord:
         return VirusRecord(
-            accession=acc, taxid="1", organism=species, family="Fam", genus="Gen",
-            species=species, length=100, completeness="complete", segment="", isolate="",
+            accession=acc,
+            taxid="1",
+            organism=species,
+            family="Fam",
+            genus="Gen",
+            species=species,
+            length=100,
+            completeness="complete",
+            segment="",
+            isolate="",
         )
 
     kept = [rec("S1", "SpeciesA")]
@@ -59,7 +63,8 @@ def test_selection_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypat
     seqs = {"S1": _seq("S1"), "O1": _seq("O1")}
     ctx = SimpleNamespace(workdir=tmp_path, outgroup_dir=tmp_path / "outgroup")
     params = SimpleNamespace(
-        outgroup_candidates_taxid_min_genomes=1, keep_files=False,
+        outgroup_candidates_taxid_min_genomes=1,
+        keep_files=False,
         outgroup_treebuilder="mashtree",
     )
 
@@ -89,7 +94,8 @@ def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) 
     kept = {"1": {"1.1": 100}}
     ctx = SimpleNamespace(workdir=tmp_path, outgroup_dir=tmp_path / "outgroup")
     params = SimpleNamespace(
-        outgroup_candidates_taxid_min_genomes=1, keep_files=False,
+        outgroup_candidates_taxid_min_genomes=1,
+        keep_files=False,
         outgroup_treebuilder="mashtree",
     )
 

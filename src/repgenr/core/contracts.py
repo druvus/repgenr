@@ -56,7 +56,8 @@ def list_fasta(source: Path) -> list[Path]:
     if not source.exists():
         return []
     return sorted(
-        p for p in source.iterdir()
+        p
+        for p in source.iterdir()
         if not p.name.startswith(".") and p.name.endswith(FASTA_SUFFIXES)
     )
 
@@ -161,17 +162,31 @@ def write_selection(path: Path, rows: list[SelectionRow]) -> None:
     """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
     with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
-        writer.writerow([
-            "accession", "family", "genus", "species", "is_outgroup", "filename",
-            "completeness", "contamination",
-        ])
+        writer.writerow(
+            [
+                "accession",
+                "family",
+                "genus",
+                "species",
+                "is_outgroup",
+                "filename",
+                "completeness",
+                "contamination",
+            ]
+        )
         for r in rows:
-            writer.writerow([
-                r.accession, r.family, r.genus, r.species,
-                "1" if r.is_outgroup else "0", r.filename,
-                "" if r.completeness is None else f"{r.completeness:.2f}",
-                "" if r.contamination is None else f"{r.contamination:.2f}",
-            ])
+            writer.writerow(
+                [
+                    r.accession,
+                    r.family,
+                    r.genus,
+                    r.species,
+                    "1" if r.is_outgroup else "0",
+                    r.filename,
+                    "" if r.completeness is None else f"{r.completeness:.2f}",
+                    "" if r.contamination is None else f"{r.contamination:.2f}",
+                ]
+            )
 
 
 def _opt_float(value: str | None) -> float | None:

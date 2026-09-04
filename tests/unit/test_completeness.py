@@ -79,24 +79,17 @@ def test_no_selection_file_is_a_noop(tmp_path: Path) -> None:
 def test_representatives_must_match_clusters(tmp_path: Path) -> None:
     reps = tmp_path / "derep" / "representatives"
     _fill(reps, ["r1.fasta"])  # crashed _write_contract: prefix of reps
-    write_clusters(tmp_path / "derep" / "clusters.tsv",
-                   {"r1.fasta": [], "r2.fasta": ["m.fasta"]})
+    write_clusters(tmp_path / "derep" / "clusters.tsv", {"r1.fasta": [], "r2.fasta": ["m.fasta"]})
     with pytest.raises(WorkdirError, match="r2.fasta"):
-        check_representatives_consistency(
-            reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG
-        )
+        check_representatives_consistency(reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG)
     _fill(reps, ["r2.fasta"])
-    check_representatives_consistency(
-        reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG
-    )
+    check_representatives_consistency(reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG)
 
 
 def test_representatives_check_noop_without_clusters(tmp_path: Path) -> None:
     reps = tmp_path / "derep" / "representatives"
     _fill(reps, ["r1.fasta"])
-    check_representatives_consistency(
-        reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG
-    )
+    check_representatives_consistency(reps, tmp_path / "derep" / "clusters.tsv", logger=_LOG)
 
 
 def test_looks_like_fasta(tmp_path: Path) -> None:

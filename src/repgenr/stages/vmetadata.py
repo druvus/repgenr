@@ -86,9 +86,12 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
     if params.target is None:
         raise UserInputError("Supply --target (e.g. adenoviridae) or --list.")
     records = ncbi_virus.fetch(
-        params.target, download_wd,
-        complete_only=params.complete_only, host=params.host,
-        released_after=params.released_after, logger=logger,
+        params.target,
+        download_wd,
+        complete_only=params.complete_only,
+        host=params.host,
+        released_after=params.released_after,
+        logger=logger,
     )
     if not records:
         raise WorkdirError(f"NCBI Virus returned no genomes for '{params.target}'.")
@@ -107,8 +110,10 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
     ctx.config.record_stage(
         "vmetadata",
         params={
-            "source": "ncbi_virus", "target": params.target,
-            "complete_only": params.complete_only, "host": params.host,
+            "source": "ncbi_virus",
+            "target": params.target,
+            "complete_only": params.complete_only,
+            "host": params.host,
             "sequences": len(records),
         },
         tool_versions=tool_versions,
@@ -134,8 +139,14 @@ def _write_base_from_records(path: Path, records) -> None:
         for taxid, g in sorted(by_taxid.items(), key=lambda x: len(x[1]["lens"]), reverse=True):
             lens = g["lens"]
             row = [
-                taxid, g["species"], len(lens), min(lens), max(lens),
-                int(_median(lens)), int(_mean(lens)), g["organism"],
+                taxid,
+                g["species"],
+                len(lens),
+                min(lens),
+                max(lens),
+                int(_median(lens)),
+                int(_mean(lens)),
+                g["organism"],
             ]
             fo.write("\t".join(map(str, row)) + "\n")
 
@@ -158,8 +169,7 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
     _write_base(download_wd / "metadata_base.tsv", base)
     _write_ncbi(download_wd / "metadata_ncbi.tsv", ncbi_data, base)
     serializable = {
-        name: {**data, "datasets": sorted(data["datasets"])}
-        for name, data in taxnames_data.items()
+        name: {**data, "datasets": sorted(data["datasets"])} for name, data in taxnames_data.items()
     }
     with open(download_wd / "metadata_ncbi_taxnames_data.json", "w", encoding="utf-8") as fo:
         json.dump(serializable, fo)
@@ -205,9 +215,7 @@ def _download_group(target: str, dest: Path, logger) -> None:
     local_size = dest.stat().st_size if dest.exists() else 0
     if remote_size and local_size != remote_size:
         dest.unlink(missing_ok=True)
-        raise WorkdirError(
-            f"Incomplete BV-BRC download: got {local_size} of {remote_size} bytes."
-        )
+        raise WorkdirError(f"Incomplete BV-BRC download: got {local_size} of {remote_size} bytes.")
     logger.info("Download finished (%d bytes)", local_size)
 
 
@@ -238,8 +246,10 @@ def _parse_fasta(path: Path, tag: str, logger):
         taxid_lens = lens[taxid]
         base[taxid] = {
             "num": count,
-            "min": min(taxid_lens), "max": max(taxid_lens),
-            "mean": int(mean(taxid_lens)), "median": int(median(taxid_lens)),
+            "min": min(taxid_lens),
+            "max": max(taxid_lens),
+            "mean": int(mean(taxid_lens)),
+            "median": int(median(taxid_lens)),
             "desc": descriptions[taxid],
         }
     logger.info("Found %d taxids; %d passed the '%s' filter", len(all_taxids), len(base), tag)
@@ -269,16 +279,24 @@ def _write_base(path: Path, base: dict) -> None:
         fo.write("\t".join(header) + "\n")
         for taxid, data in sorted(base.items(), key=lambda x: x[1]["num"], reverse=True):
             row = [
-                taxid, data["desc"]["species"], data["num"], data["min"],
-                data["max"], data["median"], data["mean"], data["desc"]["full"],
+                taxid,
+                data["desc"]["species"],
+                data["num"],
+                data["min"],
+                data["max"],
+                data["median"],
+                data["mean"],
+                data["desc"]["full"],
             ]
             fo.write("\t".join(map(str, row)) + "\n")
 
 
 def _write_ncbi(path: Path, ncbi_data: dict, base: dict) -> None:
-    header = ["taxid", "name", "num_with_tag"] + TAXNAMES_ORDERED + [
-        f"{x}_taxid" for x in TAXNAMES_ORDERED
-    ]
+    header = (
+        ["taxid", "name", "num_with_tag"]
+        + TAXNAMES_ORDERED
+        + [f"{x}_taxid" for x in TAXNAMES_ORDERED]
+    )
     with open(path, "w", encoding="utf-8") as fo:
         fo.write("\t".join(header) + "\n")
         ordered = sorted(

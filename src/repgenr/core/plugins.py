@@ -30,9 +30,7 @@ def parse_extra_int(extra: Mapping[str, object], key: str, default: int) -> int:
     try:
         return int(raw)  # type: ignore[call-overload]
     except (TypeError, ValueError) as exc:
-        raise UserInputError(
-            f"Extra parameter '{key}' must be an integer, got {raw!r}."
-        ) from exc
+        raise UserInputError(f"Extra parameter '{key}' must be an integer, got {raw!r}.") from exc
 
 
 @dataclass(frozen=True)
@@ -98,7 +96,9 @@ class Registry[T]:
                 # but log at debug so a broken in-tree adapter is diagnosable.
                 logging.getLogger("repgenr").warning(
                     "Plugin %r (group %s) failed to load and is unavailable: %s",
-                    ep.name, self.group, exc,
+                    ep.name,
+                    self.group,
+                    exc,
                 )
                 self._classes.setdefault(ep.name, _BrokenPlugin(ep.name, exc))  # type: ignore[arg-type]
         self._loaded = True
@@ -135,9 +135,7 @@ class Registry[T]:
         self._load()
         if name not in self._classes:
             available = ", ".join(self.names()) or "none"
-            raise PluginError(
-                f"Unknown tool '{name}' for {self.group}. Available: {available}"
-            )
+            raise PluginError(f"Unknown tool '{name}' for {self.group}. Available: {available}")
         cls = self._classes[name]
         if isinstance(cls, _BrokenPlugin):
             raise PluginError(f"Plugin '{name}' failed to load: {cls.error}") from cls.error
@@ -240,7 +238,8 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
         if cap is None:
             logging.getLogger("repgenr").warning(
                 "auto-select skipping '%s' (%s): the plugin failed to load.",
-                name, registry.group,
+                name,
+                registry.group,
             )
             continue
         limit = cap.recommended_max_genomes
@@ -260,9 +259,7 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
     return best[1] if best else None
 
 
-def scale_warning(
-    registry: Registry, tool: str, n_items: int
-) -> tuple[int, list[str]] | None:
+def scale_warning(registry: Registry, tool: str, n_items: int) -> tuple[int, list[str]] | None:
     """If ``tool`` is over its recommended scale, return (limit, alternatives).
 
     Alternatives are registered tools whose recommended scale accommodates

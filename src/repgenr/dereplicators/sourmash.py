@@ -60,9 +60,7 @@ class SourmashDereplicator(Dereplicator):
         name="sourmash",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled", "sketch_cache", "dense_fallback"}),
-        required_binaries=(
-            BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
-        ),
+        required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=None,
         supports_native_scaling=True,
@@ -150,7 +148,8 @@ class SourmashDereplicator(Dereplicator):
             if len(missing) < len(genomes):
                 logger.info(
                     "Reusing %d cached sourmash signatures, sketching %d",
-                    len(genomes) - len(missing), len(missing),
+                    len(genomes) - len(missing),
+                    len(missing),
                 )
             fofn = write_fofn(missing, out_dir / "genomes.fofn")
             # The genome paths live inside the fofn, not in argv, so the container
@@ -158,12 +157,18 @@ class SourmashDereplicator(Dereplicator):
             # un-resolved abspaths to match write_fofn and the backend's bind logic).
             genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in missing})
             # one signature file per genome, named by genome basename
-            run_tool(self.capabilities,
+            run_tool(
+                self.capabilities,
                 [
-                    "sourmash", "sketch", "dna",
-                    "-p", f"k={ksize},scaled={scaled}",
-                    "--from-file", fofn,
-                    "--outdir", sig_dir,
+                    "sourmash",
+                    "sketch",
+                    "dna",
+                    "-p",
+                    f"k={ksize},scaled={scaled}",
+                    "--from-file",
+                    fofn,
+                    "--outdir",
+                    sig_dir,
                 ],
                 logger=logger,
                 log_prefix="sourmash",
@@ -184,12 +189,17 @@ class SourmashDereplicator(Dereplicator):
         sig_files = sorted(sig_by_genome[g] for g in genomes)
         # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
         compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             [
-                "sourmash", "compare",
-                "-k", str(ksize),
-                "--csv", matrix_csv,
-                "--from-file", compare_fofn,
+                "sourmash",
+                "compare",
+                "-k",
+                str(ksize),
+                "--csv",
+                matrix_csv,
+                "--from-file",
+                compare_fofn,
             ],
             logger=logger,
             log_prefix="sourmash",
@@ -254,12 +264,19 @@ class SourmashDereplicator(Dereplicator):
             # atomic and concurrent writers of the same set cannot collide).
             tmp_zip = sigs_zip.parent / f".{sigs_zip.stem}.{uuid.uuid4().hex}.partial.zip"
             genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
-            run_tool(self.capabilities,
+            run_tool(
+                self.capabilities,
                 [
-                    "sourmash", "scripts", "manysketch", sketch_csv,
-                    "-o", tmp_zip,
-                    "-p", f"dna,k={ksize},scaled={scaled}",
-                    "-c", threads,
+                    "sourmash",
+                    "scripts",
+                    "manysketch",
+                    sketch_csv,
+                    "-o",
+                    tmp_zip,
+                    "-p",
+                    f"dna,k={ksize},scaled={scaled}",
+                    "-c",
+                    threads,
                 ],
                 logger=logger,
                 log_prefix="sourmash",
@@ -270,13 +287,21 @@ class SourmashDereplicator(Dereplicator):
             os.replace(tmp_zip, sigs_zip)
 
         pairwise_csv = out_dir / "pairwise.csv"
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             [
-                "sourmash", "scripts", "pairwise", sigs_zip,
-                "-o", pairwise_csv,
-                "-t", f"{threshold ** ksize:g}",
-                "-k", str(ksize),
-                "-c", threads,
+                "sourmash",
+                "scripts",
+                "pairwise",
+                sigs_zip,
+                "-o",
+                pairwise_csv,
+                "-t",
+                f"{threshold**ksize:g}",
+                "-k",
+                str(ksize),
+                "-c",
+                threads,
             ],
             logger=logger,
             log_prefix="sourmash",
@@ -382,7 +407,7 @@ def _parse_pairwise_csv(
     only labels in ``known`` are kept, so a stray name cannot introduce a
     phantom node.
     """
-    min_containment = threshold ** ksize
+    min_containment = threshold**ksize
     neighbors: dict[str, set[str]] = {}
     with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo)

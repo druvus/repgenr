@@ -134,7 +134,10 @@ def glance(
 
     def build() -> GlanceParams:
         return GlanceParams(
-            tool=tool, threads=threads, plot_max=plot_max, plot_min=plot_min,
+            tool=tool,
+            threads=threads,
+            plot_max=plot_max,
+            plot_min=plot_min,
             keep_files=keep_files,
         )
 
@@ -184,7 +187,5 @@ def list_tools() -> None:
         ("snptypers", snptypers),
         ("treebuilders", treebuilders),
     ):
-        entries = [
-            f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()
-        ]
+        entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]
         typer.echo(f"{label}: {', '.join(entries) or '(none)'}")

@@ -49,8 +49,10 @@ def _check_inputs(ctx, all_genomes: bool, allow_incomplete: bool, logger) -> Non
         )
     else:
         check_representatives_consistency(
-            ctx.representatives_dir, ctx.derep_dir / CLUSTERS_TSV,
-            logger=logger, allow_incomplete=allow_incomplete,
+            ctx.representatives_dir,
+            ctx.derep_dir / CLUSTERS_TSV,
+            logger=logger,
+            allow_incomplete=allow_incomplete,
         )
 
 
@@ -82,7 +84,10 @@ def snptype_core(
         limit, alts = warn
         logger.warning(
             "SNP typer '%s' is tuned for <=%d genomes but you have %d; consider: %s",
-            params.tool, limit, len(genomes), ", ".join(alts) or "none",
+            params.tool,
+            limit,
+            len(genomes),
+            ", ".join(alts) or "none",
         )
     typer = snp_registry.create(params.tool)
     if warn_extras:
@@ -129,8 +134,10 @@ def snptype_core(
             )
         versions.update(masker.preflight())
         filtered = masker.mask(
-            result.full_alignment, scratch / params.mask,
-            MaskParams(threads=params.threads), logger,
+            result.full_alignment,
+            scratch / params.mask,
+            MaskParams(threads=params.threads),
+            logger,
         )
         with atomic_path(core) as tmp:
             shutil.copy2(filtered, tmp)
