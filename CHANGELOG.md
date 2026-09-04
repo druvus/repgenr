@@ -7,6 +7,11 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `ska2` SNP typer: reference-free split k-mer calling (`repgenr snptype
+  --tool ska2`, `phylo --msa-source snptype --snptyper ska2`). No genome is
+  privileged as the reference, so reference-private errors do not bias the
+  SNP distances. It emits a variable-site alignment only, so `--mask` is
+  refused for it. Tuning via `--tool-arg ksize=` and `min_freq=`.
 - `repgenr doctor`: read-only workdir health check that verifies outputs
   against the records in `repgenr.yaml` -- interrupted stages, missing or
   corrupt genomes, manifest drift, representative/cluster mismatches,

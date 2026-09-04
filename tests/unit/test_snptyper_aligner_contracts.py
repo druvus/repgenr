@@ -101,6 +101,11 @@ def _make_fake_run_tool(recorded: list[list[str]]):
                 _write(Path(_flag_value(cmd, "-S")), _CANNED_MSA)
             elif "-M" in cmd:
                 _write(Path(_flag_value(cmd, "-M")), _CANNED_MSA)
+        elif tool == "ska":
+            if cmd[1] == "build":
+                _write(Path(_flag_value(cmd, "-o") + ".skf"), "SKF")
+            elif cmd[1] == "align":
+                _write(Path(_flag_value(cmd, "-o")), _CANNED_MSA)
         elif tool == "run_gubbins.py":
             prefix = _flag_value(cmd, "--prefix")
             _write(Path(prefix + ".filtered_polymorphic_sites.fasta"), _CANNED_MSA)
@@ -153,7 +158,12 @@ _SNP_PARAM_TOKENS = {
     "simple": [],
     "snippy": ["--cpus", "7"],
     "parsnp": ["-p", "7"],
+    "ska2": ["--threads", "7"],
 }
+
+# Typers whose output is a variable-site alignment only (split k-mers have no
+# reference coordinates); recombination masking is refused for them upstream.
+_NO_FULL_ALIGNMENT = {"ska2"}
 
 
 @pytest.mark.parametrize("tool", sorted(_SNP_PARAM_TOKENS))
@@ -170,14 +180,18 @@ def test_snptyper_contract(tool, genomes, recorded, tmp_path) -> None:
     if result.snp_distance_matrix is not None:
         assert result.snp_distance_matrix.exists()
 
-    # Every built-in typer must supply a whole-genome alignment for maskers
-    # (snippy: core.full.aln; parsnp: harvesttools -M; simple: its consensuses).
-    assert result.full_alignment is not None, f"{tool} did not return a full_alignment"
-    assert result.full_alignment.exists()
-    full_headers = _read_headers(result.full_alignment)
-    assert full_headers >= set(_STEMS), (
-        f"full alignment must name all genomes, got {full_headers}"
-    )
+    if tool in _NO_FULL_ALIGNMENT:
+        assert result.full_alignment is None
+    else:
+        # Every other built-in typer must supply a whole-genome alignment for
+        # maskers (snippy: core.full.aln; parsnp: harvesttools -M; simple: its
+        # consensuses).
+        assert result.full_alignment is not None, f"{tool} did not return a full_alignment"
+        assert result.full_alignment.exists()
+        full_headers = _read_headers(result.full_alignment)
+        assert full_headers >= set(_STEMS), (
+            f"full alignment must name all genomes, got {full_headers}"
+        )
 
     flat = [tok for cmd in recorded for tok in cmd]
     for token in _SNP_PARAM_TOKENS[tool]:
@@ -259,7 +273,7 @@ def test_aligner_contract(tool, genomes, recorded, tmp_path) -> None:
 
 
 def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
-    builtin_snp = {"simple", "snippy", "parsnp"}
+    builtin_snp = {"simple", "snippy", "parsnp", "ska2"}
     builtin_aln = {"progressivemauve", "cactus", "sibeliaz"}
     assert builtin_snp & set(snp_registry.names()) <= set(_SNP_PARAM_TOKENS)
     assert builtin_aln & set(align_registry.names()) <= set(_ALIGN_PARAM_TOKENS)

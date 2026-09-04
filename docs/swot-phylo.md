@@ -41,7 +41,8 @@ simple/parsnp/snippy (snippy's core.aln is SNP-only, snippy.py:63-67).
 
 **Opportunities.** The SnpTyper ABC (call(genomes, reference, out_dir, params,
 logger) -> SnpResult, docs/adding-tools.md) fits reference-free k-mer callers
-directly; ska2 would remove reference bias for clonal sets. Parallelizing
+directly; ska2 (shipped 2026-09-04 as `snptypers/ska2.py`) removes reference
+bias for clonal sets. Parallelizing
 simple's per-genome loop via the parallel_map already used by progressivemauve
 is a small change. FOFN via write_fofn is the sanctioned pattern for long input
 lists (adding-tools.md:73-76).
@@ -55,7 +56,9 @@ where a handful of reference-private errors dominate the signal.
 
 1. **High** -- Alphabetical genomes[0] reference default, unlogged (5 sites
    above). Log the choice loudly; pick a central genome (e.g. mash medoid) or
-   require --reference above a size threshold.
+   require --reference above a size threshold. Partly mitigated 2026-09-04:
+   the choice is now logged as a warning, and `--tool ska2` removes the
+   reference entirely for sets where split k-mers apply.
 2. **High** -- simple typer serial + O(n^2 S) in-RAM matrix
    (simple.py:61-68,120-147). parallel_map the per-genome calls; stream the
    matrix or make it optional above ~1000 genomes.
@@ -184,7 +187,7 @@ of CPU and a swollen tsv, not a crash -- easy to miss until FlexTaxD import.
 | decenttree | vectorized NJ/BIONJ from matrix | 64k SARS-CoV-2 genomes demonstrated; active (iqtree org) | distance-quality-bound; fine both | easy: replace neighbor_joining() call; matrix already exists |
 | rapidNJ | heuristic NJ from matrix | good to tens of thousands; stable, older | as decenttree | easy, same slot |
 | attotree | mashtree reimplementation (mash + NJ) | fraction of mashtree runtime; v0.1.6, bioconda | as mashtree | trivial: InputKind.GENOMES builder, ~60 lines |
-| ska2 | split-k-mer reference-free SNP calling | very fast, Rust; incremental add-to-callset; Genome Research 2024, active 2026 | designed for clonal/outbreak sets; no reference bias | easy: SnpTyper with requires_reference=False; emits alignment directly |
+| ska2 (in-tree) | split-k-mer reference-free SNP calling | very fast, Rust; incremental add-to-callset; Genome Research 2024, active 2026 | designed for clonal/outbreak sets; no reference bias; no whole-genome alignment, so no masking | Shipped: `snptypers/ska2.py`, requires_reference=False |
 | snp-sites | extract SNP sites from any MSA | linear, trivial | regime-neutral utility | easy: replaces simple.py's Python column scan; long-stable (not re-verified) |
 | parsnp-as-aligner | core-genome MSA (not just SNPs) | ~2000 (its own guidance) | intraspecific/clonal only | moderate: already in-tree as SnpTyper; an Aligner adapter would reuse parsnp.xmfa via harvesttools -M |
 
