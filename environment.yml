@@ -40,6 +40,7 @@ dependencies:
   - snippy
   - parsnp
   - harvesttools
+  - ska2>=0.3
   - gubbins
   # Tree builders
   - iqtree

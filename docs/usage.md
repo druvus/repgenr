@@ -145,6 +145,16 @@ gubbins`) runs on the typer's whole-genome alignment and replaces the
 core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
 emit variable sites cannot be masked.
 
+`--tool ska2` (split k-mer analysis) is reference-free: every genome is an
+ordinary sample, so no assembly's private errors bias the SNP distances, and
+the alphabetical-first-genome reference default does not apply. It emits a
+variable-site alignment only, so it is not compatible with `--mask`. Tune with
+`--tool-arg ksize=31` and `--tool-arg min_freq=0.9` (the fraction of samples a
+split k-mer must occur in). On the 60 Wolbachia species representatives from
+GTDB, a genus-level set, it returned 708 variable sites in about two minutes;
+it is designed for clonal and outbreak sets, where the shared k-mer space is
+far larger.
+
 ## Viral length filtering and over-represented species
 
 The viral selection step keeps records whose genome length falls inside a

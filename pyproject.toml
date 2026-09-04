@@ -65,6 +65,7 @@ sibeliaz = "repgenr.aligners.sibeliaz:SibeliazAligner"
 simple = "repgenr.snptypers.simple:SimpleSnpTyper"
 snippy = "repgenr.snptypers.snippy:SnippyTyper"
 parsnp = "repgenr.snptypers.parsnp:ParsnpTyper"
+ska2 = "repgenr.snptypers.ska2:Ska2Typer"
 
 [project.entry-points."repgenr.maskers"]
 gubbins = "repgenr.maskers.gubbins:GubbinsMasker"

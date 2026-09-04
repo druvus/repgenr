@@ -43,6 +43,7 @@ The stages below shell out to external tools; cite the ones your run uses.
     [SAMtools / BCFtools](https://doi.org/10.1093/gigascience/giab008)
   - [Snippy](https://github.com/tseemann/snippy)
   - [ParSNP / Harvest](https://doi.org/10.1186/s13059-014-0524-x)
+  - [SKA2](https://doi.org/10.1101/gr.279449.124) (split k-mer analysis; Derelle et al. 2024, Genome Research)
   - [Gubbins](https://doi.org/10.1093/nar/gku1196) (recombination masking)
 
 - **Taxonomy**
