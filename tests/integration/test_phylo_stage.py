@@ -260,3 +260,18 @@ def test_snptype_receives_extra_without_mask(
         ),
     )
     assert _FakeSnpTyper.seen_extra == {"kmer": "15"}
+
+
+def test_alignment_free_provenance_records_no_msa_source_tools(
+    workdir: Path, fake_phylo_tools
+) -> None:
+    # A GENOMES builder never runs the aligner or SNP typer, so recording the
+    # default aligner would make --aligner part of the resume fingerprint for a
+    # run it does not influence.
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True))
+    params = ctx.config.stages["phylo"].params
+    assert params["msa_source"] is None
+    assert params["aligner"] is None
+    assert params["snptyper"] is None

@@ -25,6 +25,34 @@ class MashtreeBuilder(TreeBuilder):
     )
     input_kind = InputKind.GENOMES
 
+    @staticmethod
+    def _command(params: TreeParams, matrix: Path, genomes: Sequence[Path]) -> list[str | Path]:
+        """One argument set for both entry points, so the tree and the matrix are
+        computed under the same settings. mindepth 0 uses every k-mer of an
+        assembly (there is no read depth to filter on); genomesize is an
+        optional extra for mash's distance estimate.
+        """
+        cmd: list[str | Path] = ["mashtree", "--numcpus", str(params.threads), "--mindepth", "0"]
+        genomesize = params.extra.get("genomesize")
+        if genomesize is not None:
+            cmd += ["--genomesize", str(int(genomesize))]
+        cmd += ["--outmatrix", matrix, *genomes]
+        return cmd
+
+    def _run(
+        self, genomes: Sequence[Path], out_dir: Path, params: TreeParams, logger: logging.Logger
+    ) -> tuple[Path, Path]:
+        """Run mashtree once; the tree goes to stdout and the matrix to a file."""
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "tree.nwk"
+        matrix = out_dir / "distance_matrix.tsv"
+        cmd = self._command(params, matrix, genomes)
+        warn_argv_bytes("mashtree", cmd, logger)
+        run_tool(self.capabilities, cmd,
+            logger=logger, log_prefix="mashtree", stdout_path=tree,
+        )
+        return tree, matrix
+
     def distance_matrix(
         self,
         genomes: Sequence[Path],
@@ -32,18 +60,7 @@ class MashtreeBuilder(TreeBuilder):
         params: TreeParams,
         logger: logging.Logger,
     ) -> Path:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        matrix = out_dir / "distance_matrix.tsv"
-        cmd: list[str | Path] = ["mashtree"]
-        genomesize = params.extra.get("genomesize")
-        if genomesize is not None:
-            cmd += ["--genomesize", str(int(genomesize))]
-        cmd += ["--mindepth", "0", "--outmatrix", matrix, *genomes]
-        warn_argv_bytes("mashtree", cmd, logger)
-        run_tool(self.capabilities, cmd,
-            logger=logger, log_prefix="mashtree",
-            stdout_path=out_dir / "mashtree.dnd",
-        )
+        _tree, matrix = self._run(genomes, out_dir, params, logger)
         return matrix
 
     def build(
@@ -53,15 +70,5 @@ class MashtreeBuilder(TreeBuilder):
         params: TreeParams,
         logger: logging.Logger,
     ) -> Path:
-        genomes = as_genome_list(msa_or_genomes)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        tree = out_dir / "tree.nwk"
-        cmd: list[str | Path] = ["mashtree", "--numcpus", str(params.threads), *genomes]
-        warn_argv_bytes("mashtree", cmd, logger)
-        run_tool(self.capabilities,
-            cmd,
-            logger=logger,
-            log_prefix="mashtree",
-            stdout_path=tree,
-        )
+        tree, _matrix = self._run(as_genome_list(msa_or_genomes), out_dir, params, logger)
         return tree

@@ -75,6 +75,18 @@ def _preflight_tools(
         snp_registry.create(snptyper).preflight()
 
 
+def _msa_source_summary(treebuilder: str, msa_source: str, aligner: str, snptyper: str) -> str:
+    """The MSA source a dry run will use, or nothing for an alignment-free builder."""
+    from ..treebuilders.base import InputKind
+    from ..treebuilders.base import registry as tb_registry
+
+    if treebuilder != "auto" and tb_registry.create(treebuilder).input_kind == InputKind.GENOMES:
+        return " (alignment-free)"
+    if msa_source == "snptype":
+        return f", snptyper={snptyper}"
+    return f", aligner={aligner}"
+
+
 @app.command()
 def run(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
@@ -166,8 +178,9 @@ def run(
         typer.echo(f"selection: {selection}")
         typer.echo(
             f"dereplicate: tool={derep_tool}, primary_ani={primary_ani}, "
-            f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}, "
-            f"aligner={aligner}; threads={threads}"
+            f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}"
+            f"{_msa_source_summary(treebuilder, msa_source, aligner, snptyper)}; "
+            f"threads={threads}"
         )
         typer.echo("[dry-run] no work done.")
         return

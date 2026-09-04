@@ -269,9 +269,11 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         tool=outcome.treebuilder,
         params={
             "requested_treebuilder": params.treebuilder,
+            # Alignment-free builders never run an MSA source; recording one
+            # would put --aligner into a fingerprint it does not influence.
             "msa_source": params.msa_source if is_msa else None,
-            "aligner": params.aligner if params.msa_source == "aligner" else None,
-            "snptyper": params.snptyper if params.msa_source == "snptype" else None,
+            "aligner": params.aligner if is_msa and params.msa_source == "aligner" else None,
+            "snptyper": params.snptyper if is_msa and params.msa_source == "snptype" else None,
             "all_genomes": params.all_genomes,
             "bootstrap": params.bootstrap,
             "outgroup": None if params.no_outgroup else outcome.outgroup_leaf,
