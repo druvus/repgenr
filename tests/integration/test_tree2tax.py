@@ -72,3 +72,33 @@ def test_tree2tax_include_dereplicated(workdir: Path) -> None:
     _, gmap = tree2tax_run(ctx, Tree2taxParams(include_dereplicated=True))
     accs = {ln.split("\t")[0] for ln in gmap.read_text().splitlines()}
     assert "GCA_000009.1" in accs  # the redundant member is mapped too
+
+
+# An unrooted tree as mashtree/fasttree emit it: the seed node is trifurcating and
+# the outgroup sits deep inside, next to one ingroup leaf.
+_UNROOTED_NWK = (
+    "(Fam_Gen_sp_GCA_000001.1:0.01,Fam_Gen_sp_GCA_000002.1:0.01,"
+    "((Fam_Gen_sp_GCA_000003.1:0.02,Fam_Out_sp_GCA_000009.1:0.2):0.01,"
+    "Fam_Gen_sp_GCA_000004.1:0.01):0.01);"
+)
+
+
+def test_tree2tax_roots_on_outgroup_edge_for_unrooted_tree(workdir: Path) -> None:
+    (workdir / "tree").mkdir(parents=True)
+    (workdir / "tree" / "tree.nwk").write_text(_UNROOTED_NWK + "\n")
+    og = workdir / "outgroup"
+    og.mkdir(parents=True)
+    (og / "Fam_Out_sp_GCA_000009.1.fasta").write_text(">x\nACGT\n")
+    (workdir / "outgroup_accession.txt").write_text("GCA_000009.1\n")
+    ctx = WorkdirContext(workdir, create=True)
+    t2t, _ = tree2tax_run(ctx, Tree2taxParams())
+    edges = _edges(t2t)
+    root_children = {c for c, p in edges if p == "root"}
+    # The root splits the outgroup from one ingroup clade; no ingroup leaf may be
+    # placed beside the outgroup because the input tree happened to be unrooted.
+    assert "Fam_Out_sp_GCA_000009.1" in root_children
+    assert len(root_children) == 2
+    (ingroup,) = root_children - {"Fam_Out_sp_GCA_000009.1"}
+    # The outgroup's former neighbour is inside the ingroup clade, not at the root.
+    assert not ingroup.startswith("Fam_")
+    assert ("Fam_Gen_sp_GCA_000003.1", "root") not in edges

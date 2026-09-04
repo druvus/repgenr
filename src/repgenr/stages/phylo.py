@@ -7,7 +7,9 @@ Three orthogonal choices:
   * tree builder  -- iqtree / fasttree / raxmlng (MSA) or mashtree / sourmash
                      (alignment-free)
 
-Outgroup rooting is handled here once, regardless of the tools chosen.
+The outgroup genome is added to the input set here and passed to builders that
+can root (iqtree, raxmlng); the others emit an unrooted tree. Rooting on the
+outgroup is done once, for every builder, in the tree2tax stage.
 """
 
 from __future__ import annotations
