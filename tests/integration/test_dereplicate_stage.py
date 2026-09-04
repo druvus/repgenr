@@ -144,15 +144,19 @@ def test_keeper_quality_promotes_best_scoring_member(
     from repgenr.core.manifest import GenomeRecord
 
     quality = {
-        genome_files[0].name: (80.0, 5.0),   # score 55.0 -- worst
-        genome_files[1].name: (95.0, 1.0),   # score 90.0
-        genome_files[2].name: (99.0, 0.2),   # score 98.0 -- best
+        genome_files[0].name: (80.0, 5.0),  # score 55.0 -- worst
+        genome_files[1].name: (95.0, 1.0),  # score 90.0
+        genome_files[2].name: (99.0, 0.2),  # score 98.0 -- best
     }
     for filename, (completeness, contamination) in quality.items():
-        ctx.manifest.upsert(GenomeRecord(
-            accession=accession_from_filename(filename), filename=filename,
-            completeness=completeness, contamination=contamination,
-        ))
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(filename),
+                filename=filename,
+                completeness=completeness,
+                contamination=contamination,
+            )
+        )
 
     result = run(ctx, DereplicateParams(tool="fake", keeper="quality"))
 
@@ -177,10 +181,14 @@ def test_keeper_tool_keeps_adapter_pick(workdir: Path, genome_files, fake_tool) 
         genome_files[2].name: (99.0, 0.2),
     }
     for filename, (completeness, contamination) in quality.items():
-        ctx.manifest.upsert(GenomeRecord(
-            accession=accession_from_filename(filename), filename=filename,
-            completeness=completeness, contamination=contamination,
-        ))
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(filename),
+                filename=filename,
+                completeness=completeness,
+                contamination=contamination,
+            )
+        )
 
     result = run(ctx, DereplicateParams(tool="fake", keeper="tool"))
 
@@ -217,10 +225,14 @@ def test_keeper_quality_with_manifest_quality_records_quality(
     from repgenr.core.manifest import GenomeRecord
 
     for f in genome_files:
-        ctx.manifest.upsert(GenomeRecord(
-            accession=accession_from_filename(f.name), filename=f.name,
-            completeness=99.0, contamination=0.5,
-        ))
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(f.name),
+                filename=f.name,
+                completeness=99.0,
+                contamination=0.5,
+            )
+        )
     run(ctx, DereplicateParams(tool="fake", keeper="quality"))
     assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
 
@@ -233,10 +245,15 @@ def test_stage1_uses_pre_thresholds(workdir: Path, genome_files, fake_tool) -> N
         (gdir / f"Francisellaceae_f_t_GCA_00000{i}.fasta").write_text(f">s{i}\n{'ACGT' * 10}\n")
 
     ctx = WorkdirContext(workdir, create=True)
-    run(ctx, DereplicateParams(
-        tool="recording", process_size=2,
-        secondary_ani=0.99, pre_secondary_ani=0.95,
-    ))
+    run(
+        ctx,
+        DereplicateParams(
+            tool="recording",
+            process_size=2,
+            secondary_ani=0.99,
+            pre_secondary_ani=0.95,
+        ),
+    )
     calls = _RecordingDereplicator.calls
     # stage-1 chunk calls use the looser pre threshold; the final stage-2 call
     # (on the union of stage-1 reps) uses the main threshold.

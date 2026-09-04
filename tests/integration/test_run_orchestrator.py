@@ -25,9 +25,20 @@ def _record(monkeypatch) -> list[str]:
 
 def test_run_bacterial_chain(monkeypatch, tmp_path) -> None:
     calls = _record(monkeypatch)
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "-d", "rep", "-l", "genus", "-tg", "francisella",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "-d",
+            "rep",
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+        ],
+    )
     assert result.exit_code == 0, result.stdout
     assert calls == ["metadata", "genome", "dereplicate", "phylo", "tree2tax"]
     assert "Pipeline complete" in result.stdout
@@ -35,9 +46,19 @@ def test_run_bacterial_chain(monkeypatch, tmp_path) -> None:
 
 def test_run_viral_chain(monkeypatch, tmp_path) -> None:
     calls = _record(monkeypatch)
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "--viral", "-t", "mastadenovirus", "-tg", "Mastadenovirus",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "--viral",
+            "-t",
+            "mastadenovirus",
+            "-tg",
+            "Mastadenovirus",
+        ],
+    )
     assert result.exit_code == 0, result.stdout
     assert calls == ["vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax"]
 
@@ -50,9 +71,19 @@ def test_run_validates_tool(monkeypatch, tmp_path) -> None:
 
 def test_run_dry_run_previews_without_executing(monkeypatch, tmp_path) -> None:
     calls = _record(monkeypatch)
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "--dry-run", "-l", "genus", "-tg", "francisella",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "--dry-run",
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+        ],
+    )
     assert result.exit_code == 0, result.stdout
     assert calls == []  # no stage executed
     assert "[dry-run]" in result.stdout
@@ -94,10 +125,22 @@ def test_run_preflights_every_tool_before_the_first_stage(
     register_tool(tb_registry, "absenttree", AbsentBuilder)
     calls: list[str] = []
     monkeypatch.setattr(cmd_run, "_run", lambda stage, *a, **k: calls.append(stage))
-    result = _runner.invoke(app, [
-        "run", "-wd", str(tmp_path), "-l", "genus", "-tg", "francisella",
-        "--tool", "okderep", "--treebuilder", "absenttree",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+            "--tool",
+            "okderep",
+            "--treebuilder",
+            "absenttree",
+        ],
+    )
     assert result.exit_code != 0
     assert calls == []  # nothing downloaded, nothing dereplicated
     assert "absenttree" in result.output

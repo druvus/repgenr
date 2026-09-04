@@ -93,8 +93,12 @@ def manifest_digest(manifest: Manifest, *, include_derep: bool = True) -> str:
     digest = hashlib.sha256()
     rows = sorted(
         (
-            r.accession, r.filename or "", r.family or "", r.genus or "",
-            r.species or "", str(r.is_outgroup),
+            r.accession,
+            r.filename or "",
+            r.family or "",
+            r.genus or "",
+            r.species or "",
+            str(r.is_outgroup),
             *((r.derep_status or "", r.representative or "") if include_derep else ()),
             "" if r.completeness is None else repr(r.completeness),
             "" if r.contamination is None else repr(r.contamination),

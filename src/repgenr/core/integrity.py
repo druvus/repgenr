@@ -41,11 +41,7 @@ def _known_missing_accessions(workdir: Path) -> set[str]:
     path = workdir / MISSING_ACCESSIONS_TXT
     if not path.exists():
         return set()
-    return {
-        line.strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
+    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
 
 
 def check_genome_completeness(

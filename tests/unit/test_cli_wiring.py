@@ -37,10 +37,26 @@ def _invoke(dispatched, args: list[str]):
 
 
 def test_metadata_wiring(dispatched, tmp_path) -> None:
-    stage, params, create = _invoke(dispatched, [
-        "metadata", "-wd", str(tmp_path), "--source", "api", "--level", "species",
-        "-tg", "Francisella", "-ts", "tularensis", "--limit", "5", "--dataset", "rep",
-    ])
+    stage, params, create = _invoke(
+        dispatched,
+        [
+            "metadata",
+            "-wd",
+            str(tmp_path),
+            "--source",
+            "api",
+            "--level",
+            "species",
+            "-tg",
+            "Francisella",
+            "-ts",
+            "tularensis",
+            "--limit",
+            "5",
+            "--dataset",
+            "rep",
+        ],
+    )
     assert stage == "metadata" and create is True
     assert (params.source, params.level) == ("api", "species")
     assert (params.target_genus, params.target_species) == ("Francisella", "tularensis")
@@ -48,20 +64,47 @@ def test_metadata_wiring(dispatched, tmp_path) -> None:
 
 
 def test_genome_wiring(dispatched, tmp_path) -> None:
-    stage, params, create = _invoke(dispatched, [
-        "genome", "-wd", str(tmp_path), "--accession-list-only", "--keep-files",
-    ])
+    stage, params, create = _invoke(
+        dispatched,
+        [
+            "genome",
+            "-wd",
+            str(tmp_path),
+            "--accession-list-only",
+            "--keep-files",
+        ],
+    )
     assert stage == "genome" and create is False
     assert params.accession_list_only is True and params.keep_files is True
 
 
 def test_dereplicate_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "dereplicate", "-wd", str(tmp_path), "--tool", "skder",
-        "-sani", "0.98", "-pani", "0.85", "-af", "0.6", "-t", "4",
-        "--process-size", "100", "--reduce", "species", "--target-reps", "10",
-        "--keeper", "tool",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "dereplicate",
+            "-wd",
+            str(tmp_path),
+            "--tool",
+            "skder",
+            "-sani",
+            "0.98",
+            "-pani",
+            "0.85",
+            "-af",
+            "0.6",
+            "-t",
+            "4",
+            "--process-size",
+            "100",
+            "--reduce",
+            "species",
+            "--target-reps",
+            "10",
+            "--keeper",
+            "tool",
+        ],
+    )
     assert stage == "dereplicate"
     assert (params.tool, params.secondary_ani, params.primary_ani) == ("skder", 0.98, 0.85)
     assert (params.aligned_fraction, params.threads) == (0.6, 4)
@@ -89,54 +132,111 @@ def test_dereplicate_unknown_tool_fails(dispatched, tmp_path) -> None:
 
 
 def test_snptype_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "snptype", "-wd", str(tmp_path), "--tool", "simple", "--mask", "gubbins",
-        "--reference", "ref.fasta", "--all-genomes", "-t", "3",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "snptype",
+            "-wd",
+            str(tmp_path),
+            "--tool",
+            "simple",
+            "--mask",
+            "gubbins",
+            "--reference",
+            "ref.fasta",
+            "--all-genomes",
+            "-t",
+            "3",
+        ],
+    )
     assert stage == "snptype"
     assert (params.tool, params.mask, params.reference) == ("simple", "gubbins", "ref.fasta")
     assert params.all_genomes is True and params.threads == 3
 
 
 def test_phylo_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "phylo", "-wd", str(tmp_path), "--treebuilder", "mashtree",
-        "--msa-source", "snptype", "--snptyper", "simple",
-        "--bootstrap", "1000", "--no-outgroup",
-        "--aligner-arg", "kmer=15",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "phylo",
+            "-wd",
+            str(tmp_path),
+            "--treebuilder",
+            "mashtree",
+            "--msa-source",
+            "snptype",
+            "--snptyper",
+            "simple",
+            "--bootstrap",
+            "1000",
+            "--no-outgroup",
+            "--aligner-arg",
+            "kmer=15",
+        ],
+    )
     assert stage == "phylo"
     assert (params.treebuilder, params.msa_source, params.snptyper) == (
-        "mashtree", "snptype", "simple",
+        "mashtree",
+        "snptype",
+        "simple",
     )
     assert params.bootstrap == 1000 and params.no_outgroup is True
     assert params.extra == {"kmer": "15"}
 
 
 def test_phylo_bad_aligner_arg_fails(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "phylo", "-wd", str(tmp_path), "--aligner-arg", "not-key-value",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "phylo",
+            "-wd",
+            str(tmp_path),
+            "--aligner-arg",
+            "not-key-value",
+        ],
+    )
     assert result.exit_code != 0
     assert dispatched == []
 
 
 def test_tree2tax_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "tree2tax", "-wd", str(tmp_path), "--node-basename", "NODE",
-        "-r", "myroot", "--remove-outgroup", "--include-dereplicated",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "tree2tax",
+            "-wd",
+            str(tmp_path),
+            "--node-basename",
+            "NODE",
+            "-r",
+            "myroot",
+            "--remove-outgroup",
+            "--include-dereplicated",
+        ],
+    )
     assert stage == "tree2tax"
     assert (params.node_basename, params.root_name) == ("NODE", "myroot")
     assert params.remove_outgroup is True and params.include_dereplicated is True
 
 
 def test_vmetadata_wiring(dispatched, tmp_path) -> None:
-    stage, params, create = _invoke(dispatched, [
-        "vmetadata", "-wd", str(tmp_path), "-t", "adenoviridae",
-        "--source", "ncbi_virus", "--complete-only", "--host", "homo sapiens",
-        "--released-after", "01/31/2024",
-    ])
+    stage, params, create = _invoke(
+        dispatched,
+        [
+            "vmetadata",
+            "-wd",
+            str(tmp_path),
+            "-t",
+            "adenoviridae",
+            "--source",
+            "ncbi_virus",
+            "--complete-only",
+            "--host",
+            "homo sapiens",
+            "--released-after",
+            "01/31/2024",
+        ],
+    )
     assert stage == "vmetadata" and create is True
     assert (params.target, params.source) == ("adenoviridae", "ncbi_virus")
     assert params.complete_only is True and params.host == "homo sapiens"
@@ -144,18 +244,40 @@ def test_vmetadata_wiring(dispatched, tmp_path) -> None:
 
 
 def test_vmetadata_bad_source_fails(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "vmetadata", "-wd", str(tmp_path), "-t", "x", "--source", "nosuch",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "vmetadata",
+            "-wd",
+            str(tmp_path),
+            "-t",
+            "x",
+            "--source",
+            "nosuch",
+        ],
+    )
     assert result.exit_code != 0
 
 
 def test_vgenome_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "vgenome", "-wd", str(tmp_path), "-tg", "Mastadenovirus",
-        "--length-range", "25000-35000", "--length-deviation", "15",
-        "--group-segments", "--no-outgroup", "--discard", "partial,plasmid",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "vgenome",
+            "-wd",
+            str(tmp_path),
+            "-tg",
+            "Mastadenovirus",
+            "--length-range",
+            "25000-35000",
+            "--length-deviation",
+            "15",
+            "--group-segments",
+            "--no-outgroup",
+            "--discard",
+            "partial,plasmid",
+        ],
+    )
     assert stage == "vgenome"
     assert params.target_genus == "Mastadenovirus"
     assert (params.length_range, params.length_deviation) == ("25000-35000", 15)
@@ -164,10 +286,21 @@ def test_vgenome_wiring(dispatched, tmp_path) -> None:
 
 
 def test_glance_wiring(dispatched, tmp_path) -> None:
-    stage, params, _ = _invoke(dispatched, [
-        "glance", "-wd", str(tmp_path), "-t", "2", "--plot-max", "0.9",
-        "--plot-min", "0.1", "--keep-files",
-    ])
+    stage, params, _ = _invoke(
+        dispatched,
+        [
+            "glance",
+            "-wd",
+            str(tmp_path),
+            "-t",
+            "2",
+            "--plot-max",
+            "0.9",
+            "--plot-min",
+            "0.1",
+            "--keep-files",
+        ],
+    )
     assert stage == "glance"
     assert (params.threads, params.plot_max, params.plot_min) == (2, 0.9, 0.1)
     assert params.keep_files is True
@@ -200,9 +333,17 @@ def step_calls(monkeypatch) -> list:
 def test_genome_fetch_step_wiring(step_calls, tmp_path) -> None:
     sel = tmp_path / "selection.tsv"
     sel.write_text("accession\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "genome-fetch", "--selection", str(sel), "-o", str(tmp_path / "out"), "--keep-files",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "genome-fetch",
+            "--selection",
+            str(sel),
+            "-o",
+            str(tmp_path / "out"),
+            "--keep-files",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.selection_tsv == sel and params.keep_files is True
@@ -213,10 +354,23 @@ def test_dereplicate_chunk_step_wiring(step_calls, tmp_path) -> None:
     g.write_text(">g1\nACGT\n", encoding="utf-8")
     fofn = tmp_path / "genomes.fofn"
     fofn.write_text(f"{g}\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
-        "--tool", "galah", "-sani", "0.97", "-t", "2", "--virus",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-chunk",
+            "--genomes-fofn",
+            str(fofn),
+            "-o",
+            str(tmp_path / "out"),
+            "--tool",
+            "galah",
+            "-sani",
+            "0.97",
+            "-t",
+            "2",
+            "--virus",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert (params.tool, params.secondary_ani, params.threads) == ("galah", 0.97, 2)
@@ -228,10 +382,21 @@ def test_dereplicate_chunk_step_injects_virus_for_reader(step_calls, tmp_path) -
     g.write_text(">g1\nACGT\n", encoding="utf-8")
     fofn = tmp_path / "genomes.fofn"
     fofn.write_text(f"{g}\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
-        "--tool", "drep", "-t", "2", "--virus",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-chunk",
+            "--genomes-fofn",
+            str(fofn),
+            "-o",
+            str(tmp_path / "out"),
+            "--tool",
+            "drep",
+            "-t",
+            "2",
+            "--virus",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.tool == "drep"
@@ -245,10 +410,20 @@ def test_dereplicate_chunk_step_wiring_selection_and_keeper(step_calls, tmp_path
     fofn.write_text(f"{g}\n", encoding="utf-8")
     sel = tmp_path / "selection.tsv"
     sel.write_text("accession\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
-        "--selection-tsv", str(sel), "--keeper", "tool",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-chunk",
+            "--genomes-fofn",
+            str(fofn),
+            "-o",
+            str(tmp_path / "out"),
+            "--selection-tsv",
+            str(sel),
+            "--keeper",
+            "tool",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.selection_tsv == sel and params.keeper == "tool"
@@ -263,10 +438,18 @@ def test_dereplicate_merge_step_requires_chunks(step_calls, tmp_path) -> None:
 def test_dereplicate_merge_step_wiring(step_calls, tmp_path) -> None:
     chunk = tmp_path / "chunk0"
     chunk.mkdir()
-    result = _runner.invoke(app, [
-        "dereplicate-merge", "-o", str(tmp_path / "out"),
-        "--chunk-dir", str(chunk), "--tool", "skder",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-merge",
+            "-o",
+            str(tmp_path / "out"),
+            "--chunk-dir",
+            str(chunk),
+            "--tool",
+            "skder",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.chunk_dirs == [chunk] and params.tool == "skder"
@@ -277,11 +460,22 @@ def test_dereplicate_merge_step_wiring_selection_and_keeper(step_calls, tmp_path
     chunk.mkdir()
     sel = tmp_path / "selection.tsv"
     sel.write_text("accession\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "dereplicate-merge", "-o", str(tmp_path / "out"),
-        "--chunk-dir", str(chunk), "--tool", "skder",
-        "--selection-tsv", str(sel), "--keeper", "tool",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-merge",
+            "-o",
+            str(tmp_path / "out"),
+            "--chunk-dir",
+            str(chunk),
+            "--tool",
+            "skder",
+            "--selection-tsv",
+            str(sel),
+            "--keeper",
+            "tool",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.selection_tsv == sel and params.keeper == "tool"
@@ -290,19 +484,38 @@ def test_dereplicate_merge_step_wiring_selection_and_keeper(step_calls, tmp_path
 def test_dereplicate_merge_step_rejects_bad_keeper(step_calls, tmp_path) -> None:
     chunk = tmp_path / "chunk0"
     chunk.mkdir()
-    result = _runner.invoke(app, [
-        "dereplicate-merge", "-o", str(tmp_path / "out"),
-        "--chunk-dir", str(chunk), "--keeper", "bogus",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate-merge",
+            "-o",
+            str(tmp_path / "out"),
+            "--chunk-dir",
+            str(chunk),
+            "--keeper",
+            "bogus",
+        ],
+    )
     assert result.exit_code != 0
     assert step_calls == []
 
 
 def test_phylo_build_step_wiring(step_calls, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "phylo-build", "--genomes-dir", str(tmp_path), "-o", str(tmp_path / "out"),
-        "--treebuilder", "mashtree", "--no-outgroup", "-t", "3",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "phylo-build",
+            "--genomes-dir",
+            str(tmp_path),
+            "-o",
+            str(tmp_path / "out"),
+            "--treebuilder",
+            "mashtree",
+            "--no-outgroup",
+            "-t",
+            "3",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.phylo.treebuilder == "mashtree"
@@ -313,10 +526,19 @@ def test_phylo_build_step_wiring(step_calls, tmp_path) -> None:
 def test_tree2tax_relations_step_wiring(step_calls, tmp_path) -> None:
     tree = tmp_path / "tree.nwk"
     tree.write_text("(a,b);\n", encoding="utf-8")
-    result = _runner.invoke(app, [
-        "tree2tax-relations", "--tree", str(tree), "-o", str(tmp_path / "out"),
-        "--node-basename", "NODE", "--remove-outgroup",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "tree2tax-relations",
+            "--tree",
+            str(tree),
+            "-o",
+            str(tmp_path / "out"),
+            "--node-basename",
+            "NODE",
+            "--remove-outgroup",
+        ],
+    )
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.tree == tree
@@ -326,27 +548,55 @@ def test_tree2tax_relations_step_wiring(step_calls, tmp_path) -> None:
 def test_run_viral_injects_virus_extra_only_when_accepted(dispatched, tmp_path) -> None:
     """--viral must not fingerprint-churn tools that ignore extra['virus']."""
     wd = str(tmp_path)
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "--viral", "-t", "adeno", "--tool", "skder",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "--viral",
+            "-t",
+            "adeno",
+            "--tool",
+            "skder",
+        ],
+    )
     assert result.exit_code == 0, result.output
     derep = {s: p for s, p, _ in dispatched}["dereplicate"]
     assert derep.extra == {}  # skder ignores 'virus'
     dispatched.clear()
 
-    result = _runner.invoke(app, [
-        "run", "-wd", wd, "--viral", "-t", "adeno", "--tool", "drep",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "--viral",
+            "-t",
+            "adeno",
+            "--tool",
+            "drep",
+        ],
+    )
     assert result.exit_code == 0, result.output
     derep = {s: p for s, p, _ in dispatched}["dereplicate"]
     assert derep.extra == {"virus": True}  # drep reads it
 
 
 def test_tool_arg_reaches_extra(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "dereplicate", "-wd", str(tmp_path), "--tool", "skder",
-        "--tool-arg", "mode=greedy",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "dereplicate",
+            "-wd",
+            str(tmp_path),
+            "--tool",
+            "skder",
+            "--tool-arg",
+            "mode=greedy",
+        ],
+    )
     assert result.exit_code == 0, result.output
     params = {s: p for s, p, _ in dispatched}["dereplicate"]
     assert params.extra == {"mode": "greedy"}
@@ -368,10 +618,20 @@ def test_help_lists_registered_tools() -> None:
 
 
 def test_phylo_mask_option_feeds_extra(dispatched, tmp_path) -> None:
-    result = _runner.invoke(app, [
-        "phylo", "-wd", str(tmp_path), "--msa-source", "snptype",
-        "--snptyper", "simple", "--mask", "gubbins",
-    ])
+    result = _runner.invoke(
+        app,
+        [
+            "phylo",
+            "-wd",
+            str(tmp_path),
+            "--msa-source",
+            "snptype",
+            "--snptyper",
+            "simple",
+            "--mask",
+            "gubbins",
+        ],
+    )
     assert result.exit_code == 0, result.output
     params = {s: p for s, p, _ in dispatched}["phylo"]
     assert params.extra["mask"] == "gubbins"

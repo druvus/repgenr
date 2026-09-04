@@ -81,13 +81,17 @@ class SibeliazAligner(Aligner):
         sib_argv: list[str | Path] = [
             *sibeliaz_cmd,
             *tuning,
-            "-f", str(filtermemory),
-            "-t", str(params.threads),
-            "-o", out_dir,
+            "-f",
+            str(filtermemory),
+            "-t",
+            str(params.threads),
+            "-o",
+            out_dir,
             *[str(g.resolve()) for g in genomes],
         ]
         warn_argv_bytes("sibeliaz", sib_argv, logger)
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             sib_argv,
             logger=logger,
             log_prefix="sibeliaz",

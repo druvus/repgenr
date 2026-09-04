@@ -34,11 +34,18 @@ def metadata(
 
     def build():
         return metadata_params(
-            dataset=dataset, level=level, source=source,
-            release=release, version=gtdb_version,
-            target_family=target_family, target_genus=target_genus,
-            target_species=target_species, outgroup_accession=outgroup_accession,
-            metadata_path=metadata_path, nodownload=nodownload, limit=limit,
+            dataset=dataset,
+            level=level,
+            source=source,
+            release=release,
+            version=gtdb_version,
+            target_family=target_family,
+            target_genus=target_genus,
+            target_species=target_species,
+            outgroup_accession=outgroup_accession,
+            metadata_path=metadata_path,
+            nodownload=nodownload,
+            limit=limit,
         )
 
     _run("metadata", workdir, build, create=True)
@@ -68,29 +75,37 @@ def dereplicate(
     aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     process_size: int | None = typer.Option(
-        None, "-s", "--process-size",
+        None,
+        "-s",
+        "--process-size",
         help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",
     ),
     num_processes: int = typer.Option(
-        0, "-p", "--num-processes",
+        0,
+        "-p",
+        "--num-processes",
         help="Parallel stage-1 chunk workers (threads split across them). "
         "0 = auto (~threads/4, capped by cores).",
     ),
     pre_primary_ani: float | None = typer.Option(
-        None, "--pre-primary-ani",
+        None,
+        "--pre-primary-ani",
         help="Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani.",
     ),
     pre_secondary_ani: float | None = typer.Option(
-        None, "--pre-secondary-ani",
+        None,
+        "--pre-secondary-ani",
         help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
     ),
     reduce: str = typer.Option(
-        "none", "--reduce",
+        "none",
+        "--reduce",
         help="Taxonomy-aware reduction after ANI: none, species, or genus "
         "(one representative per taxon).",
     ),
     target_reps: int = typer.Option(
-        0, "--target-reps",
+        0,
+        "--target-reps",
         help="Target representative count: search --secondary-ani to land near it "
         "(0 = off; re-runs dereplication per search step).",
     ),
@@ -99,11 +114,13 @@ def dereplicate(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable), e.g. mode=greedy."
     ),
     allow_incomplete: bool = typer.Option(
-        False, "--allow-incomplete",
+        False,
+        "--allow-incomplete",
         help="Proceed with a warning when genomes/ is missing selected genomes.",
     ),
     keeper: str = typer.Option(
-        "quality", "--keeper",
+        "quality",
+        "--keeper",
         help="Representative choice per cluster: quality (CheckM score from GTDB) "
         "or tool (adapter's own).",
     ),

@@ -24,18 +24,20 @@ from repgenr.viral.entrez import TAXNAMES_ORDERED
 
 
 def _report_line(accession: str, organism: str, family: str, length: int) -> str:
-    return json.dumps({
-        "accession": accession,
-        "length": length,
-        "completeness": "complete",
-        "segment": "",
-        "isolate": {"name": f"iso-{accession}"},
-        "virus": {
-            "organismName": organism,
-            "taxId": 10508,
-            "lineage": [{"name": "Viruses"}, {"name": family}, {"name": "Mastadenovirus"}],
-        },
-    })
+    return json.dumps(
+        {
+            "accession": accession,
+            "length": length,
+            "completeness": "complete",
+            "segment": "",
+            "isolate": {"name": f"iso-{accession}"},
+            "virus": {
+                "organismName": organism,
+                "taxId": 10508,
+                "lineage": [{"name": "Viruses"}, {"name": family}, {"name": "Mastadenovirus"}],
+            },
+        }
+    )
 
 
 @pytest.fixture()
@@ -47,10 +49,12 @@ def fake_datasets(monkeypatch):
         cmd = [str(c) for c in cmd]
         calls.append(cmd)
         zip_path = Path(cmd[cmd.index("--filename") + 1])
-        report = "\n".join([
-            _report_line("NC_001.1", "Human adenovirus 1", "Adenoviridae", 34000),
-            _report_line("NC_002.1", "Human adenovirus 2", "Adenoviridae", 35000),
-        ])
+        report = "\n".join(
+            [
+                _report_line("NC_001.1", "Human adenovirus 1", "Adenoviridae", 34000),
+                _report_line("NC_002.1", "Human adenovirus 2", "Adenoviridae", 35000),
+            ]
+        )
         fna = ">NC_001.1 Human adenovirus 1\nACGT\n>NC_002.1 Human adenovirus 2\nACGT\n"
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr("ncbi_dataset/data/data_report.jsonl", report)
@@ -58,8 +62,7 @@ def fake_datasets(monkeypatch):
         return 0
 
     monkeypatch.setattr(ncbi_virus, "run_tool_with_retries", fake)
-    monkeypatch.setattr(vmetadata, "preflight", lambda caps: {"datasets": "16.0"},
-                        raising=False)
+    monkeypatch.setattr(vmetadata, "preflight", lambda caps: {"datasets": "16.0"}, raising=False)
     return calls
 
 
@@ -87,12 +90,12 @@ def test_ncbi_virus_filters_forwarded(tmp_path, fake_datasets, monkeypatch) -> N
 
     monkeypatch.setattr(plugins, "check_binaries", lambda specs: {})
     ctx = WorkdirContext(tmp_path / "wd", create=True)
-    params = VmetadataParams(target="adenoviridae", complete_only=True,
-                             host="homo sapiens", released_after="01/31/2024")
+    params = VmetadataParams(
+        target="adenoviridae", complete_only=True, host="homo sapiens", released_after="01/31/2024"
+    )
     vmetadata.run(ctx, params)
     flat = [tok for cmd in fake_datasets for tok in cmd]
-    for token in ("--complete-only", "--host", "homo sapiens",
-                  "--released-after", "01/31/2024"):
+    for token in ("--complete-only", "--host", "homo sapiens", "--released-after", "01/31/2024"):
         assert token in flat
 
 
@@ -180,7 +183,8 @@ def test_vgenome_dispatches_to_records_backend(tmp_path, monkeypatch) -> None:
 
     called = {}
     monkeypatch.setattr(
-        selection, "run_records",
+        selection,
+        "run_records",
         lambda ctx, params, dwd, fasta, records, logger: called.setdefault("n", 7) or 7,
     )
     assert vgenome.run(ctx, VgenomeParams()) == 7
@@ -198,7 +202,8 @@ def test_vgenome_dispatches_to_bvbrc_backend(tmp_path, monkeypatch) -> None:
     import repgenr.viral.bvbrc as bvbrc
 
     monkeypatch.setattr(
-        bvbrc, "run_select",
+        bvbrc,
+        "run_select",
         lambda ctx, params, fasta, base, ncbi, logger: 5,
     )
     assert vgenome.run(ctx, VgenomeParams()) == 5

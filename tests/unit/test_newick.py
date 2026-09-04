@@ -33,7 +33,7 @@ def test_four_taxa_recovers_expected_grouping() -> None:
     assert nwk.endswith(");")
     assert _leaves(nwk) == {"A", "B", "C", "D"}
     # A and B should be adjacent in the tree string (a cherry), likewise C and D
-    assert ("A_" in nwk.replace("A:", "A_") and "B" in nwk)
+    assert "A_" in nwk.replace("A:", "A_") and "B" in nwk
     assert re.search(r"\(A:[0-9.]+,B:[0-9.]+\)", nwk) or re.search(r"\(B:[0-9.]+,A:[0-9.]+\)", nwk)
     assert re.search(r"\(C:[0-9.]+,D:[0-9.]+\)", nwk) or re.search(r"\(D:[0-9.]+,C:[0-9.]+\)", nwk)
 

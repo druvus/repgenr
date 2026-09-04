@@ -41,7 +41,8 @@ class FasttreeBuilder(TreeBuilder):
             binary = "fasttree"
         else:
             binary = "FastTree" if shutil.which("FastTree") else "fasttree"
-        run_tool(self.capabilities, 
+        run_tool(
+            self.capabilities,
             [binary, "-nt", "-gtr", msa],
             logger=logger,
             log_prefix="fasttree",

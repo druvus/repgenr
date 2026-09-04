@@ -24,8 +24,12 @@ _LOG = logging.getLogger("test")
 
 _GENOMES = ["g1.fasta", "g2.fasta", "g3.fasta", "g4.fasta"]
 # canned clustering: g1 represents {g2}, g3 represents {g4}
-_REP_OF = {"g1.fasta": "g1.fasta", "g2.fasta": "g1.fasta",
-           "g3.fasta": "g3.fasta", "g4.fasta": "g3.fasta"}
+_REP_OF = {
+    "g1.fasta": "g1.fasta",
+    "g2.fasta": "g1.fasta",
+    "g3.fasta": "g3.fasta",
+    "g4.fasta": "g3.fasta",
+}
 _NEWICK = "(g1:0.1,g2:0.1,(g3:0.1,g4:0.1):0.1);\n"
 
 
@@ -194,8 +198,7 @@ def test_dereplicator_contract(tool, genomes, recorded, tmp_path) -> None:
     if tool not in derep_registry.names():
         pytest.skip(f"{tool} not registered")
     adapter = derep_registry.create(tool)
-    params = DerepParams(primary_ani=0.90, secondary_ani=0.99,
-                         aligned_fraction=0.50, threads=7)
+    params = DerepParams(primary_ani=0.90, secondary_ani=0.99, aligned_fraction=0.50, threads=7)
     result = adapter.dereplicate(genomes, tmp_path / "out", params, _LOG)
 
     _assert_partition(result)

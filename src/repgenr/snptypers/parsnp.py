@@ -49,10 +49,18 @@ class ParsnpTyper(SnpTyper):
 
         results = out_dir / "parsnp_out"
         cmd: list[str | Path] = [
-            "parsnp", "-r", reference.resolve(), "-d", gdir,
-            "-o", results, "-p", str(params.threads),
+            "parsnp",
+            "-r",
+            reference.resolve(),
+            "-d",
+            gdir,
+            "-o",
+            results,
+            "-p",
+            str(params.threads),
         ]
-        run_tool(self.capabilities, 
+        run_tool(
+            self.capabilities,
             cmd,
             logger=logger,
             log_prefix="parsnp",
@@ -62,14 +70,16 @@ class ParsnpTyper(SnpTyper):
             raise WorkdirError("ParSNP did not produce parsnp.ggr")
 
         core_fasta = out_dir / "core_snp.fasta"
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             ["harvesttools", "-i", ggr, "-S", core_fasta],
             logger=logger,
             log_prefix="harvesttools",
         )
 
         full_fasta = out_dir / "full_alignment.fasta"
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             ["harvesttools", "-i", ggr, "-M", full_fasta],
             logger=logger,
             log_prefix="harvesttools",

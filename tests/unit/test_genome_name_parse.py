@@ -13,7 +13,10 @@ def test_bacterial_round_trip() -> None:
     name = genome_filename("Francisellaceae", "Francisella", "tularensis", "GCF_000017785.1")
     assert name == "Francisellaceae_Francisella_tularensis_GCF_000017785.1.fasta"
     assert parse_genome_filename(name) == (
-        "Francisellaceae", "Francisella", "tularensis", "GCF_000017785.1",
+        "Francisellaceae",
+        "Francisella",
+        "tularensis",
+        "GCF_000017785.1",
     )
     assert accession_from_filename(name) == "GCF_000017785.1"
 

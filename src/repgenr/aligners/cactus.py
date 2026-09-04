@@ -62,14 +62,18 @@ class CactusAligner(Aligner):
         # Genome paths live inside seqfile.txt, not in argv, so the backend
         # cannot infer their mounts; declare their directories explicitly.
         genome_dirs = sorted({os.path.dirname(p) for p in genome_paths})
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             [
                 "cactus-pangenome",
                 job_store,
                 seqfile,
-                "--outDir", results,
-                "--outName", "pangenome",
-                "--reference", ref_name,
+                "--outDir",
+                results,
+                "--outName",
+                "pangenome",
+                "--reference",
+                ref_name,
             ],
             logger=logger,
             log_prefix="cactus",

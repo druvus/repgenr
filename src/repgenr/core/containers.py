@@ -301,11 +301,19 @@ def run_tool(
         if config.active:
             logger.warning(
                 "Tool '%s' declares no container/conda image; running on the "
-                "host despite --container %s.", caps.name, config.backend,
+                "host despite --container %s.",
+                caps.name,
+                config.backend,
             )
         return process.run(
-            command, logger=logger, cwd=cwd, env=env, check=check,
-            stdout_path=stdout_path, log_prefix=log_prefix, timeout=timeout,
+            command,
+            logger=logger,
+            cwd=cwd,
+            env=env,
+            check=check,
+            stdout_path=stdout_path,
+            log_prefix=log_prefix,
+            timeout=timeout,
         )
 
     argv = [str(part) for part in command]
@@ -314,8 +322,14 @@ def run_tool(
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
     return process.run(
-        wrapped, logger=logger, cwd=cwd, env=merged_env, check=check,
-        stdout_path=stdout_path, log_prefix=log_prefix or caps.name, timeout=timeout,
+        wrapped,
+        logger=logger,
+        cwd=cwd,
+        env=merged_env,
+        check=check,
+        stdout_path=stdout_path,
+        log_prefix=log_prefix or caps.name,
+        timeout=timeout,
     )
 
 
@@ -343,7 +357,11 @@ def run_tool_with_retries(
             delay = retry_delay * 2 ** (attempt - 1)
             logger.warning(
                 "%s failed (attempt %d/%d): %s; retrying in %.0fs",
-                caps.name, attempt, attempts, exc, delay,
+                caps.name,
+                attempt,
+                attempts,
+                exc,
+                delay,
             )
             time.sleep(delay)
     raise RuntimeError("unreachable")

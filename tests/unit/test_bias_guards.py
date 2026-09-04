@@ -52,9 +52,7 @@ def test_unknown_reference_still_raises(tmp_path):
 
 def _write_msa(tmp_path: Path, seqs: list[str]) -> Path:
     msa = tmp_path / "msa.fasta"
-    msa.write_text(
-        "".join(f">s{i}\n{seq}\n" for i, seq in enumerate(seqs)), encoding="utf-8"
-    )
+    msa.write_text("".join(f">s{i}\n{seq}\n" for i, seq in enumerate(seqs)), encoding="utf-8")
     return msa
 
 

@@ -45,11 +45,19 @@ class SnippyTyper(SnpTyper):
             if genome.resolve() == reference.resolve():
                 continue
             sdir = out_dir / genome.stem
-            run_tool(self.capabilities, 
+            run_tool(
+                self.capabilities,
                 [
-                    "snippy", "--cpus", str(params.threads),
-                    "--outdir", sdir, "--ref", reference.resolve(),
-                    "--ctgs", genome.resolve(), "--force",
+                    "snippy",
+                    "--cpus",
+                    str(params.threads),
+                    "--outdir",
+                    sdir,
+                    "--ref",
+                    reference.resolve(),
+                    "--ctgs",
+                    genome.resolve(),
+                    "--force",
                 ],
                 logger=logger,
                 log_prefix="snippy",
@@ -58,10 +66,16 @@ class SnippyTyper(SnpTyper):
 
         core_prefix = out_dir / "core"
         core_cmd: list[str | Path] = [
-            "snippy-core", "--ref", reference.resolve(), "--prefix", core_prefix, *sample_dirs
+            "snippy-core",
+            "--ref",
+            reference.resolve(),
+            "--prefix",
+            core_prefix,
+            *sample_dirs,
         ]
         warn_argv_bytes("snippy-core", core_cmd, logger)
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             core_cmd,
             logger=logger,
             log_prefix="snippy-core",

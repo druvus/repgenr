@@ -118,15 +118,19 @@ def test_inputs_digest_keys_are_workdir_relative(tmp_path) -> None:
 
 def test_manifest_digest_order_independent_and_content_sensitive(tmp_path) -> None:
     m1 = Manifest(tmp_path / "a.sqlite")
-    m1.upsert_many([
-        GenomeRecord(accession="GCF_2", species="b"),
-        GenomeRecord(accession="GCF_1", species="a"),
-    ])
+    m1.upsert_many(
+        [
+            GenomeRecord(accession="GCF_2", species="b"),
+            GenomeRecord(accession="GCF_1", species="a"),
+        ]
+    )
     m2 = Manifest(tmp_path / "b.sqlite")
-    m2.upsert_many([
-        GenomeRecord(accession="GCF_1", species="a"),
-        GenomeRecord(accession="GCF_2", species="b"),
-    ])
+    m2.upsert_many(
+        [
+            GenomeRecord(accession="GCF_1", species="a"),
+            GenomeRecord(accession="GCF_2", species="b"),
+        ]
+    )
     assert manifest_digest(m1) == manifest_digest(m2)
 
     m2.upsert_many([GenomeRecord(accession="GCF_3", species="c")])

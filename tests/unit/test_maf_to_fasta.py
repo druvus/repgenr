@@ -34,11 +34,7 @@ def test_maf_projection(tmp_path: Path) -> None:
 
 def test_maf_reference_gap_dropped(tmp_path: Path) -> None:
     maf = tmp_path / "a.maf"
-    maf.write_text(
-        "a\n"
-        "s ref.c 0 6 + 6 AC--GT\n"
-        "s qry.c 0 6 + 6 ACTTGT\n"
-    )
+    maf.write_text("a\ns ref.c 0 6 + 6 AC--GT\ns qry.c 0 6 + 6 ACTTGT\n")
     out = tmp_path / "out.fasta"
     maf_to_fasta(maf, "ref", out)
     records = _read_fasta(out)
@@ -52,11 +48,7 @@ def test_name_map_reference_with_version_dot(tmp_path: Path) -> None:
     # reference is passed as such a dotted label. Regression for a bug where the
     # reference key got version-stripped and matched no row -> empty MSA.
     maf = tmp_path / "a.maf"
-    maf.write_text(
-        "a\n"
-        "s c1 0 8 + 8 ACGTACGT\n"
-        "s d1 0 8 + 8 ACGAACGT\n"
-    )
+    maf.write_text("a\ns c1 0 8 + 8 ACGTACGT\ns d1 0 8 + 8 ACGAACGT\n")
     out = tmp_path / "out.fasta"
     name_map = {"c1": "G_GCF_1.1", "d1": "H_GCF_2.1"}
     maf_to_fasta(maf, "G_GCF_1.1", out, name_map=name_map)
@@ -70,10 +62,7 @@ def test_exclude_drops_pseudo_genome(tmp_path: Path) -> None:
     # Minigraph-Cactus adds a _MINIGRAPH_ backbone; exclude must drop it as a taxon.
     maf = tmp_path / "a.maf"
     maf.write_text(
-        "a\n"
-        "s ref.chr1 0 4 + 4 ACGT\n"
-        "s qry.chr1 0 4 + 4 ACGA\n"
-        "s _MINIGRAPH_.chr1 0 4 + 4 ACGT\n"
+        "a\ns ref.chr1 0 4 + 4 ACGT\ns qry.chr1 0 4 + 4 ACGA\ns _MINIGRAPH_.chr1 0 4 + 4 ACGT\n"
     )
     out = tmp_path / "out.fasta"
     maf_to_fasta(maf, "ref", out, exclude={"_MINIGRAPH_"})

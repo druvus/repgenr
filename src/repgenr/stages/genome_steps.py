@@ -53,18 +53,28 @@ def genome_fetch(params: GenomeFetchParams, logger: logging.Logger) -> int:
     if selected:
         filenames = {r.accession: r.filename for r in selected}
         download_accessions(
-            list(filenames), filenames, params.out_dir / "genomes", scratch,
-            logger, params.keep_files,
+            list(filenames),
+            filenames,
+            params.out_dir / "genomes",
+            scratch,
+            logger,
+            params.keep_files,
         )
     if outgroup:
         og_filenames = {r.accession: r.filename for r in outgroup}
         download_accessions(
-            list(og_filenames), og_filenames, params.out_dir / "outgroup", scratch,
-            logger, params.keep_files,
+            list(og_filenames),
+            og_filenames,
+            params.out_dir / "outgroup",
+            scratch,
+            logger,
+            params.keep_files,
         )
 
     logger.info(
         "genome-fetch: requested %d genomes + %d outgroup into %s",
-        len(selected), len(outgroup), params.out_dir,
+        len(selected),
+        len(outgroup),
+        params.out_dir,
     )
     return len(selected)

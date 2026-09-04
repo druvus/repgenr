@@ -68,8 +68,13 @@ def test_target_reps_step_function_cannot_reach_intermediate_target(tmp_path):
     adapter = _StepFunctionDerep(n=40)
     genomes = _genomes(tmp_path, 40)
     result = _search_target_reps(
-        adapter, genomes, tmp_path / "scratch", DerepParams(),
-        DereplicateParams(tool="mock"), target=20, logger=_LOGGER,
+        adapter,
+        genomes,
+        tmp_path / "scratch",
+        DerepParams(),
+        DereplicateParams(tool="mock"),
+        target=20,
+        logger=_LOGGER,
     )
     achieved = len(result.representatives)
     assert achieved in (1, 40)
@@ -82,8 +87,13 @@ def test_target_reps_exact_target_short_circuits(tmp_path):
     adapter = _StepFunctionDerep(n=40)
     genomes = _genomes(tmp_path, 40)
     result = _search_target_reps(
-        adapter, genomes, tmp_path / "scratch", DerepParams(),
-        DereplicateParams(tool="mock"), target=40, logger=_LOGGER,
+        adapter,
+        genomes,
+        tmp_path / "scratch",
+        DerepParams(),
+        DereplicateParams(tool="mock"),
+        target=40,
+        logger=_LOGGER,
     )
     assert len(result.representatives) == 40
 

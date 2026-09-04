@@ -19,7 +19,7 @@ def test_core_snp_reduction(tmp_path: Path) -> None:
     assert n == 2  # columns 3 and 7 are variable
 
     records = _read_fasta(core)
-    assert records["ref"] == "TT"   # ref bases at the two variable columns
+    assert records["ref"] == "TT"  # ref bases at the two variable columns
     assert records["s1"] == "AT"
     assert records["s2"] == "TA"
 

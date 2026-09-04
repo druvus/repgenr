@@ -32,9 +32,21 @@ def main() -> None:
     work = STORAGE / "work" / "b5-pureclone"
     work.mkdir(parents=True, exist_ok=True)
     out = work / "phylo_out"
-    argv = [_repgenr(), "phylo-build", "--genomes-dir", str(set_dir),
-            "-o", str(out), "--treebuilder", "fasttree", "--aligner", args.aligner,
-            "--no-outgroup", "-t", "8"]
+    argv = [
+        _repgenr(),
+        "phylo-build",
+        "--genomes-dir",
+        str(set_dir),
+        "-o",
+        str(out),
+        "--treebuilder",
+        "fasttree",
+        "--aligner",
+        args.aligner,
+        "--no-outgroup",
+        "-t",
+        "8",
+    ]
     proc = run_group(argv, timeout_s=5400)
 
     row: dict = {"aligner": args.aligner, "exit_code": proc.returncode}

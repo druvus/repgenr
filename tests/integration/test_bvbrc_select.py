@@ -44,12 +44,20 @@ def _write_metadata(download_wd: Path) -> tuple[Path, Path]:
         return "\t".join([taxid, species, "2", *names, *taxids])
 
     ncbi_tsv = download_wd / "metadata_ncbi.tsv"
-    header = ["taxid", "name", "num_with_tag", *TAXNAMES_ORDERED,
-              *[f"{x}_taxid" for x in TAXNAMES_ORDERED]]
+    header = [
+        "taxid",
+        "name",
+        "num_with_tag",
+        *TAXNAMES_ORDERED,
+        *[f"{x}_taxid" for x in TAXNAMES_ORDERED],
+    ]
     ncbi_tsv.write_text(
-        "\t".join(header) + "\n"
-        + _row("10535", "Mastadenovirus", "10509", "Human mastadenovirus C") + "\n"
-        + _row("99999", "Othervirus", "88888", "Other virus") + "\n"
+        "\t".join(header)
+        + "\n"
+        + _row("10535", "Mastadenovirus", "10509", "Human mastadenovirus C")
+        + "\n"
+        + _row("99999", "Othervirus", "88888", "Other virus")
+        + "\n"
     )
     return base_tsv, ncbi_tsv
 
@@ -80,9 +88,7 @@ def test_run_select_writes_matching_genomes(workdir: Path) -> None:
     fasta.write_text(_FASTA)
     base_tsv, ncbi_tsv = _write_metadata(download_wd)
 
-    params = VgenomeParams(
-        target_genus="mastadenovirus", no_outgroup=True, length_range="250-350"
-    )
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
     n = bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
 
     assert n == 2  # the two mastadenovirus sequences; the 'Other virus' is excluded
@@ -108,8 +114,6 @@ def test_run_select_parses_fasta_once(workdir: Path, monkeypatch) -> None:
         return real_parse(*a, **k)
 
     monkeypatch.setattr(bvbrc.SeqIO, "parse", counting_parse)
-    params = VgenomeParams(
-        target_genus="mastadenovirus", no_outgroup=True, length_range="250-350"
-    )
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
     bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
     assert calls["n"] == 1  # one metadata scan; sequences via SeqIO.index

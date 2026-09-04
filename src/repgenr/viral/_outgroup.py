@@ -45,7 +45,8 @@ def resolve_outgroup_builder(tool: str):
     builder = registry.create(tool)
     if type(builder).distance_matrix is TreeBuilder.distance_matrix:
         supporters = sorted(
-            name for name in registry.names()
+            name
+            for name in registry.names()
             if not registry.is_broken(name)
             and registry.get(name).distance_matrix is not TreeBuilder.distance_matrix
         )
@@ -95,8 +96,10 @@ def run_distance_matrix(
     from ..treebuilders.base import TreeParams
 
     return builder.distance_matrix(
-        genome_files, outgroup_wd,
-        TreeParams(extra={"genomesize": genomesize}), logger,
+        genome_files,
+        outgroup_wd,
+        TreeParams(extra={"genomesize": genomesize}),
+        logger,
     )
 
 

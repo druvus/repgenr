@@ -20,8 +20,17 @@ from ..core.errors import WorkdirError
 # Order in which to present taxonomic names. The last "real" levels are followed
 # by the custom "undefined_strain" bucket and the sub-lineage levels.
 TAXNAMES_ORDERED: list[str] = [
-    "superkingdom", "clade", "kingdom", "phylum", "class", "order",
-    "family", "genus", "species", "serotype", "no rank",
+    "superkingdom",
+    "clade",
+    "kingdom",
+    "phylum",
+    "class",
+    "order",
+    "family",
+    "genus",
+    "species",
+    "serotype",
+    "no rank",
 ]
 UNDEFINED_STRAIN = "undefined_strain"
 TAXNAMES_ORDERED.append(UNDEFINED_STRAIN)
@@ -34,7 +43,10 @@ def _send_query(taxon_ids: Iterable[str]) -> str:
     # NCBI asks high-volume callers to identify themselves (tool/email) and
     # raises the rate limit from 3 to 10 req/s when an API key is supplied.
     params: dict[str, object] = {
-        "db": "taxonomy", "id": list(taxon_ids), "retmode": "xml", "tool": "repgenr",
+        "db": "taxonomy",
+        "id": list(taxon_ids),
+        "retmode": "xml",
+        "tool": "repgenr",
     }
     email = os.environ.get("NCBI_EMAIL")
     if email:
@@ -175,7 +187,8 @@ def _parse_taxon_element(el, tax_ids_list, tax_ids_to_parse, taxids_alts, logger
                         break
             chunk_level = sub.findtext("Rank") or ""
             level_data[chunk_level] = {
-                "taxid": chunk_taxid, "name": sub.findtext("ScientificName") or "",
+                "taxid": chunk_taxid,
+                "name": sub.findtext("ScientificName") or "",
                 "level": chunk_level,
             }
 
@@ -184,7 +197,9 @@ def _parse_taxon_element(el, tax_ids_list, tax_ids_to_parse, taxids_alts, logger
 
     if not any(d["taxid"] == taxid for d in level_data.values() if d["taxid"] is not None):
         level_data[UNDEFINED_STRAIN] = {
-            "taxid": taxid, "name": scientific_name, "level": UNDEFINED_STRAIN
+            "taxid": taxid,
+            "name": scientific_name,
+            "level": UNDEFINED_STRAIN,
         }
 
     return taxid, {"taxid": taxid, "name": scientific_name, "taxdata": level_data}

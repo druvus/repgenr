@@ -87,12 +87,18 @@ class SkderDereplicator(Dereplicator):
         af_pct = _as_percent(params.aligned_fraction)
         cmd = [
             "skder",
-            "-g", *[str(g) for g in genomes],
-            "-o", result_dir,
-            "-i", ani_pct,
-            "-f", af_pct,
-            "-c", params.threads,
-            "-d", mode,
+            "-g",
+            *[str(g) for g in genomes],
+            "-o",
+            result_dir,
+            "-i",
+            ani_pct,
+            "-f",
+            af_pct,
+            "-c",
+            params.threads,
+            "-d",
+            mode,
         ]
         try:
             run_tool(self.capabilities, cmd, logger=logger, log_prefix="skder")

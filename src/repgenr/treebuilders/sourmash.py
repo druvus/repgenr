@@ -27,9 +27,7 @@ class SourmashBuilder(TreeBuilder):
         name="sourmash",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled"}),
-        required_binaries=(
-            BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),
-        ),
+        required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=2000,
     )
@@ -61,12 +59,18 @@ class SourmashBuilder(TreeBuilder):
         # Genome paths live inside the fofn (not argv); declare their dirs so the
         # container backend binds them (un-resolved abspaths, matching write_fofn).
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
-        run_tool(self.capabilities,
+        run_tool(
+            self.capabilities,
             [
-                "sourmash", "sketch", "dna",
-                "-p", f"k={ksize},scaled={scaled}",
-                "--from-file", fofn,
-                "--outdir", sig_dir,
+                "sourmash",
+                "sketch",
+                "dna",
+                "-p",
+                f"k={ksize},scaled={scaled}",
+                "--from-file",
+                fofn,
+                "--outdir",
+                sig_dir,
             ],
             logger=logger,
             log_prefix="sourmash",
@@ -74,7 +78,8 @@ class SourmashBuilder(TreeBuilder):
         )
         # Skip macOS AppleDouble companions ("._*") that appear on exFAT/NTFS volumes.
         sigs = [
-            p for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
+            p
+            for p in (sorted(sig_dir.glob("*.sig")) + sorted(sig_dir.glob("*.sig.gz")))
             if not p.name.startswith("._")
         ]
         if not sigs:
@@ -82,9 +87,18 @@ class SourmashBuilder(TreeBuilder):
 
         matrix_csv = out_dir / "compare.csv"
         compare_fofn = write_fofn(sigs, out_dir / "signatures.fofn")
-        run_tool(self.capabilities,
-            ["sourmash", "compare", "-k", str(ksize), "--csv", matrix_csv,
-             "--from-file", compare_fofn],
+        run_tool(
+            self.capabilities,
+            [
+                "sourmash",
+                "compare",
+                "-k",
+                str(ksize),
+                "--csv",
+                matrix_csv,
+                "--from-file",
+                compare_fofn,
+            ],
             logger=logger,
             log_prefix="sourmash",
         )

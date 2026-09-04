@@ -100,9 +100,7 @@ def _emit_relations(
     return out_tree2tax, out_map
 
 
-def tree2tax_relations(
-    params: Tree2taxStepParams, logger: logging.Logger
-) -> tuple[Path, Path]:
+def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tuple[Path, Path]:
     """Emit FlexTaxD relations from explicit inputs (stateless; no config)."""
     if not params.tree.exists():
         raise WorkdirError(f"Tree not found: {params.tree}. Run the phylo step first.")

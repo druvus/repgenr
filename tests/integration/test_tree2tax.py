@@ -28,6 +28,7 @@ def _setup(workdir: Path, *, with_outgroup: bool = False, clusters: dict | None 
     if clusters is not None:
         (workdir / "derep").mkdir(parents=True)
         from repgenr.core.contracts import write_clusters
+
         write_clusters(workdir / "derep" / "clusters.tsv", clusters)
     if with_outgroup:
         og = workdir / "outgroup"
@@ -44,8 +45,10 @@ def test_tree2tax_unrooted_edges_and_map(workdir: Path) -> None:
     # every leaf has a path to root; two cherries -> two distinct internal nodes
     leaves = {c for c, _ in edges if c.startswith("Fam_")}
     assert leaves == {
-        "Fam_Gen_sp_GCA_000001.1", "Fam_Gen_sp_GCA_000002.1",
-        "Fam_Gen_sp_GCA_000003.1", "Fam_Gen_sp_GCA_000004.1",
+        "Fam_Gen_sp_GCA_000001.1",
+        "Fam_Gen_sp_GCA_000002.1",
+        "Fam_Gen_sp_GCA_000003.1",
+        "Fam_Gen_sp_GCA_000004.1",
     }
     assert any(p == "root" for _, p in edges)
     # genomes_map: each accession -> its leaf

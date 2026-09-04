@@ -15,9 +15,7 @@ import re
 from pathlib import Path
 
 # Complement table over the IUPAC subset the original handled.
-_COMPLEMENTS = bytes.maketrans(
-    b"acgtrymkbdhvACGTRYMKBDHV", b"tgcayrkmvhdbTGCAYRKMVHDB"
-)
+_COMPLEMENTS = bytes.maketrans(b"acgtrymkbdhvACGTRYMKBDHV", b"tgcayrkmvhdbTGCAYRKMVHDB")
 
 _PATTERN_START = re.compile(r"^>\s*(\d+):(\d+)-(\d+) ([+-])")
 _PATTERN_SEQ_NAME = re.compile(r"#Sequence(\d+)File")
@@ -96,9 +94,7 @@ def xmfa_to_fasta(
         if ref is not None and ref["p2"] > length_of_reference:
             length_of_reference = ref["p2"]
 
-    outseqs: dict[int, bytearray] = {
-        num: bytearray(b"-" * length_of_reference) for num in num2name
-    }
+    outseqs: dict[int, bytearray] = {num: bytearray(b"-" * length_of_reference) for num in num2name}
 
     for alignment in list(a_gen.keys()):
         if reference_num not in a_gen[alignment]:

@@ -80,8 +80,7 @@ def _cluster_plan(
         n_clusters = max(2, n // 50)
         sizes = _split_sizes(n, n_clusters)
         return [
-            (f"m{i + 1}", size, 0.005 + 0.045 * i / max(1, n_clusters - 1),
-             _MEMBER_DIVERGENCE)
+            (f"m{i + 1}", size, 0.005 + 0.045 * i / max(1, n_clusters - 1), _MEMBER_DIVERGENCE)
             for i, size in enumerate(sizes)
         ]
     raise ValueError(f"Unknown scenario '{scenario}' (balanced|clonal|mixed).")
@@ -104,9 +103,7 @@ def _split_sizes(n: int, parts: int) -> list[int]:
     return [base + (1 if i < extra else 0) for i in range(parts)]
 
 
-def _assign_accessions(
-    rng: random.Random, memberships: list[str], order: str
-) -> list[int]:
+def _assign_accessions(rng: random.Random, memberships: list[str], order: str) -> list[int]:
     """Accession index per genome (position i in ``memberships``).
 
     clustered: input order (clone block first) -> contiguous low accessions.
@@ -208,12 +205,17 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--genome-length", type=int, default=2_000_000)
     parser.add_argument("--clone-fraction", type=float, default=0.4)
-    parser.add_argument("--order", default="clustered",
-                        choices=["clustered", "interleaved", "random"])
+    parser.add_argument(
+        "--order", default="clustered", choices=["clustered", "interleaved", "random"]
+    )
     args = parser.parse_args()
     truth = generate_set(
-        args.out, scenario=args.scenario, n=args.n, seed=args.seed,
-        genome_length=args.genome_length, clone_fraction=args.clone_fraction,
+        args.out,
+        scenario=args.scenario,
+        n=args.n,
+        seed=args.seed,
+        genome_length=args.genome_length,
+        clone_fraction=args.clone_fraction,
         order=args.order,
     )
     print(f"Wrote {len(truth['clusters'])} genomes to {args.out}")

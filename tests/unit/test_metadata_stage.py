@@ -54,8 +54,12 @@ def gtdb_tsv(tmp_path) -> Path:
 
 def _params(gtdb_tsv: Path, **overrides) -> MetadataParams:
     defaults = dict(
-        dataset="all", level="species", release="232.0", version="bac120",
-        target_genus="Francisella", target_species="tularensis",
+        dataset="all",
+        level="species",
+        release="232.0",
+        version="bac120",
+        target_genus="Francisella",
+        target_species="tularensis",
         metadata_path=str(gtdb_tsv),
     )
     defaults.update(overrides)
@@ -75,7 +79,10 @@ def test_tsv_species_selection_end_to_end(tmp_path, gtdb_tsv) -> None:
     rows = _read_selection(ctx.workdir)
     by_acc = {r["accession"]: r for r in rows}
     assert set(by_acc) == {
-        "GCF_000001.1", "GCF_000002.1", "GCF_000003.1", "GCF_000010.1",
+        "GCF_000001.1",
+        "GCF_000002.1",
+        "GCF_000003.1",
+        "GCF_000010.1",
     }
     # the same-genus representative is the outgroup
     outgroups = [r for r in rows if r["is_outgroup"] in ("1", "True", "true")]
@@ -137,9 +144,7 @@ def test_obtain_metadata_downloads_and_verifies(tmp_path, gtdb_tsv, monkeypatch)
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     count = metadata.run(ctx, _params(gtdb_tsv, metadata_path=None))
     assert count == 3
-    assert calls["download"] and calls["download"][0].endswith(
-        "232.0/bac120_metadata_r232.tsv.gz"
-    )
+    assert calls["download"] and calls["download"][0].endswith("232.0/bac120_metadata_r232.tsv.gz")
     assert calls["verify"], "MD5 manifest verification must run on the download"
 
 
@@ -197,8 +202,11 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(metadata, "_api_get", fake_api_get)
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     params = MetadataParams(
-        dataset="all", level="species", source="api",
-        target_genus="Francisella", target_species="tularensis",
+        dataset="all",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
     )
     count = metadata.run(ctx, params)
     assert count == 2
@@ -228,6 +236,7 @@ def _fake_api_with_cards(selection_rows, parent_rows, cards: dict[str, dict]):
                 raise card
             return card
         raise AssertionError(f"unexpected API path {path}")
+
     return fake_api_get
 
 
@@ -250,10 +259,16 @@ def test_api_selection_reads_quality_from_genome_cards(tmp_path, monkeypatch) ->
     fake = _fake_api_with_cards(selection_rows, parent_rows, cards)
     monkeypatch.setattr(metadata, "_api_get", fake)
     ctx = WorkdirContext(tmp_path / "wd", create=True)
-    metadata.run(ctx, MetadataParams(
-        dataset="all", level="species", source="api",
-        target_genus="Francisella", target_species="tularensis",
-    ))
+    metadata.run(
+        ctx,
+        MetadataParams(
+            dataset="all",
+            level="species",
+            source="api",
+            target_genus="Francisella",
+            target_species="tularensis",
+        ),
+    )
     quality = _quality_by_accession(_read_selection(ctx.workdir))
     assert quality["GCF_000001.1"] == ("99.96", "0.18")
     assert quality["GCF_000002.1"] == ("95.10", "1.20")
@@ -276,10 +291,16 @@ def test_api_card_failure_leaves_that_genome_unscored(tmp_path, monkeypatch, cap
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     ctx.logger.addHandler(caplog.handler)  # the workdir logger does not propagate
     with caplog.at_level(logging.WARNING):
-        count = metadata.run(ctx, MetadataParams(
-            dataset="all", level="species", source="api",
-            target_genus="Francisella", target_species="tularensis",
-        ))
+        count = metadata.run(
+            ctx,
+            MetadataParams(
+                dataset="all",
+                level="species",
+                source="api",
+                target_genus="Francisella",
+                target_species="tularensis",
+            ),
+        )
     assert count == 2  # one unreadable card does not fail the selection
     quality = _quality_by_accession(_read_selection(ctx.workdir))
     assert quality["GCF_000001.1"] == ("99.96", "0.18")
@@ -291,9 +312,7 @@ def test_api_card_failure_leaves_that_genome_unscored(tmp_path, monkeypatch, cap
 def test_api_no_rows_raises(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(metadata, "_api_get", lambda path, params=None: {"rows": []})
     ctx = WorkdirContext(tmp_path / "wd", create=True)
-    params = MetadataParams(
-        dataset="all", level="genus", source="api", target_genus="Francisella"
-    )
+    params = MetadataParams(dataset="all", level="genus", source="api", target_genus="Francisella")
     with pytest.raises(UserInputError, match="no genomes"):
         metadata.run(ctx, params)
 
@@ -320,7 +339,8 @@ def _write_quality_tsv(
 def test_parse_metadata_carries_checkm2_quality(tmp_path) -> None:
     path = tmp_path / "quality_checkm2.tsv.gz"
     _write_quality_tsv(
-        path, ("checkm2_completeness", "checkm2_contamination"),
+        path,
+        ("checkm2_completeness", "checkm2_contamination"),
         {"GCF_000001.1": ("99.0", "0.5")},
     )
     accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))
@@ -337,7 +357,8 @@ def test_parse_metadata_carries_checkm2_quality(tmp_path) -> None:
 def test_parse_metadata_falls_back_to_checkm_quality(tmp_path) -> None:
     path = tmp_path / "quality_checkm.tsv.gz"
     _write_quality_tsv(
-        path, ("checkm_completeness", "checkm_contamination"),
+        path,
+        ("checkm_completeness", "checkm_contamination"),
         {"GCF_000001.1": ("98.0", "1.2")},
     )
     accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))

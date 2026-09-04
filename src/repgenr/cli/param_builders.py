@@ -52,17 +52,23 @@ def metadata_params(
     from ..stages.metadata import MetadataParams
 
     return _build(
-        MetadataParams, dataset=dataset, level=level, source=source,
-        release=release, version=version, target_family=target_family,
-        target_genus=target_genus, target_species=target_species,
-        outgroup_accession=outgroup_accession, metadata_path=metadata_path,
-        nodownload=nodownload, limit=limit,
+        MetadataParams,
+        dataset=dataset,
+        level=level,
+        source=source,
+        release=release,
+        version=version,
+        target_family=target_family,
+        target_genus=target_genus,
+        target_species=target_species,
+        outgroup_accession=outgroup_accession,
+        metadata_path=metadata_path,
+        nodownload=nodownload,
+        limit=limit,
     )
 
 
-def genome_params(
-    *, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET
-) -> GenomeParams:
+def genome_params(*, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET) -> GenomeParams:
     from ..stages.genome import GenomeParams
 
     return _build(GenomeParams, accession_list_only=accession_list_only, keep_files=keep_files)
@@ -83,8 +89,13 @@ def vmetadata_params(
     if source is not _UNSET:
         _require_choice(source, {"ncbi_virus", "bvbrc"}, "--source")
     return _build(
-        VmetadataParams, target=target, source=source, filter=filter,
-        list_targets=list_targets, host=host, complete_only=complete_only,
+        VmetadataParams,
+        target=target,
+        source=source,
+        filter=filter,
+        list_targets=list_targets,
+        host=host,
+        complete_only=complete_only,
         released_after=released_after,
     )
 
@@ -125,19 +136,30 @@ def dereplicate_params(
     if target_reps is not _UNSET and target_reps < 0:
         raise UserInputError(f"--target-reps must be >= 0, got {target_reps}.")
     for value, label in (
-        (primary_ani, "--primary-ani"), (secondary_ani, "--secondary-ani"),
+        (primary_ani, "--primary-ani"),
+        (secondary_ani, "--secondary-ani"),
         (aligned_fraction, "--aligned-fraction"),
-        (pre_primary_ani, "--pre-primary-ani"), (pre_secondary_ani, "--pre-secondary-ani"),
+        (pre_primary_ani, "--pre-primary-ani"),
+        (pre_secondary_ani, "--pre-secondary-ani"),
     ):
         if value is not _UNSET:
             _require_unit_interval(value, label)
     return _build(
-        DereplicateParams, tool=tool, primary_ani=primary_ani,
-        secondary_ani=secondary_ani, aligned_fraction=aligned_fraction,
-        threads=threads, process_size=process_size, num_processes=num_processes,
-        pre_primary_ani=pre_primary_ani, pre_secondary_ani=pre_secondary_ani,
-        reduce=reduce, target_reps=target_reps, extra=extra,
-        allow_incomplete=allow_incomplete, keeper=keeper,
+        DereplicateParams,
+        tool=tool,
+        primary_ani=primary_ani,
+        secondary_ani=secondary_ani,
+        aligned_fraction=aligned_fraction,
+        threads=threads,
+        process_size=process_size,
+        num_processes=num_processes,
+        pre_primary_ani=pre_primary_ani,
+        pre_secondary_ani=pre_secondary_ani,
+        reduce=reduce,
+        target_reps=target_reps,
+        extra=extra,
+        allow_incomplete=allow_incomplete,
+        keeper=keeper,
     )
 
 
@@ -170,9 +192,17 @@ def phylo_params(
     elif snptyper is not _UNSET:
         _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
     return _build(
-        PhyloParams, treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,
-        snptyper=snptyper, all_genomes=all_genomes, no_outgroup=no_outgroup,
-        bootstrap=bootstrap, reference=reference, threads=threads, extra=extra,
+        PhyloParams,
+        treebuilder=treebuilder,
+        msa_source=msa_source,
+        aligner=aligner,
+        snptyper=snptyper,
+        all_genomes=all_genomes,
+        no_outgroup=no_outgroup,
+        bootstrap=bootstrap,
+        reference=reference,
+        threads=threads,
+        extra=extra,
         allow_incomplete=allow_incomplete,
     )
 
@@ -188,7 +218,10 @@ def tree2tax_params(
     from ..stages.tree2tax import Tree2taxParams
 
     return _build(
-        Tree2taxParams, node_basename=node_basename, root_name=root_name,
-        remove_outgroup=remove_outgroup, all_genomes=all_genomes,
+        Tree2taxParams,
+        node_basename=node_basename,
+        root_name=root_name,
+        remove_outgroup=remove_outgroup,
+        all_genomes=all_genomes,
         include_dereplicated=include_dereplicated,
     )

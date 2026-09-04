@@ -225,8 +225,7 @@ class Manifest:
         with self.transaction() as conn:
             cur = conn.execute("SELECT accession FROM genomes")
             stale = [row[0] for row in cur.fetchall() if row[0] not in keep]
-            conn.executemany("DELETE FROM genomes WHERE accession = ?",
-                             [(acc,) for acc in stale])
+            conn.executemany("DELETE FROM genomes WHERE accession = ?", [(acc,) for acc in stale])
             conn.executemany(_UPSERT_SQL, [_record_params(r) for r in records])
 
     def set_derep_status(
@@ -235,9 +234,7 @@ class Manifest:
         with self.transaction() as conn:
             conn.execute(_SET_DEREP_SQL, (status, representative, accession))
 
-    def set_derep_status_many(
-        self, updates: Sequence[tuple[str, str, str | None]]
-    ) -> None:
+    def set_derep_status_many(self, updates: Sequence[tuple[str, str, str | None]]) -> None:
         """Batch derep-status updates (accession, status, representative) in one
         transaction; avoids one commit per genome on large sets.
 
@@ -255,9 +252,7 @@ class Manifest:
         return int(cur.fetchone()["n"])
 
     def representatives(self) -> list[GenomeRecord]:
-        cur = self._conn.execute(
-            "SELECT * FROM genomes WHERE derep_status='representative'"
-        )
+        cur = self._conn.execute("SELECT * FROM genomes WHERE derep_status='representative'")
         return [_row_to_record(row) for row in cur.fetchall()]
 
     def all_genomes(self, include_outgroup: bool = False) -> list[GenomeRecord]:

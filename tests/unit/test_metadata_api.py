@@ -21,8 +21,11 @@ def test_target_taxon_strings() -> None:
     assert _target_taxon(p) == "f__Francisellaceae"
 
     p = MetadataParams(
-        dataset="rep", level="species", source="api",
-        target_genus="francisella", target_species="tularensis",
+        dataset="rep",
+        level="species",
+        source="api",
+        target_genus="francisella",
+        target_species="tularensis",
     )
     assert _target_taxon(p) == "s__Francisella tularensis"
 

@@ -21,7 +21,7 @@ registry: Registry[TreeBuilder] = Registry("repgenr.treebuilders")
 
 class InputKind(Enum):
     MSA_FASTA = "msa_fasta"  # needs an MSA source (aligner or snptyper)
-    GENOMES = "genomes"      # alignment-free; consumes genome files directly
+    GENOMES = "genomes"  # alignment-free; consumes genome files directly
 
 
 def as_msa_path(value: Path | Sequence[Path]) -> Path:

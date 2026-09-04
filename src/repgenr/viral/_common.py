@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from ..stages.vgenome import VgenomeParams
 
+
 def parse_custom_filter(kv: str) -> tuple[str, str]:
     """Split one ``--target-custom`` entry into ``(key, value)`` at the first colon.
 
@@ -33,9 +34,7 @@ def parse_custom_filter(kv: str) -> tuple[str, str]:
     key = key.strip()
     val = val.strip()
     if not sep or not key or not val:
-        raise UserInputError(
-            f"Invalid --target-custom entry '{kv}': expected 'key:value'"
-        )
+        raise UserInputError(f"Invalid --target-custom entry '{kv}': expected 'key:value'")
     return key, val
 
 

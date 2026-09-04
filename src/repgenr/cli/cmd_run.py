@@ -44,7 +44,11 @@ def _virus_extra(derep_tool: str, viral: bool) -> dict:
 
 
 def _preflight_tools(
-    derep_tool: str, treebuilder: str, msa_source: str, aligner: str, snptyper: str,
+    derep_tool: str,
+    treebuilder: str,
+    msa_source: str,
+    aligner: str,
+    snptyper: str,
 ) -> None:
     """Check every external tool the chain will need before the first stage runs.
 
@@ -113,7 +117,8 @@ def run(
     secondary_ani: float = typer.Option(0.99, "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
     keeper: str = typer.Option(
-        "quality", "--keeper",
+        "quality",
+        "--keeper",
         help="Representative choice per cluster: quality (CheckM score from GTDB) "
         "or tool (adapter's own).",
     ),
@@ -125,7 +130,8 @@ def run(
     no_outgroup: bool = typer.Option(False, "--no-outgroup"),
     # --- taxonomy output ---
     include_dereplicated: bool = typer.Option(
-        True, "--include-dereplicated/--no-include-dereplicated",
+        True,
+        "--include-dereplicated/--no-include-dereplicated",
         help="List redundant genomes under their representative in tree2tax.",
     ),
     # --- common ---
@@ -145,28 +151,29 @@ def run(
         vmetadata_params,
     )
 
-    logger = configure_logging(
-        workdir if workdir.exists() else None, level=_RUN_STATE["log_level"]
-    )
+    logger = configure_logging(workdir if workdir.exists() else None, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
         # Fail fast before any stage runs; the same validation re-runs inside
         # each stage's builder.
         dereplicate_params(
-            tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
-            aligned_fraction=aligned_fraction, keeper=keeper,
+            tool=derep_tool,
+            primary_ani=primary_ani,
+            secondary_ani=secondary_ani,
+            aligned_fraction=aligned_fraction,
+            keeper=keeper,
         )
         phylo_params(
-            treebuilder=treebuilder, msa_source=msa_source,
-            aligner=aligner, snptyper=snptyper,
+            treebuilder=treebuilder,
+            msa_source=msa_source,
+            aligner=aligner,
+            snptyper=snptyper,
         )
         if not viral and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
 
     if dry_run:
         chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
-        typer.echo(
-            f"[dry-run] {'viral' if viral else 'bacterial'} pipeline in {workdir}:"
-        )
+        typer.echo(f"[dry-run] {'viral' if viral else 'bacterial'} pipeline in {workdir}:")
         for stage in chain:
             typer.echo(f"  - {stage}")
         selection = (
@@ -189,34 +196,76 @@ def run(
         _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper)
 
     if viral:
-        _run("vmetadata", workdir, lambda: vmetadata_params(
-            target=target, source=viral_source,
-        ), create=True)
-        _run("vgenome", workdir, lambda: vgenome_params(
-            target_genus=target_genus, target_species=target_species,
-            no_outgroup=no_outgroup, group_segments=group_segments,
-        ))
+        _run(
+            "vmetadata",
+            workdir,
+            lambda: vmetadata_params(
+                target=target,
+                source=viral_source,
+            ),
+            create=True,
+        )
+        _run(
+            "vgenome",
+            workdir,
+            lambda: vgenome_params(
+                target_genus=target_genus,
+                target_species=target_species,
+                no_outgroup=no_outgroup,
+                group_segments=group_segments,
+            ),
+        )
     else:
-        _run("metadata", workdir, lambda: metadata_params(
-            dataset=dataset, level=level or "", source=metadata_source,
-            release=release, version=gtdb_version,
-            target_family=target_family, target_genus=target_genus,
-            target_species=target_species, outgroup_accession=outgroup_accession,
-        ), create=True)
+        _run(
+            "metadata",
+            workdir,
+            lambda: metadata_params(
+                dataset=dataset,
+                level=level or "",
+                source=metadata_source,
+                release=release,
+                version=gtdb_version,
+                target_family=target_family,
+                target_genus=target_genus,
+                target_species=target_species,
+                outgroup_accession=outgroup_accession,
+            ),
+            create=True,
+        )
         _run("genome", workdir, lambda: genome_params())
 
-    _run("dereplicate", workdir, lambda: dereplicate_params(
-        tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
-        aligned_fraction=aligned_fraction, threads=threads,
-        extra=_virus_extra(derep_tool, viral), keeper=keeper,
-    ))
-    _run("phylo", workdir, lambda: phylo_params(
-        treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,
-        snptyper=snptyper, no_outgroup=no_outgroup, threads=threads,
-    ))
-    _run("tree2tax", workdir, lambda: tree2tax_params(
-        include_dereplicated=include_dereplicated,
-    ))
+    _run(
+        "dereplicate",
+        workdir,
+        lambda: dereplicate_params(
+            tool=derep_tool,
+            primary_ani=primary_ani,
+            secondary_ani=secondary_ani,
+            aligned_fraction=aligned_fraction,
+            threads=threads,
+            extra=_virus_extra(derep_tool, viral),
+            keeper=keeper,
+        ),
+    )
+    _run(
+        "phylo",
+        workdir,
+        lambda: phylo_params(
+            treebuilder=treebuilder,
+            msa_source=msa_source,
+            aligner=aligner,
+            snptyper=snptyper,
+            no_outgroup=no_outgroup,
+            threads=threads,
+        ),
+    )
+    _run(
+        "tree2tax",
+        workdir,
+        lambda: tree2tax_params(
+            include_dereplicated=include_dereplicated,
+        ),
+    )
 
     typer.echo(
         f"\nPipeline complete. Deliverables in {workdir}: "

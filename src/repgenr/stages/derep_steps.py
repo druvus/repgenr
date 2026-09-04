@@ -143,7 +143,9 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-chunk: %d genomes -> %d representatives (%s)",
-        len(params.genomes), len(result.representatives), params.tool,
+        len(params.genomes),
+        len(result.representatives),
+        params.tool,
     )
     return result
 
@@ -202,10 +204,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     # status without a cluster (QC rejects), so the completeness check covers the
     # whole input set rather than only the clustered part of it.
     all_names = {
-        name
-        for r in stage1
-        for rep, members in r.clusters.items()
-        for name in (rep, *members)
+        name for r in stage1 for rep, members in r.clusters.items() for name in (rep, *members)
     }
     all_names |= {genome for r in stage1 for genome in r.genome_status}
     check_result_complete(final, all_names)
@@ -217,7 +216,10 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-merge: %d chunks, union of %d reps -> %d representatives (%s)",
-        len(params.chunk_dirs), len(union), len(final.representatives), params.tool,
+        len(params.chunk_dirs),
+        len(union),
+        len(final.representatives),
+        params.tool,
     )
     return final
 
@@ -249,9 +251,7 @@ def _load_chunk(chunk_dir: Path) -> DerepResult:
     return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
 
 
-def _write_step_contract(
-    out_dir: Path, result: DerepResult, fallback_dirs: list[Path]
-) -> None:
+def _write_step_contract(out_dir: Path, result: DerepResult, fallback_dirs: list[Path]) -> None:
     """Write representatives/ + clusters.tsv + genome_status.tsv under ``out_dir``."""
     rep_dir = out_dir / _REPRESENTATIVES_DIR
     if rep_dir.exists():

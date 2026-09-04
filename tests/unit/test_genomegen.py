@@ -29,8 +29,9 @@ def test_deterministic_output(tmp_path: Path) -> None:
 
 
 def test_truth_json_written(tmp_path: Path) -> None:
-    truth = generate_set(tmp_path / "s", scenario="clonal", n=10, seed=1,
-                         genome_length=4000, clone_fraction=0.5)
+    truth = generate_set(
+        tmp_path / "s", scenario="clonal", n=10, seed=1, genome_length=4000, clone_fraction=0.5
+    )
     on_disk = json.loads((tmp_path / "s" / "truth.json").read_text(encoding="utf-8"))
     assert on_disk == truth
     assert on_disk["scenario"] == "clonal"
@@ -60,8 +61,9 @@ def test_intra_cluster_identity_higher_than_inter(tmp_path: Path) -> None:
 
 def test_clone_block_is_near_identical(tmp_path: Path) -> None:
     out = tmp_path / "s"
-    truth = generate_set(out, scenario="clonal", n=10, seed=7,
-                         genome_length=50000, clone_fraction=0.4)
+    truth = generate_set(
+        out, scenario="clonal", n=10, seed=7, genome_length=50000, clone_fraction=0.4
+    )
     clone = truth["clone_cluster"]
     members = [g for g, c in truth["clusters"].items() if c == clone]
     s1, s2 = _read_seq(out / members[0]), _read_seq(out / members[1])
@@ -71,16 +73,29 @@ def test_clone_block_is_near_identical(tmp_path: Path) -> None:
 def test_accession_order_controls_sort_position(tmp_path: Path) -> None:
     """clustered: the clone block occupies the alphabetically-first filenames;
     random: it does not (for a seeded set where that is checkable)."""
-    clustered = generate_set(tmp_path / "c", scenario="clonal", n=10, seed=5,
-                             genome_length=2000, clone_fraction=0.4,
-                             order="clustered")
+    clustered = generate_set(
+        tmp_path / "c",
+        scenario="clonal",
+        n=10,
+        seed=5,
+        genome_length=2000,
+        clone_fraction=0.4,
+        order="clustered",
+    )
     names = sorted(clustered["clusters"])
     clone = clustered["clone_cluster"]
     first_four = names[:4]
     assert all(clustered["clusters"][n] == clone for n in first_four)
 
-    rand = generate_set(tmp_path / "r", scenario="clonal", n=10, seed=5,
-                        genome_length=2000, clone_fraction=0.4, order="random")
+    rand = generate_set(
+        tmp_path / "r",
+        scenario="clonal",
+        n=10,
+        seed=5,
+        genome_length=2000,
+        clone_fraction=0.4,
+        order="random",
+    )
     names_r = sorted(rand["clusters"])
     assert not all(rand["clusters"][n] == rand["clone_cluster"] for n in names_r[:4])
 

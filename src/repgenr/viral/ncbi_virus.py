@@ -125,6 +125,7 @@ def fetch(
     ``>accession ...``). ``runner`` is injectable for tests.
     """
     if runner is None:
+
         def runner(caps, cmd, **kw):
             # datasets performs its own network transfers with no built-in
             # retry; cap and retry it like the bacterial download path.
@@ -137,8 +138,15 @@ def fetch(
         shutil.rmtree(extract)
 
     cmd = [
-        "datasets", "download", "virus", "genome", "taxon", target,
-        "--filename", str(zip_path), "--no-progressbar",
+        "datasets",
+        "download",
+        "virus",
+        "genome",
+        "taxon",
+        target,
+        "--filename",
+        str(zip_path),
+        "--no-progressbar",
     ]
     if complete_only:
         cmd.append("--complete-only")

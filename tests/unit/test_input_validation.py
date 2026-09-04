@@ -49,9 +49,7 @@ def test_limit_zero_rejected(tmp_path) -> None:
 
 
 def test_length_deviation_negative_rejected(tmp_path) -> None:
-    result = _runner.invoke(
-        app, ["vgenome", "-wd", str(tmp_path), "--length-deviation", "-1"]
-    )
+    result = _runner.invoke(app, ["vgenome", "-wd", str(tmp_path), "--length-deviation", "-1"])
     assert result.exit_code == 2
     assert "--length-deviation" in _plain(result.output)
 

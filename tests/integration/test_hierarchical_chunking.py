@@ -111,8 +111,8 @@ def test_recursive_reduction_accounts_all(workdir: Path, reg) -> None:
     ctx = WorkdirContext(workdir, create=True)
     # 8 genomes, size 2 -> multi-level reduce-tree (depth 0 and 1)
     res = run(ctx, DereplicateParams(tool="halver", process_size=2))
-    assert len(res.representatives) < 8           # genuinely reduced
-    assert len(res.genome_status) == 8            # every original genome accounted for
+    assert len(res.representatives) < 8  # genuinely reduced
+    assert len(res.genome_status) == 8  # every original genome accounted for
 
 
 def test_fail_qc_genome_survives_chunked_composition(workdir: Path, reg) -> None:

@@ -12,22 +12,29 @@ from repgenr.viral.ncbi_virus import VirusRecord, parse_report, write_records
 
 
 def _report_line(acc, family, genus, species, length, segment="ANONYMOUS"):
-    return json.dumps({
-        "accession": acc, "length": length, "completeness": "COMPLETE", "segment": segment,
-        "virus": {
-            "organism_name": species, "tax_id": 11676,
-            "lineage": [
-                {"name": family, "tax_id": 1, "rank": "family"},
-                {"name": genus, "tax_id": 2, "rank": "genus"},
-                {"name": species, "tax_id": 3, "rank": "species"},
-            ],
-        },
-    })
+    return json.dumps(
+        {
+            "accession": acc,
+            "length": length,
+            "completeness": "COMPLETE",
+            "segment": segment,
+            "virus": {
+                "organism_name": species,
+                "tax_id": 11676,
+                "lineage": [
+                    {"name": family, "tax_id": 1, "rank": "family"},
+                    {"name": genus, "tax_id": 2, "rank": "genus"},
+                    {"name": species, "tax_id": 3, "rank": "species"},
+                ],
+            },
+        }
+    )
 
 
 def test_parse_report_extracts_taxonomy_and_sanitizes() -> None:
-    line = _report_line("NC_001802.1", "Retroviridae", "Lentivirus",
-                        "Human immunodeficiency virus 1", 9181)
+    line = _report_line(
+        "NC_001802.1", "Retroviridae", "Lentivirus", "Human immunodeficiency virus 1", 9181
+    )
     (rec,) = parse_report([line])
     assert rec.accession == "NC_001802.1"
     assert rec.family == "Retroviridae" and rec.genus == "Lentivirus"
@@ -38,18 +45,25 @@ def test_parse_report_extracts_taxonomy_and_sanitizes() -> None:
 def test_parse_download_report_schema_camelcase_and_no_ranks() -> None:
     # The download package's data_report.jsonl uses camelCase and has no rank
     # labels -- taxonomy must come from ICTV name suffixes.
-    line = json.dumps({
-        "accession": "AY358025.2", "length": 19111, "completeness": "COMPLETE",
-        "isolate": {"name": "M/S.Africa/1975"},
-        "virus": {
-            "organismName": "Orthomarburgvirus marburgense", "taxId": 3052505,
-            "lineage": [
-                {"name": "Viruses"}, {"name": "Mononegavirales"},
-                {"name": "Filoviridae"}, {"name": "Orthomarburgvirus"},
-                {"name": "Orthomarburgvirus marburgense"},
-            ],
-        },
-    })
+    line = json.dumps(
+        {
+            "accession": "AY358025.2",
+            "length": 19111,
+            "completeness": "COMPLETE",
+            "isolate": {"name": "M/S.Africa/1975"},
+            "virus": {
+                "organismName": "Orthomarburgvirus marburgense",
+                "taxId": 3052505,
+                "lineage": [
+                    {"name": "Viruses"},
+                    {"name": "Mononegavirales"},
+                    {"name": "Filoviridae"},
+                    {"name": "Orthomarburgvirus"},
+                    {"name": "Orthomarburgvirus marburgense"},
+                ],
+            },
+        }
+    )
     (rec,) = parse_report([line])
     assert rec.family == "Filoviridae"
     assert rec.genus == "Orthomarburgvirus"
@@ -59,10 +73,30 @@ def test_parse_download_report_schema_camelcase_and_no_ranks() -> None:
 
 def _fake_records() -> list[VirusRecord]:
     return [
-        VirusRecord("NC_001802.1", "11676", "HIV-1", "Retroviridae", "Lentivirus",
-                    "Human-immunodeficiency-virus-1", 9181, "COMPLETE", "ANONYMOUS", ""),
-        VirusRecord("AF033819.3", "11676", "HIV-1", "Retroviridae", "Lentivirus",
-                    "Human-immunodeficiency-virus-1", 9100, "COMPLETE", "ANONYMOUS", ""),
+        VirusRecord(
+            "NC_001802.1",
+            "11676",
+            "HIV-1",
+            "Retroviridae",
+            "Lentivirus",
+            "Human-immunodeficiency-virus-1",
+            9181,
+            "COMPLETE",
+            "ANONYMOUS",
+            "",
+        ),
+        VirusRecord(
+            "AF033819.3",
+            "11676",
+            "HIV-1",
+            "Retroviridae",
+            "Lentivirus",
+            "Human-immunodeficiency-virus-1",
+            9100,
+            "COMPLETE",
+            "ANONYMOUS",
+            "",
+        ),
     ]
 
 
@@ -72,9 +106,7 @@ def test_vmetadata_ncbi_virus_path(workdir: Path, monkeypatch) -> None:
 
     def fake_fetch(target, out_dir, **kw):
         recs = _fake_records()
-        (out_dir / "download.fa").write_text(
-            "".join(f">{r.accession} x\nACGT\n" for r in recs)
-        )
+        (out_dir / "download.fa").write_text("".join(f">{r.accession} x\nACGT\n" for r in recs))
         return recs
 
     monkeypatch.setattr(ncbi_virus, "fetch", fake_fetch)
@@ -116,14 +148,54 @@ def test_vgenome_group_segments_per_isolate(workdir: Path) -> None:
 
     # isolate A has 3 segments; isolate B has 1 (stays a singleton)
     recs = [
-        VirusRecord("SEG1.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
-                    "Influenza-A", 2300, "COMPLETE", "1", "A/iso/A/2020"),
-        VirusRecord("SEG2.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
-                    "Influenza-A", 1700, "COMPLETE", "4", "A/iso/A/2020"),
-        VirusRecord("SEG3.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
-                    "Influenza-A", 1000, "COMPLETE", "7", "A/iso/A/2020"),
-        VirusRecord("SOLO.1", "1", "Flu", "Orthomyxoviridae", "Alphainfluenzavirus",
-                    "Influenza-A", 1500, "COMPLETE", "5", "A/iso/B/2020"),
+        VirusRecord(
+            "SEG1.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            2300,
+            "COMPLETE",
+            "1",
+            "A/iso/A/2020",
+        ),
+        VirusRecord(
+            "SEG2.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            1700,
+            "COMPLETE",
+            "4",
+            "A/iso/A/2020",
+        ),
+        VirusRecord(
+            "SEG3.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            1000,
+            "COMPLETE",
+            "7",
+            "A/iso/A/2020",
+        ),
+        VirusRecord(
+            "SOLO.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            1500,
+            "COMPLETE",
+            "5",
+            "A/iso/B/2020",
+        ),
     ]
     dl = workdir / "virus_download_wd"
     dl.mkdir(parents=True)

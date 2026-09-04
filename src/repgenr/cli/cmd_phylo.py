@@ -31,7 +31,8 @@ def snptype(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
     allow_incomplete: bool = typer.Option(
-        False, "--allow-incomplete",
+        False,
+        "--allow-incomplete",
         help="Proceed with a warning when the input genome set is incomplete.",
     ),
 ) -> None:
@@ -69,16 +70,20 @@ def phylo(
     ),
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     aligner_arg: list[str] = typer.Option(
-        [], "--aligner-arg",
+        [],
+        "--aligner-arg",
         help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
         "or seed_weight=11 (progressivemauve).",
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
     mask: str = typer.Option(
-        "none", "--mask", help="Recombination masking for --msa-source snptype.",
+        "none",
+        "--mask",
+        help="Recombination masking for --msa-source snptype.",
     ),
     allow_incomplete: bool = typer.Option(
-        False, "--allow-incomplete",
+        False,
+        "--allow-incomplete",
         help="Proceed with a warning when the input genome set is incomplete.",
     ),
 ) -> None:
@@ -113,7 +118,8 @@ def tree2tax(
     root_name: str = typer.Option("root", "-r", "--root-name", help="Name for the root node."),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
     include_dereplicated: bool = typer.Option(
-        True, "--include-dereplicated/--no-include-dereplicated",
+        True,
+        "--include-dereplicated/--no-include-dereplicated",
         help="List redundant genomes under their representative.",
     ),
 ) -> None:

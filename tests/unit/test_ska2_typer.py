@@ -42,8 +42,11 @@ def test_ska2_builds_then_aligns(tmp_path: Path, monkeypatch) -> None:
     genomes = _genomes(tmp_path)
 
     result = mod.Ska2Typer().call(
-        genomes, None, tmp_path / "out",
-        SnpParams(threads=2, extra={"ksize": 21, "min_freq": 0.8}), _LOG,
+        genomes,
+        None,
+        tmp_path / "out",
+        SnpParams(threads=2, extra={"ksize": 21, "min_freq": 0.8}),
+        _LOG,
     )
 
     build, align = calls
@@ -53,7 +56,8 @@ def test_ska2_builds_then_aligns(tmp_path: Path, monkeypatch) -> None:
     # ska build takes a two-column list: sample name, then the FASTA path.
     listing = Path(build[build.index("-f") + 1])
     assert listing.read_text(encoding="utf-8").splitlines() == [
-        f"a\t{genomes[0].resolve()}", f"b\t{genomes[1].resolve()}",
+        f"a\t{genomes[0].resolve()}",
+        f"b\t{genomes[1].resolve()}",
     ]
     assert align[:2] == ["ska", "align"]
     assert align[align.index("--min-freq") + 1] == "0.8"

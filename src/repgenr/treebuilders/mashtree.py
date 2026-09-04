@@ -17,9 +17,7 @@ class MashtreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="mashtree",
         conda=("bioconda::mashtree",),
-        required_binaries=(
-            BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),
-        ),
+        required_binaries=(BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),),
         recommended_max_genomes=10000,
         accepted_extras=frozenset({"genomesize"}),
     )
@@ -48,8 +46,12 @@ class MashtreeBuilder(TreeBuilder):
         matrix = out_dir / "distance_matrix.tsv"
         cmd = self._command(params, matrix, genomes)
         warn_argv_bytes("mashtree", cmd, logger)
-        run_tool(self.capabilities, cmd,
-            logger=logger, log_prefix="mashtree", stdout_path=tree,
+        run_tool(
+            self.capabilities,
+            cmd,
+            logger=logger,
+            log_prefix="mashtree",
+            stdout_path=tree,
         )
         return tree, matrix
 

@@ -25,7 +25,8 @@ def test_exact_accession_match_wins_over_substring(tmp_path: Path) -> None:
     """A stale outgroup file whose name merely CONTAINS the accession must not
     shadow the file whose parsed accession IS the accession."""
     og_dir, acc_file = _setup(
-        tmp_path, "GCF_1.1",
+        tmp_path,
+        "GCF_1.1",
         # the stale file sorts first AND contains "GCF_1.1" as a substring,
         # but its parsed accession is "1.1_backup", not "GCF_1.1"
         ["AAA_Old_GCF_1.1_backup.fasta", "Fam_Out_grp_GCF_1.1.fasta"],

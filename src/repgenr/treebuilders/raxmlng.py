@@ -20,9 +20,7 @@ class RaxmlNgBuilder(TreeBuilder):
         name="raxmlng",
         conda=("bioconda::raxml-ng",),
         accepted_extras=frozenset({"model"}),
-        required_binaries=(
-            BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),
-        ),
+        required_binaries=(BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),),
         recommended_max_genomes=1000,
     )
     input_kind = InputKind.MSA_FASTA
@@ -38,13 +36,18 @@ class RaxmlNgBuilder(TreeBuilder):
         out_dir.mkdir(parents=True, exist_ok=True)
         prefix = out_dir / "raxml"
         cmd: list[str | Path] = [
-            "raxml-ng", "--all",
-            "--msa", msa,
-            "--model", params.extra.get("model", "GTR+G"),
+            "raxml-ng",
+            "--all",
+            "--msa",
+            msa,
+            "--model",
+            params.extra.get("model", "GTR+G"),
             # auto{N}: let RAxML-NG pick an efficient thread count up to the
             # budget, avoiding its core-oversubscription guard on small alignments.
-            "--threads", f"auto{{{params.threads}}}",
-            "--prefix", prefix,
+            "--threads",
+            f"auto{{{params.threads}}}",
+            "--prefix",
+            prefix,
             "--redo",  # overwrite any outputs from a previous run at this prefix
         ]
         # Bound the bootstrap. With `--all` and no `--bs-trees`, RAxML-NG defaults

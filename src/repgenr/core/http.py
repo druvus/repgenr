@@ -103,9 +103,7 @@ def download(
 
     if expected and written != expected:
         tmp.unlink(missing_ok=True)
-        raise WorkdirError(
-            f"Incomplete download: {url} got {written} of {expected} bytes."
-        )
+        raise WorkdirError(f"Incomplete download: {url} got {written} of {expected} bytes.")
     tmp.replace(dest)
     if logger is not None:
         logger.info("Downloaded %s (%d bytes)", dest.name, written)
@@ -115,9 +113,7 @@ def download(
 _MD5_RE = re.compile(r"^([0-9a-fA-F]{32})\s+\.?/?(.+)$")
 
 
-def verify_md5_manifest(
-    path: Path, manifest_url: str, *, logger: logging.Logger
-) -> bool:
+def verify_md5_manifest(path: Path, manifest_url: str, *, logger: logging.Logger) -> bool:
     """Verify ``path`` against an md5sum-format manifest published beside it.
 
     Returns True when the checksum matches. An unavailable manifest or a file
