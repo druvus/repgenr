@@ -6,6 +6,8 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-04
+
 ### Added
 - `ska2` SNP typer: reference-free split k-mer calling (`repgenr snptype
   --tool ska2`, `phylo --msa-source snptype --snptyper ska2`). No genome is
@@ -17,6 +19,40 @@ All notable changes to RepGenR are documented here. The format follows
   corrupt genomes, manifest drift, representative/cluster mismatches,
   truncated deliverables, unresolvable outgroups, leftover temp files, and
   stages whose inputs changed since completion. Exits 1 on failures.
+- `repgenr run` accepts `--msa-source` and `--snptyper`, so the SNP-typing
+  phylogeny path (previously manual-only via `repgenr phylo`) is reachable from
+  the one-shot orchestrator with identical resume fingerprints.
+- **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
+  data-channel workflow with no shared working directory. Parameter schema
+  (`nextflow_schema.json`) with nf-schema validation, execution reports and
+  nf-core template files; stateless `repgenr dereplicate-chunk` /
+  `dereplicate-merge` / `genome-fetch` CLI steps and a portable `selection.tsv`
+  hand-off; a scatter-gather dereplication subworkflow; data-channel
+  `BACTERIAL_DATAFLOW` (metadata -> genome -> derep -> phylo -> tree2tax) and
+  `VIRAL_DATAFLOW` pipelines selected by `--mode`; results published under
+  `--outdir`. Stub-based nf-test and a CI job run them on Nextflow 26.04. The
+  legacy shared-workdir orchestrator and done-signal modules are removed.
+- **Sparse sourmash dereplication back-end**: when the optional
+  `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
+  uses `manysketch` + `pairwise` to compute only above-threshold edges instead of
+  the dense N x N `compare` matrix, keeping memory roughly linear in the number of
+  close pairs (relevant at 10k+ genomes). Selected automatically; falls back to
+  the dense `compare` path when the plugin is absent. Both paths yield the same
+  cluster partition and representative count for a given threshold. Install via
+  the `sparse` extra or the `sourmash_plugin_branchwater` conda package.
+- **Quality-aware representative selection.** `--keeper quality` (default)
+  re-picks each cluster's representative by CheckM completeness minus five
+  times contamination after any dereplicator runs, at the in-process stage,
+  the Nextflow chunk level and taxonomy reduction; `--keeper tool` keeps the
+  adapter's own pick. GTDB CheckM values are carried into the manifest
+  (schema v2, two quality columns) and `selection.tsv` (two optional
+  columns). Provenance records `keeper`, `keeper_effective` and the number
+  of representatives changed.
+- `snp/full_alignment.fasta`: SNP typers emit the whole-genome alignment
+  (snippy `core.full.aln`, ParSNP `harvesttools -M`, the simple typer's
+  consensuses) as a deliverable and as the input for recombination maskers.
+- Nextflow publishes `pipeline_info/software_versions.yml`, collected from
+  every process.
 
 ### Changed
 - **Crash/restart hardening (stage audit)**: a stage that crashes while
@@ -52,29 +88,20 @@ All notable changes to RepGenR are documented here. The format follows
   `--no-include-dereplicated` for the old manual behavior. The bacterial
   `repgenr run` now requires `-l/--level` instead of silently passing an empty
   level.
-
-### Added
-- `repgenr run` accepts `--msa-source` and `--snptyper`, so the SNP-typing
-  phylogeny path (previously manual-only via `repgenr phylo`) is reachable from
-  the one-shot orchestrator with identical resume fingerprints.
-- **Nextflow nf-core rewrite (Phase 4)**: the pipeline is now a typed
-  data-channel workflow with no shared working directory. Parameter schema
-  (`nextflow_schema.json`) with nf-schema validation, execution reports and
-  nf-core template files; stateless `repgenr dereplicate-chunk` /
-  `dereplicate-merge` / `genome-fetch` CLI steps and a portable `selection.tsv`
-  hand-off; a scatter-gather dereplication subworkflow; data-channel
-  `BACTERIAL_DATAFLOW` (metadata -> genome -> derep -> phylo -> tree2tax) and
-  `VIRAL_DATAFLOW` pipelines selected by `--mode`; results published under
-  `--outdir`. Stub-based nf-test and a CI job run them on Nextflow 26.04. The
-  legacy shared-workdir orchestrator and done-signal modules are removed.
-- **Sparse sourmash dereplication back-end**: when the optional
-  `sourmash_plugin_branchwater` plugin is installed, the sourmash dereplicator
-  uses `manysketch` + `pairwise` to compute only above-threshold edges instead of
-  the dense N x N `compare` matrix, keeping memory roughly linear in the number of
-  close pairs (relevant at 10k+ genomes). Selected automatically; falls back to
-  the dense `compare` path when the plugin is absent. Both paths yield the same
-  cluster partition and representative count for a given threshold. Install via
-  the `sparse` extra or the `sourmash_plugin_branchwater` conda package.
+- **Breaking for third-party adapters:** `Masker.mask(full_alignment,
+  out_dir, params, logger)` receives the whole-genome alignment and a
+  `MaskParams`; `SnpParams.mask` is removed; `xmfa_to_fasta` loses its unused
+  `flank` argument.
+- Stage-level flags (`--virus`, `--mask`) enter a tool's extras only when that
+  tool declares them, so resume fingerprints change only when behaviour
+  does; every stage warns by name about extras no selected tool reads.
+- Repository hygiene: `ruff format` is enforced in CI (the mechanical
+  reformat is listed in `.git-blame-ignore-revs`), CI caches pip and the
+  micromamba environment and installs nf-test from a pinned release tarball,
+  the wiki binaries are no longer tracked (figures live in `docs/images/`),
+  and a test pins `pyproject.toml`, the Nextflow manifest and this changelog
+  to one version. The Nextflow floor is `>=23.10.0`, the minimum nf-schema
+  2.3.0 supports.
 
 ### Fixed
 - `tree2tax` roots on the outgroup edge instead of at the outgroup's parent
@@ -99,6 +126,15 @@ All notable changes to RepGenR are documented here. The format follows
   streamed tool output goes to DEBUG (the file log keeps it, the console
   shows the pipeline's own messages), with carriage-return redraws logged
   once in their final state.
+- Dereplication refuses incomplete results (a genome without a status, an
+  unmarked representative, a contained genome with no or several
+  representatives) instead of silently dropping genomes; genomes that fail a
+  tool's QC filter are carried through chunked composition, taxonomy
+  reduction and the Nextflow merge.
+- `doctor` is strictly read-only: it opens the manifest in read-only mode and
+  never creates, migrates or journals it.
+- Nextflow help text names NCBI Virus; `tree2tax` publishes only its TSVs to
+  the outdir root.
 
 ## [2.0.0] - 2026-06-18
 
