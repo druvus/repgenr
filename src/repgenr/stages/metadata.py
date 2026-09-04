@@ -19,6 +19,7 @@ import gzip
 import shutil
 import tarfile
 import urllib.parse
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,7 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError, WorkdirError
+from ..core.executors import parallel_map
 from ..core.manifest import GenomeRecord
 
 TAXONOMY = ("domain", "phylum", "class", "family", "genus", "species")
@@ -388,10 +390,23 @@ def _capitalize_taxon(name: str) -> str:
     return " ".join(parts)
 
 
-def _api_quality(row: dict) -> tuple[float | None, float | None]:
-    """CheckM quality from an API row; None unless it carries checkm2_* fields."""
+# Parallel card fetches; the shared retry session bounds each request, so this
+# only caps how many are in flight against the GTDB API at once.
+_API_CARD_WORKERS = 8
+
+
+def _api_quality(card: dict) -> tuple[float | None, float | None]:
+    """CheckM quality from a ``/genome/{gid}/card`` response.
+
+    The card nests it under ``metadata_gene``; the ``genomes-detail`` rows carry
+    no quality at all. Prefers checkm2_* and falls back to checkm_*, like the TSV
+    path. Returns (None, None) when neither is present.
+    """
+    gene = card.get("metadata_gene")
+    source = gene if isinstance(gene, dict) else card
+
     def val(key: str) -> float | None:
-        raw = row.get(key)
+        raw = source.get(key)
         if raw is None or raw == "":
             return None
         try:
@@ -399,7 +414,42 @@ def _api_quality(row: dict) -> tuple[float | None, float | None]:
         except (TypeError, ValueError):
             return None
 
-    return val("checkm2_completeness"), val("checkm2_contamination")
+    for prefix in ("checkm2", "checkm"):
+        completeness = val(f"{prefix}_completeness")
+        contamination = val(f"{prefix}_contamination")
+        if completeness is not None or contamination is not None:
+            return completeness, contamination
+    return None, None
+
+
+def _api_card(accession: str) -> dict:
+    return _api_get(f"/genome/{urllib.parse.quote(accession, safe='')}/card")
+
+
+def _api_quality_by_accession(
+    accessions: Sequence[str], logger
+) -> dict[str, tuple[float | None, float | None]]:
+    """Fetch each genome's card and return its CheckM quality.
+
+    A card that cannot be fetched leaves that genome unscored (a warning names
+    it) rather than failing the whole selection; the keeper then treats it like
+    any other genome without quality.
+    """
+    if not accessions:
+        return {}
+    logger.info("Fetching assembly quality for %d genomes from the GTDB API", len(accessions))
+
+    def fetch(acc: str) -> tuple[str, tuple[float | None, float | None] | None]:
+        try:
+            return acc, _api_quality(_api_card(acc))
+        except WorkdirError as exc:
+            logger.warning("No assembly quality for %s: %s", acc, exc)
+            return acc, None
+
+    out: dict[str, tuple[float | None, float | None]] = {}
+    for acc, quality in parallel_map(fetch, accessions, _API_CARD_WORKERS):
+        out[acc] = quality if quality is not None else (None, None)
+    return out
 
 
 def _normalize_api_tax(row: dict) -> dict:
@@ -434,11 +484,12 @@ def _select_via_api(
     if params.limit:
         rows = rows[: params.limit]
 
+    quality = _api_quality_by_accession([row["gid"] for row in rows], logger)
     records: list[GenomeRecord] = []
     selected_acc: set[str] = set()
     for row in rows:
         acc = row["gid"]
-        completeness, contamination = _api_quality(row)
+        completeness, contamination = quality[acc]
         records.append(
             _record_from_tax(
                 acc, _normalize_api_tax(row),
@@ -488,7 +539,7 @@ def _select_outgroup_via_api(
         # must be outside the selected sub-taxon
         if row.get(_rank_field(params.level)) == rows[0].get(_rank_field(params.level)):
             continue
-        completeness, contamination = _api_quality(row)
+        completeness, contamination = _api_quality_by_accession([row["gid"]], logger)[row["gid"]]
         return _record_from_tax(
             row["gid"], _normalize_api_tax(row), is_outgroup=True,
             completeness=completeness, contamination=contamination,

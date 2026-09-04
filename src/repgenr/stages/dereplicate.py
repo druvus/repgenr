@@ -125,7 +125,12 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         if quality:
             result, keeper_swaps = rescore_representatives(result, quality, logger)
         else:
-            logger.info("No assembly quality in the manifest; keeping the tool's representatives")
+            logger.warning(
+                "No assembly quality in the manifest, so --keeper quality has no "
+                "effect: keeping the tool's own representatives. GTDB TSV selections "
+                "carry CheckM quality; API selections fetch it per genome card."
+            )
+    keeper_effective = "quality" if quality else "tool"
 
     if params.reduce != "none":
         before = len(result.representatives)
@@ -155,6 +160,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "reduce": params.reduce,
             "target_reps": params.target_reps,
             "keeper": params.keeper,
+            "keeper_effective": keeper_effective,
             "keeper_swaps": keeper_swaps,
             **(params.extra or {}),
         },

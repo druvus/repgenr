@@ -189,6 +189,42 @@ def test_keeper_tool_keeps_adapter_pick(workdir: Path, genome_files, fake_tool) 
     assert ctx.config.stages["dereplicate"].params["keeper_swaps"] == 0
 
 
+def test_keeper_quality_without_manifest_quality_warns_and_records_fallback(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    # No completeness/contamination in the manifest (e.g. an API selection that
+    # could not fetch quality): the stage must say so loudly and record that the
+    # adapter's own picks were kept, so "quality, 0 swaps" is not ambiguous.
+    import logging
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, DereplicateParams(tool="fake", keeper="quality"))
+
+    params = ctx.config.stages["dereplicate"].params
+    assert params["keeper"] == "quality"
+    assert params["keeper_effective"] == "tool"
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("quality" in m.lower() for m in warnings)
+
+
+def test_keeper_quality_with_manifest_quality_records_quality(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    ctx = WorkdirContext(workdir, create=True)
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    for f in genome_files:
+        ctx.manifest.upsert(GenomeRecord(
+            accession=accession_from_filename(f.name), filename=f.name,
+            completeness=99.0, contamination=0.5,
+        ))
+    run(ctx, DereplicateParams(tool="fake", keeper="quality"))
+    assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
+
+
 def test_stage1_uses_pre_thresholds(workdir: Path, genome_files, fake_tool) -> None:
     # 3 genomes, process_size=2 -> trailing singleton merges into one chunk, so
     # only stage 1 runs; bump to >=4 genomes to force a real two-stage pass.
