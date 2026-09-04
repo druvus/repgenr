@@ -139,3 +139,52 @@ def test_datasets_timeout_scales_with_batch():
     assert _timeout_for(10) == 3600.0          # floor for small batches
     assert _timeout_for(5000) == 15000.0       # 3 s per accession at full batch
     assert _timeout_for(0) == 3600.0
+
+
+# --- mashtree: one argument set for the tree and the distance matrix ----------
+
+
+def _mashtree_commands(monkeypatch):
+    from repgenr.treebuilders import mashtree as mt
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(
+        mt, "run_tool", lambda caps, cmd, **k: seen.append([str(c) for c in cmd])
+    )
+    return mt, seen
+
+
+def test_mashtree_tree_and_matrix_share_flags(tmp_path, monkeypatch):
+    from repgenr.treebuilders.base import TreeParams
+
+    mt, seen = _mashtree_commands(monkeypatch)
+    genomes = [tmp_path / "a.fasta", tmp_path / "b.fasta"]
+    params = TreeParams(threads=4, extra={"genomesize": 1500000})
+    adapter = mt.MashtreeBuilder()
+    adapter.build(genomes, tmp_path / "tree", params, _LOGGER)
+    adapter.distance_matrix(genomes, tmp_path / "dist", params, _LOGGER)
+    build_cmd, matrix_cmd = seen
+
+    def flags(cmd: list[str]) -> dict[str, str]:
+        out = {}
+        for i, tok in enumerate(cmd):
+            if tok.startswith("--") and tok != "--outmatrix":
+                out[tok] = cmd[i + 1]
+        return out
+
+    # threads, mindepth and genomesize are passed identically to both calls
+    assert flags(build_cmd) == flags(matrix_cmd)
+    assert flags(build_cmd)["--numcpus"] == "4"
+    assert flags(build_cmd)["--mindepth"] == "0"
+    assert flags(build_cmd)["--genomesize"] == "1500000"
+
+
+def test_mashtree_build_also_writes_the_distance_matrix(tmp_path, monkeypatch):
+    from repgenr.treebuilders.base import TreeParams
+
+    mt, seen = _mashtree_commands(monkeypatch)
+    genomes = [tmp_path / "a.fasta", tmp_path / "b.fasta"]
+    mt.MashtreeBuilder().build(genomes, tmp_path / "tree", TreeParams(threads=1), _LOGGER)
+    (cmd,) = seen
+    assert "--outmatrix" in cmd
+    assert cmd[cmd.index("--outmatrix") + 1] == str(tmp_path / "tree" / "distance_matrix.tsv")

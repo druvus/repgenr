@@ -33,10 +33,10 @@ END_VERSIONS
 
     stub:
     """
-    printf 'accession\\tfamily\\tgenus\\tspecies\\tis_outgroup\\tfilename\\n' > selection.tsv
-    printf 'GCF_000001.1\\tFam\\tGen\\tsp1\\t0\\tFam_Gen_sp1_GCF_000001.1.fasta\\n' >> selection.tsv
-    printf 'GCF_000002.1\\tFam\\tGen\\tsp2\\t0\\tFam_Gen_sp2_GCF_000002.1.fasta\\n' >> selection.tsv
-    printf 'GCF_000009.1\\tFam\\tOut\\tgrp\\t1\\tFam_Out_grp_GCF_000009.1.fasta\\n' >> selection.tsv
+    printf 'accession\\tfamily\\tgenus\\tspecies\\tis_outgroup\\tfilename\\tcompleteness\\tcontamination\\n' > selection.tsv
+    printf 'GCF_000001.1\\tFam\\tGen\\tsp1\\t0\\tFam_Gen_sp1_GCF_000001.1.fasta\\t\\t\\n' >> selection.tsv
+    printf 'GCF_000002.1\\tFam\\tGen\\tsp2\\t0\\tFam_Gen_sp2_GCF_000002.1.fasta\\t\\t\\n' >> selection.tsv
+    printf 'GCF_000009.1\\tFam\\tOut\\tgrp\\t1\\tFam_Out_grp_GCF_000009.1.fasta\\t\\t\\n' >> selection.tsv
     printf 'GCF_000009.1\\n' > outgroup_accession.txt
     touch versions.yml
     """

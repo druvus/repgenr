@@ -121,6 +121,22 @@ and emits them as a channel feeding the scatter-gather dereplication; `phylo` an
 `tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
 quick wiring check without external tools.
 
+### Representative selection
+
+`repgenr dereplicate` and `repgenr run` (the manual and `run` CLI entry points,
+not the Nextflow data-channel path) accept `--keeper quality|tool` (default
+`quality`). After the chosen dereplicator clusters the genomes, the keeper step
+re-picks each cluster's representative by `completeness - 5 x contamination`
+using GTDB CheckM values already present in the manifest
+(`src/repgenr/stages/derep_keeper.py`), which corrects the tendency of
+connectivity-based tools to keep the most-sequenced (not the best-quality)
+genome in a cluster. `--keeper tool` restores the adapter's own pick. Clusters
+with no manifest quality data keep the adapter's choice either way. The GTDB
+table carries CheckM values directly; `--source api` fetches them from each
+genome's card (one request per selected genome). When the manifest has no
+quality at all the stage warns, and `repgenr.yaml` records
+`keeper_effective: tool` next to the requested `keeper` and the swap count.
+
 ### SNP typing and masking
 
 The `repgenr snptype` command (and `phylo-build --msa-source snptype`) call a

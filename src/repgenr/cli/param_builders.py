@@ -110,6 +110,7 @@ def dereplicate_params(
     target_reps: Any = _UNSET,
     extra: Any = _UNSET,
     allow_incomplete: Any = _UNSET,
+    keeper: Any = _UNSET,
 ) -> DereplicateParams:
     from ..core.errors import UserInputError
     from ..dereplicators.base import registry as _derep_registry
@@ -119,6 +120,8 @@ def dereplicate_params(
         _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
     if reduce is not _UNSET:
         _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
+    if keeper is not _UNSET:
+        _require_choice(keeper, {"quality", "tool"}, "--keeper")
     if target_reps is not _UNSET and target_reps < 0:
         raise UserInputError(f"--target-reps must be >= 0, got {target_reps}.")
     for value, label in (
@@ -134,7 +137,7 @@ def dereplicate_params(
         threads=threads, process_size=process_size, num_processes=num_processes,
         pre_primary_ani=pre_primary_ani, pre_secondary_ani=pre_secondary_ani,
         reduce=reduce, target_reps=target_reps, extra=extra,
-        allow_incomplete=allow_incomplete,
+        allow_incomplete=allow_incomplete, keeper=keeper,
     )
 
 

@@ -23,7 +23,7 @@ from .. import __version__
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, SELECTION_TSV, TREE_NWK
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
-from ..core.inputs import inputs_digest, manifest_digest
+from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
 
 app = typer.Typer(
@@ -91,8 +91,11 @@ STAGE_INPUTS: dict[str, Any] = {
 }
 
 # Stages whose result also depends on the manifest's genome rows (taxonomy,
-# derep status), digested from ordered query results.
-_MANIFEST_INPUT_STAGES = frozenset({"tree2tax"})
+# derep status, CheckM quality), digested from ordered query results.
+# "dereplicate" reads the manifest for the quality-aware keeper and --reduce
+# taxonomy grouping, so a manifest-only edit (no genome file touched) must
+# still invalidate a prior resume.
+_MANIFEST_INPUT_STAGES = frozenset({"tree2tax", "dereplicate"})
 
 # Param flags that turn a stage invocation into a pure query (list/preview
 # modes that write no pipeline outputs). Such invocations bypass the resume
@@ -119,7 +122,7 @@ def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> d
         return {}
     digests = inputs_digest(ctx.workdir, spec(ctx, params))
     if stage_name in _MANIFEST_INPUT_STAGES:
-        digests["manifest"] = manifest_digest(ctx.manifest)
+        digests["manifest"] = manifest_digest_for_stage(stage_name, ctx.manifest)
     return digests
 
 

@@ -17,6 +17,7 @@ nextflow_process {
                         file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta")
                     ]
                 )
+                input[1] = []
                 """
             }
         }
@@ -30,6 +31,33 @@ nextflow_process {
                 def dir = get(1)
                 assert path("${dir}/clusters.tsv").exists()
                 assert path("${dir}/genome_status.tsv").exists()
+                assert path("${dir}/representatives").exists()
+            }
+        }
+    }
+
+    test("accepts a selection.tsv (quality-aware keeper input) alongside the genomes") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'chunk_0'],
+                    [
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta")
+                    ]
+                )
+                input[1] = file("${projectDir}/nextflow/tests/data/selection.tsv")
+                """
+            }
+        }
+        then {
+            // The stub script never reads selection.tsv (no repgenr call), so this
+            // exercises only the wiring: the process must accept the staged file
+            // and still succeed.
+            assert process.success
+            with(process.out.chunk.get(0)) {
+                def dir = get(1)
                 assert path("${dir}/representatives").exists()
             }
         }

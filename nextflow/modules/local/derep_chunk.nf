@@ -10,6 +10,7 @@ process DEREP_CHUNK {
 
     input:
     tuple val(meta), path(genomes, stageAs: 'inputs/*')
+    path selection, stageAs: 'selection.tsv'
 
     output:
     tuple val(meta), path("${meta.id}"), emit: chunk
@@ -25,6 +26,14 @@ process DEREP_CHUNK {
     # Build a file-of-filenames from the staged genomes (never argv -- ARG_MAX).
     ls -1 inputs/* > genomes.fofn
 
+    # selection.tsv is optional: no bacterial ACQUIRE selection (viral path, or
+    # a harness with no metadata front) stages nothing under that name, so the
+    # quality-aware keeper is skipped rather than passed a missing file. Every
+    # genome in the chunk has a real file here (unlike at the merge step), so
+    # any promotion the keeper makes is always resolvable.
+    sel=""
+    [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
+
     repgenr ${params.repgenr_opts} dereplicate-chunk \\
         --genomes-fofn genomes.fofn \\
         --out ${meta.id} \\
@@ -32,6 +41,8 @@ process DEREP_CHUNK {
         --primary-ani ${params.derep_primary_ani} \\
         --secondary-ani ${params.derep_secondary_ani} \\
         --aligned-fraction ${params.derep_aligned_fraction} \\
+        --keeper ${params.derep_keeper} \\
+        \$sel \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
 

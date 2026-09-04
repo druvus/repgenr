@@ -29,7 +29,7 @@ from .contracts import (
     read_clusters,
     read_selection,
 )
-from .inputs import inputs_digest, manifest_digest
+from .inputs import inputs_digest, manifest_digest_for_stage
 from .integrity import (
     check_genome_completeness,
     check_representatives_consistency,
@@ -273,7 +273,7 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
             if manifest_path.exists():
                 manifest = Manifest.open_readonly(manifest_path)
                 try:
-                    digests["manifest"] = manifest_digest(manifest)
+                    digests["manifest"] = manifest_digest_for_stage(name, manifest)
                 finally:
                     manifest.close()
         changed = sorted(

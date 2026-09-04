@@ -18,14 +18,16 @@ from pathlib import Path
 from .errors import WorkdirError
 
 MANIFEST_FILENAME = "manifest.sqlite"
-SCHEMA_VERSION = 1  # bump + add a migration step when the table layout changes
+SCHEMA_VERSION = 2  # bump + add a migration step when the table layout changes
 BUSY_TIMEOUT_MS = 30000  # wait up to 30s for a competing writer before erroring
 
 _UPSERT_SQL = """
     INSERT INTO genomes (accession, filename, source, family, genus,
-                         species, is_outgroup, derep_status, representative)
+                         species, is_outgroup, derep_status, representative,
+                         completeness, contamination)
     VALUES (:accession, :filename, :source, :family, :genus,
-            :species, :is_outgroup, :derep_status, :representative)
+            :species, :is_outgroup, :derep_status, :representative,
+            :completeness, :contamination)
     ON CONFLICT(accession) DO UPDATE SET
         filename=excluded.filename,
         source=excluded.source,
@@ -34,7 +36,9 @@ _UPSERT_SQL = """
         species=excluded.species,
         is_outgroup=excluded.is_outgroup,
         derep_status=excluded.derep_status,
-        representative=excluded.representative
+        representative=excluded.representative,
+        completeness=excluded.completeness,
+        contamination=excluded.contamination
 """
 
 _SET_DEREP_SQL = "UPDATE genomes SET derep_status=?, representative=? WHERE accession=?"
@@ -49,7 +53,9 @@ CREATE TABLE IF NOT EXISTS genomes (
     species     TEXT,
     is_outgroup INTEGER DEFAULT 0,
     derep_status TEXT,                 -- representative | contained | fail_qc | NULL
-    representative TEXT                 -- accession of the representative, if contained
+    representative TEXT,                -- accession of the representative, if contained
+    completeness REAL,                 -- CheckM completeness percentage, if known
+    contamination REAL                 -- CheckM contamination percentage, if known
 );
 CREATE INDEX IF NOT EXISTS idx_genomes_species ON genomes(species);
 CREATE INDEX IF NOT EXISTS idx_genomes_derep ON genomes(derep_status);
@@ -67,6 +73,8 @@ class GenomeRecord:
     is_outgroup: bool = False
     derep_status: str | None = None
     representative: str | None = None
+    completeness: float | None = None
+    contamination: float | None = None
 
 
 class Manifest:
@@ -151,9 +159,13 @@ class Manifest:
         """
         version = self._check_version()
         # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
-        # Future: while version < SCHEMA_VERSION: apply step; version += 1
-        if version != SCHEMA_VERSION:
-            self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        if version < 2:
+            cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
+            for col in ("completeness", "contamination"):
+                if col not in cols:
+                    self._conn.execute(f"ALTER TABLE genomes ADD COLUMN {col} REAL")
+            version = 2
+        self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @classmethod
     def open(cls, workdir: str | os.PathLike[str]) -> Manifest:
@@ -255,6 +267,23 @@ class Manifest:
         cur = self._conn.execute(query)
         return [_row_to_record(row) for row in cur.fetchall()]
 
+    def quality(self) -> dict[str, tuple[float, float]]:
+        """filename -> (completeness, contamination) for genomes with both values.
+
+        A manifest opened read-only never runs ``_migrate``, so a pre-v2 file
+        genuinely lacks these columns; querying them would raise
+        ``sqlite3.OperationalError``. Check for the columns first and return an
+        empty mapping rather than fail, mirroring ``_row_to_record``'s tolerance.
+        """
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
+        if "completeness" not in cols or "contamination" not in cols:
+            return {}
+        rows = self._conn.execute(
+            "SELECT filename, completeness, contamination FROM genomes "
+            "WHERE filename IS NOT NULL AND completeness IS NOT NULL AND contamination IS NOT NULL"
+        )
+        return {r["filename"]: (float(r["completeness"]), float(r["contamination"])) for r in rows}
+
 
 def _record_params(record: GenomeRecord) -> dict:
     return {
@@ -267,10 +296,13 @@ def _record_params(record: GenomeRecord) -> dict:
         "is_outgroup": int(record.is_outgroup),
         "derep_status": record.derep_status,
         "representative": record.representative,
+        "completeness": record.completeness,
+        "contamination": record.contamination,
     }
 
 
 def _row_to_record(row: sqlite3.Row) -> GenomeRecord:
+    keys = row.keys()
     return GenomeRecord(
         accession=row["accession"],
         filename=row["filename"],
@@ -281,4 +313,6 @@ def _row_to_record(row: sqlite3.Row) -> GenomeRecord:
         is_outgroup=bool(row["is_outgroup"]),
         derep_status=row["derep_status"],
         representative=row["representative"],
+        completeness=row["completeness"] if "completeness" in keys else None,
+        contamination=row["contamination"] if "contamination" in keys else None,
     )

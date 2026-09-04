@@ -49,7 +49,10 @@ The phylo stage composes three independent choices:
 * tree builder: MSA-based (iqtree/fasttree/raxmlng) or alignment-free
   (mashtree/sourmash)
 
-Outgroup rooting is handled once in the stage, regardless of the tools chosen.
+The stage adds the outgroup genome to the input set and passes it to builders
+that can root (iqtree, raxmlng); mashtree, fasttree and sourmash emit an
+unrooted tree. The tree2tax stage then roots every tree on the outgroup edge,
+so the taxonomy always splits the outgroup from a single ingroup clade.
 
 ## Scaling
 

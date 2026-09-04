@@ -59,6 +59,9 @@ class DereplicateParams:
     extra: dict | None = None
     # Proceed on a partial genome set with a warning instead of refusing.
     allow_incomplete: bool = False
+    # Per-cluster representative choice: re-pick by manifest CheckM quality
+    # (completeness - 5 x contamination), or "tool" to keep the adapter's own pick.
+    keeper: str = "quality"  # quality | tool
 
 
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
@@ -113,9 +116,26 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     else:
         result = _dereplicate_to_result(adapter, genomes, scratch, derep_params, params, logger)
 
+    keeper_swaps = 0
+    quality: dict[str, tuple[float, float]] = {}
+    if params.keeper == "quality":
+        from .derep_keeper import rescore_representatives
+
+        quality = _quality_lookup(ctx)
+        if quality:
+            result, keeper_swaps = rescore_representatives(result, quality, logger)
+        else:
+            logger.warning(
+                "No assembly quality in the manifest, so --keeper quality has no "
+                "effect: keeping the tool's own representatives. GTDB TSV selections "
+                "carry CheckM quality; API selections fetch it per genome card."
+            )
+    keeper_effective = "quality" if quality else "tool"
+
     if params.reduce != "none":
         before = len(result.representatives)
-        result = _reduce_by_taxonomy(ctx, result, params.reduce, logger)
+        # Reuse the quality lookup above instead of re-querying the manifest.
+        result = _reduce_by_taxonomy(ctx, result, params.reduce, quality, logger)
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
             params.reduce, before, len(result.representatives),
@@ -139,6 +159,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             "pre_secondary_ani": params.pre_secondary_ani,
             "reduce": params.reduce,
             "target_reps": params.target_reps,
+            "keeper": params.keeper,
+            "keeper_effective": keeper_effective,
+            "keeper_swaps": keeper_swaps,
             **(params.extra or {}),
         },
         tool_versions=versions,
@@ -404,19 +427,33 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
 
 
 def _reduce_by_taxonomy(
-    ctx: WorkdirContext, result: DerepResult, level: str, logger
+    ctx: WorkdirContext,
+    result: DerepResult,
+    level: str,
+    quality: dict[str, tuple[float, float]],
+    logger,
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
-    Representatives sharing a manifest taxon are merged into a single keeper (the
-    one with the largest existing cluster, then lexical), and the others -- plus
-    their cluster members -- become contained under it. Representatives whose
-    taxon is unknown/empty are kept as-is (each its own group), so reduction never
-    silently drops an un-annotated genome.
+    Representatives sharing a manifest taxon are merged into a single keeper.
+    When ``quality`` is non-empty, the keeper is chosen by manifest assembly
+    quality first (:func:`~.derep_keeper.quality_score`) -- the caller's own
+    manifest lookup, reused here instead of querying the manifest a second
+    time -- falling back to the largest existing cluster and then lexical
+    order for unscored/tied candidates; pass ``{}`` (keeper="tool", or no
+    manifest quality data) to use the largest-cluster rule alone. The others
+    -- plus their cluster members -- become contained under the keeper.
+    Representatives whose taxon is unknown/empty are kept as-is (each its own
+    group), so reduction never silently drops an un-annotated genome.
     """
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
+    from .derep_keeper import quality_score
 
     taxon_of = _taxon_lookup(ctx, level)
+
+    def _score_or_min(name: str) -> float:
+        q = quality.get(name)
+        return float("-inf") if q is None else quality_score(*q)
 
     # group rep filename -> taxon key; unknown taxon -> unique per-rep key (kept)
     groups: dict[str, list[str]] = {}
@@ -438,8 +475,11 @@ def _reduce_by_taxonomy(
     }
 
     for members in groups.values():
-        # keeper: largest existing cluster, tie-break by name (deterministic)
-        keeper = max(members, key=lambda n: (len(result.clusters.get(n, [])), n))
+        # keeper: best quality score (when known), then largest existing
+        # cluster, then lexical name (deterministic).
+        keeper = max(
+            members, key=lambda n: (_score_or_min(n), len(result.clusters.get(n, [])), n)
+        )
         new_reps.append(rep_by_name[keeper])
         status[keeper] = STATUS_REPRESENTATIVE
         contained: list[str] = []
@@ -475,6 +515,16 @@ def _taxon_lookup(ctx: WorkdirContext, level: str) -> dict[str, str]:
         taxon = rec.species if level == "species" else rec.genus
         lookup[rec.filename] = taxon or ""
     return lookup
+
+
+def _quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
+    """Map each genome filename to (completeness, contamination) from the manifest."""
+    try:
+        return ctx.manifest.quality()
+    except (sqlite3.OperationalError, OSError):
+        # Manifest absent / not yet initialized (e.g. the data-channel path or
+        # tests) -> no quality data, the adapter's own representative stands.
+        return {}
 
 
 def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:

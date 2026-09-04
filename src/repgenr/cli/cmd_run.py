@@ -43,6 +43,50 @@ def _virus_extra(derep_tool: str, viral: bool) -> dict:
     return gated_extra(_derep_registry, derep_tool, "virus", True)
 
 
+def _preflight_tools(
+    derep_tool: str, treebuilder: str, msa_source: str, aligner: str, snptyper: str,
+) -> None:
+    """Check every external tool the chain will need before the first stage runs.
+
+    Each stage preflights its own adapter, but by then the earlier stages have
+    already downloaded and dereplicated; a missing tree builder should fail in
+    the first second, not after the genome download. ``auto`` choices are
+    resolved from the genome count inside their stage and are skipped here.
+    """
+    from ..dereplicators.base import registry as derep_registry
+    from ..treebuilders.base import InputKind
+    from ..treebuilders.base import registry as tb_registry
+
+    if derep_tool != "auto":
+        derep_registry.create(derep_tool).preflight()
+    if treebuilder == "auto":
+        return
+    builder = tb_registry.create(treebuilder)
+    builder.preflight()
+    if builder.input_kind != InputKind.MSA_FASTA:
+        return
+    if msa_source == "aligner":
+        from ..aligners.base import registry as aligner_registry
+
+        aligner_registry.create(aligner).preflight()
+    elif msa_source == "snptype":
+        from ..snptypers.base import registry as snp_registry
+
+        snp_registry.create(snptyper).preflight()
+
+
+def _msa_source_summary(treebuilder: str, msa_source: str, aligner: str, snptyper: str) -> str:
+    """The MSA source a dry run will use, or nothing for an alignment-free builder."""
+    from ..treebuilders.base import InputKind
+    from ..treebuilders.base import registry as tb_registry
+
+    if treebuilder != "auto" and tb_registry.create(treebuilder).input_kind == InputKind.GENOMES:
+        return " (alignment-free)"
+    if msa_source == "snptype":
+        return f", snptyper={snptyper}"
+    return f", aligner={aligner}"
+
+
 @app.command()
 def run(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
@@ -68,6 +112,11 @@ def run(
     primary_ani: float = typer.Option(0.90, "--primary-ani"),
     secondary_ani: float = typer.Option(0.99, "--secondary-ani"),
     aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
+    keeper: str = typer.Option(
+        "quality", "--keeper",
+        help="Representative choice per cluster: quality (CheckM score from GTDB) "
+        "or tool (adapter's own).",
+    ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
@@ -104,7 +153,7 @@ def run(
         # each stage's builder.
         dereplicate_params(
             tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
-            aligned_fraction=aligned_fraction,
+            aligned_fraction=aligned_fraction, keeper=keeper,
         )
         phylo_params(
             treebuilder=treebuilder, msa_source=msa_source,
@@ -129,11 +178,15 @@ def run(
         typer.echo(f"selection: {selection}")
         typer.echo(
             f"dereplicate: tool={derep_tool}, primary_ani={primary_ani}, "
-            f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}, "
-            f"aligner={aligner}; threads={threads}"
+            f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}"
+            f"{_msa_source_summary(treebuilder, msa_source, aligner, snptyper)}; "
+            f"threads={threads}"
         )
         typer.echo("[dry-run] no work done.")
         return
+
+    with stage_errors(logger):
+        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper)
 
     if viral:
         _run("vmetadata", workdir, lambda: vmetadata_params(
@@ -155,7 +208,7 @@ def run(
     _run("dereplicate", workdir, lambda: dereplicate_params(
         tool=derep_tool, primary_ani=primary_ani, secondary_ani=secondary_ani,
         aligned_fraction=aligned_fraction, threads=threads,
-        extra=_virus_extra(derep_tool, viral),
+        extra=_virus_extra(derep_tool, viral), keeper=keeper,
     ))
     _run("phylo", workdir, lambda: phylo_params(
         treebuilder=treebuilder, msa_source=msa_source, aligner=aligner,

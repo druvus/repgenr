@@ -122,8 +122,9 @@ unstable topologies that tree2tax then freezes into taxonomy.
 3. **Medium** -- No support values by default; FastTree silently drops
    bootstrap and outgroup (phylo.py:50, iqtree.py:46-47, fasttree.py:44-49).
    Warn when bootstrap=0 with an MSA builder; log ignored params.
-4. **Medium** -- mashtree build/distance_matrix parameter mismatch
-   (mashtree.py:39 vs :57). Pass the same flags in both.
+4. **Medium -- CLOSED** -- mashtree build/distance_matrix parameter mismatch
+   (mashtree.py:39 vs :57). Both entry points now share one argument builder
+   and a single mashtree call writes the tree and the matrix together.
 5. **Medium** -- Declared limits unbenchmarked (all treebuilder capabilities).
    Benchmark once at 500/1000/5000 and correct the numbers.
 6. **Low** -- Newick label sanitization can merge distinct labels

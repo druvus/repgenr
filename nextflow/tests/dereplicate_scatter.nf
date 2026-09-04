@@ -25,7 +25,7 @@ workflow {
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
         .filter { !it.name.startsWith('._') }   // skip macOS AppleDouble files
 
-    DEREPLICATE_SCATTER(ch_genomes)
+    DEREPLICATE_SCATTER(ch_genomes, Channel.value([]))
 
     DEREPLICATE_SCATTER.out.reps
         .map { meta, dir -> dir }

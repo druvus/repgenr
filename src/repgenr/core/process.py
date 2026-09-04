@@ -73,9 +73,13 @@ def run(
 ) -> int:
     """Run ``command`` (an argument vector) without a shell.
 
-    Output is line-streamed to ``logger`` at INFO. When ``stdout_path`` is given,
-    stdout is written there instead (stderr still goes to the logger) -- use this
-    for tools that emit their result on stdout (e.g. ``mashtree``).
+    The command line is logged at INFO; the tool's own output is line-streamed
+    at DEBUG (progress bars and per-file chatter would otherwise dominate the
+    log), and the last lines are kept for the error message on failure. A line
+    a tool redraws in place with carriage returns is logged once, in its final
+    state. When ``stdout_path`` is given, stdout is written there instead
+    (stderr still goes to the logger) -- use this for tools that emit their
+    result on stdout (e.g. ``mashtree``).
 
     ``timeout`` (seconds) caps the run: on expiry the whole process group is
     killed and :class:`ToolExecutionError` is raised, so a hung tool (or a stuck
@@ -116,8 +120,9 @@ def run(
             env=full_env,
             stdout=(out_handle if out_handle is not None else subprocess.PIPE),
             stderr=subprocess.STDOUT if out_handle is None else subprocess.PIPE,
-            text=True,
-            bufsize=1,
+            # Binary so that a "\r" inside a line is ours to interpret; text
+            # mode's universal newlines would split every progress-bar redraw
+            # into its own line.
             # Own process group so a timeout can kill the tool and its children.
             start_new_session=limit is not None,
         )
@@ -136,11 +141,13 @@ def run(
         stream = proc.stdout if out_handle is None else proc.stderr
         if stream is not None:
             for raw in stream:
-                line = raw.rstrip("\n")
+                # A progress bar redraws one line with "\r"; keep its last frame.
+                text = raw.decode("utf-8", errors="replace")
+                line = text.rstrip("\r\n").rsplit("\r", 1)[-1]
                 if not line:
                     continue
                 tail.append(line)
-                logger.info("%s%s", prefix, line)
+                logger.debug("%s%s", prefix, line)
         returncode = proc.wait()
     except BaseException:
         if out_target is not None and out_tmp is not None:

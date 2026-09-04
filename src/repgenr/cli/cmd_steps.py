@@ -70,6 +70,15 @@ def dereplicate_chunk_cmd(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
+    selection_tsv: Path | None = typer.Option(
+        None, "--selection-tsv",
+        help="selection.tsv with quality columns; enables quality-aware representatives.",
+    ),
+    keeper: str = typer.Option(
+        "quality", "--keeper",
+        help="Representative choice when --selection-tsv is given: "
+        "quality (manifest completeness/contamination) or tool (adapter's own pick).",
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -85,6 +94,7 @@ def dereplicate_chunk_cmd(
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        _require_choice(keeper, {"quality", "tool"}, "--keeper")
         genomes = _read_path_fofn(genomes_fofn)
         dereplicate_chunk(
             ChunkParams(
@@ -95,6 +105,8 @@ def dereplicate_chunk_cmd(
                     **_parse_key_values(tool_arg, "--tool-arg"),
                     **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
                 },
+                selection_tsv=selection_tsv,
+                keeper=keeper,
                 versions_out=versions_out,
             ),
             logger,
@@ -220,6 +232,15 @@ def dereplicate_merge_cmd(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
+    selection_tsv: Path | None = typer.Option(
+        None, "--selection-tsv",
+        help="selection.tsv with quality columns; enables quality-aware representatives.",
+    ),
+    keeper: str = typer.Option(
+        "quality", "--keeper",
+        help="Representative choice when --selection-tsv is given: "
+        "quality (manifest completeness/contamination) or tool (adapter's own pick).",
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -234,6 +255,7 @@ def dereplicate_merge_cmd(
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
+        _require_choice(keeper, {"quality", "tool"}, "--keeper")
         chunk_dirs = list(chunk_dir)
         if chunk_fofn is not None:
             chunk_dirs += _read_path_fofn(chunk_fofn)
@@ -248,6 +270,8 @@ def dereplicate_merge_cmd(
                     **_parse_key_values(tool_arg, "--tool-arg"),
                     **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
                 },
+                selection_tsv=selection_tsv,
+                keeper=keeper,
                 versions_out=versions_out,
             ),
             logger,

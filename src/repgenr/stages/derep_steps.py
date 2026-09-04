@@ -33,6 +33,7 @@ from ..core.contracts import (
     GENOME_STATUS_TSV,
     read_clusters,
     read_genome_status,
+    read_selection,
     write_clusters,
     write_genome_status,
 )
@@ -41,6 +42,7 @@ from ..core.plugins import warn_unconsumed_extras
 from ..core.process import link_or_copy
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
+from .derep_keeper import rescore_representatives
 from .dereplicate import _compose_two_stage
 
 _REPRESENTATIVES_DIR = "representatives"
@@ -49,6 +51,15 @@ _REPRESENTATIVES_DIR = "representatives"
 def _maybe_write_versions(path: Path | None, versions: dict[str, str]) -> None:
     if path is not None:
         write_versions_fragment(path, versions)
+
+
+def _quality_from_selection(selection_tsv: Path) -> dict[str, tuple[float, float]]:
+    """filename -> (completeness, contamination) for rows carrying both values."""
+    return {
+        r.filename: (r.completeness, r.contamination)
+        for r in read_selection(selection_tsv)
+        if r.completeness is not None and r.contamination is not None
+    }
 
 
 @dataclass
@@ -62,6 +73,11 @@ class ChunkParams:
     threads: int = 16
     extra: dict | None = None
     versions_out: Path | None = None
+    # A selection.tsv (with quality columns) that enables the quality-aware
+    # keeper below. Unlike at the merge step, every genome in the chunk has a
+    # real file here (params.genomes), so any promotion is always resolvable.
+    selection_tsv: Path | None = None
+    keeper: str = "quality"  # quality | tool
 
 
 @dataclass
@@ -75,6 +91,11 @@ class MergeParams:
     threads: int = 16
     extra: dict | None = None
     versions_out: Path | None = None
+    # A selection.tsv (with quality columns) that enables the quality-aware
+    # keeper below; without it (or with keeper="tool") the adapter's own
+    # merge-level pick stands, as before.
+    selection_tsv: Path | None = None
+    keeper: str = "quality"  # quality | tool
 
 
 def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResult:
@@ -101,6 +122,20 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
     )
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
+
+    if params.keeper == "quality" and params.selection_tsv is not None:
+        quality = _quality_from_selection(params.selection_tsv)
+        result, keeper_swaps = rescore_representatives(result, quality, logger)
+        if keeper_swaps:
+            logger.info(
+                "dereplicate-chunk: quality-aware keeper changed %d representative(s)",
+                keeper_swaps,
+            )
+    elif params.keeper == "tool" and params.selection_tsv is not None:
+        logger.info(
+            "dereplicate-chunk: --selection-tsv given but --keeper is 'tool'; "
+            "keeping the adapter's own representatives."
+        )
 
     check_result_complete(result, [g.name for g in params.genomes])
     fallbacks = sorted({g.parent for g in params.genomes})
@@ -138,6 +173,31 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
 
+    if params.keeper == "quality" and params.selection_tsv is not None:
+        # Only stage-1 representatives are staged at the merge step (each
+        # chunk's representatives/ directory); a chunk-level CONTAINED member's
+        # file never reaches this step, even though _compose_two_stage's
+        # expanded membership lists it in final.clusters. Restrict the quality
+        # map to resolvable names so such a member can never be promoted to a
+        # representative _write_step_contract cannot then find a file for.
+        resolvable = {rep.name for r in stage1 for rep in r.representatives}
+        quality = {
+            name: qual
+            for name, qual in _quality_from_selection(params.selection_tsv).items()
+            if name in resolvable
+        }
+        final, keeper_swaps = rescore_representatives(final, quality, logger)
+        if keeper_swaps:
+            logger.info(
+                "dereplicate-merge: quality-aware keeper changed %d representative(s)",
+                keeper_swaps,
+            )
+    elif params.keeper == "tool" and params.selection_tsv is not None:
+        logger.info(
+            "dereplicate-merge: --selection-tsv given but --keeper is 'tool'; "
+            "keeping the adapter's own representatives."
+        )
+
     # Every genome the chunks saw: cluster members plus the genomes that carry a
     # status without a cluster (QC rejects), so the completeness check covers the
     # whole input set rather than only the clustered part of it.
@@ -173,7 +233,10 @@ def _load_chunk(chunk_dir: Path) -> DerepResult:
     if not clusters_path.exists():
         raise WorkdirError(f"dereplicate-merge: {clusters_path} not found (not a chunk result).")
     clusters = read_clusters(clusters_path)
-    status = read_genome_status(chunk_dir / GENOME_STATUS_TSV)
+    status_path = chunk_dir / GENOME_STATUS_TSV
+    if not status_path.exists():
+        raise WorkdirError(f"dereplicate-merge: {status_path} not found (not a chunk result).")
+    status = read_genome_status(status_path)
     rep_dir = chunk_dir / _REPRESENTATIVES_DIR
     reps: list[Path] = []
     for rep_name in clusters:

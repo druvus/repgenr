@@ -89,3 +89,27 @@ def test_output_name_matches_canonical(tmp_path: Path) -> None:
         family="Fam", genus="Gen", species="sp",
     )
     assert genome_stage._output_name(rec) == genome_filename("Fam", "Gen", "sp", "GCF_5.1")
+
+
+def test_selection_quality_columns_round_trip(tmp_path):
+    from repgenr.core.contracts import SelectionRow, read_selection, write_selection
+
+    rows = [
+        SelectionRow(
+            "A", "f", "g", "s", False, "f_g_s_A.fasta",
+            completeness=98.5, contamination=1.0,
+        ),
+        SelectionRow("B", "f", "g", "s", True, "f_g_s_B.fasta"),
+    ]
+    write_selection(tmp_path / "s.tsv", rows)
+    back = read_selection(tmp_path / "s.tsv")
+    assert (back[0].completeness, back[0].contamination) == (98.5, 1.0)
+    assert (back[1].completeness, back[1].contamination) == (None, None)
+
+
+def test_selection_without_quality_columns_still_reads(tmp_path):
+    from repgenr.core.contracts import read_selection
+
+    p = tmp_path / "s.tsv"
+    p.write_text("accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\nA\tf\tg\ts\t0\tx.fasta\n")
+    assert read_selection(p)[0].completeness is None

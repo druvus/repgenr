@@ -71,6 +71,30 @@ All notable changes to RepGenR are documented here. The format follows
   cluster partition and representative count for a given threshold. Install via
   the `sparse` extra or the `sourmash_plugin_branchwater` conda package.
 
+### Fixed
+- `tree2tax` roots on the outgroup edge instead of at the outgroup's parent
+  node. For the unrooted trees that mashtree, fasttree and the sourmash tree
+  builder emit, the old rooting left the root with three children (the
+  outgroup, its nearest ingroup neighbour and everything else), so the
+  taxonomy had no node for the whole ingroup and one taxon sat beside the
+  outgroup. The phylo docstring and architecture note now say where rooting
+  happens.
+- `metadata --source api` reads CheckM quality from each genome's GTDB card
+  (`metadata_gene.checkm2_*`, `checkm_*` fallback); the genomes-detail rows
+  carry none, so API selections had empty quality columns and the quality
+  keeper silently kept the adapter's picks. `dereplicate` now warns when the
+  manifest has no quality and records `keeper_effective` in `repgenr.yaml`.
+- `repgenr run` preflights every external tool (dereplicator, tree builder,
+  and the aligner or SNP typer when the builder needs an MSA) before the
+  first stage, instead of discovering a missing tree builder after download
+  and dereplication.
+- Alignment-free `phylo` runs no longer record an aligner in provenance, so
+  `--aligner` cannot invalidate a mashtree or sourmash tree; mashtree builds
+  and distance matrices share one argument set and come from one call;
+  streamed tool output goes to DEBUG (the file log keeps it, the console
+  shows the pipeline's own messages), with carriage-return redraws logged
+  once in their final state.
+
 ## [2.0.0] - 2026-06-18
 
 First stable release of the v2 rewrite: a modular `repgenr` Python package

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import logging
 from pathlib import Path
 
 import pytest
@@ -189,6 +190,8 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
             if "tularensis" in path:
                 return {"rows": selection_rows}
             return {"rows": parent_rows}
+        if path.startswith("/genome/") and path.endswith("/card"):
+            return {}  # a card without quality; selection must still succeed
         raise AssertionError(f"unexpected API path {path}")
 
     monkeypatch.setattr(metadata, "_api_get", fake_api_get)
@@ -204,6 +207,87 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
     assert outgroups == ["GCF_000010.1"]
 
 
+def _card(completeness=None, contamination=None, *, checkm2: bool = True) -> dict:
+    """The shape of ``/genome/{gid}/card``: quality is nested under metadata_gene."""
+    prefix = "checkm2" if checkm2 else "checkm"
+    gene = {}
+    if completeness is not None:
+        gene[f"{prefix}_completeness"] = completeness
+        gene[f"{prefix}_contamination"] = contamination
+    return {"metadataTaxonomy": {}, "metadata_gene": gene}
+
+
+def _fake_api_with_cards(selection_rows, parent_rows, cards: dict[str, dict]):
+    def fake_api_get(path, params=None):
+        if "/taxon/" in path and path.endswith("/genomes-detail"):
+            return {"rows": selection_rows if "tularensis" in path else parent_rows}
+        if path.startswith("/genome/") and path.endswith("/card"):
+            gid = path.removeprefix("/genome/").removesuffix("/card")
+            card = cards[gid]
+            if isinstance(card, Exception):
+                raise card
+            return card
+        raise AssertionError(f"unexpected API path {path}")
+    return fake_api_get
+
+
+def _quality_by_accession(rows: list[dict]) -> dict[str, tuple[str, str]]:
+    return {r["accession"]: (r["completeness"], r["contamination"]) for r in rows}
+
+
+def test_api_selection_reads_quality_from_genome_cards(tmp_path, monkeypatch) -> None:
+    # genomes-detail rows carry no quality; it lives on each genome's card.
+    selection_rows = [
+        _api_row("GCF_000001.1", "Francisella", "tularensis"),
+        _api_row("GCF_000002.1", "Francisella", "tularensis", is_rep=False),
+    ]
+    parent_rows = selection_rows + [_api_row("GCF_000010.1", "Francisella", "philomiragia")]
+    cards = {
+        "GCF_000001.1": _card(99.96, 0.18),
+        "GCF_000002.1": _card(95.1, 1.2, checkm2=False),  # older card: checkm only
+        "GCF_000010.1": _card(98.0, 0.5),
+    }
+    fake = _fake_api_with_cards(selection_rows, parent_rows, cards)
+    monkeypatch.setattr(metadata, "_api_get", fake)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, MetadataParams(
+        dataset="all", level="species", source="api",
+        target_genus="Francisella", target_species="tularensis",
+    ))
+    quality = _quality_by_accession(_read_selection(ctx.workdir))
+    assert quality["GCF_000001.1"] == ("99.96", "0.18")
+    assert quality["GCF_000002.1"] == ("95.10", "1.20")
+    assert quality["GCF_000010.1"] == ("98.00", "0.50")  # the outgroup too
+
+
+def test_api_card_failure_leaves_that_genome_unscored(tmp_path, monkeypatch, caplog) -> None:
+    selection_rows = [
+        _api_row("GCF_000001.1", "Francisella", "tularensis"),
+        _api_row("GCF_000002.1", "Francisella", "tularensis", is_rep=False),
+    ]
+    parent_rows = selection_rows + [_api_row("GCF_000010.1", "Francisella", "philomiragia")]
+    cards = {
+        "GCF_000001.1": _card(99.96, 0.18),
+        "GCF_000002.1": WorkdirError("HTTP 404 for /genome/GCF_000002.1/card"),
+        "GCF_000010.1": _card(98.0, 0.5),
+    }
+    fake = _fake_api_with_cards(selection_rows, parent_rows, cards)
+    monkeypatch.setattr(metadata, "_api_get", fake)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    ctx.logger.addHandler(caplog.handler)  # the workdir logger does not propagate
+    with caplog.at_level(logging.WARNING):
+        count = metadata.run(ctx, MetadataParams(
+            dataset="all", level="species", source="api",
+            target_genus="Francisella", target_species="tularensis",
+        ))
+    assert count == 2  # one unreadable card does not fail the selection
+    quality = _quality_by_accession(_read_selection(ctx.workdir))
+    assert quality["GCF_000001.1"] == ("99.96", "0.18")
+    assert quality["GCF_000002.1"] == ("", "")
+    warnings = [rec.message for rec in caplog.records if rec.levelname == "WARNING"]
+    assert any("GCF_000002.1" in message for message in warnings)
+
+
 def test_api_no_rows_raises(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(metadata, "_api_get", lambda path, params=None: {"rows": []})
     ctx = WorkdirContext(tmp_path / "wd", create=True)
@@ -212,6 +296,53 @@ def test_api_no_rows_raises(tmp_path, monkeypatch) -> None:
     )
     with pytest.raises(UserInputError, match="no genomes"):
         metadata.run(ctx, params)
+
+
+# --- CheckM quality columns (checkm2_* preferred, checkm_* fallback) ----------
+
+
+def _write_quality_tsv(
+    path: Path, quality_cols: tuple[str, str], quality_values: dict[str, tuple[str, str]]
+) -> None:
+    """A copy of the ``gtdb_tsv`` fixture layout with two extra quality columns."""
+    header = (
+        "accession\tgtdb_genome_representative\tgtdb_taxonomy\t"
+        f"ncbi_genbank_assembly_accession\t{quality_cols[0]}\t{quality_cols[1]}"
+    )
+    lines = [header]
+    for acc, rep, tax in _ROWS:
+        comp, cont = quality_values.get(acc, ("", ""))
+        lines.append(f"RS_{acc}\tRS_{rep}\t{tax}\t{acc}\t{comp}\t{cont}")
+    with gzip.open(path, "wt", encoding="utf-8") as fo:
+        fo.write("\n".join(lines) + "\n")
+
+
+def test_parse_metadata_carries_checkm2_quality(tmp_path) -> None:
+    path = tmp_path / "quality_checkm2.tsv.gz"
+    _write_quality_tsv(
+        path, ("checkm2_completeness", "checkm2_contamination"),
+        {"GCF_000001.1": ("99.0", "0.5")},
+    )
+    accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))
+    assert accessions["GCF_000001.1"]["completeness"] == 99.0
+    assert accessions["GCF_000001.1"]["contamination"] == 0.5
+
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(path))
+    rec = next(g for g in ctx.manifest.all_genomes() if g.accession == "GCF_000001.1")
+    assert rec.completeness == 99.0
+    assert rec.contamination == 0.5
+
+
+def test_parse_metadata_falls_back_to_checkm_quality(tmp_path) -> None:
+    path = tmp_path / "quality_checkm.tsv.gz"
+    _write_quality_tsv(
+        path, ("checkm_completeness", "checkm_contamination"),
+        {"GCF_000001.1": ("98.0", "1.2")},
+    )
+    accessions = metadata._parse_metadata(path, _params(path), logging.getLogger("test"))
+    assert accessions["GCF_000001.1"]["completeness"] == 98.0
+    assert accessions["GCF_000001.1"]["contamination"] == 1.2
 
 
 def test_narrower_reselection_shrinks_manifest(tmp_path, gtdb_tsv) -> None:

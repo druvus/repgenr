@@ -25,6 +25,7 @@ def dispatched(monkeypatch) -> list[tuple]:
 
     for mod in (cmd_bacterial, cmd_viral, cmd_phylo, cmd_misc, cmd_run):
         monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(cmd_run, "_preflight_tools", lambda *a, **k: None)
     return calls
 
 
@@ -59,11 +60,26 @@ def test_dereplicate_wiring(dispatched, tmp_path) -> None:
         "dereplicate", "-wd", str(tmp_path), "--tool", "skder",
         "-sani", "0.98", "-pani", "0.85", "-af", "0.6", "-t", "4",
         "--process-size", "100", "--reduce", "species", "--target-reps", "10",
+        "--keeper", "tool",
     ])
     assert stage == "dereplicate"
     assert (params.tool, params.secondary_ani, params.primary_ani) == ("skder", 0.98, 0.85)
     assert (params.aligned_fraction, params.threads) == (0.6, 4)
     assert (params.process_size, params.reduce, params.target_reps) == (100, "species", 10)
+    assert params.keeper == "tool"
+
+
+def test_dereplicate_keeper_defaults_to_quality(dispatched, tmp_path) -> None:
+    _, params, _ = _invoke(dispatched, ["dereplicate", "-wd", str(tmp_path), "--tool", "skder"])
+    assert params.keeper == "quality"
+
+
+def test_dereplicate_unknown_keeper_fails(dispatched, tmp_path) -> None:
+    result = _runner.invoke(
+        app, ["dereplicate", "-wd", str(tmp_path), "--tool", "skder", "--keeper", "nosuch"]
+    )
+    assert result.exit_code != 0
+    assert dispatched == []
 
 
 def test_dereplicate_unknown_tool_fails(dispatched, tmp_path) -> None:
@@ -222,6 +238,22 @@ def test_dereplicate_chunk_step_injects_virus_for_reader(step_calls, tmp_path) -
     assert params.extra == {"virus": True}  # drep reads it
 
 
+def test_dereplicate_chunk_step_wiring_selection_and_keeper(step_calls, tmp_path) -> None:
+    g = tmp_path / "g1.fasta"
+    g.write_text(">g1\nACGT\n", encoding="utf-8")
+    fofn = tmp_path / "genomes.fofn"
+    fofn.write_text(f"{g}\n", encoding="utf-8")
+    sel = tmp_path / "selection.tsv"
+    sel.write_text("accession\n", encoding="utf-8")
+    result = _runner.invoke(app, [
+        "dereplicate-chunk", "--genomes-fofn", str(fofn), "-o", str(tmp_path / "out"),
+        "--selection-tsv", str(sel), "--keeper", "tool",
+    ])
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.selection_tsv == sel and params.keeper == "tool"
+
+
 def test_dereplicate_merge_step_requires_chunks(step_calls, tmp_path) -> None:
     result = _runner.invoke(app, ["dereplicate-merge", "-o", str(tmp_path / "out")])
     assert result.exit_code != 0
@@ -238,6 +270,32 @@ def test_dereplicate_merge_step_wiring(step_calls, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     (params,) = step_calls
     assert params.chunk_dirs == [chunk] and params.tool == "skder"
+
+
+def test_dereplicate_merge_step_wiring_selection_and_keeper(step_calls, tmp_path) -> None:
+    chunk = tmp_path / "chunk0"
+    chunk.mkdir()
+    sel = tmp_path / "selection.tsv"
+    sel.write_text("accession\n", encoding="utf-8")
+    result = _runner.invoke(app, [
+        "dereplicate-merge", "-o", str(tmp_path / "out"),
+        "--chunk-dir", str(chunk), "--tool", "skder",
+        "--selection-tsv", str(sel), "--keeper", "tool",
+    ])
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.selection_tsv == sel and params.keeper == "tool"
+
+
+def test_dereplicate_merge_step_rejects_bad_keeper(step_calls, tmp_path) -> None:
+    chunk = tmp_path / "chunk0"
+    chunk.mkdir()
+    result = _runner.invoke(app, [
+        "dereplicate-merge", "-o", str(tmp_path / "out"),
+        "--chunk-dir", str(chunk), "--keeper", "bogus",
+    ])
+    assert result.exit_code != 0
+    assert step_calls == []
 
 
 def test_phylo_build_step_wiring(step_calls, tmp_path) -> None:

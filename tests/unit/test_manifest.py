@@ -164,3 +164,63 @@ def test_manifest_digest_changes_after_reconciliation(tmp_path: Path) -> None:
     before = manifest_digest(m)
     m.replace_genomes([GenomeRecord(accession="A1")])
     assert manifest_digest(m) != before
+
+
+def test_quality_round_trip_and_migration(tmp_path):
+    from repgenr.core.manifest import SCHEMA_VERSION, GenomeRecord, Manifest
+
+    m = Manifest(tmp_path / "m.sqlite")
+    m.upsert(GenomeRecord(accession="A", filename="a.fasta", completeness=99.1, contamination=0.4))
+    m.upsert(GenomeRecord(accession="B", filename="b.fasta"))
+    assert m.quality() == {"a.fasta": (99.1, 0.4)}
+    assert SCHEMA_VERSION == 2
+    m.close()
+
+
+def test_v1_database_is_migrated(tmp_path):
+    import sqlite3
+
+    from repgenr.core.manifest import Manifest
+
+    path = tmp_path / "old.sqlite"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        "CREATE TABLE genomes (accession TEXT PRIMARY KEY, filename TEXT, source TEXT, "
+        "family TEXT, genus TEXT, species TEXT, is_outgroup INTEGER DEFAULT 0, "
+        "derep_status TEXT, representative TEXT); PRAGMA user_version=1;"
+    )
+    conn.execute("INSERT INTO genomes (accession, filename) VALUES ('A', 'a.fasta')")
+    conn.commit()
+    conn.close()
+    m = Manifest(path)
+    assert m.quality() == {}
+    assert m.all_genomes()[0].completeness is None
+    m.close()
+
+
+def test_quality_on_readonly_v1_database_returns_empty(tmp_path):
+    """quality() must not raise on a v1 file opened read-only (never migrated)."""
+    import sqlite3
+
+    from repgenr.core.manifest import Manifest
+
+    path = tmp_path / "old.sqlite"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        "CREATE TABLE genomes (accession TEXT PRIMARY KEY, filename TEXT, source TEXT, "
+        "family TEXT, genus TEXT, species TEXT, is_outgroup INTEGER DEFAULT 0, "
+        "derep_status TEXT, representative TEXT); PRAGMA user_version=1;"
+    )
+    conn.execute("INSERT INTO genomes (accession, filename) VALUES ('A', 'a.fasta')")
+    conn.commit()
+    conn.close()
+
+    m = Manifest.open_readonly(path)
+    assert m.quality() == {}
+    assert [g.accession for g in m.all_genomes()] == ["A"]
+    m.close()
+
+    # never migrated: user_version is still 1 on reopen
+    reopened = sqlite3.connect(path)
+    assert int(reopened.execute("PRAGMA user_version").fetchone()[0]) == 1
+    reopened.close()

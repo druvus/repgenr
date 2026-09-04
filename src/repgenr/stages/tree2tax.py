@@ -209,7 +209,15 @@ def _set_outgroup(tree: dendropy.Tree, leaf_label: str, logger) -> None:
     if node is None:
         logger.warning("Outgroup leaf %s not in tree; leaving unrooted", leaf_label)
         return
-    tree.to_outgroup_position(node, update_bipartitions=False)
+    # Root on the outgroup's edge, not at its parent node: to_outgroup_position
+    # keeps the parent as the root, and on an unrooted (trifurcating) tree from
+    # mashtree, fasttree or the sourmash NJ that leaves the root with three
+    # children -- the outgroup, its nearest ingroup neighbour and everything
+    # else -- so the ingroup never appears as one clade. Splitting the edge gives
+    # a bifurcating root: outgroup on one side, the whole ingroup on the other.
+    length = node.edge.length
+    half = None if length is None else length / 2
+    tree.reroot_at_edge(node.edge, length1=half, length2=half, update_bipartitions=False)
 
 
 def _name_nodes(tree: dendropy.Tree, node_basename: str | None) -> dict[str, list[str]]:

@@ -15,6 +15,7 @@ nextflow_workflow {
             workflow {
                 """
                 input[0] = Channel.fromPath("${projectDir}/nextflow/tests/data/genomes/*.fasta")
+                input[1] = Channel.value([])
                 """
             }
         }

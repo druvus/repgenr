@@ -113,6 +113,8 @@ class SelectionRow:
     species: str
     is_outgroup: bool
     filename: str
+    completeness: float | None = None
+    contamination: float | None = None
 
 
 @contextmanager
@@ -159,12 +161,23 @@ def write_selection(path: Path, rows: list[SelectionRow]) -> None:
     """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
     with atomic_replace(path, newline="") as fo:
         writer = csv.writer(fo, delimiter="\t")
-        writer.writerow(["accession", "family", "genus", "species", "is_outgroup", "filename"])
+        writer.writerow([
+            "accession", "family", "genus", "species", "is_outgroup", "filename",
+            "completeness", "contamination",
+        ])
         for r in rows:
             writer.writerow([
                 r.accession, r.family, r.genus, r.species,
                 "1" if r.is_outgroup else "0", r.filename,
+                "" if r.completeness is None else f"{r.completeness:.2f}",
+                "" if r.contamination is None else f"{r.contamination:.2f}",
             ])
+
+
+def _opt_float(value: str | None) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)
 
 
 def read_selection(path: Path) -> list[SelectionRow]:
@@ -181,6 +194,8 @@ def read_selection(path: Path) -> list[SelectionRow]:
                     species=row.get("species", ""),
                     is_outgroup=row.get("is_outgroup", "0") == "1",
                     filename=row["filename"],
+                    completeness=_opt_float(row.get("completeness")),
+                    contamination=_opt_float(row.get("contamination")),
                 )
             )
     return rows
