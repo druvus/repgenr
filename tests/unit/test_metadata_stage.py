@@ -375,3 +375,158 @@ def test_narrower_reselection_shrinks_manifest(tmp_path, gtdb_tsv) -> None:
     metadata.run(ctx, _params(gtdb_tsv, limit=1))
     accs = {g.accession for g in ctx.manifest.all_genomes(include_outgroup=True)}
     assert len(accs) == 2  # one selected + one outgroup, older rows gone
+
+
+# --- --limit: species-stratified, quality-ranked within species ---------------
+
+
+def _cand(acc: str, species: str, comp=None, cont=None, is_rep=False):
+    return metadata._Candidate(
+        accession=acc,
+        species=species,
+        is_rep=is_rep,
+        completeness=comp,
+        contamination=cont,
+    )
+
+
+def test_stratified_limit_round_robins_over_species_best_first() -> None:
+    cands = [
+        _cand("A1", "alpha", 90.0, 1.0),
+        _cand("A2", "alpha", 99.0, 0.5),  # best alpha
+        _cand("A3", "alpha", 95.0, 1.0),
+        _cand("B1", "beta", 80.0, 0.0),  # only beta
+        _cand("C1", "gamma", 97.0, 0.2),  # best gamma
+        _cand("C2", "gamma", 96.0, 0.2),
+    ]
+    kept = [c.accession for c in metadata._stratified_limit(cands, 4)]
+    # First pass: best of each species (alphabetical species order); second pass: next best.
+    assert kept == ["A2", "B1", "C1", "A3"]
+
+
+def test_stratified_limit_unscored_genomes_rank_last_within_species() -> None:
+    cands = [_cand("X1", "s"), _cand("X2", "s", 70.0, 5.0), _cand("X3", "s", 60.0, 0.0)]
+    kept = [c.accession for c in metadata._stratified_limit(cands, 2)]
+    assert kept == ["X3", "X2"]  # 60 - 0 = 60 beats 70 - 25 = 45; unscored X1 last
+
+
+def test_stratified_limit_ties_prefer_gtdb_representative_then_accession() -> None:
+    cands = [
+        _cand("Z2", "s", 95.0, 1.0),
+        _cand("Z1", "s", 95.0, 1.0),
+        _cand("Z9", "s", 95.0, 1.0, is_rep=True),
+    ]
+    kept = [c.accession for c in metadata._stratified_limit(cands, 3)]
+    assert kept == ["Z9", "Z1", "Z2"]
+
+
+def test_stratified_limit_without_limit_returns_all_in_ranked_order() -> None:
+    cands = [_cand("B1", "beta", 50.0, 0.0), _cand("A1", "alpha", 99.0, 0.0)]
+    assert [c.accession for c in metadata._stratified_limit(cands, None)] == ["A1", "B1"]
+    assert len(metadata._stratified_limit(cands, 10)) == 2
+
+
+def test_tsv_limit_keeps_best_quality_not_first_rows(tmp_path) -> None:
+    # tularensis has three genomes; file order is 000001, 000002, 000003.
+    # Scores: 000001 -> 80, 000002 -> 96.5, 000003 -> 90. A limit of 2 must keep
+    # the two best, dropping the first row the old slice would have kept.
+    path = tmp_path / "bac120_metadata_r232.tsv.gz"
+    _write_quality_tsv(
+        path,
+        ("checkm2_completeness", "checkm2_contamination"),
+        {
+            "GCF_000001.1": ("90.0", "2.0"),
+            "GCF_000002.1": ("99.0", "0.5"),
+            "GCF_000003.1": ("95.0", "1.0"),
+            "GCF_000010.1": ("98.0", "0.1"),
+        },
+    )
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    assert metadata.run(ctx, _params(path, limit=2)) == 2
+    rows = _read_selection(ctx.workdir)
+    kept = {r["accession"] for r in rows if r["is_outgroup"] not in ("1", "True", "true")}
+    assert kept == {"GCF_000002.1", "GCF_000003.1"}
+
+
+def test_api_limit_fetches_quality_for_every_candidate_then_stratifies(
+    tmp_path, monkeypatch
+) -> None:
+    selection_rows = [
+        _api_row("GCF_000001.1", "Francisella", "tularensis"),
+        _api_row("GCF_000002.1", "Francisella", "tularensis", is_rep=False),
+        _api_row("GCF_000003.1", "Francisella", "tularensis", is_rep=False),
+    ]
+    parent_rows = selection_rows + [_api_row("GCF_000010.1", "Francisella", "philomiragia")]
+    cards = {
+        "GCF_000001.1": _card(90.0, 2.0),  # 80
+        "GCF_000002.1": _card(99.0, 0.5),  # 96.5, best
+        "GCF_000003.1": _card(95.0, 1.0),  # 90
+        "GCF_000010.1": _card(98.0, 0.5),
+    }
+    fake = _fake_api_with_cards(selection_rows, parent_rows, cards)
+    card_requests: list[str] = []
+
+    def counting(path, params=None):
+        if path.endswith("/card"):
+            card_requests.append(path)
+        return fake(path, params)
+
+    monkeypatch.setattr(metadata, "_api_get", counting)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(
+        ctx,
+        MetadataParams(
+            dataset="all",
+            level="species",
+            source="api",
+            limit=2,
+            target_genus="Francisella",
+            target_species="tularensis",
+        ),
+    )
+    rows = _read_selection(ctx.workdir)
+    kept = {r["accession"] for r in rows if r["is_outgroup"] not in ("1", "True", "true")}
+    assert kept == {"GCF_000002.1", "GCF_000003.1"}
+    # Every candidate's card was fetched before the cut (3), plus the outgroup's (1).
+    assert len(card_requests) == 4
+
+
+def test_api_card_that_was_rate_limited_is_retried_in_a_second_pass(monkeypatch, caplog) -> None:
+    # A 429 that outlives the session's retries must not leave the genome
+    # unscored when a later, slower attempt would have succeeded.
+    attempts: dict[str, int] = {}
+
+    def flaky_card(accession: str) -> dict:
+        attempts[accession] = attempts.get(accession, 0) + 1
+        if accession == "GCF_000002.1" and attempts[accession] == 1:
+            raise WorkdirError(
+                "HTTP request failed: .../card (429 Client Error: Too Many Requests)"
+            )
+        return _card(95.0, 1.0)
+
+    monkeypatch.setattr(metadata, "_api_card", flaky_card)
+    monkeypatch.setattr(metadata.time, "sleep", lambda s: None)
+    logger = logging.getLogger("test.retry.pass")
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        quality = metadata._api_quality_by_accession(
+            ["GCF_000001.1", "GCF_000002.1", "GCF_000003.1"], logger
+        )
+    assert quality["GCF_000002.1"] == (95.0, 1.0)
+    assert attempts["GCF_000002.1"] == 2
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_api_card_failing_twice_is_unscored_with_one_warning(monkeypatch, caplog) -> None:
+    def broken_card(accession: str) -> dict:
+        if accession == "GCF_000002.1":
+            raise WorkdirError("HTTP request failed: .../card (429 Client Error)")
+        return _card(95.0, 1.0)
+
+    monkeypatch.setattr(metadata, "_api_card", broken_card)
+    monkeypatch.setattr(metadata.time, "sleep", lambda s: None)
+    logger = logging.getLogger("test.retry.fail")
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        quality = metadata._api_quality_by_accession(["GCF_000001.1", "GCF_000002.1"], logger)
+    assert quality["GCF_000002.1"] == (None, None)
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "GCF_000002.1" in warnings[0]

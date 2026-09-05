@@ -18,6 +18,7 @@ import csv
 import gzip
 import shutil
 import tarfile
+import time
 import urllib.parse
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -128,7 +129,7 @@ def _select_via_tsv(
             f"Target not found in GTDB: family={params.target_family} "
             f"genus={params.target_genus} species={params.target_species} at level {params.level}"
         )
-    selected = _select(accessions, target_levels, params.limit)
+    selected = _select(accessions, target_levels, params.limit, logger)
     outgroup_acc, outgroup_data = _pick_outgroup(accessions, selected, target_levels, params)
 
     records = [
@@ -320,14 +321,94 @@ def _target_levels(accessions: dict[str, dict], params: MetadataParams) -> dict[
     return {}
 
 
-def _select(accessions: dict[str, dict], target_levels: dict[str, str], limit: int | None):
-    selected = {}
-    for acc, data in accessions.items():
-        if all(data["tax"][lvl] == val for lvl, val in target_levels.items()):
-            selected[acc] = data
-            if limit and len(selected) >= limit:
-                break
-    return selected
+@dataclass(frozen=True)
+class _Candidate:
+    """One genome competing for a place under ``--limit``."""
+
+    accession: str
+    species: str
+    is_rep: bool
+    completeness: float | None
+    contamination: float | None
+
+    def score(self) -> float | None:
+        if self.completeness is None or self.contamination is None:
+            return None
+        from .derep_keeper import quality_score
+
+        return quality_score(self.completeness, self.contamination)
+
+
+def _stratified_limit(candidates: Sequence[_Candidate], limit: int | None) -> list[_Candidate]:
+    """Choose up to ``limit`` genomes: the best of every species first, then each
+    species' next best, and so on (round-robin), so a heavily sequenced species
+    cannot fill the cap and file order plays no part.
+
+    Within a species genomes rank by CheckM score (the keeper's rule), unscored
+    genomes last, then the GTDB species-representative flag, then accession, so
+    the choice is deterministic. Species are visited in name order. With no
+    limit every candidate is returned in that ranked order.
+    """
+
+    def rank(c: _Candidate) -> tuple:
+        score = c.score()
+        return (score is None, -(score or 0.0), not c.is_rep, c.accession)
+
+    by_species: dict[str, list[_Candidate]] = {}
+    for c in candidates:
+        by_species.setdefault(c.species, []).append(c)
+    queues = [sorted(members, key=rank) for _species, members in sorted(by_species.items())]
+
+    kept: list[_Candidate] = []
+    total = len(candidates)
+    target = total if limit is None else min(limit, total)
+    depth = 0
+    while len(kept) < target:
+        for queue in queues:
+            if depth < len(queue):
+                kept.append(queue[depth])
+                if len(kept) == target:
+                    break
+        depth += 1
+    return kept
+
+
+def _log_limit(limit: int | None, candidates: Sequence[_Candidate], kept: Sequence, logger) -> None:
+    if limit and len(kept) < len(candidates):
+        species = len({c.species for c in candidates})
+        logger.info(
+            "Limit %d: kept %d of %d candidate genomes across %d species "
+            "(best assembly quality per species first)",
+            limit,
+            len(kept),
+            len(candidates),
+            species,
+        )
+
+
+def _select(accessions: dict[str, dict], target_levels: dict[str, str], limit: int | None, logger):
+    """Every genome matching the target, cut to ``limit`` by species-stratified
+    quality ranking (never by file order)."""
+    matching = {
+        acc: data
+        for acc, data in accessions.items()
+        if all(data["tax"][lvl] == val for lvl, val in target_levels.items())
+    }
+    if not limit or len(matching) <= limit:
+        return matching
+    candidates = [
+        _Candidate(
+            accession=acc,
+            species=data["tax"]["species"],
+            is_rep=bool(data.get("is_rep")),
+            completeness=data.get("completeness"),
+            contamination=data.get("contamination"),
+        )
+        for acc, data in matching.items()
+    ]
+    kept = _stratified_limit(candidates, limit)
+    _log_limit(limit, candidates, kept, logger)
+    return {c.accession: matching[c.accession] for c in kept}
 
 
 def _pick_outgroup(accessions, selected, target_levels, params):
@@ -410,9 +491,11 @@ def _capitalize_taxon(name: str) -> str:
     return " ".join(parts)
 
 
-# Parallel card fetches; the shared retry session bounds each request, so this
-# only caps how many are in flight against the GTDB API at once.
-_API_CARD_WORKERS = 8
+# Parallel card fetches. Measured 2026-09-05 on 1540 Wolbachia cards: eight in
+# flight drew 429 responses that outlived the session's five retries for a
+# handful of genomes. Four is gentler; the stragglers get a slow second pass.
+_API_CARD_WORKERS = 4
+_API_CARD_RETRY_PAUSE = 2.0  # seconds between second-pass requests
 
 
 def _api_quality(card: dict) -> tuple[float | None, float | None]:
@@ -451,9 +534,11 @@ def _api_quality_by_accession(
 ) -> dict[str, tuple[float | None, float | None]]:
     """Fetch each genome's card and return its CheckM quality.
 
-    A card that cannot be fetched leaves that genome unscored (a warning names
-    it) rather than failing the whole selection; the keeper then treats it like
-    any other genome without quality.
+    Cards are fetched a few at a time; any that still fail after the session's
+    own retries (the API rate-limits sustained bursts) are retried once more,
+    one at a time with a pause. A card that fails both passes leaves that
+    genome unscored (a warning names it) rather than failing the whole
+    selection; the keeper then treats it like any other genome without quality.
     """
     if not accessions:
         return {}
@@ -462,13 +547,25 @@ def _api_quality_by_accession(
     def fetch(acc: str) -> tuple[str, tuple[float | None, float | None] | None]:
         try:
             return acc, _api_quality(_api_card(acc))
-        except WorkdirError as exc:
-            logger.warning("No assembly quality for %s: %s", acc, exc)
+        except WorkdirError:
             return acc, None
 
     out: dict[str, tuple[float | None, float | None]] = {}
+    failed: list[str] = []
     for acc, quality in parallel_map(fetch, accessions, _API_CARD_WORKERS):
-        out[acc] = quality if quality is not None else (None, None)
+        if quality is None:
+            failed.append(acc)
+        else:
+            out[acc] = quality
+    if failed:
+        logger.info("Retrying %d quality card(s) that the API refused, one at a time", len(failed))
+    for acc in failed:
+        time.sleep(_API_CARD_RETRY_PAUSE)
+        try:
+            out[acc] = _api_quality(_api_card(acc))
+        except WorkdirError as exc:
+            logger.warning("No assembly quality for %s: %s", acc, exc)
+            out[acc] = (None, None)
     return out
 
 
@@ -505,10 +602,24 @@ def _select_via_api(params: MetadataParams, logger) -> tuple[list[GenomeRecord],
     if not rows:
         raise UserInputError(f"GTDB API returned no genomes for {taxon}. Check the target name.")
 
-    if params.limit:
-        rows = rows[: params.limit]
-
+    # Quality for every candidate first: the cut below ranks on it.
     quality = _api_quality_by_accession([row["gid"] for row in rows], logger)
+    if params.limit and len(rows) > params.limit:
+        candidates = [
+            _Candidate(
+                accession=row["gid"],
+                species=_normalize_api_tax(row)["species"],
+                is_rep=bool(row.get("gtdbIsRep", False)),
+                completeness=quality[row["gid"]][0],
+                contamination=quality[row["gid"]][1],
+            )
+            for row in rows
+        ]
+        kept = _stratified_limit(candidates, params.limit)
+        _log_limit(params.limit, candidates, kept, logger)
+        keep = {c.accession for c in kept}
+        rows = [row for row in rows if row["gid"] in keep]
+
     records: list[GenomeRecord] = []
     selected_acc: set[str] = set()
     for row in rows:
