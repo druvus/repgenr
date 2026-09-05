@@ -173,6 +173,25 @@ GTDB, a genus-level set, it returned 708 variable sites in about two minutes;
 it is designed for clonal and outbreak sets, where the shared k-mer space is
 far larger.
 
+### Collapsing weak splits in tree2tax
+
+`repgenr tree2tax` (and the `tree2tax-relations` step the Nextflow module
+runs) can merge weakly supported or near-zero-length internal nodes into
+their parents before naming them, so a split the data does not support does
+not become its own FlexTaxD node. Both thresholds are off by default.
+`--collapse-length L` merges a node whose branch is shorter than L, in the
+tree's own units (mash distance for mashtree, substitutions per site for the
+ML builders). `--collapse-support S` merges a node whose support is below the
+fraction S; IQ-TREE and RAxML-NG write percentages and are normalised
+automatically, FastTree writes fractions, and mashtree and the sourmash
+builder write no supports, in which case the option warns and does nothing.
+Either criterion suffices. The root, the outgroup/ingroup split under it and
+the leaves never collapse. A collapsed node's branch length is added to its
+children's. Provenance records both thresholds and the number of nodes
+collapsed, so changing a threshold re-runs the stage. On the 171-leaf
+Wolbachia mashtree tree, `--collapse-length 0.0005` removes 26 of 168 internal
+nodes.
+
 ## Viral length filtering and over-represented species
 
 The viral selection step keeps records whose genome length falls inside a

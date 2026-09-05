@@ -213,6 +213,19 @@ def tree2tax_relations_cmd(
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
+    collapse_support: float | None = typer.Option(
+        None,
+        "--collapse-support",
+        min=0.0,
+        max=1.0,
+        help="Merge nodes whose support is below this fraction into their parent.",
+    ),
+    collapse_length: float | None = typer.Option(
+        None,
+        "--collapse-length",
+        min=0.0,
+        help="Merge nodes whose branch is shorter than this length into their parent.",
+    ),
 ) -> None:
     """Emit FlexTaxD relations from a tree (stateless data-channel step)."""
     from ..stages.tree2tax import Tree2taxStepParams, tree2tax_relations
@@ -231,6 +244,8 @@ def tree2tax_relations_cmd(
                 remove_outgroup=remove_outgroup,
                 include_dereplicated=include_dereplicated,
                 versions_out=versions_out,
+                collapse_support=collapse_support,
+                collapse_length=collapse_length,
             ),
             logger,
         )

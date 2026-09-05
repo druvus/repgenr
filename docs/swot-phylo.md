@@ -156,9 +156,10 @@ missing outgroup degrades silently to an unrooted tree with only a warning
 output rooting.
 
 **Opportunities.** A single post-order pass computing child hashes
-incrementally makes naming O(n); collapsing branches below a length/support
-threshold before emission would make the taxonomy robust on clonal sets and is
-purely local to this stage.
+incrementally makes naming O(n). Collapsing branches below a length/support
+threshold before emission (shipped 2026-09-05 as `--collapse-length` /
+`--collapse-support`, `_collapse_weak_nodes`) makes the taxonomy robust on
+clonal sets and is purely local to this stage.
 
 **Threats.** A taxonomy built from an unsupported, reference-biased tree
 inherits every upstream artifact; at 5000 leaves the quadratic pass is minutes

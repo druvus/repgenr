@@ -6,6 +6,14 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `tree2tax --collapse-length L` and `--collapse-support S` (also on the
+  `tree2tax-relations` step): internal nodes whose branch is shorter than L,
+  or whose support is below the fraction S (percentage trees are normalised),
+  merge into their parent before nodes are named, so weak splits do not
+  become FlexTaxD nodes. The root, the outgroup/ingroup split and leaves
+  never collapse. Provenance records the thresholds and the collapsed count.
+
 ### Changed
 - `metadata --limit N` no longer keeps the first N genomes in GTDB file (or
   API) order. It round-robins over species, taking the best CheckM-scored

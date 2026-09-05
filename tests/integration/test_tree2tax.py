@@ -105,3 +105,33 @@ def test_tree2tax_roots_on_outgroup_edge_for_unrooted_tree(workdir: Path) -> Non
     # The outgroup's former neighbour is inside the ingroup clade, not at the root.
     assert not ingroup.startswith("Fam_")
     assert ("Fam_Gen_sp_GCA_000003.1", "root") not in edges
+
+
+def test_tree2tax_collapse_length_reparents_leaves_to_grandparent(workdir: Path) -> None:
+    # (GCA_000001.1, GCA_000002.1) sit on a near-zero branch inside the ingroup.
+    newick = (
+        "(Fam_Out_sp_GCA_000009.1:0.3,"
+        "((Fam_Gen_sp_GCA_000001.1:0.01,Fam_Gen_sp_GCA_000002.1:0.01):0.00001,"
+        "Fam_Gen_sp_GCA_000003.1:0.02):0.3);"
+    )
+    (workdir / "tree").mkdir(parents=True)
+    (workdir / "tree" / "tree.nwk").write_text(newick + "\n")
+    og = workdir / "outgroup"
+    og.mkdir(parents=True)
+    (og / "Fam_Out_sp_GCA_000009.1.fasta").write_text(">x\nACGT\n")
+    (workdir / "outgroup_accession.txt").write_text("GCA_000009.1\n")
+    ctx = WorkdirContext(workdir, create=True)
+    t2t, _ = tree2tax_run(ctx, Tree2taxParams(collapse_length=0.001))
+    edges = _edges(t2t)
+    parent = {c: p for c, p in edges}
+    # All three ingroup leaves now share one parent: the ingroup clade node.
+    assert (
+        parent["Fam_Gen_sp_GCA_000001.1"]
+        == parent["Fam_Gen_sp_GCA_000002.1"]
+        == parent["Fam_Gen_sp_GCA_000003.1"]
+    )
+    assert parent[parent["Fam_Gen_sp_GCA_000003.1"]] == "root"
+    params = ctx.config.stages["tree2tax"].params
+    assert params["collapse_length"] == 0.001
+    assert params["collapse_support"] is None
+    assert params["collapsed_nodes"] == 1

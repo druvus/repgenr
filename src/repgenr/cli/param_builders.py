@@ -214,6 +214,8 @@ def tree2tax_params(
     remove_outgroup: Any = _UNSET,
     all_genomes: Any = _UNSET,
     include_dereplicated: Any = _UNSET,
+    collapse_support: Any = _UNSET,
+    collapse_length: Any = _UNSET,
 ) -> Tree2taxParams:
     from ..stages.tree2tax import Tree2taxParams
 
@@ -224,4 +226,6 @@ def tree2tax_params(
         remove_outgroup=remove_outgroup,
         all_genomes=all_genomes,
         include_dereplicated=include_dereplicated,
+        collapse_support=collapse_support,
+        collapse_length=collapse_length,
     )
