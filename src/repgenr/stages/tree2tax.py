@@ -42,6 +42,11 @@ class Tree2taxParams:
     # Default on: the genomes_map deliverable lists redundant genomes under
     # their representative, matching what `repgenr run` has always produced.
     include_dereplicated: bool = True
+    # Weak-split collapse thresholds (both off by default): a node merges into
+    # its parent when its support is below collapse_support (a fraction; percent
+    # trees are normalised) or its branch is shorter than collapse_length.
+    collapse_support: float | None = None
+    collapse_length: float | None = None
 
 
 @dataclass
@@ -58,6 +63,8 @@ class Tree2taxStepParams:
     remove_outgroup: bool = False
     include_dereplicated: bool = False
     versions_out: Path | None = None
+    collapse_support: float | None = None
+    collapse_length: float | None = None
 
 
 def _emit_relations(
@@ -71,12 +78,16 @@ def _emit_relations(
     out_tree2tax: Path,
     out_map: Path,
     logger: logging.Logger,
-) -> tuple[Path, Path]:
+    collapse_support: float | None = None,
+    collapse_length: float | None = None,
+) -> tuple[Path, Path, int]:
     """Build FlexTaxD relations from a tree and write the two output tables.
 
     Stateless core shared by :func:`run` (workdir-bound) and
-    :func:`tree2tax_relations` (data-channel step): it roots, names nodes and
-    emits ``tree2tax.tsv`` + ``genomes_map.tsv`` to the given paths.
+    :func:`tree2tax_relations` (data-channel step): it roots, collapses weak
+    splits when asked, names nodes and emits ``tree2tax.tsv`` +
+    ``genomes_map.tsv`` to the given paths. Returns the two paths and the
+    number of internal nodes collapsed.
     """
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
@@ -84,6 +95,11 @@ def _emit_relations(
 
     if outgroup_leaf is not None:
         _set_outgroup(tree, outgroup_leaf, logger)
+
+    # Collapse before naming so node names describe the collapsed topology.
+    stats = _collapse_weak_nodes(
+        tree, support=collapse_support, length=collapse_length, logger=logger
+    )
 
     leaves_nodes = _name_nodes(tree, node_basename)
     _build_paths(tree, leaves_nodes)
@@ -97,7 +113,7 @@ def _emit_relations(
     write_tree2tax(out_tree2tax, _edges(leaves_nodes))
     write_genomes_map(out_map, _genome_map(leaves_nodes, redundant))
     logger.info("Wrote %s and %s", out_tree2tax.name, out_map.name)
-    return out_tree2tax, out_map
+    return out_tree2tax, out_map, stats.collapsed
 
 
 def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tuple[Path, Path]:
@@ -121,7 +137,7 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         from ..core.versions import write_versions_fragment
 
         write_versions_fragment(params.versions_out, {})
-    return _emit_relations(
+    out_tree2tax, out_map, _collapsed = _emit_relations(
         params.tree.read_text().strip(),
         outgroup_leaf,
         redundant,
@@ -131,7 +147,10 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         out_tree2tax=params.out_dir / TREE2TAX_TSV,
         out_map=params.out_dir / GENOMES_MAP_TSV,
         logger=logger,
+        collapse_support=params.collapse_support,
+        collapse_length=params.collapse_length,
     )
+    return out_tree2tax, out_map
 
 
 def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
@@ -143,7 +162,7 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}
 
-    out_tree2tax, out_map = _emit_relations(
+    out_tree2tax, out_map, collapsed = _emit_relations(
         tree_file.read_text().strip(),
         outgroup_leaf,
         redundant,
@@ -153,6 +172,8 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
         out_tree2tax=ctx.workdir / TREE2TAX_TSV,
         out_map=ctx.workdir / GENOMES_MAP_TSV,
         logger=logger,
+        collapse_support=params.collapse_support,
+        collapse_length=params.collapse_length,
     )
 
     ctx.config.record_stage(
@@ -161,6 +182,9 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
             "remove_outgroup": params.remove_outgroup,
             "include_dereplicated": params.include_dereplicated,
             "root_name": params.root_name,
+            "collapse_support": params.collapse_support,
+            "collapse_length": params.collapse_length,
+            "collapsed_nodes": collapsed,
         },
         completed=datetime.now(UTC).isoformat(),
     )
@@ -216,6 +240,92 @@ def _set_outgroup(tree: dendropy.Tree, leaf_label: str, logger) -> None:
     length = node.edge.length
     half = None if length is None else length / 2
     tree.reroot_at_edge(node.edge, length1=half, length2=half, update_bipartitions=False)
+
+
+@dataclass
+class _CollapseStats:
+    collapsed: int = 0
+    by_support: int = 0
+    by_length: int = 0
+
+
+def _parse_support(label: str | None) -> float | None:
+    if label is None:
+        return None
+    try:
+        return float(label)
+    except ValueError:
+        return None
+
+
+def _collapse_weak_nodes(
+    tree: dendropy.Tree,
+    *,
+    support: float | None,
+    length: float | None,
+    logger: logging.Logger,
+) -> _CollapseStats:
+    """Merge weakly supported or near-zero-length internal nodes into their parents.
+
+    A node collapses when its support is below ``support`` (a fraction; when
+    any label in the tree exceeds 1 the tree is read as percentages) or its
+    branch is shorter than ``length``; either criterion suffices. The root, the
+    root's children (the outgroup/ingroup split) and leaves never collapse.
+    Decisions are taken on the tree as read, then applied, so one collapse
+    cannot change another node's verdict; a collapsed node's branch length is
+    added to its children's. Thresholds of None disable a criterion.
+    """
+    stats = _CollapseStats()
+    if support is None and length is None:
+        return stats
+
+    protected = {tree.seed_node, *tree.seed_node.child_nodes()}
+    candidates = [n for n in tree.internal_nodes() if n not in protected]
+
+    supports: dict[dendropy.Node, float] = {}
+    if support is not None:
+        for node in tree.internal_nodes():
+            if node is tree.seed_node:
+                continue
+            value = _parse_support(node.label)
+            if value is not None:
+                supports[node] = value
+        if not supports:
+            logger.warning(
+                "--collapse-support %.3g given but the tree carries no support values; "
+                "nothing collapsed on support (use --collapse-length, or build the tree "
+                "with --bootstrap).",
+                support,
+            )
+        elif max(supports.values()) > 1.0:
+            logger.info("Support values read as percentages; comparing against %.1f", support * 100)
+            supports = {n: v / 100.0 for n, v in supports.items()}
+
+    to_collapse: list[dendropy.Node] = []
+    for node in candidates:
+        weak_support = support is not None and node in supports and supports[node] < support
+        short = length is not None and node.edge.length is not None and node.edge.length < length
+        if weak_support:
+            stats.by_support += 1
+        if short:
+            stats.by_length += 1
+        if weak_support or short:
+            to_collapse.append(node)
+
+    for node in to_collapse:
+        node.edge.collapse(adjust_collapsed_head_children_edge_lengths=True)
+    stats.collapsed = len(to_collapse)
+    if to_collapse:
+        logger.info(
+            "Collapsed %d of %d internal nodes (%d below support %s, %d shorter than %s)",
+            stats.collapsed,
+            len(candidates),
+            stats.by_support,
+            "n/a" if support is None else f"{support:g}",
+            stats.by_length,
+            "n/a" if length is None else f"{length:g}",
+        )
+    return stats
 
 
 def _name_nodes(tree: dendropy.Tree, node_basename: str | None) -> dict[str, list[str]]:

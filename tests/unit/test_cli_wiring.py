@@ -635,3 +635,52 @@ def test_phylo_mask_option_feeds_extra(dispatched, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     params = {s: p for s, p, _ in dispatched}["phylo"]
     assert params.extra["mask"] == "gubbins"
+
+
+def test_tree2tax_collapse_flags_wiring(dispatched, tmp_path) -> None:
+    stage, params, _create = _invoke(
+        dispatched,
+        [
+            "tree2tax",
+            "-wd",
+            str(tmp_path),
+            "--collapse-support",
+            "0.7",
+            "--collapse-length",
+            "0.001",
+        ],
+    )
+    assert stage == "tree2tax"
+    assert params.collapse_support == 0.7
+    assert params.collapse_length == 0.001
+
+
+def test_tree2tax_relations_collapse_flags_wiring(monkeypatch, tmp_path) -> None:
+    from repgenr.stages import tree2tax as t2t_mod
+
+    seen = {}
+
+    def fake(params, logger):
+        seen["params"] = params
+        return (tmp_path / "a", tmp_path / "b")
+
+    monkeypatch.setattr(t2t_mod, "tree2tax_relations", fake)
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(a,b);\n")
+    result = _runner.invoke(
+        app,
+        [
+            "tree2tax-relations",
+            "--tree",
+            str(tree),
+            "-o",
+            str(tmp_path / "out"),
+            "--collapse-support",
+            "0.7",
+            "--collapse-length",
+            "0.001",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["params"].collapse_support == 0.7
+    assert seen["params"].collapse_length == 0.001

@@ -122,6 +122,19 @@ def tree2tax(
         "--include-dereplicated/--no-include-dereplicated",
         help="List redundant genomes under their representative.",
     ),
+    collapse_support: float | None = typer.Option(
+        None,
+        "--collapse-support",
+        min=0.0,
+        max=1.0,
+        help="Merge nodes whose support is below this fraction into their parent.",
+    ),
+    collapse_length: float | None = typer.Option(
+        None,
+        "--collapse-length",
+        min=0.0,
+        help="Merge nodes whose branch is shorter than this length into their parent.",
+    ),
 ) -> None:
     """Emit FlexTaxD-compatible taxonomy relations from the tree."""
     from .param_builders import tree2tax_params
@@ -132,6 +145,8 @@ def tree2tax(
             root_name=root_name,
             remove_outgroup=remove_outgroup,
             include_dereplicated=include_dereplicated,
+            collapse_support=collapse_support,
+            collapse_length=collapse_length,
         )
 
     _run("tree2tax", workdir, build)
