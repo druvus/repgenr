@@ -6,6 +6,15 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `metadata --limit N` no longer keeps the first N genomes in GTDB file (or
+  API) order. It round-robins over species, taking the best CheckM-scored
+  genome of every species first, then each species' next best, until N;
+  within a species unscored genomes rank last, then the GTDB representative
+  flag, then accession. The same `--limit` therefore returns a different,
+  better set than before. On the API path the per-genome quality cards are
+  fetched for every candidate before the cut.
+
 ### Fixed
 - Six small defects noted in the 2026-09-01 audit's self-review: `phylo`
   publishes `tree/tree.nwk` through the atomic copy used by every other
