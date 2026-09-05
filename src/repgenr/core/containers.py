@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import process
-from .errors import MissingBinaryError, ToolExecutionError
+from .errors import MissingBinaryError, ToolExecutionError, UserInputError
 from .plugins import ToolCapabilities
 
 NATIVE = "none"
@@ -69,7 +69,9 @@ class ContainerConfig:
 
 
 _CONFIG = ContainerConfig()
-_WAVE_CACHE: dict[tuple[str, ...], str] = {}
+# Keyed by (conda spec, platform): the same spec mints a different image per
+# architecture, so an arm64 and an amd64 request must not share an entry.
+_WAVE_CACHE: dict[tuple[tuple[str, ...], str | None], str] = {}
 
 
 def configure_container(
@@ -83,7 +85,10 @@ def configure_container(
     """Set the process-global container backend. ``backend='none'`` = native."""
     global _CONFIG
     if backend not in (NATIVE, DOCKER, SINGULARITY):
-        raise ToolExecutionError([backend], 2, f"unknown container backend '{backend}'")
+        raise UserInputError(
+            f"Unknown container backend '{backend}'; choose {NATIVE}, {DOCKER} or "
+            f"{SINGULARITY} (use --container-engine for podman/apptainer binaries)."
+        )
     _CONFIG = ContainerConfig(
         backend=backend,
         engine=engine,
@@ -113,8 +118,9 @@ def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None)
 
 
 def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
-    if conda_spec in _WAVE_CACHE:
-        return _WAVE_CACHE[conda_spec]
+    cache_key = (conda_spec, config.platform)
+    if cache_key in _WAVE_CACHE:
+        return _WAVE_CACHE[cache_key]
     if shutil.which("wave") is None:
         raise MissingBinaryError(
             "Wave is enabled but the 'wave' CLI is not on PATH. Install it or pin "
@@ -139,7 +145,7 @@ def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
             cmd, proc.returncode, output="wave returned no image URI on stdout"
         )
     image = lines[-1].strip()
-    _WAVE_CACHE[conda_spec] = image
+    _WAVE_CACHE[cache_key] = image
     return image
 
 

@@ -6,6 +6,16 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Six small defects noted in the 2026-09-01 audit's self-review: `phylo`
+  publishes `tree/tree.nwk` through the atomic copy used by every other
+  deliverable; the Nextflow retry window no longer includes exit 130 and 131
+  (a cancelled task is not resubmitted); an unknown `--container` value is a
+  user-input error with the valid choices in the message; IQ-TREE refuses
+  `--bootstrap` values below its floor of 1000 before running; the Wave image
+  cache is keyed by platform as well as conda spec; and a failure inside the
+  tool-output read loop kills the child process before the error propagates.
+
 ## [3.0.0] - 2026-09-04
 
 ### Added

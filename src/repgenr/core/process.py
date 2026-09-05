@@ -113,6 +113,7 @@ def run(
     out_handle = open(out_tmp, "w", encoding="utf-8") if out_tmp is not None else None
     timer: threading.Timer | None = None
     timed_out = False
+    proc: subprocess.Popen[bytes] | None = None
     try:
         proc = subprocess.Popen(
             cmd,
@@ -152,6 +153,20 @@ def run(
                 logger.debug("%s%s", prefix, line)
         returncode = proc.wait()
     except BaseException:
+        # A failure in this function (a logging handler, a KeyboardInterrupt)
+        # must not orphan the tool: kill it and its group before re-raising.
+        if proc is not None and proc.poll() is None:
+            try:
+                if limit is not None:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
         if out_target is not None and out_tmp is not None:
             out_tmp.unlink(missing_ok=True)
         raise

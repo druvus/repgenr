@@ -198,3 +198,44 @@ def test_run_tool_with_retries_exhausts(monkeypatch) -> None:
         containers.run_tool_with_retries(
             _wave_caps(), ["datasets", "download"], logger=_LOG, attempts=2
         )
+
+
+# --- backlog fixes from the 2026-09-01 audit self-review ----------------------
+
+
+def test_unknown_backend_is_a_user_input_error() -> None:
+    from repgenr.core.errors import UserInputError
+
+    try:
+        with pytest.raises(UserInputError, match="podman"):
+            containers.configure_container("podman")
+    finally:
+        containers.configure_container("none")
+
+
+def test_wave_cache_is_keyed_by_platform(monkeypatch, _wave_env) -> None:
+    import subprocess
+    from types import SimpleNamespace
+
+    minted: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        minted.append(list(cmd))
+        platform = cmd[cmd.index("--platform") + 1] if "--platform" in cmd else "host"
+        return SimpleNamespace(returncode=0, stdout=f"wave.io/img:{platform}\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    amd = resolve_image(
+        _wave_caps(), ContainerConfig(backend="docker", wave_enabled=True, platform="linux/amd64")
+    )
+    arm = resolve_image(
+        _wave_caps(), ContainerConfig(backend="docker", wave_enabled=True, platform="linux/arm64")
+    )
+    assert amd == "wave.io/img:linux/amd64"
+    assert arm == "wave.io/img:linux/arm64"
+    assert len(minted) == 2  # one mint per platform, not a shared entry
+    # The same platform twice is served from the cache.
+    resolve_image(
+        _wave_caps(), ContainerConfig(backend="docker", wave_enabled=True, platform="linux/amd64")
+    )
+    assert len(minted) == 2

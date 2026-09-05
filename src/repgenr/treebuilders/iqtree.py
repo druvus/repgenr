@@ -10,7 +10,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import atomic_path
-from ..core.errors import WorkdirError
+from ..core.errors import UserInputError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 
@@ -24,6 +24,9 @@ class IqtreeBuilder(TreeBuilder):
     )
     input_kind = InputKind.MSA_FASTA
 
+    # IQ-TREE's ultrafast bootstrap (-B) rejects fewer than 1000 replicates.
+    MIN_BOOTSTRAP = 1000
+
     def build(
         self,
         msa_or_genomes: Path | Sequence[Path],
@@ -32,6 +35,12 @@ class IqtreeBuilder(TreeBuilder):
         logger: logging.Logger,
     ) -> Path:
         msa = as_msa_path(msa_or_genomes)
+        if 0 < params.bootstrap < self.MIN_BOOTSTRAP:
+            raise UserInputError(
+                f"IQ-TREE needs at least {self.MIN_BOOTSTRAP} ultrafast bootstrap "
+                f"replicates (-B); got {params.bootstrap}. Use --bootstrap "
+                f"{self.MIN_BOOTSTRAP} or more, or 0 for none."
+            )
         out_dir.mkdir(parents=True, exist_ok=True)
         work_msa = out_dir / "msa.fasta"
         if work_msa.resolve() != msa.resolve():

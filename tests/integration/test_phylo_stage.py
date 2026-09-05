@@ -273,3 +273,44 @@ def test_alignment_free_provenance_records_no_msa_source_tools(
     assert params["msa_source"] is None
     assert params["aligner"] is None
     assert params["snptyper"] is None
+
+
+class _SideFileTreeBuilder(TreeBuilder):
+    """Writes its tree under a tool-specific name, as iqtree/raxmlng do; the stage
+    must publish it as tree/tree.nwk without a window where the final path is
+    truncated or half-written."""
+
+    capabilities = ToolCapabilities(name="faketree_sidefile")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "builder_output.treefile"
+        tree.write_text("(new);\n", encoding="utf-8")
+        return tree
+
+
+def test_tree_published_through_atomic_path(workdir: Path, monkeypatch, register_tool) -> None:
+    from repgenr.stages import phylo as phylo_mod
+
+    register_tool(tb_registry, "faketree_sidefile", _SideFileTreeBuilder)
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.tree_dir.mkdir(parents=True, exist_ok=True)
+    (ctx.tree_dir / "tree.nwk").write_text("(old);\n", encoding="utf-8")
+
+    published_via: list[Path] = []
+    real_atomic_path = phylo_mod.atomic_path
+
+    def spy(path: Path):
+        published_via.append(path)
+        return real_atomic_path(path)
+
+    monkeypatch.setattr(phylo_mod, "atomic_path", spy)
+    tree = run(ctx, PhyloParams(treebuilder="faketree_sidefile", no_outgroup=True))
+    assert tree.read_text(encoding="utf-8") == "(new);\n"
+    assert published_via == [ctx.tree_dir / "tree.nwk"]
+    assert not list(ctx.tree_dir.glob("*.part")) and not list(ctx.tree_dir.glob(".*tmp*"))
