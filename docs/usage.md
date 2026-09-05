@@ -149,7 +149,10 @@ accession, so the result is deterministic. A heavily sequenced species
 therefore cannot fill the cap on its own. With `-d rep` there is one genome
 per species and the rule reduces to a quality ranking across species. On the
 `--source api` path the per-genome quality cards are fetched for every
-candidate before the cut, one request per genome. The outgroup is chosen
+candidate before the cut, one request per genome, four at a time (about five
+genomes a second; the 1540 Wolbachia genomes take some five minutes). The
+API refuses sustained bursts now and then; refused cards are retried once
+more, slowly, and only a genome refused twice is left unscored. The outgroup is chosen
 afterwards from the parent taxon and never counts against the limit.
 
 ### SNP typing and masking

@@ -18,6 +18,7 @@ import csv
 import gzip
 import shutil
 import tarfile
+import time
 import urllib.parse
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -490,9 +491,11 @@ def _capitalize_taxon(name: str) -> str:
     return " ".join(parts)
 
 
-# Parallel card fetches; the shared retry session bounds each request, so this
-# only caps how many are in flight against the GTDB API at once.
-_API_CARD_WORKERS = 8
+# Parallel card fetches. Measured 2026-09-05 on 1540 Wolbachia cards: eight in
+# flight drew 429 responses that outlived the session's five retries for a
+# handful of genomes. Four is gentler; the stragglers get a slow second pass.
+_API_CARD_WORKERS = 4
+_API_CARD_RETRY_PAUSE = 2.0  # seconds between second-pass requests
 
 
 def _api_quality(card: dict) -> tuple[float | None, float | None]:
@@ -531,9 +534,11 @@ def _api_quality_by_accession(
 ) -> dict[str, tuple[float | None, float | None]]:
     """Fetch each genome's card and return its CheckM quality.
 
-    A card that cannot be fetched leaves that genome unscored (a warning names
-    it) rather than failing the whole selection; the keeper then treats it like
-    any other genome without quality.
+    Cards are fetched a few at a time; any that still fail after the session's
+    own retries (the API rate-limits sustained bursts) are retried once more,
+    one at a time with a pause. A card that fails both passes leaves that
+    genome unscored (a warning names it) rather than failing the whole
+    selection; the keeper then treats it like any other genome without quality.
     """
     if not accessions:
         return {}
@@ -542,13 +547,25 @@ def _api_quality_by_accession(
     def fetch(acc: str) -> tuple[str, tuple[float | None, float | None] | None]:
         try:
             return acc, _api_quality(_api_card(acc))
-        except WorkdirError as exc:
-            logger.warning("No assembly quality for %s: %s", acc, exc)
+        except WorkdirError:
             return acc, None
 
     out: dict[str, tuple[float | None, float | None]] = {}
+    failed: list[str] = []
     for acc, quality in parallel_map(fetch, accessions, _API_CARD_WORKERS):
-        out[acc] = quality if quality is not None else (None, None)
+        if quality is None:
+            failed.append(acc)
+        else:
+            out[acc] = quality
+    if failed:
+        logger.info("Retrying %d quality card(s) that the API refused, one at a time", len(failed))
+    for acc in failed:
+        time.sleep(_API_CARD_RETRY_PAUSE)
+        try:
+            out[acc] = _api_quality(_api_card(acc))
+        except WorkdirError as exc:
+            logger.warning("No assembly quality for %s: %s", acc, exc)
+            out[acc] = (None, None)
     return out
 
 

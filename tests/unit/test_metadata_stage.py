@@ -489,3 +489,44 @@ def test_api_limit_fetches_quality_for_every_candidate_then_stratifies(
     assert kept == {"GCF_000002.1", "GCF_000003.1"}
     # Every candidate's card was fetched before the cut (3), plus the outgroup's (1).
     assert len(card_requests) == 4
+
+
+def test_api_card_that_was_rate_limited_is_retried_in_a_second_pass(monkeypatch, caplog) -> None:
+    # A 429 that outlives the session's retries must not leave the genome
+    # unscored when a later, slower attempt would have succeeded.
+    attempts: dict[str, int] = {}
+
+    def flaky_card(accession: str) -> dict:
+        attempts[accession] = attempts.get(accession, 0) + 1
+        if accession == "GCF_000002.1" and attempts[accession] == 1:
+            raise WorkdirError(
+                "HTTP request failed: .../card (429 Client Error: Too Many Requests)"
+            )
+        return _card(95.0, 1.0)
+
+    monkeypatch.setattr(metadata, "_api_card", flaky_card)
+    monkeypatch.setattr(metadata.time, "sleep", lambda s: None)
+    logger = logging.getLogger("test.retry.pass")
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        quality = metadata._api_quality_by_accession(
+            ["GCF_000001.1", "GCF_000002.1", "GCF_000003.1"], logger
+        )
+    assert quality["GCF_000002.1"] == (95.0, 1.0)
+    assert attempts["GCF_000002.1"] == 2
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_api_card_failing_twice_is_unscored_with_one_warning(monkeypatch, caplog) -> None:
+    def broken_card(accession: str) -> dict:
+        if accession == "GCF_000002.1":
+            raise WorkdirError("HTTP request failed: .../card (429 Client Error)")
+        return _card(95.0, 1.0)
+
+    monkeypatch.setattr(metadata, "_api_card", broken_card)
+    monkeypatch.setattr(metadata.time, "sleep", lambda s: None)
+    logger = logging.getLogger("test.retry.fail")
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        quality = metadata._api_quality_by_accession(["GCF_000001.1", "GCF_000002.1"], logger)
+    assert quality["GCF_000002.1"] == (None, None)
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1 and "GCF_000002.1" in warnings[0]
