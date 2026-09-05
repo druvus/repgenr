@@ -15,6 +15,7 @@ outgroup is done once, for every builder, in the tree2tax stage.
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from ..core.contracts import (
     CLUSTERS_TSV,
     TREE_NWK,
     accession_from_filename,
+    atomic_path,
     list_fasta,
     parse_genome_filename,
 )
@@ -188,7 +190,10 @@ def build_tree(
 
     final = dirs.tree_dir / TREE_NWK
     if tree.resolve() != final.resolve():
-        final.write_text(Path(tree).read_text(encoding="utf-8"))
+        # Copy through a temp sibling so a previous tree.nwk is never left
+        # truncated or half-written if the copy fails.
+        with atomic_path(final) as tmp:
+            shutil.copy2(tree, tmp)
     logger.info("Phylogenetic tree written to %s", final)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
