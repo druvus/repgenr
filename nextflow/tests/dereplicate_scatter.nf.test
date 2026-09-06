@@ -14,22 +14,23 @@ nextflow_workflow {
             }
             workflow {
                 """
-                input[0] = Channel.fromPath("${projectDir}/nextflow/tests/data/genomes/*.fasta")
-                input[1] = Channel.value([])
+                input[0] = channel.fromPath("${projectDir}/nextflow/tests/data/genomes/*.fasta")
+                    .collect()
+                    .map { files -> tuple([id: 'test', mode: 'bacterial'], files) }
+                input[1] = channel.value(tuple([id: 'test', mode: 'bacterial'], []))
                 """
             }
         }
         then {
             assert workflow.success
-            // exactly one merged result, tagged 'merged'
+            // exactly one merged result, carrying the run meta again
             assert workflow.out.reps.size() == 1
             with(workflow.out.reps.get(0)) {
-                assert get(0).id == 'merged'
+                assert get(0) == [id: 'test', mode: 'bacterial']
                 def dir = get(1)
                 assert path("${dir}/clusters.tsv").exists()
                 assert path("${dir}/representatives").exists()
             }
-            // a versions file from each chunk task and the merge
             assert workflow.out.versions
         }
     }

@@ -20,10 +20,7 @@ workflow BACTERIAL_DATAFLOW {
     ACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
 
-    // Glue until Task 5: the scatter still takes bare paths.
-    def ch_genome_files = ACQUIRE.out.genomes.flatMap { _meta, files -> files }
-    def ch_selection    = ACQUIRE.out.selection.map { _meta, sel -> sel }
-    DEREPLICATE_SCATTER(ch_genome_files, ch_selection)
+    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     // Glue until Task 6: phylo and tree2tax still take bare paths.

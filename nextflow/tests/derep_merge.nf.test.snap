@@ -5,7 +5,12 @@
                 "0": [
                     [
                         {
-                            "id": "merged"
+                            "id": "test.merged",
+                            "mode": "bacterial",
+                            "run": {
+                                "id": "test",
+                                "mode": "bacterial"
+                            }
                         },
                         [
                             "clusters.tsv:md5,e7bbabc269dd861fe162fb9f04c92ccf",
@@ -23,7 +28,12 @@
                 "reps": [
                     [
                         {
-                            "id": "merged"
+                            "id": "test.merged",
+                            "mode": "bacterial",
+                            "run": {
+                                "id": "test",
+                                "mode": "bacterial"
+                            }
                         },
                         [
                             "clusters.tsv:md5,e7bbabc269dd861fe162fb9f04c92ccf",
@@ -40,10 +50,10 @@
                 ]
             }
         ],
-        "timestamp": "2026-08-30T20:17:36.556165",
+        "timestamp": "2026-09-06T08:18:43.892436",
         "meta": {
             "nf-test": "0.9.5",
-            "nextflow": "26.04.3"
+            "nextflow": "26.04.6"
         }
     }
 }

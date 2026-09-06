@@ -21,11 +21,14 @@ workflow {
     if (!params.genomes_dir) {
         error "Provide --genomes_dir <DIR> with genome FASTAs."
     }
+    def meta = [id: 'local', mode: 'bacterial']
     def ch_genomes = channel
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
         .filter { f -> !f.name.startsWith('._') }
+        .collect()
+        .map { files -> tuple(meta, files) }
 
-    DEREPLICATE_SCATTER(ch_genomes, channel.value([]))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
 
     def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
     def ch_outgroup = channel.value([])                    // no outgroup in the test

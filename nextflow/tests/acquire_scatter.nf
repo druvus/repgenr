@@ -12,12 +12,9 @@ include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 include { run_meta            } from '../subworkflows/local/run_meta'
 
 workflow {
-    ACQUIRE(channel.value(run_meta(params)))
-
-    // Glue until Task 5: the scatter still takes bare paths.
-    def ch_genome_files = ACQUIRE.out.genomes.flatMap { _meta, files -> files }
-    def ch_selection    = ACQUIRE.out.selection.map { _meta, sel -> sel }
-    DEREPLICATE_SCATTER(ch_genome_files, ch_selection)
+    def ch_meta = channel.value(run_meta(params))
+    ACQUIRE(ch_meta)
+    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
 
     DEREPLICATE_SCATTER.out.reps
         .map { _meta, dir -> dir }

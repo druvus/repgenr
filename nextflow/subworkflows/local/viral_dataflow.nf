@@ -19,14 +19,12 @@ workflow VIRAL_DATAFLOW {
     VACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
-    // vmetadata writes no selection.tsv (unlike the bacterial metadata stage)
-    // and VACQUIRE emits no selection channel; viral genomes also carry no
-    // CheckM quality (BV-BRC/NCBI Virus supply no completeness/
-    // contamination), so an empty value is passed -- the merge step's
-    // quality-aware keeper is skipped on this front either way.
-    // Glue until Task 5: the scatter still takes bare paths.
-    def ch_genome_files = VACQUIRE.out.genomes.flatMap { _meta, files -> (files instanceof List ? files : [files]) }
-    DEREPLICATE_SCATTER(ch_genome_files, channel.value([]))
+    def ch_genomes = VACQUIRE.out.genomes
+        .map { meta, files -> tuple(meta, files instanceof List ? files : [files]) }
+    // vmetadata writes no selection.tsv and viral genomes carry no CheckM
+    // quality, so the keeper input is an empty list under the run meta.
+    def ch_no_selection = ch_meta.map { meta -> tuple(meta, []) }
+    DEREPLICATE_SCATTER(ch_genomes, ch_no_selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     // Glue until Task 6: phylo and tree2tax still take bare paths.

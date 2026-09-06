@@ -21,11 +21,14 @@ workflow {
         error "Provide --genomes_dir <DIR> with genome FASTAs."
     }
 
+    def meta = [id: 'local', mode: 'bacterial']
     def ch_genomes = channel
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
         .filter { f -> !f.name.startsWith('._') }   // skip macOS AppleDouble files
+        .collect()
+        .map { files -> tuple(meta, files) }
 
-    DEREPLICATE_SCATTER(ch_genomes, channel.value([]))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
 
     DEREPLICATE_SCATTER.out.reps
         .map { _meta, dir -> dir }
