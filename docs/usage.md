@@ -110,8 +110,11 @@ Add `-stub` to exercise the wiring without running the tools.
 Each Nextflow process reads its tool flags from `task.ext.args`, which
 `nextflow/conf/modules.config` maps from the user-facing parameters:
 `--metadata_args`, `--vmetadata_args` and `--vgenome_args`, `--phylo_args`,
-`--tree2tax_args`, and the six `--derep_*` parameters (composed into one
-string for the two dereplication processes). Publishing directories live in
+`--tree2tax_args`, and five dereplication parameters (`--derep_tool`,
+`--derep_primary_ani`, `--derep_secondary_ani`, `--derep_aligned_fraction`,
+`--derep_keeper`) composed into one string for the two dereplication
+processes; `--derep_process_size` is read by the scatter subworkflow to
+size the chunks and is not a tool flag. Publishing directories live in
 the same file, and resources and the retry window in
 `nextflow/conf/base.config`. A site can retune one process without touching
 the pipeline by passing its own config:

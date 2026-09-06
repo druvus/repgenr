@@ -51,7 +51,7 @@ carries the process's `ext.args` closure and its `publishDir`:
 | PHYLO | `{ params.phylo_args }` | `${params.outdir}/phylo`, mode copy |
 | TREE2TAX | `{ params.tree2tax_args }` | `${params.outdir}`, mode copy, pattern `*.tsv` |
 
-The dereplication closure composes the six `derep_*` params into one flag
+The dereplication closure composes five `derep_*` params into one flag
 string: `--tool`, `--primary-ani`, `--secondary-ani`, `--aligned-fraction`,
 `--keeper`, plus `--virus` when `params.mode == 'viral'`.
 `derep_process_size` stays a param read by the scatter subworkflow, since it
