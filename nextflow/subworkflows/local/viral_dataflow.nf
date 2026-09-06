@@ -11,7 +11,7 @@ include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow VIRAL_DATAFLOW {
     main:
-    ch_versions = Channel.empty()
+    def ch_versions = channel.empty()
 
     VACQUIRE()
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
@@ -21,12 +21,12 @@ workflow VIRAL_DATAFLOW {
     // CheckM quality (BV-BRC/NCBI Virus supply no completeness/
     // contamination), so an empty value is passed -- the merge step's
     // quality-aware keeper is skipped on this front either way.
-    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), Channel.value([]))
+    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), channel.value([]))
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = VACQUIRE.out.outgroup.collect().ifEmpty([])
-    ch_og_acc   = VACQUIRE.out.outgroup_accession
+    def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
+    def ch_outgroup = VACQUIRE.out.outgroup.collect().ifEmpty([])
+    def ch_og_acc   = VACQUIRE.out.outgroup_accession
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     ch_versions = ch_versions.mix(PHYLO.out.versions)

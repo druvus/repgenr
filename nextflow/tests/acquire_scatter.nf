@@ -15,6 +15,6 @@ workflow {
     DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
 
     DEREPLICATE_SCATTER.out.reps
-        .map { meta, dir -> dir }
+        .map { _meta, dir -> dir }
         .collectFile(name: 'merged_path.txt', storeDir: params.outdir) { dir -> "${dir}\n" }
 }

@@ -39,7 +39,7 @@ workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
 
-    ch_versions = Channel.empty()
+    def ch_versions = channel.empty()
     if (params.mode == 'viral') {
         VIRAL_DATAFLOW()
         ch_versions = VIRAL_DATAFLOW.out.versions

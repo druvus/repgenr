@@ -10,7 +10,7 @@ include { GENOME   } from '../../modules/local/dataflow/genome'
 
 workflow ACQUIRE {
     main:
-    ch_versions = Channel.empty()
+    def ch_versions = channel.empty()
 
     METADATA()
     ch_versions = ch_versions.mix(METADATA.out.versions)

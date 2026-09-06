@@ -12,7 +12,7 @@ include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow BACTERIAL_DATAFLOW {
     main:
-    ch_versions = Channel.empty()
+    def ch_versions = channel.empty()
 
     ACQUIRE()
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
@@ -20,9 +20,9 @@ workflow BACTERIAL_DATAFLOW {
     DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = ACQUIRE.out.outgroup.collect().ifEmpty([])
-    ch_og_acc   = ACQUIRE.out.outgroup_accession
+    def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
+    def ch_outgroup = ACQUIRE.out.outgroup.collect().ifEmpty([])
+    def ch_og_acc   = ACQUIRE.out.outgroup_accession
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     ch_versions = ch_versions.mix(PHYLO.out.versions)

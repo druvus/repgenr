@@ -13,7 +13,7 @@ workflow PUBLISH_VERSIONS {
 
     main:
     ch_versions
-        .map { it.text }
+        .map { f -> f.text }
         .unique()
         .collectFile(
             name: 'software_versions.yml',

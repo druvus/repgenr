@@ -21,14 +21,14 @@ workflow {
         error "Provide --genomes_dir <DIR> with genome FASTAs."
     }
 
-    ch_genomes = Channel
+    def ch_genomes = channel
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
-        .filter { !it.name.startsWith('._') }   // skip macOS AppleDouble files
+        .filter { f -> !f.name.startsWith('._') }   // skip macOS AppleDouble files
 
-    DEREPLICATE_SCATTER(ch_genomes, Channel.value([]))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value([]))
 
     DEREPLICATE_SCATTER.out.reps
-        .map { meta, dir -> dir }
+        .map { _meta, dir -> dir }
         .collectFile(name: 'merged_path.txt', storeDir: params.outdir) { dir ->
             "${dir}\n"
         }

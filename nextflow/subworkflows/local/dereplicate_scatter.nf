@@ -20,14 +20,14 @@ workflow DEREPLICATE_SCATTER {
     ch_selection  // channel: selection.tsv (quality columns) or Channel.value([])
 
     main:
-    ch_versions = Channel.empty()
+    def ch_versions = channel.empty()
 
     // Group genomes into chunks; a null/zero process size means a single chunk.
     // Coerce because command-line params arrive as strings.
     def requested_size = params.derep_process_size ? (params.derep_process_size as Integer) : 0
     def chunk_size = requested_size > 0 ? requested_size : 1000000
 
-    ch_chunks = ch_genomes
+    def ch_chunks = ch_genomes
         .collect()
         .flatMap { files ->
             files.collate(chunk_size).withIndex().collect { chunk, i ->
@@ -48,14 +48,14 @@ workflow DEREPLICATE_SCATTER {
     // idiom for an optional single file/no-file input (as DEREP_MERGE already
     // does with ch_selection directly, since its own chunk-gather channel has
     // exactly one emission regardless).
-    ch_selection_bc = ch_selection.first()
+    def ch_selection_bc = ch_selection.first()
 
     DEREP_CHUNK(ch_chunks, ch_selection_bc)
     ch_versions = ch_versions.mix(DEREP_CHUNK.out.versions.first())
 
     // Gather every chunk result directory into a single merge input.
-    ch_merge_in = DEREP_CHUNK.out.chunk
-        .map { meta, dir -> dir }
+    def ch_merge_in = DEREP_CHUNK.out.chunk
+        .map { _meta, dir -> dir }
         .collect()
         .map { dirs -> tuple([id: 'merged'], dirs) }
 
