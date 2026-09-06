@@ -46,11 +46,7 @@ process DEREP_CHUNK {
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
 
-    cat > versions.yml <<END_VERSIONS
-"${task.process}":
-    repgenr: \$(repgenr --version | sed 's/repgenr //')
-END_VERSIONS
-    cat tool_versions.yml >> versions.yml
+    repgenr_versions_fragment "${task.process}" tool_versions.yml
     """
 
     stub:

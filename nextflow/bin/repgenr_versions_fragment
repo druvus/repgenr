@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Write versions.yml for the calling Nextflow process: repgenr's own version
+# plus the external tool versions the stage recorded (a tool_versions.yml
+# fragment written by --versions-out or `repgenr versions`).
+#
+# Usage: repgenr_versions_fragment "<task.process>" [tool_versions.yml]
+set -eu
+
+process="$1"
+tools="${2:-tool_versions.yml}"
+
+{
+    printf '"%s":\n' "$process"
+    printf '    repgenr: %s\n' "$(repgenr --version | sed 's/repgenr //')"
+    if [ -f "$tools" ]; then
+        cat "$tools"
+    fi
+} > versions.yml
