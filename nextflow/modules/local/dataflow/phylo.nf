@@ -39,8 +39,10 @@ process PHYLO {
 
     stub:
     def args = task.ext.args ?: ''
+    def opts = task.ext.repgenr_opts ?: ''
     """
     echo "ext.args: ${args}"
+    echo "ext.repgenr_opts: ${opts}"
     mkdir -p tree
     names=\$(ls ${reps_dir}/representatives | sed 's/\\.[^.]*\$//' | paste -sd, -)
     echo "(\${names});" > tree/tree.nwk

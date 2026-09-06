@@ -3,6 +3,11 @@
 // id   -- a slug of the selection target, taken from the argument strings the
 //         user passes to the metadata stages, so published work directories
 //         and task tags name the taxon. Falls back to the mode.
+//         Bacterial: the value after `-ts` in metadata_args, else after
+//         `-tg`, else after `-tf` (most specific rank first). Viral: the
+//         value after `-tg` in vgenome_args, else after `-t` in
+//         vmetadata_args. `target_after(args, flag)` returns the token after
+//         `flag` in `args`, or null when `flag` is absent.
 // mode -- 'bacterial' or 'viral'.
 
 def target_after(String args, String flag) {

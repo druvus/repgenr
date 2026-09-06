@@ -63,8 +63,8 @@ module. The container profiles keep setting `params.repgenr_opts`.
 
 The meta is built once in `main.nf` by a function `run_meta(params)`:
 
-- `id`: a slug of the target. Bacterial: the value after `-tg`, else `-ts`,
-  else `-tf` in `params.metadata_args`; viral: the value after `-tg` in
+- `id`: a slug of the target. Bacterial: the value after `-ts`, else `-tg`,
+  else `-tf` in `params.metadata_args` (most specific rank first); viral: the value after `-tg` in
   `params.vgenome_args`, else after `-t` in `params.vmetadata_args`. Lowercase,
   non-alphanumerics replaced by `_`. Fallback: `params.mode`.
 - `mode`: `params.mode`.
