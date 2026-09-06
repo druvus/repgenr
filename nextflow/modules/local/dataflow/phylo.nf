@@ -8,10 +8,6 @@
 
 process PHYLO {
     tag "phylo"
-    // debug forwards task stdout into Nextflow's own log, which is what
-    // lets an nf-test assertion on process.stdout see the stub's ext.args
-    // echo (the stub's .command.out is otherwise not exposed there).
-    debug true
     label 'process_high'
 
     input:
