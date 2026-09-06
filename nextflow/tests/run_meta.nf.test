@@ -1,0 +1,68 @@
+nextflow_function {
+
+    name "run_meta"
+    script "../subworkflows/local/run_meta.nf"
+    function "run_meta"
+    tag "stub"
+
+    test("bacterial genus target becomes the id") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'bacterial',
+                            metadata_args: '-r 232.0 --gtdb-version bac120 -d rep -l genus -tg Francisella',
+                            vmetadata_args: '', vgenome_args: '']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == [id: 'francisella', mode: 'bacterial']
+        }
+    }
+
+    test("species target wins over family, and is slugged") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'bacterial',
+                            metadata_args: '-l species -tf Francisellaceae -ts novicida-like',
+                            vmetadata_args: '', vgenome_args: '']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result.id == 'novicida_like'
+        }
+    }
+
+    test("viral target comes from vgenome_args, then vmetadata_args") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'viral', metadata_args: '',
+                            vmetadata_args: '-t adenoviridae', vgenome_args: '-tg Mastadenovirus']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == [id: 'mastadenovirus', mode: 'viral']
+        }
+    }
+
+    test("no target falls back to the mode") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'bacterial', metadata_args: '', vmetadata_args: '', vgenome_args: '']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == [id: 'bacterial', mode: 'bacterial']
+        }
+    }
+}

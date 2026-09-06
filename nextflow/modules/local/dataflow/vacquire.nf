@@ -8,15 +8,18 @@
 
 process VACQUIRE {
     label 'process_medium'
-    tag "vacquire"
+    tag "${meta.id}"
     // Raw genomes are large intermediates (they flow on to dereplication); they
     // are not published. The selected representatives are published downstream.
 
+    input:
+    val meta
+
     output:
-    path "out/genomes/*"         , emit: genomes
-    path "out/outgroup/*"        , emit: outgroup, optional: true
-    path "outgroup_accession.txt", emit: outgroup_accession
-    path "versions.yml"          , emit: versions
+    tuple val(meta), path("out/genomes/*")         , emit: genomes
+    tuple val(meta), path("out/outgroup/*")        , emit: outgroup, optional: true
+    tuple val(meta), path("outgroup_accession.txt"), emit: outgroup_accession
+    path "versions.yml"                            , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

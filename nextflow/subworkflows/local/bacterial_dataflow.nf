@@ -11,18 +11,25 @@ include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow BACTERIAL_DATAFLOW {
+    take:
+    ch_meta
+
     main:
     def ch_versions = channel.empty()
 
-    ACQUIRE()
+    ACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
 
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
+    // Glue until Task 5: the scatter still takes bare paths.
+    def ch_genome_files = ACQUIRE.out.genomes.flatMap { _meta, files -> files }
+    def ch_selection    = ACQUIRE.out.selection.map { _meta, sel -> sel }
+    DEREPLICATE_SCATTER(ch_genome_files, ch_selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
+    // Glue until Task 6: phylo and tree2tax still take bare paths.
     def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
-    def ch_outgroup = ACQUIRE.out.outgroup.collect().ifEmpty([])
-    def ch_og_acc   = ACQUIRE.out.outgroup_accession
+    def ch_outgroup = ACQUIRE.out.outgroup.map { _meta, files -> files }
+    def ch_og_acc   = ACQUIRE.out.outgroup_accession.map { _meta, acc -> acc }
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     ch_versions = ch_versions.mix(PHYLO.out.versions)

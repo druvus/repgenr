@@ -1,0 +1,28 @@
+// The run-level meta map: one per pipeline run, carried on every channel.
+//
+// id   -- a slug of the selection target, taken from the argument strings the
+//         user passes to the metadata stages, so published work directories
+//         and task tags name the taxon. Falls back to the mode.
+// mode -- 'bacterial' or 'viral'.
+
+def target_after(String args, String flag) {
+    def tokens = args ? args.tokenize() : []
+    def i = tokens.indexOf(flag)
+    return (i >= 0 && i + 1 < tokens.size()) ? tokens[i + 1] : null
+}
+
+def run_meta(Map params) {
+    def target = null
+    if (params.mode == 'viral') {
+        target = target_after(params.vgenome_args ?: '', '-tg')
+            ?: target_after(params.vmetadata_args ?: '', '-t')
+    }
+    else {
+        def bact = params.metadata_args ?: ''
+        target = target_after(bact, '-ts')
+            ?: target_after(bact, '-tg')
+            ?: target_after(bact, '-tf')
+    }
+    def id = (target ?: params.mode).toLowerCase().replaceAll('[^a-z0-9]+', '_')
+    return [id: id, mode: params.mode]
+}

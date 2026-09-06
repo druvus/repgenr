@@ -10,10 +10,13 @@ include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow VIRAL_DATAFLOW {
+    take:
+    ch_meta
+
     main:
     def ch_versions = channel.empty()
 
-    VACQUIRE()
+    VACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
     // vmetadata writes no selection.tsv (unlike the bacterial metadata stage)
@@ -21,12 +24,15 @@ workflow VIRAL_DATAFLOW {
     // CheckM quality (BV-BRC/NCBI Virus supply no completeness/
     // contamination), so an empty value is passed -- the merge step's
     // quality-aware keeper is skipped on this front either way.
-    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), channel.value([]))
+    // Glue until Task 5: the scatter still takes bare paths.
+    def ch_genome_files = VACQUIRE.out.genomes.flatMap { _meta, files -> (files instanceof List ? files : [files]) }
+    DEREPLICATE_SCATTER(ch_genome_files, channel.value([]))
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
+    // Glue until Task 6: phylo and tree2tax still take bare paths.
     def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
-    def ch_outgroup = VACQUIRE.out.outgroup.collect().ifEmpty([])
-    def ch_og_acc   = VACQUIRE.out.outgroup_accession
+    def ch_outgroup = VACQUIRE.out.outgroup.map { _meta, files -> files }.ifEmpty([])
+    def ch_og_acc   = VACQUIRE.out.outgroup_accession.map { _meta, acc -> acc }
 
     PHYLO(ch_reps, ch_outgroup, ch_og_acc)
     ch_versions = ch_versions.mix(PHYLO.out.versions)

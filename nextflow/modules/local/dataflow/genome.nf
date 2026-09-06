@@ -7,17 +7,17 @@
 
 process GENOME {
     label 'process_medium'
-    tag "genome"
+    tag "${meta.id}"
     // Raw genomes are large intermediates (they flow on to dereplication); they
     // are not published. The selected representatives are published downstream.
 
     input:
-    path selection
+    tuple val(meta), path(selection)
 
     output:
-    path "out/genomes/*" , emit: genomes
-    path "out/outgroup/*", emit: outgroup, optional: true
-    path "versions.yml"  , emit: versions
+    tuple val(meta), path("out/genomes/*") , emit: genomes
+    tuple val(meta), path("out/outgroup/*"), emit: outgroup, optional: true
+    path "versions.yml"                    , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

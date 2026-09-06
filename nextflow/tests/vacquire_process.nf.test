@@ -7,14 +7,24 @@ nextflow_process {
     options "-stub"
 
     test("emits viral genomes, the outgroup, and its accession") {
+        when {
+            process {
+                """
+                input[0] = [id: 'test', mode: 'viral']
+                """
+            }
+        }
         then {
             assert process.success
             assert snapshot(process.out).match()
-            def genomes = [process.out.genomes.get(0)].flatten().collect { file(it).name }.sort()
-            assert genomes == ['Vir_gen_sp1_iso1.fasta', 'Vir_gen_sp2_iso2.fasta']
-            def outgroup = [process.out.outgroup.get(0)].flatten().collect { file(it).name }
+            with(process.out.genomes.get(0)) {
+                assert get(0).id == 'test'
+                def genomes = [get(1)].flatten().collect { p -> file(p).name }.sort()
+                assert genomes == ['Vir_gen_sp1_iso1.fasta', 'Vir_gen_sp2_iso2.fasta']
+            }
+            def outgroup = [process.out.outgroup.get(0).get(1)].flatten().collect { p -> file(p).name }
             assert outgroup == ['Vir_out_grp_iso9.fasta']
-            assert path(process.out.outgroup_accession.get(0)).text.trim() == 'iso9'
+            assert path(process.out.outgroup_accession.get(0).get(1)).text.trim() == 'iso9'
         }
     }
 }

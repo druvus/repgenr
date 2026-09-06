@@ -8,12 +8,15 @@
 
 process METADATA {
     label 'process_low'
-    tag "metadata"
+    tag "${meta.id}"
+
+    input:
+    val meta
 
     output:
-    path "selection.tsv"        , emit: selection
-    path "outgroup_accession.txt", emit: outgroup_accession
-    path "versions.yml"         , emit: versions
+    tuple val(meta), path("selection.tsv")         , emit: selection
+    tuple val(meta), path("outgroup_accession.txt"), emit: outgroup_accession
+    path "versions.yml"                            , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
