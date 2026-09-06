@@ -29,9 +29,9 @@ process DEREP_MERGE {
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
     # One --chunk-dir per staged chunk directory.
-    args=""
+    chunk_args=""
     for d in chunks/*; do
-        args="\$args --chunk-dir \$d"
+        chunk_args="\$chunk_args --chunk-dir \$d"
     done
 
     # selection.tsv is optional: no bacterial ACQUIRE selection (viral path, or
@@ -41,7 +41,7 @@ process DEREP_MERGE {
     [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
 
     repgenr ${opts} dereplicate-merge \\
-        \$args \\
+        \$chunk_args \\
         --out ${prefix} \\
         ${args} \\
         \$sel \\
