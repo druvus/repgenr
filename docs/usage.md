@@ -135,6 +135,11 @@ process {
 the hook for the top-level repgenr options every process prepends (the
 container profiles set it through `--repgenr_opts`).
 
+An `ext.args` override replaces the whole string for that process; for the
+dereplication processes that means every flag not repeated in the override
+falls back to the repgenr CLI default rather than to the `--derep_*`
+parameter.
+
 Every channel carries a meta map built once per run: `id` is a slug of the
 selection target (`francisella` for `-tg francisella`), `mode` is
 `bacterial` or `viral`. Task tags and the dereplication chunk names use it.

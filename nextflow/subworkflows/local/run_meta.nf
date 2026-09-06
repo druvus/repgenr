@@ -28,6 +28,7 @@ def run_meta(Map params) {
             ?: target_after(bact, '-tg')
             ?: target_after(bact, '-tf')
     }
-    def id = (target ?: params.mode).toLowerCase().replaceAll('[^a-z0-9]+', '_')
+    def stripped = (target ?: params.mode).replaceAll('^[\'"]+|[\'"]+$', '')
+    def id = stripped.toLowerCase().replaceAll('[^a-z0-9]+', '_').replaceAll('^_+|_+$', '')
     return [id: id, mode: params.mode]
 }

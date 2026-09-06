@@ -36,7 +36,7 @@ process GENOME {
 
     stub:
     """
-    echo "ext.args:"
+    echo "ext.args: (none; GENOME takes no tool flags)"
     mkdir -p out/genomes out/outgroup
     tail -n +2 ${selection} | while IFS=\$'\\t' read -r acc fam gen sp og fname completeness contamination; do
         [ -z "\$fname" ] && continue

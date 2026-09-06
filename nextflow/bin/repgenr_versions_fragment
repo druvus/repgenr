@@ -4,14 +4,15 @@
 # fragment written by --versions-out or `repgenr versions`).
 #
 # Usage: repgenr_versions_fragment "<task.process>" [tool_versions.yml]
-set -eu
+set -euo pipefail
 
 process="$1"
 tools="${2:-tool_versions.yml}"
+repgenr_version="$(repgenr --version | sed 's/repgenr //')"
 
 {
     printf '"%s":\n' "$process"
-    printf '    repgenr: %s\n' "$(repgenr --version | sed 's/repgenr //')"
+    printf '    repgenr: %s\n' "$repgenr_version"
     if [ -f "$tools" ]; then
         cat "$tools"
     fi

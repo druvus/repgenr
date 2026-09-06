@@ -30,7 +30,9 @@ All notable changes to RepGenR are documented here. The format follows
   resources and the retry window sit in `nextflow/conf/base.config`. The
   Nextflow floor is 26.04 (`!>=26.04.0`) with nf-schema 2.6.1, and the layer
   lints clean under the strict parser. Command lines and parameters are
-  unchanged; code that included a RepGenR module or subworkflow directly must
+  unchanged; per-stage `versions.yml` fragments are no longer copied under
+  `--outdir` (the collected `pipeline_info/software_versions.yml` remains);
+  code that included a RepGenR module or subworkflow directly must
   adapt to the tuple shapes.
 
 ### Fixed

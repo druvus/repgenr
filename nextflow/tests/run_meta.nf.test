@@ -52,6 +52,22 @@ nextflow_function {
         }
     }
 
+    test("a quoted target is stripped and slugged without stray underscores") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'bacterial',
+                            metadata_args: '-l species -ts "novicida-like"',
+                            vmetadata_args: '', vgenome_args: '']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result.id == 'novicida_like'
+        }
+    }
+
     test("no target falls back to the mode") {
         when {
             function {
