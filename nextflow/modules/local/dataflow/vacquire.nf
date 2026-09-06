@@ -18,13 +18,19 @@ process VACQUIRE {
     path "outgroup_accession.txt", emit: outgroup_accession
     path "versions.yml"          , emit: versions
 
+    when:
+    task.ext.when == null || task.ext.when
+
     script:
+    def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
-    repgenr ${params.repgenr_opts} vmetadata -wd wd ${params.vmetadata_args}
-    repgenr ${params.repgenr_opts} vgenome   -wd wd ${params.vgenome_args}
+    repgenr ${opts} vmetadata -wd wd ${args}
+    repgenr ${opts} vgenome   -wd wd ${args2}
 
     mkdir -p out
     cp -r wd/genomes out/genomes
@@ -44,7 +50,11 @@ END_VERSIONS
     """
 
     stub:
+    def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
     """
+    echo "ext.args: ${args}"
+    echo "ext.args2: ${args2}"
     mkdir -p out/genomes out/outgroup
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp1_iso1.fasta
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp2_iso2.fasta

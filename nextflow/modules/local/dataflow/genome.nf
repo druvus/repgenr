@@ -19,12 +19,16 @@ process GENOME {
     path "out/outgroup/*", emit: outgroup, optional: true
     path "versions.yml"  , emit: versions
 
+    when:
+    task.ext.when == null || task.ext.when
+
     script:
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
-    repgenr ${params.repgenr_opts} genome-fetch --selection ${selection} --out out \\
+    repgenr ${opts} genome-fetch --selection ${selection} --out out \\
         --versions-out tool_versions.yml
 
     cat > versions.yml <<END_VERSIONS
@@ -36,6 +40,7 @@ END_VERSIONS
 
     stub:
     """
+    echo "ext.args:"
     mkdir -p out/genomes out/outgroup
     tail -n +2 ${selection} | while IFS=\$'\\t' read -r acc fam gen sp og fname completeness contamination; do
         [ -z "\$fname" ] && continue

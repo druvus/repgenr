@@ -4,11 +4,12 @@
 // channel files: the tree, the merged representatives' clusters.tsv (for
 // --include-dereplicated) and the outgroup directory. Emits tree2tax.tsv and
 // genomes_map.tsv as channel outputs; there is no shared working directory.
+// Tool flags arrive as task.ext.args from conf/modules.config; publishing is
+// configured there too.
 
 process TREE2TAX {
     label 'process_low'
     tag "tree2tax"
-    publishDir "${params.outdir}", mode: 'copy', pattern: '*.tsv'
 
     input:
     path tree
@@ -21,17 +22,22 @@ process TREE2TAX {
     path "genomes_map.tsv", emit: genomes_map
     path "versions.yml"   , emit: versions
 
+    when:
+    task.ext.when == null || task.ext.when
+
     script:
+    def args = task.ext.args ?: ''
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
-    repgenr ${params.repgenr_opts} tree2tax-relations \\
+    repgenr ${opts} tree2tax-relations \\
         --tree ${tree} \\
         --clusters ${reps_dir}/clusters.tsv \\
         --outgroup-dir outgroup \\
         --outgroup-accession ${outgroup_accession} \\
-        -o . ${params.tree2tax_args} \\
+        -o . ${args} \\
         --versions-out tool_versions.yml
 
     cat > versions.yml <<END_VERSIONS
@@ -42,7 +48,9 @@ END_VERSIONS
     """
 
     stub:
+    def args = task.ext.args ?: ''
     """
+    echo "ext.args: ${args}"
     printf 'child\\tparent\\n' > tree2tax.tsv
     for f in ${reps_dir}/representatives/*; do
         leaf=\$(basename \$f | sed 's/\\.[^.]*\$//')

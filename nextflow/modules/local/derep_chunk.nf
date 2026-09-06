@@ -2,7 +2,8 @@
 //
 // Data-channel module: genome FASTAs are staged in as channel inputs (not read
 // from a shared workdir), and the chunk result directory is emitted as a typed
-// output other processes consume. Wraps `repgenr dereplicate-chunk`.
+// output other processes consume. Wraps `repgenr dereplicate-chunk`. Tool
+// flags arrive as task.ext.args from conf/modules.config.
 
 process DEREP_CHUNK {
     label 'process_high'
@@ -16,9 +17,12 @@ process DEREP_CHUNK {
     tuple val(meta), path("${meta.id}"), emit: chunk
     path 'versions.yml'                , emit: versions
 
+    when:
+    task.ext.when == null || task.ext.when
+
     script:
-    // Virus-tuned tool parameters whenever the viral pipeline is running.
-    def virus_flag = params.mode == 'viral' ? '--virus' : ''
+    def args = task.ext.args ?: ''
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
@@ -34,14 +38,10 @@ process DEREP_CHUNK {
     sel=""
     [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
 
-    repgenr ${params.repgenr_opts} dereplicate-chunk \\
+    repgenr ${opts} dereplicate-chunk \\
         --genomes-fofn genomes.fofn \\
         --out ${meta.id} \\
-        --tool ${params.derep_tool} ${virus_flag} \\
-        --primary-ani ${params.derep_primary_ani} \\
-        --secondary-ani ${params.derep_secondary_ani} \\
-        --aligned-fraction ${params.derep_aligned_fraction} \\
-        --keeper ${params.derep_keeper} \\
+        ${args} \\
         \$sel \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
@@ -54,7 +54,9 @@ END_VERSIONS
     """
 
     stub:
+    def args = task.ext.args ?: ''
     """
+    echo "ext.args: ${args}"
     mkdir -p ${meta.id}/representatives
     printf 'representative\\tmember\\n' > ${meta.id}/clusters.tsv
     printf 'genome\\tstatus\\n' > ${meta.id}/genome_status.tsv
