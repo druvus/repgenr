@@ -7,17 +7,15 @@
 // conf/modules.config; publishing is configured there too.
 
 process PHYLO {
-    tag "phylo"
+    tag "${meta.id}"
     label 'process_high'
 
     input:
-    path reps_dir
-    path outgroup, stageAs: 'outgroup/*'
-    path outgroup_accession
+    tuple val(meta), path(reps_dir), path(outgroup, stageAs: 'outgroup/*'), path(outgroup_accession)
 
     output:
-    path "tree/tree.nwk", emit: tree
-    path "versions.yml" , emit: versions
+    tuple val(meta), path("tree/tree.nwk"), emit: tree
+    path "versions.yml"                   , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

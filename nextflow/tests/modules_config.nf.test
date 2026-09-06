@@ -11,9 +11,12 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = file("${projectDir}/nextflow/tests/data/derep_out")
-                input[1] = file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta")
-                input[2] = file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
                 """
             }
         }

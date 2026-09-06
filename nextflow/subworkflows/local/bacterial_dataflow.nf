@@ -23,15 +23,17 @@ workflow BACTERIAL_DATAFLOW {
     DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    // Glue until Task 6: phylo and tree2tax still take bare paths.
-    def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
-    def ch_outgroup = ACQUIRE.out.outgroup.map { _meta, files -> files }
-    def ch_og_acc   = ACQUIRE.out.outgroup_accession.map { _meta, acc -> acc }
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .join(ACQUIRE.out.outgroup, by: 0)
+        .join(ACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
+    PHYLO(ch_phylo_in)
     ch_versions = ch_versions.mix(PHYLO.out.versions)
 
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+    // [meta, tree] joined with [meta, reps, outgroup, accession]
+    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+
+    TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:

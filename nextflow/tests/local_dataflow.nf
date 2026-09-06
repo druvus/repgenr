@@ -30,12 +30,10 @@ workflow {
 
     DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
 
-    def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
-    def ch_outgroup = channel.value([])                    // no outgroup in the test
-    def ch_og_acc   = channel.fromPath(params.empty_accession)
-
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .map { m, dir -> tuple(m, dir, [], file(params.empty_accession)) }
+    PHYLO(ch_phylo_in)
+    TREE2TAX(PHYLO.out.tree.join(ch_phylo_in, by: 0))
 
     def ch_versions = DEREPLICATE_SCATTER.out.versions
         .mix(PHYLO.out.versions, TREE2TAX.out.versions)

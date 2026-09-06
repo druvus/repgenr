@@ -9,18 +9,15 @@
 
 process TREE2TAX {
     label 'process_low'
-    tag "tree2tax"
+    tag "${meta.id}"
 
     input:
-    path tree
-    path reps_dir
-    path outgroup, stageAs: 'outgroup/*'
-    path outgroup_accession
+    tuple val(meta), path(tree), path(reps_dir), path(outgroup, stageAs: 'outgroup/*'), path(outgroup_accession)
 
     output:
-    path "tree2tax.tsv"   , emit: tree2tax
-    path "genomes_map.tsv", emit: genomes_map
-    path "versions.yml"   , emit: versions
+    tuple val(meta), path("tree2tax.tsv")   , emit: tree2tax
+    tuple val(meta), path("genomes_map.tsv"), emit: genomes_map
+    path "versions.yml"                     , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

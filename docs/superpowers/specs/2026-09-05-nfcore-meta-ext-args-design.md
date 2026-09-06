@@ -109,12 +109,14 @@ Subworkflows:
   [fasta...])` and `tuple(meta, selection_or_[])`, derives chunk metas, and
   emits `reps` as `tuple(meta, dir)` with the run meta (not the merge meta),
   so downstream joins on the run meta work.
-- `PHYLO(tuple(meta, reps_dir), tuple(meta, [outgroup...]), tuple(meta,
-  outgroup_accession))` and `TREE2TAX(tuple(meta, tree), tuple(meta,
-  reps_dir), tuple(meta, [outgroup...]), tuple(meta, outgroup_accession))`.
-  The dataflow subworkflows build these with `.join(by: 0)` on the meta
-  rather than the current `.map { meta, dir -> dir }` reshapes and
-  `.collect().ifEmpty([])`.
+- `PHYLO(tuple(meta, reps_dir, [outgroup...], outgroup_accession))` and
+  `TREE2TAX(tuple(meta, tree, reps_dir, [outgroup...], outgroup_accession))`:
+  one joined tuple per process, built in the dataflow subworkflows with
+  `.join(by: 0)` on the meta, which is the nf-core shape for a process with
+  several per-run inputs. The dereplication processes keep `selection.tsv` as a
+  bare auxiliary input (reference-file style), and DEREP_MERGE's output
+  directory is `task.ext.prefix` (set to `merged` in `conf/modules.config`) so
+  published paths do not change.
 - Both dataflow subworkflows take `ch_meta` from `main.nf`.
 - `PUBLISH_VERSIONS` is unchanged.
 

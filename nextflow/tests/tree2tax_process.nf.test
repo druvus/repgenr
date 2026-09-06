@@ -10,22 +10,28 @@ nextflow_process {
         when {
             process {
                 """
-                input[0] = file("${projectDir}/nextflow/tests/data/tree.nwk")
-                input[1] = file("${projectDir}/nextflow/tests/data/derep_out")
-                input[2] = file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta")
-                input[3] = file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
                 """
             }
         }
         then {
             assert process.success
             assert snapshot(process.out).match()
-            def relations = path(process.out.tree2tax.get(0)).readLines()
-            assert relations[0] == 'child\tparent'
-            assert relations.size() == 3  // header + one row per representative
-            def genome_map = path(process.out.genomes_map.get(0)).readLines()
+            with(process.out.tree2tax.get(0)) {
+                assert get(0).id == 'test'
+                def relations = path(get(1)).readLines()
+                assert relations[0] == 'child\tparent'
+                assert relations.size() == 3  // header + one row per representative
+            }
+            def genome_map = path(process.out.genomes_map.get(0).get(1)).readLines()
             assert genome_map.size() == 2
-            assert genome_map.every { it.contains('\t') }
+            assert genome_map.every { row -> row.contains('\t') }
         }
     }
 }

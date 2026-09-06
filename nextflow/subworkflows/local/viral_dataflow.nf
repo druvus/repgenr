@@ -27,15 +27,24 @@ workflow VIRAL_DATAFLOW {
     DEREPLICATE_SCATTER(ch_genomes, ch_no_selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    // Glue until Task 6: phylo and tree2tax still take bare paths.
-    def ch_reps     = DEREPLICATE_SCATTER.out.reps.map { _meta, dir -> dir }
-    def ch_outgroup = VACQUIRE.out.outgroup.map { _meta, files -> files }.ifEmpty([])
-    def ch_og_acc   = VACQUIRE.out.outgroup_accession.map { _meta, acc -> acc }
+    def ch_outgroup = ch_genomes
+        .map { meta, _files -> meta }
+        .join(VACQUIRE.out.outgroup, by: 0, remainder: true)
+        .map { meta, files ->
+            def list = files == null ? [] : (files instanceof List ? files : [files])
+            tuple(meta, list)
+        }
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .join(ch_outgroup, by: 0)
+        .join(VACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
+    PHYLO(ch_phylo_in)
     ch_versions = ch_versions.mix(PHYLO.out.versions)
 
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+    // [meta, tree] joined with [meta, reps, outgroup, accession]
+    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+
+    TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:
