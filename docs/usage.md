@@ -105,6 +105,56 @@ nextflow run nextflow/tests/dereplicate_scatter.nf -c nextflow/nextflow.config \
 
 Add `-stub` to exercise the wiring without running the tools.
 
+### Configuring processes
+
+Each Nextflow process reads its tool flags from `task.ext.args`, which
+`nextflow/conf/modules.config` maps from the user-facing parameters:
+`--metadata_args`, `--vmetadata_args` and `--vgenome_args`, `--phylo_args`,
+`--tree2tax_args`, and five dereplication parameters (`--derep_tool`,
+`--derep_primary_ani`, `--derep_secondary_ani`, `--derep_aligned_fraction`,
+`--derep_keeper`) composed into one string for the two dereplication
+processes; `--derep_process_size` is read by the scatter subworkflow to
+size the chunks and is not a tool flag. Publishing directories live in
+the same file, and resources and the retry window in
+`nextflow/conf/base.config`. A site can retune one process without touching
+the pipeline by passing its own config:
+
+```groovy
+// site.config
+process {
+    withName: 'PHYLO' {
+        ext.args = '--treebuilder iqtree --bootstrap 1000'
+    }
+    withName: 'DEREP_CHUNK|DEREP_MERGE' {
+        ext.args = '--tool galah --secondary-ani 0.98'
+    }
+}
+```
+
+`nextflow run nextflow/main.nf -c site.config ...`. `ext.repgenr_opts` is
+the hook for the top-level repgenr options every process prepends (the
+container profiles set it through `--repgenr_opts`).
+
+An `ext.args` override replaces the whole string for that process; for the
+dereplication processes that means every flag not repeated in the override
+falls back to the repgenr CLI default rather than to the `--derep_*`
+parameter.
+
+Every channel carries a meta map built once per run: `id` is a slug of the
+selection target (`francisella` for `-tg francisella`), `mode` is
+`bacterial` or `viral`. Task tags and the dereplication chunk names use it.
+
+Nextflow resolves both `bin/` and the default config relative to the
+launched script. The harness scripts under `nextflow/tests/` therefore reach
+the versions helper through the symlink
+`nextflow/tests/bin/repgenr_versions_fragment`, and running one of them
+directly needs `-c nextflow/nextflow.config` (nf-test supplies the config
+itself). Any future script added to `nextflow/bin/` needs its own link under
+`nextflow/tests/bin/`.
+
+The pipeline requires Nextflow 26.04 or later (`nextflowVersion =
+'!>=26.04.0'`).
+
 ### Pipeline structure
 
 `nextflow/main.nf` dispatches by `--mode` to one of two data-channel subworkflows

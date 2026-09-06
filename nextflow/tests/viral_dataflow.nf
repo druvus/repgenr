@@ -7,7 +7,8 @@
 nextflow.enable.dsl = 2
 
 include { VIRAL_DATAFLOW } from '../subworkflows/local/viral_dataflow'
+include { run_meta       } from '../subworkflows/local/run_meta'
 
 workflow {
-    VIRAL_DATAFLOW()
+    VIRAL_DATAFLOW(channel.value(run_meta(params)))
 }

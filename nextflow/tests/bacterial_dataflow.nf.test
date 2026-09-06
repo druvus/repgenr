@@ -22,6 +22,11 @@ nextflow_pipeline {
             // every process's versions.yml fragment is collected and published
             assert path("$outputDir/pipeline_info/software_versions.yml").exists()
             assert path("$outputDir/pipeline_info/software_versions.yml").text.contains("repgenr")
+            // The run meta id built from metadata_args under the test profile
+            // ('-tg francisella') tags every task through to TREE2TAX.
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains('TREE2TAX (francisella)') }
+            assert names.any { n -> n.contains('DEREP_MERGE (francisella.merged)') }
         }
     }
 }

@@ -156,6 +156,9 @@ available via `--vmetadata_args "--source bvbrc"`). Profiles: `standard` (local)
 the tools in pinned images). Resource labels (`process_low/medium/high`) are
 tuned per profile; heavy aligners such as Cactus use `process_high`. Set
 `--derep_process_size` to scatter dereplication across tasks for large inputs.
+Nextflow 26.04 or later is required. Per-process tool flags and publishing
+are configured in `nextflow/conf/modules.config` (see `docs/usage.md`,
+"Configuring processes").
 
 ## Development
 

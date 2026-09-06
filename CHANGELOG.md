@@ -22,6 +22,18 @@ All notable changes to RepGenR are documented here. The format follows
   flag, then accession. The same `--limit` therefore returns a different,
   better set than before. On the API path the per-genome quality cards are
   fetched for every candidate before the cut.
+- **Nextflow layer in nf-core shape.** Every channel carries a run-level meta
+  map (`id` from the selection target, `mode`), processes exchange
+  `tuple val(meta), path(...)`, tool flags reach processes as
+  `task.ext.args` mapped from the unchanged parameters in
+  `nextflow/conf/modules.config` (where publishing now lives too), and
+  resources and the retry window sit in `nextflow/conf/base.config`. The
+  Nextflow floor is 26.04 (`!>=26.04.0`) with nf-schema 2.6.1, and the layer
+  lints clean under the strict parser. Command lines and parameters are
+  unchanged; per-stage `versions.yml` fragments are no longer copied under
+  `--outdir` (the collected `pipeline_info/software_versions.yml` remains);
+  code that included a RepGenR module or subworkflow directly must
+  adapt to the tuple shapes.
 
 ### Fixed
 - Six small defects noted in the 2026-09-01 audit's self-review: `phylo`
@@ -32,6 +44,11 @@ All notable changes to RepGenR are documented here. The format follows
   `--bootstrap` values below its floor of 1000 before running; the Wave image
   cache is keyed by platform as well as conda spec; and a failure inside the
   tool-output read loop kills the child process before the error propagates.
+
+### Notes
+- With the 26.04 floor, moving version reporting to `eval()` outputs on the
+  `versions` topic costs nothing in compatibility and is the natural next step
+  for the Nextflow layer.
 
 ## [3.0.0] - 2026-09-04
 

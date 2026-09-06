@@ -21,20 +21,21 @@ workflow {
     if (!params.genomes_dir) {
         error "Provide --genomes_dir <DIR> with genome FASTAs."
     }
-    ch_genomes = Channel
+    def meta = [id: 'local', mode: 'bacterial']
+    def ch_genomes = channel
         .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
-        .filter { !it.name.startsWith('._') }
+        .filter { f -> !f.name.startsWith('._') }
+        .collect()
+        .map { files -> tuple(meta, files) }
 
-    DEREPLICATE_SCATTER(ch_genomes, Channel.value([]))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
 
-    ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = Channel.value([])                       // no outgroup in the test
-    ch_og_acc   = Channel.fromPath(params.empty_accession)
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .map { m, dir -> tuple(m, dir, [], file(params.empty_accession)) }
+    PHYLO(ch_phylo_in)
+    TREE2TAX(PHYLO.out.tree.join(ch_phylo_in, by: 0))
 
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
-
-    ch_versions = DEREPLICATE_SCATTER.out.versions
+    def ch_versions = DEREPLICATE_SCATTER.out.versions
         .mix(PHYLO.out.versions, TREE2TAX.out.versions)
     PUBLISH_VERSIONS(ch_versions)
 }

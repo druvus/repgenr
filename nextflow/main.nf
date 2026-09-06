@@ -14,6 +14,7 @@ include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
 include { BACTERIAL_DATAFLOW } from './subworkflows/local/bacterial_dataflow'
 include { VIRAL_DATAFLOW     } from './subworkflows/local/viral_dataflow'
 include { PUBLISH_VERSIONS   } from './subworkflows/local/publish_versions'
+include { run_meta           } from './subworkflows/local/run_meta'
 
 workflow {
     // Print usage and exit before validation, so `--help` needs no other params.
@@ -39,13 +40,15 @@ workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
 
-    ch_versions = Channel.empty()
+    def ch_meta = channel.value(run_meta(params))
+
+    def ch_versions = channel.empty()
     if (params.mode == 'viral') {
-        VIRAL_DATAFLOW()
+        VIRAL_DATAFLOW(ch_meta)
         ch_versions = VIRAL_DATAFLOW.out.versions
     }
     else {
-        BACTERIAL_DATAFLOW()
+        BACTERIAL_DATAFLOW(ch_meta)
         ch_versions = BACTERIAL_DATAFLOW.out.versions
     }
 

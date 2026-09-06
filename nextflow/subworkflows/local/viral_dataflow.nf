@@ -10,28 +10,41 @@ include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow VIRAL_DATAFLOW {
-    main:
-    ch_versions = Channel.empty()
+    take:
+    ch_meta
 
-    VACQUIRE()
+    main:
+    def ch_versions = channel.empty()
+
+    VACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(VACQUIRE.out.versions)
 
-    // vmetadata writes no selection.tsv (unlike the bacterial metadata stage)
-    // and VACQUIRE emits no selection channel; viral genomes also carry no
-    // CheckM quality (BV-BRC/NCBI Virus supply no completeness/
-    // contamination), so an empty value is passed -- the merge step's
-    // quality-aware keeper is skipped on this front either way.
-    DEREPLICATE_SCATTER(VACQUIRE.out.genomes.flatten(), Channel.value([]))
+    def ch_genomes = VACQUIRE.out.genomes
+        .map { meta, files -> tuple(meta, files instanceof List ? files : [files]) }
+    // vmetadata writes no selection.tsv and viral genomes carry no CheckM
+    // quality, so the keeper input is an empty list under the run meta.
+    def ch_no_selection = ch_meta.map { meta -> tuple(meta, []) }
+    DEREPLICATE_SCATTER(ch_genomes, ch_no_selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = VACQUIRE.out.outgroup.collect().ifEmpty([])
-    ch_og_acc   = VACQUIRE.out.outgroup_accession
+    def ch_outgroup = ch_genomes
+        .map { meta, _files -> meta }
+        .join(VACQUIRE.out.outgroup, by: 0, remainder: true)
+        .map { meta, files ->
+            def list = files == null ? [] : (files instanceof List ? files : [files])
+            tuple(meta, list)
+        }
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .join(ch_outgroup, by: 0)
+        .join(VACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
+    PHYLO(ch_phylo_in)
     ch_versions = ch_versions.mix(PHYLO.out.versions)
 
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+    // [meta, tree] joined with [meta, reps, outgroup, accession]
+    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+
+    TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:

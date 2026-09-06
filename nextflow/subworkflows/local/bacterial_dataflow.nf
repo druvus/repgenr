@@ -11,23 +11,29 @@ include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow BACTERIAL_DATAFLOW {
-    main:
-    ch_versions = Channel.empty()
+    take:
+    ch_meta
 
-    ACQUIRE()
+    main:
+    def ch_versions = channel.empty()
+
+    ACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
 
     DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
-    ch_reps     = DEREPLICATE_SCATTER.out.reps.map { meta, dir -> dir }
-    ch_outgroup = ACQUIRE.out.outgroup.collect().ifEmpty([])
-    ch_og_acc   = ACQUIRE.out.outgroup_accession
+    def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
+        .join(ACQUIRE.out.outgroup, by: 0)
+        .join(ACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_reps, ch_outgroup, ch_og_acc)
+    PHYLO(ch_phylo_in)
     ch_versions = ch_versions.mix(PHYLO.out.versions)
 
-    TREE2TAX(PHYLO.out.tree, ch_reps, ch_outgroup, ch_og_acc)
+    // [meta, tree] joined with [meta, reps, outgroup, accession]
+    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+
+    TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:

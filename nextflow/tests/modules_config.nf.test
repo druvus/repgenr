@@ -1,12 +1,13 @@
 nextflow_process {
 
-    name "PHYLO (stub)"
+    name "ext.args reaches the process command line"
     script "../modules/local/dataflow/phylo.nf"
     tag "stub"
     process "PHYLO"
     options "-stub"
+    config "./modules_config_override.config"
 
-    test("emits a Newick tree naming every representative") {
+    test("a withName ext.args override and params.repgenr_opts are what the stub echoes") {
         when {
             process {
                 """
@@ -21,14 +22,8 @@ nextflow_process {
         }
         then {
             assert process.success
-            assert snapshot(process.out).match()
-            with(process.out.tree.get(0)) {
-                assert get(0).id == 'test'
-                def newick = path(get(1)).text.trim()
-                assert newick.endsWith(';')
-                assert newick.contains('Fam_Gen_sp1_GCF_000001.1')
-                assert newick.contains('Fam_Gen_sp2_GCF_000002.1')
-            }
+            assert process.stdout.any { line -> line.contains('ext.args: --treebuilder faketree-from-config') }
+            assert process.stdout.any { line -> line.contains('ext.repgenr_opts: --quiet') }
         }
     }
 }

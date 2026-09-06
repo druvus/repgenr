@@ -8,23 +8,32 @@
 
 process VACQUIRE {
     label 'process_medium'
-    tag "vacquire"
+    tag "${meta.id}"
     // Raw genomes are large intermediates (they flow on to dereplication); they
     // are not published. The selected representatives are published downstream.
 
+    input:
+    val meta
+
     output:
-    path "out/genomes/*"         , emit: genomes
-    path "out/outgroup/*"        , emit: outgroup, optional: true
-    path "outgroup_accession.txt", emit: outgroup_accession
-    path "versions.yml"          , emit: versions
+    tuple val(meta), path("out/genomes/*")         , emit: genomes
+    tuple val(meta), path("out/outgroup/*")        , emit: outgroup, optional: true
+    tuple val(meta), path("outgroup_accession.txt"), emit: outgroup_accession
+    path "versions.yml"                            , emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
 
     script:
+    def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
-    repgenr ${params.repgenr_opts} vmetadata -wd wd ${params.vmetadata_args}
-    repgenr ${params.repgenr_opts} vgenome   -wd wd ${params.vgenome_args}
+    repgenr ${opts} vmetadata -wd wd ${args}
+    repgenr ${opts} vgenome   -wd wd ${args2}
 
     mkdir -p out
     cp -r wd/genomes out/genomes
@@ -36,15 +45,15 @@ process VACQUIRE {
     fi
 
     repgenr versions -wd wd --versions-out tool_versions.yml
-    cat > versions.yml <<END_VERSIONS
-"${task.process}":
-    repgenr: \$(repgenr --version | sed 's/repgenr //')
-END_VERSIONS
-    cat tool_versions.yml >> versions.yml
+    repgenr_versions_fragment "${task.process}" tool_versions.yml
     """
 
     stub:
+    def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
     """
+    echo "ext.args: ${args}"
+    echo "ext.args2: ${args2}"
     mkdir -p out/genomes out/outgroup
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp1_iso1.fasta
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp2_iso2.fasta

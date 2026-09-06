@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _retry_exit_codes() -> set[int]:
-    config = (ROOT / "nextflow" / "nextflow.config").read_text(encoding="utf-8")
+    config = (ROOT / "nextflow" / "conf" / "base.config").read_text(encoding="utf-8")
     line = next(ln for ln in config.splitlines() if "errorStrategy" in ln and "exitStatus" in ln)
     codes: set[int] = set()
     for lo, hi in re.findall(r"\((\d+)\.\.(\d+)\)", line):

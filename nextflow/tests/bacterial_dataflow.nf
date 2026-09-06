@@ -8,8 +8,9 @@ nextflow.enable.dsl = 2
 
 include { BACTERIAL_DATAFLOW } from '../subworkflows/local/bacterial_dataflow'
 include { PUBLISH_VERSIONS   } from '../subworkflows/local/publish_versions'
+include { run_meta           } from '../subworkflows/local/run_meta'
 
 workflow {
-    BACTERIAL_DATAFLOW()
+    BACTERIAL_DATAFLOW(channel.value(run_meta(params)))
     PUBLISH_VERSIONS(BACTERIAL_DATAFLOW.out.versions)
 }

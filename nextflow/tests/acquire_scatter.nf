@@ -9,12 +9,14 @@ nextflow.enable.dsl = 2
 
 include { ACQUIRE             } from '../subworkflows/local/acquire'
 include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
+include { run_meta            } from '../subworkflows/local/run_meta'
 
 workflow {
-    ACQUIRE()
+    def ch_meta = channel.value(run_meta(params))
+    ACQUIRE(ch_meta)
     DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
 
     DEREPLICATE_SCATTER.out.reps
-        .map { meta, dir -> dir }
+        .map { _meta, dir -> dir }
         .collectFile(name: 'merged_path.txt', storeDir: params.outdir) { dir -> "${dir}\n" }
 }

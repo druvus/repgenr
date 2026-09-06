@@ -7,35 +7,36 @@
 
 process GENOME {
     label 'process_medium'
-    tag "genome"
+    tag "${meta.id}"
     // Raw genomes are large intermediates (they flow on to dereplication); they
     // are not published. The selected representatives are published downstream.
 
     input:
-    path selection
+    tuple val(meta), path(selection)
 
     output:
-    path "out/genomes/*" , emit: genomes
-    path "out/outgroup/*", emit: outgroup, optional: true
-    path "versions.yml"  , emit: versions
+    tuple val(meta), path("out/genomes/*") , emit: genomes
+    tuple val(meta), path("out/outgroup/*"), emit: outgroup, optional: true
+    path "versions.yml"                    , emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
 
     script:
+    def opts = task.ext.repgenr_opts ?: ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
-    repgenr ${params.repgenr_opts} genome-fetch --selection ${selection} --out out \\
+    repgenr ${opts} genome-fetch --selection ${selection} --out out \\
         --versions-out tool_versions.yml
 
-    cat > versions.yml <<END_VERSIONS
-"${task.process}":
-    repgenr: \$(repgenr --version | sed 's/repgenr //')
-END_VERSIONS
-    cat tool_versions.yml >> versions.yml
+    repgenr_versions_fragment "${task.process}" tool_versions.yml
     """
 
     stub:
     """
+    echo "ext.args: (none; GENOME takes no tool flags)"
     mkdir -p out/genomes out/outgroup
     tail -n +2 ${selection} | while IFS=\$'\\t' read -r acc fam gen sp og fname completeness contamination; do
         [ -z "\$fname" ] && continue

@@ -64,6 +64,11 @@ so the taxonomy always splits the outgroup from a single ingroup clade.
   `supports_native_scaling` only informs auto-selection and log wording.
 * Nextflow provides the actual parallelism and HPC/cloud execution; resource
   labels assign heavy stages (Cactus) to large nodes.
+* Every Nextflow channel carries a run-level meta map (`id`, `mode`) built
+  from the parameters in `main.nf`; processes exchange
+  `tuple val(meta), path(...)`, read tool flags only from `task.ext.args`
+  (mapped from the parameters in `nextflow/conf/modules.config`), and are
+  published from configuration rather than from the module files.
 
 ## Data contracts
 
