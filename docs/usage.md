@@ -45,7 +45,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
-| `--tree2tax_args` | `--include-dereplicated` | tree-to-taxonomy (FlexTaxD) arguments. |
+| `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). |
 
 Parameters are validated against `nextflow/nextflow_schema.json` at launch.
 

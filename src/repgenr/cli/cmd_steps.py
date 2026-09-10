@@ -214,7 +214,9 @@ def tree2tax_relations_cmd(
     root_name: str = typer.Option("root", "-r", "--root-name", help="Name for the root node."),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
     include_dereplicated: bool = typer.Option(
-        False, "--include-dereplicated", help="List redundant genomes under their representative."
+        True,
+        "--include-dereplicated/--no-include-dereplicated",
+        help="List redundant genomes under their representative.",
     ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."

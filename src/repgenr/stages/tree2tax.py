@@ -60,7 +60,9 @@ class Tree2taxStepParams:
     node_basename: str | None = None
     root_name: str = "root"
     remove_outgroup: bool = False
-    include_dereplicated: bool = False
+    # On by default, as on the workdir command and `run`: the genomes_map
+    # deliverable lists redundant genomes under their representative.
+    include_dereplicated: bool = True
     versions_out: Path | None = None
     collapse_support: float | None = None
     collapse_length: float | None = None
