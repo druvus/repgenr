@@ -39,6 +39,20 @@ _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
 # consistent (stages previously mixed 16 and 24).
 DEFAULT_THREADS = 16
 
+# Help texts shared by several commands, so the same flag reads the same
+# everywhere and the CLI matrix (tests/audit/cli_matrix.yaml) can hold one
+# sentence per flag.
+HELP_THREADS = "Threads for the external tool."
+HELP_PRIMARY_ANI = "Primary (pre-clustering) ANI threshold in (0, 1]."
+HELP_SECONDARY_ANI = "Secondary (final cluster) ANI threshold in (0, 1]."
+HELP_ALIGNED_FRACTION = "Minimum aligned fraction in (0, 1] for a pair to be compared."
+HELP_TARGET_FAMILY = "Restrict the selection to this family."
+HELP_TARGET_GENUS = "Restrict the selection to this genus."
+HELP_TARGET_SPECIES = "Restrict the selection to this species."
+HELP_OUTGROUP_ACCESSION = "Accession to fetch and set aside as the outgroup."
+HELP_NO_OUTGROUP = "Do not root with an outgroup."
+HELP_KEEP_FILES = "Keep download and scratch intermediates."
+
 # Canonical stage order per lineage. Used to show progress (`status`) and by
 # `run --dry-run` to print the chain.
 PIPELINE_BACTERIAL = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")

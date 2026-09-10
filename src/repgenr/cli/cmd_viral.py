@@ -7,7 +7,14 @@ from pathlib import Path
 
 import typer
 
-from .base import _run, app
+from .base import (
+    HELP_KEEP_FILES,
+    HELP_NO_OUTGROUP,
+    HELP_TARGET_GENUS,
+    HELP_TARGET_SPECIES,
+    _run,
+    app,
+)
 
 
 def _validate_released_after(value: str | None) -> str | None:
@@ -61,12 +68,23 @@ def vmetadata(
 @app.command()
 def vgenome(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    target_genus: str | None = typer.Option(None, "-tg", "--target-genus"),
-    target_species: str | None = typer.Option(None, "-ts", "--target-species"),
-    target_serotype: str | None = typer.Option(None, "-tse", "--target-serotype"),
+    target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),
+    target_species: str | None = typer.Option(
+        None, "-ts", "--target-species", help=HELP_TARGET_SPECIES
+    ),
+    target_serotype: str | None = typer.Option(
+        None, "-tse", "--target-serotype", help="Restrict the selection to this serotype."
+    ),
     target_custom: str | None = typer.Option(None, "-tc", "--target-custom", help="key:value."),
-    length_all: bool = typer.Option(False, "--length-all"),
-    length_deviation: int = typer.Option(10, "--length-deviation", min=0),
+    length_all: bool = typer.Option(
+        False, "--length-all", help="Disable the length window (keep every length)."
+    ),
+    length_deviation: int = typer.Option(
+        10,
+        "--length-deviation",
+        min=0,
+        help="Half-width of the length window, in percent of its center.",
+    ),
     length_method: str = typer.Option(
         "median_of_medians",
         "--length-method",
@@ -76,22 +94,30 @@ def vgenome(
     ),
     length_range: str | None = typer.Option(None, "--length-range", help="e.g. 25000-35000."),
     discard: str | None = typer.Option(None, "--discard", help="Comma-separated header tags."),
-    no_outgroup: bool = typer.Option(False, "--no-outgroup"),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
     group_segments: bool = typer.Option(
         False,
         "--group-segments",
         help="ncbi_virus: combine an isolate's segments into one genome (segmented viruses).",
     ),
-    min_outgroup_genomes: int = typer.Option(5, "--outgroup-candidates-taxid-min-genomes"),
+    min_outgroup_genomes: int = typer.Option(
+        5,
+        "--outgroup-candidates-taxid-min-genomes",
+        help="Genomes a sister taxid needs to qualify as an outgroup candidate.",
+    ),
     outgroup_treebuilder: str = typer.Option(
         "mashtree",
         "--outgroup-treebuilder",
         help="Tree builder used for the outgroup distance matrix.",
     ),
     glance: bool = typer.Option(False, "--glance", help="Print selection and stop."),
-    print_fasta_headers: bool = typer.Option(False, "--print-fasta-headers"),
-    ignore_duplicates: bool = typer.Option(False, "--ignore-duplicates"),
-    keep_files: bool = typer.Option(False, "--keep-files"),
+    print_fasta_headers: bool = typer.Option(
+        False, "--print-fasta-headers", help="Print the headers of the selected records."
+    ),
+    ignore_duplicates: bool = typer.Option(
+        False, "--ignore-duplicates", help="bvbrc: tolerate duplicate record ids (last wins)."
+    ),
+    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
 ) -> None:
     """Select and organize viral genomes (virus equivalent of genome)."""
     from .param_builders import vgenome_params

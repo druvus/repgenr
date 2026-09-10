@@ -8,6 +8,8 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
+    HELP_KEEP_FILES,
+    HELP_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
     PIPELINE_VIRAL,
@@ -130,10 +132,14 @@ def doctor(
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     tool: str = typer.Option("drep", "--tool", help=_derep_help(auto=False)),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
-    plot_max: float = typer.Option(1.0, "--plot-max"),
-    plot_min: float = typer.Option(0.0, "--plot-min"),
-    keep_files: bool = typer.Option(False, "--keep-files"),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    plot_max: float = typer.Option(
+        1.0, "--plot-max", help="Upper similarity bound of the values plotted."
+    ),
+    plot_min: float = typer.Option(
+        0.0, "--plot-min", help="Lower similarity bound of the values plotted."
+    ),
+    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
 ) -> None:
     """Quick all-vs-all ANI overview (dRep compare dendrogram + plots)."""
     from ..stages.glance import GlanceParams
@@ -153,7 +159,9 @@ def glance(
 @app.command(name="derep-unpack")
 def derep_unpack(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    no_representant: bool = typer.Option(False, "--no-representant"),
+    no_representant: bool = typer.Option(
+        False, "--no-representant", help="Leave the representative out of its cluster directory."
+    ),
 ) -> None:
     """Explode clusters into one directory per representative."""
     from ..stages.derep_unpack import DerepUnpackParams
@@ -184,6 +192,7 @@ def list_tools() -> None:
     """List the available pluggable tools in each family."""
     from ..aligners.base import registry as aligners
     from ..dereplicators.base import registry as dereplicators
+    from ..maskers.base import registry as maskers
     from ..snptypers.base import registry as snptypers
     from ..treebuilders.base import registry as treebuilders
 
@@ -191,6 +200,7 @@ def list_tools() -> None:
         ("dereplicators", dereplicators),
         ("aligners", aligners),
         ("snptypers", snptypers),
+        ("maskers", maskers),
         ("treebuilders", treebuilders),
     ):
         entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]

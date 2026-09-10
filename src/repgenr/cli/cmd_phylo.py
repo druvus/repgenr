@@ -8,6 +8,7 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
+    HELP_THREADS,
     _aligner_help,
     _mask_help,
     _parse_key_values,
@@ -26,7 +27,7 @@ def snptype(
     reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
     all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
     mask: str = typer.Option("none", "--mask", help=_mask_help()),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
@@ -75,7 +76,7 @@ def phylo(
         help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
         "or seed_weight=11 (progressivemauve).",
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     mask: str = typer.Option(
         "none",
         "--mask",

@@ -1,0 +1,2030 @@
+# CLI matrix: one record per (command, flag), the single source of truth the
+# audit checks against the real command tree (tests/unit/test_cli_matrix.py)
+# and renders to docs/audit/cli-matrix.md (scripts/render_cli_matrix.py).
+#
+# Fields
+#   aliases      short forms; secondary: the --no-X form of a boolean pair
+#   param        what the flag sets: Class.field[.sub] on the params object the
+#                command dispatches, `workdir`, container.<field>, state.<key>,
+#                or `n/a: reason`
+#   value        sample value used by the wiring test ({wd}, {dir}, {alt_dir},
+#                {file}, {alt_file}, {fofn}, {alt_fofn}, {out} are tmp paths);
+#                absent for boolean flags
+#   with_args    extra arguments needed for the flag to take effect
+#   validated    how a bad value is rejected: choice | registry | unit_interval
+#                | range | callback | stage (checked when the stage runs) | none
+#   invalid      the bad value the validation test passes (range/callback)
+#   reported_as  the name the rejection message uses when it is not the flag
+#   docs         Markdown files that mention the long flag
+#   nextflow     params.* or ext.args carrier in the Nextflow layer (PR-I)
+#   live         tests/live node id, `n/a: reason`, or `todo: PR-<letter>`
+#   observable   what the live test asserts
+global_flags:
+  --version:
+    param: 'n/a: prints the version and exits'
+    validated: none
+    docs:
+    - docs/adding-tools.md
+    nextflow: null
+    live: 'todo: PR-E'
+  --container:
+    envvar: REPGENR_CONTAINER
+    param: container.backend
+    value: docker
+    validated: choice
+    reported_as: container backend
+    docs:
+    - README.md
+    - docs/adding-tools.md
+    - docs/containers.md
+    - docs/swot-viral.md
+    - docs/usage.md
+    - docs/verification.md
+    nextflow: null
+    live: 'todo: PR-H'
+  --container-engine:
+    envvar: REPGENR_CONTAINER_ENGINE
+    param: container.engine
+    value: podman
+    validated: none
+    docs:
+    - docs/containers.md
+    nextflow: null
+    live: 'todo: PR-H'
+  --container-cache:
+    envvar: REPGENR_CONTAINER_CACHE
+    param: container.cache_dir
+    value: '{alt_dir}'
+    validated: none
+    docs:
+    - docs/containers.md
+    - docs/verification.md
+    nextflow: null
+    live: 'todo: PR-H'
+  --platform:
+    envvar: REPGENR_CONTAINER_PLATFORM
+    param: container.platform
+    value: linux/amd64
+    validated: none
+    docs:
+    - README.md
+    - docs/containers.md
+    nextflow: null
+    live: 'todo: PR-H'
+  --wave:
+    secondary:
+    - --no-wave
+    envvar: REPGENR_WAVE
+    param: container.wave_enabled
+    validated: none
+    docs:
+    - docs/adding-tools.md
+    - docs/containers.md
+    - docs/swot-viral.md
+    nextflow: null
+    live: 'todo: PR-H'
+  --force:
+    aliases:
+    - -f
+    secondary:
+    - --no-force
+    envvar: REPGENR_FORCE
+    param: state.force
+    validated: none
+    docs:
+    - README.md
+    nextflow: null
+    live: 'todo: PR-E'
+    observable: a completed stage re-runs
+  --verbose:
+    aliases:
+    - -v
+    param: state.log_level
+    validated: none
+    docs:
+    - README.md
+    nextflow: null
+    live: 'todo: PR-E'
+    observable: DEBUG lines in repgenr.log
+  --quiet:
+    aliases:
+    - -q
+    param: state.log_level
+    validated: none
+    docs: []
+    nextflow: null
+    live: 'todo: PR-E'
+    observable: no INFO lines on the console
+commands:
+  derep-stock:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    - --action
+    - list
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --action:
+        param: DerepStockParams.action
+        value: pack
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: pack/unpack/delete/list round trip
+      --name:
+        param: DerepStockParams.name
+        value: run1
+        validated: none
+        docs:
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+  derep-unpack:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --no-representant:
+        param: DerepUnpackParams.no_representant
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: cluster dirs lack the representative
+  dereplicate:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --tool:
+        param: DereplicateParams.tool
+        value: sourmash
+        validated: registry
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: derep/clusters.tsv partition matches truth.json
+      --primary-ani:
+        aliases:
+        - -pani
+        param: DereplicateParams.primary_ani
+        value: '0.85'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --secondary-ani:
+        aliases:
+        - -sani
+        param: DereplicateParams.secondary_ani
+        value: '0.95'
+        validated: unit_interval
+        docs:
+        - docs/scaling-audit.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: representative count differs between -sani 0.95 and -sani 0.999
+      --aligned-fraction:
+        aliases:
+        - -af
+        param: DereplicateParams.aligned_fraction
+        value: '0.6'
+        validated: unit_interval
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --threads:
+        aliases:
+        - -t
+        param: DereplicateParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --process-size:
+        aliases:
+        - -s
+        param: DereplicateParams.process_size
+        value: '4'
+        validated: none
+        docs:
+        - docs/architecture.md
+        - docs/scaling-audit.md
+        - docs/swot-derep.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: chunk directories appear under scratch/
+      --num-processes:
+        aliases:
+        - -p
+        param: DereplicateParams.num_processes
+        value: '2'
+        validated: none
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --pre-primary-ani:
+        param: DereplicateParams.pre_primary_ani
+        value: '0.8'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --pre-secondary-ani:
+        param: DereplicateParams.pre_secondary_ani
+        value: '0.9'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --reduce:
+        param: DereplicateParams.reduce
+        value: species
+        validated: choice
+        docs:
+        - docs/scaling-audit.md
+        - docs/swot-derep.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: one representative per species
+      --target-reps:
+        param: DereplicateParams.target_reps
+        value: '3'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/scaling-audit.md
+        - docs/swot-derep.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: representative count lands near the target
+      --virus:
+        param: DereplicateParams.extra
+        with_args:
+        - --tool
+        - drep
+        validated: none
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/swot-derep.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --tool-arg:
+        param: DereplicateParams.extra
+        value: mode=greedy
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: the key=value reaches the tool command line in repgenr.log
+      --allow-incomplete:
+        param: DereplicateParams.allow_incomplete
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --keeper:
+        param: DereplicateParams.keeper
+        value: tool
+        validated: choice
+        docs:
+        - README.md
+        - docs/swot-derep.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+  dereplicate-chunk:
+    dispatch: step:repgenr.stages.derep_steps.dereplicate_chunk
+    base_args:
+    - --genomes-fofn
+    - '{fofn}'
+    - -o
+    - '{out}'
+    flags:
+      --genomes-fofn:
+        param: ChunkParams.genomes
+        value: '{alt_fofn}'
+        validated: stage
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --out:
+        aliases:
+        - -o
+        param: ChunkParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --tool:
+        param: ChunkParams.tool
+        value: sourmash
+        validated: registry
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --primary-ani:
+        aliases:
+        - -pani
+        param: ChunkParams.primary_ani
+        value: '0.85'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --secondary-ani:
+        aliases:
+        - -sani
+        param: ChunkParams.secondary_ani
+        value: '0.95'
+        validated: unit_interval
+        docs:
+        - docs/scaling-audit.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: representative count differs between -sani 0.95 and -sani 0.999
+      --aligned-fraction:
+        aliases:
+        - -af
+        param: ChunkParams.aligned_fraction
+        value: '0.6'
+        validated: unit_interval
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --threads:
+        aliases:
+        - -t
+        param: ChunkParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --virus:
+        param: ChunkParams.extra
+        with_args:
+        - --tool
+        - drep
+        validated: none
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/swot-derep.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --tool-arg:
+        param: ChunkParams.extra
+        value: mode=greedy
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: the key=value reaches the tool command line in repgenr.log
+      --selection-tsv:
+        param: ChunkParams.selection_tsv
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --keeper:
+        param: ChunkParams.keeper
+        value: tool
+        validated: choice
+        docs:
+        - README.md
+        - docs/swot-derep.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --versions-out:
+        param: ChunkParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: a versions YAML fragment is written
+  dereplicate-merge:
+    dispatch: step:repgenr.stages.derep_steps.dereplicate_merge
+    base_args:
+    - -o
+    - '{out}'
+    - --chunk-dir
+    - '{dir}'
+    flags:
+      --out:
+        aliases:
+        - -o
+        param: MergeParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --chunk-dir:
+        param: MergeParams.chunk_dirs
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --chunk-fofn:
+        param: MergeParams.chunk_dirs
+        value: '{fofn}'
+        validated: stage
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --tool:
+        param: MergeParams.tool
+        value: sourmash
+        validated: registry
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --primary-ani:
+        aliases:
+        - -pani
+        param: MergeParams.primary_ani
+        value: '0.85'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --secondary-ani:
+        aliases:
+        - -sani
+        param: MergeParams.secondary_ani
+        value: '0.95'
+        validated: unit_interval
+        docs:
+        - docs/scaling-audit.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: representative count differs between -sani 0.95 and -sani 0.999
+      --aligned-fraction:
+        aliases:
+        - -af
+        param: MergeParams.aligned_fraction
+        value: '0.6'
+        validated: unit_interval
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --threads:
+        aliases:
+        - -t
+        param: MergeParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --virus:
+        param: MergeParams.extra
+        with_args:
+        - --tool
+        - drep
+        validated: none
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/swot-derep.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --tool-arg:
+        param: MergeParams.extra
+        value: mode=greedy
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: the key=value reaches the tool command line in repgenr.log
+      --selection-tsv:
+        param: MergeParams.selection_tsv
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --keeper:
+        param: MergeParams.keeper
+        value: tool
+        validated: choice
+        docs:
+        - README.md
+        - docs/swot-derep.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --versions-out:
+        param: MergeParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: a versions YAML fragment is written
+  doctor:
+    dispatch: query
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: exit 0 on a sound workdir, 1 after corrupting a genome
+  genome:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --accession-list-only:
+        param: GenomeParams.accession_list_only
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+        observable: accession list written, genomes/ empty
+      --keep-files:
+        param: GenomeParams.keep_files
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+  genome-fetch:
+    dispatch: step:repgenr.stages.genome_steps.genome_fetch
+    base_args:
+    - --selection
+    - '{file}'
+    - -o
+    - '{out}'
+    flags:
+      --selection:
+        param: GenomeFetchParams.selection_tsv
+        value: '{alt_file}'
+        validated: stage
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --out:
+        aliases:
+        - -o
+        param: GenomeFetchParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --keep-files:
+        param: GenomeFetchParams.keep_files
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --versions-out:
+        param: GenomeFetchParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: a versions YAML fragment is written
+  glance:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --tool:
+        param: GlanceParams.tool
+        value: skder
+        validated: none
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --threads:
+        aliases:
+        - -t
+        param: GlanceParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --plot-max:
+        param: GlanceParams.plot_max
+        value: '0.99'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-H'
+      --plot-min:
+        param: GlanceParams.plot_min
+        value: '0.5'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-H'
+      --keep-files:
+        param: GlanceParams.keep_files
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-H'
+  ingest:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    - --genomes-dir
+    - '{dir}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --genomes-dir:
+        param: IngestParams.genomes_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: genomes/ holds one link per source FASTA
+      --selection:
+        param: IngestParams.selection
+        value: '{alt_file}'
+        validated: stage
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --outgroup:
+        param: IngestParams.outgroup
+        value: GCF_000001.1
+        validated: stage
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: outgroup/ and outgroup_accession.txt written
+      --copy:
+        param: IngestParams.copy
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: genomes/ entries are regular files
+  list-tools:
+    dispatch: query
+    base_args: []
+    flags: {}
+  metadata:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    - -d
+    - rep
+    - -l
+    - genus
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --dataset:
+        aliases:
+        - -d
+        param: MetadataParams.dataset
+        value: all
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --level:
+        aliases:
+        - -l
+        param: MetadataParams.level
+        value: species
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --source:
+        param: MetadataParams.source
+        value: api
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --release:
+        aliases:
+        - -r
+        param: MetadataParams.release
+        value: '232.0'
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --gtdb-version:
+        param: MetadataParams.version
+        value: bac120
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-family:
+        aliases:
+        - -tf
+        param: MetadataParams.target_family
+        value: Francisellaceae
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-genus:
+        aliases:
+        - -tg
+        param: MetadataParams.target_genus
+        value: Francisella
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-species:
+        aliases:
+        - -ts
+        param: MetadataParams.target_species
+        value: tularensis
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --outgroup-accession:
+        param: MetadataParams.outgroup_accession
+        value: GCF_000001.1
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --metadata-path:
+        param: MetadataParams.metadata_path
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --nodownload:
+        param: MetadataParams.nodownload
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --limit:
+        param: MetadataParams.limit
+        value: '5'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/scaling-audit.md
+        - docs/swot-derep.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+        observable: selection.tsv has at most N rows
+  phylo:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --treebuilder:
+        param: PhyloParams.treebuilder
+        value: fasttree
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --msa-source:
+        param: PhyloParams.msa_source
+        value: snptype
+        validated: choice
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --aligner:
+        param: PhyloParams.aligner
+        value: sibeliaz
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --snptyper:
+        param: PhyloParams.snptyper
+        value: ska2
+        with_args:
+        - --msa-source
+        - snptype
+        validated: registry
+        docs: []
+        nextflow: null
+        live: 'todo: PR-G'
+      --all-genomes:
+        param: PhyloParams.all_genomes
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-G'
+        observable: leaf set is all genomes
+      --no-outgroup:
+        param: PhyloParams.no_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: no outgroup leaf in tree.nwk
+      --bootstrap:
+        aliases:
+        - -B
+        param: PhyloParams.bootstrap
+        value: '1000'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-G'
+        observable: support labels in tree.nwk
+      --reference:
+        param: PhyloParams.reference
+        value: ref.fasta
+        validated: none
+        docs:
+        - docs/swot-phylo.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --aligner-arg:
+        param: PhyloParams.extra
+        value: kmer=15
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --threads:
+        aliases:
+        - -t
+        param: PhyloParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --mask:
+        param: PhyloParams.extra
+        value: gubbins
+        validated: none
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/output.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --allow-incomplete:
+        param: PhyloParams.allow_incomplete
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-G'
+  phylo-build:
+    dispatch: step:repgenr.stages.phylo.phylo_build
+    base_args:
+    - --genomes-dir
+    - '{dir}'
+    - -o
+    - '{out}'
+    flags:
+      --genomes-dir:
+        param: PhyloBuildParams.genomes_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --out:
+        aliases:
+        - -o
+        param: PhyloBuildParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --outgroup-dir:
+        param: PhyloBuildParams.outgroup_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --outgroup-accession:
+        param: PhyloBuildParams.outgroup_accession
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --treebuilder:
+        param: PhyloBuildParams.phylo.treebuilder
+        value: fasttree
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --msa-source:
+        param: PhyloBuildParams.phylo.msa_source
+        value: snptype
+        validated: choice
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --aligner:
+        param: PhyloBuildParams.phylo.aligner
+        value: sibeliaz
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --snptyper:
+        param: PhyloBuildParams.phylo.snptyper
+        value: ska2
+        with_args:
+        - --msa-source
+        - snptype
+        validated: registry
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --no-outgroup:
+        param: PhyloBuildParams.phylo.no_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: no outgroup leaf in tree.nwk
+      --bootstrap:
+        aliases:
+        - -B
+        param: PhyloBuildParams.phylo.bootstrap
+        value: '1000'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: support labels in tree.nwk
+      --reference:
+        param: PhyloBuildParams.phylo.reference
+        value: ref.fasta
+        validated: none
+        docs:
+        - docs/swot-phylo.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --aligner-arg:
+        param: PhyloBuildParams.phylo.extra
+        value: kmer=15
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        nextflow: null
+        live: 'todo: PR-H'
+      --threads:
+        aliases:
+        - -t
+        param: PhyloBuildParams.phylo.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --versions-out:
+        param: PhyloBuildParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: a versions YAML fragment is written
+  run:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    - -l
+    - genus
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --viral:
+        param: VmetadataParams
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+        observable: viral chain stages recorded
+      --dataset:
+        aliases:
+        - -d
+        param: MetadataParams.dataset
+        value: all
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --level:
+        aliases:
+        - -l
+        param: MetadataParams.level
+        value: species
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-family:
+        aliases:
+        - -tf
+        param: MetadataParams.target_family
+        value: Francisellaceae
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-genus:
+        aliases:
+        - -tg
+        param: MetadataParams.target_genus
+        value: Francisella
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-species:
+        aliases:
+        - -ts
+        param: MetadataParams.target_species
+        value: tularensis
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --release:
+        aliases:
+        - -r
+        param: MetadataParams.release
+        value: '232.0'
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --gtdb-version:
+        param: MetadataParams.version
+        value: bac120
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --metadata-source:
+        param: MetadataParams.source
+        value: api
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --outgroup-accession:
+        param: MetadataParams.outgroup_accession
+        value: GCF_000001.1
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target:
+        aliases:
+        - -t
+        param: VmetadataParams.target
+        value: adenoviridae
+        with_args:
+        - --viral
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --viral-source:
+        param: VmetadataParams.source
+        value: bvbrc
+        with_args:
+        - --viral
+        validated: choice
+        reported_as: --source
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --group-segments:
+        param: VgenomeParams.group_segments
+        with_args:
+        - --viral
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --tool:
+        param: DereplicateParams.tool
+        value: sourmash
+        validated: registry
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --primary-ani:
+        param: DereplicateParams.primary_ani
+        value: '0.85'
+        validated: unit_interval
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --secondary-ani:
+        param: DereplicateParams.secondary_ani
+        value: '0.95'
+        validated: unit_interval
+        docs:
+        - docs/scaling-audit.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --aligned-fraction:
+        param: DereplicateParams.aligned_fraction
+        value: '0.6'
+        validated: unit_interval
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --keeper:
+        param: DereplicateParams.keeper
+        value: tool
+        validated: choice
+        docs:
+        - README.md
+        - docs/swot-derep.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --treebuilder:
+        param: PhyloParams.treebuilder
+        value: fasttree
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --msa-source:
+        param: PhyloParams.msa_source
+        value: snptype
+        validated: choice
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --aligner:
+        param: PhyloParams.aligner
+        value: sibeliaz
+        validated: registry
+        docs:
+        - README.md
+        - docs/containers.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --snptyper:
+        param: PhyloParams.snptyper
+        value: ska2
+        with_args:
+        - --msa-source
+        - snptype
+        validated: registry
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --no-outgroup:
+        param: PhyloParams.no_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --include-dereplicated:
+        secondary:
+        - --no-include-dereplicated
+        param: Tree2taxParams.include_dereplicated
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --threads:
+        param: DereplicateParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --dry-run:
+        param: 'n/a: prints the chain and exits before any stage'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+        observable: stage list printed, no workdir written
+  snptype:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --tool:
+        param: SnptypeParams.tool
+        value: ska2
+        validated: registry
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/containers.md
+        - docs/swot-derep.md
+        - docs/swot-phylo.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-G'
+        observable: snp/core_snp.fasta written
+      --reference:
+        param: SnptypeParams.reference
+        value: ref.fasta
+        validated: none
+        docs:
+        - docs/swot-phylo.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --all-genomes:
+        param: SnptypeParams.all_genomes
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-G'
+        observable: row count equals all genomes
+      --mask:
+        param: SnptypeParams.mask
+        value: gubbins
+        validated: choice
+        docs:
+        - README.md
+        - docs/adding-tools.md
+        - docs/output.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-G'
+        observable: masked alignment differs from unmasked
+      --threads:
+        aliases:
+        - -t
+        param: SnptypeParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --tool-arg:
+        param: SnptypeParams.extra
+        value: k=21
+        validated: callback
+        invalid: noequals
+        docs:
+        - docs/adding-tools.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-G'
+      --allow-incomplete:
+        param: SnptypeParams.allow_incomplete
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-G'
+  status:
+    dispatch: query
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: reports the local chain with every stage done
+  tree2tax:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --node-basename:
+        param: Tree2taxParams.node_basename
+        value: node
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: internal node names carry the prefix
+      --root-name:
+        aliases:
+        - -r
+        param: Tree2taxParams.root_name
+        value: top
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --remove-outgroup:
+        param: Tree2taxParams.remove_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --include-dereplicated:
+        secondary:
+        - --no-include-dereplicated
+        param: Tree2taxParams.include_dereplicated
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: genomes_map.tsv lists every genome
+      --collapse-support:
+        param: Tree2taxParams.collapse_support
+        value: '0.5'
+        validated: range
+        invalid: '2'
+        docs:
+        - docs/swot-phylo.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --collapse-length:
+        param: Tree2taxParams.collapse_length
+        value: '0.01'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/swot-phylo.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+  tree2tax-relations:
+    dispatch: step:repgenr.stages.tree2tax.tree2tax_relations
+    base_args:
+    - --tree
+    - '{file}'
+    - -o
+    - '{out}'
+    flags:
+      --tree:
+        param: Tree2taxStepParams.tree
+        value: '{alt_file}'
+        validated: stage
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --out:
+        aliases:
+        - -o
+        param: Tree2taxStepParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --clusters:
+        param: Tree2taxStepParams.clusters
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --outgroup-dir:
+        param: Tree2taxStepParams.outgroup_dir
+        value: '{alt_dir}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --outgroup-accession:
+        param: Tree2taxStepParams.outgroup_accession
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --node-basename:
+        param: Tree2taxStepParams.node_basename
+        value: node
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: internal node names carry the prefix
+      --root-name:
+        aliases:
+        - -r
+        param: Tree2taxStepParams.root_name
+        value: top
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --remove-outgroup:
+        param: Tree2taxStepParams.remove_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+      --include-dereplicated:
+        param: Tree2taxStepParams.include_dereplicated
+        validated: none
+        docs:
+        - README.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --versions-out:
+        param: Tree2taxStepParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: a versions YAML fragment is written
+      --collapse-support:
+        param: Tree2taxStepParams.collapse_support
+        value: '0.5'
+        validated: range
+        invalid: '2'
+        docs:
+        - docs/swot-phylo.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --collapse-length:
+        param: Tree2taxStepParams.collapse_length
+        value: '0.01'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/swot-phylo.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-E'
+  versions:
+    dispatch: query
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: 'todo: PR-E'
+      --versions-out:
+        param: 'n/a: query command, no stage parameters'
+        value: '{alt_file}'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-E'
+        observable: YAML fragment written
+  vgenome:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --target-genus:
+        aliases:
+        - -tg
+        param: VgenomeParams.target_genus
+        value: Mastadenovirus
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-species:
+        aliases:
+        - -ts
+        param: VgenomeParams.target_species
+        value: Human mastadenovirus C
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-serotype:
+        aliases:
+        - -tse
+        param: VgenomeParams.target_serotype
+        value: '2'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --target-custom:
+        aliases:
+        - -tc
+        param: VgenomeParams.target_custom
+        value: host:human
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --length-all:
+        param: VgenomeParams.length_all
+        validated: none
+        docs:
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --length-deviation:
+        param: VgenomeParams.length_deviation
+        value: '20'
+        validated: range
+        invalid: '-1'
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --length-method:
+        param: VgenomeParams.length_method
+        value: mean
+        validated: none
+        docs:
+        - docs/scaling-audit.md
+        - docs/swot-viral.md
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --length-range:
+        param: VgenomeParams.length_range
+        value: 25000-35000
+        validated: none
+        docs:
+        - docs/usage.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --discard:
+        param: VgenomeParams.discard
+        value: partial
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --no-outgroup:
+        param: VgenomeParams.no_outgroup
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --group-segments:
+        param: VgenomeParams.group_segments
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --outgroup-candidates-taxid-min-genomes:
+        param: VgenomeParams.outgroup_candidates_taxid_min_genomes
+        value: '3'
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --outgroup-treebuilder:
+        param: VgenomeParams.outgroup_treebuilder
+        value: sourmash
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --glance:
+        param: VgenomeParams.glance
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+        observable: selection printed, nothing written
+      --print-fasta-headers:
+        param: VgenomeParams.print_fasta_headers
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --ignore-duplicates:
+        param: VgenomeParams.ignore_duplicates
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --keep-files:
+        param: VgenomeParams.keep_files
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+  vmetadata:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/containers.md
+        - docs/output.md
+        nextflow: null
+        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        observable: the workdir is populated
+      --target:
+        aliases:
+        - -t
+        param: VmetadataParams.target
+        value: adenoviridae
+        validated: none
+        docs:
+        - README.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --source:
+        param: VmetadataParams.source
+        value: bvbrc
+        validated: choice
+        docs:
+        - README.md
+        - docs/usage.md
+        - docs/verification.md
+        nextflow: null
+        live: 'todo: PR-F'
+      --filter:
+        aliases:
+        - -f
+        param: VmetadataParams.filter
+        value: segment
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --host:
+        param: VmetadataParams.host
+        value: human
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --complete-only:
+        param: VmetadataParams.complete_only
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --released-after:
+        param: VmetadataParams.released_after
+        value: 01/31/2024
+        validated: callback
+        invalid: '2024-01-31'
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+      --list:
+        aliases:
+        - -l
+        param: VmetadataParams.list_targets
+        validated: none
+        docs: []
+        nextflow: null
+        live: 'todo: PR-F'
+known_short_alias_collisions:
+  -t:
+  - --target
+  - --threads
+  -r:
+  - --release
+  - --root-name
+  -l:
+  - --level
+  - --list
+  -f:
+  - --filter
+  - --force
