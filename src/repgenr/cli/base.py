@@ -83,6 +83,16 @@ def _ingest_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     return paths
 
 
+def _derep_stock_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
+    action = getattr(params, "action", "")
+    name = getattr(params, "name", None) or ""
+    if action == "pack":
+        return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
+    if action == "unpack":
+        return [ctx.derep_dir / "stock" / name]
+    return []
+
+
 def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     paths = [ctx.tree_dir / TREE_NWK]
     if getattr(params, "include_dereplicated", False):
@@ -116,6 +126,10 @@ STAGE_INPUTS: dict[str, Any] = {
     ],
     "phylo": _phylo_inputs,
     "tree2tax": _tree2tax_inputs,
+    # Auxiliary stages: recorded so status shows them and a repeat skips.
+    "glance": lambda ctx, p: [ctx.genomes_dir],
+    "derep_unpack": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.genomes_dir],
+    "derep_stock": _derep_stock_inputs,
 }
 
 # Stages whose result also depends on the manifest's genome rows (taxonomy,
@@ -137,8 +151,17 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Query modes keyed on a value rather than a flag.
+QUERY_ONLY_PREDICATES: dict[str, Any] = {
+    "derep_stock": lambda p: getattr(p, "action", None) == "list",
+}
+
+
 def _is_query_only(stage_name: str, params: Any) -> bool:
-    return any(getattr(params, flag, False) for flag in QUERY_ONLY_FLAGS.get(stage_name, ()))
+    if any(getattr(params, flag, False) for flag in QUERY_ONLY_FLAGS.get(stage_name, ())):
+        return True
+    predicate = QUERY_ONLY_PREDICATES.get(stage_name)
+    return bool(predicate and predicate(params))
 
 
 def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> dict[str, str]:

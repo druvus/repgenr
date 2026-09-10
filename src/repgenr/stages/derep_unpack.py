@@ -7,7 +7,8 @@ Reads the derep ``clusters.tsv`` contract and copies each cluster's genomes
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
@@ -49,5 +50,11 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
                 link_or_copy(source, cluster_dir / genome)
     if empty:
         logger.info("%d clusters had only a representative and were skipped", empty)
+    ctx.config.record_stage(
+        "derep_unpack",
+        params={**asdict(params), "clusters": len(clusters)},
+        completed=datetime.now(UTC).isoformat(),
+    )
+    ctx.save_config()
     logger.info("Unpacked %d clusters into %s", len(clusters), unpack_dir)
     return unpack_dir

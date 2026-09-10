@@ -8,7 +8,8 @@ the all-vs-all MASH ANI similarities from ``Mdb.csv``.
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
@@ -63,6 +64,13 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
 
     if not params.keep_files and glance_wd.exists():
         shutil.rmtree(glance_wd)
+    ctx.config.record_stage(
+        "glance",
+        tool=params.tool,
+        params=asdict(params),
+        completed=datetime.now(UTC).isoformat(),
+    )
+    ctx.save_config()
     logger.info("Glance outputs written to %s", ctx.workdir)
     return out_pdf
 
