@@ -86,6 +86,10 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- The Nextflow `standard` profile caps process resource requests to the
+  host's CPUs and memory (D-11). A laptop run used to fail with "Process
+  requirement exceeds available CPUs -- req: 32" unless `-profile test`
+  was given; `slurm` and `cloud` stay uncapped.
 - `glance`, `derep-unpack` and `derep-stock` (pack, unpack, delete) record
   a stage like every other command (D-7): `status` lists them under the
   optional stages, `doctor` sees them, and an identical repeat skips on
