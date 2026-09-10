@@ -72,6 +72,29 @@ repgenr run -wd $WD -d rep -l genus -tg francisella --tool skder --treebuilder i
 repgenr status -wd $WD     # which stages are done, and what to run next
 ```
 
+### Starting from local genomes
+
+`repgenr ingest` replaces the `metadata` + `genome` front for genomes that are
+already on disk. It stages every FASTA under `--genomes-dir` into `genomes/`
+(symlinks by default, `--copy` to duplicate), writes the same `selection.tsv`
+and manifest the download stages produce, and records itself as a stage so
+`status`, `doctor` and resume work as usual. Taxonomy comes from an optional
+`--selection` table (the eight-column `selection.tsv` format, which may also
+carry CheckM completeness and contamination for `--keeper quality`) or from
+canonical `Family_genus_species_ACCESSION.fasta` filenames; other filenames
+give an empty taxonomy and the stem as accession.
+
+```bash
+repgenr ingest -wd $WD --genomes-dir ./my_genomes --outgroup GCF_003574425.1
+repgenr dereplicate -wd $WD --tool skder
+repgenr phylo -wd $WD --treebuilder mashtree
+repgenr tree2tax -wd $WD --include-dereplicated
+```
+
+`--outgroup` names a genome under `--genomes-dir` (filename, stem or
+accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
+out of the ingroup.
+
 ### Resume and `--force`
 
 Each stage records its parameters, the digests of its inputs, and the container

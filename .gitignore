@@ -175,6 +175,9 @@ cython_debug/
 results/
 work/
 
+# Live-suite local configuration (per machine)
+tests/live/live.local.toml
+
 # nf-test
 .nf-test/
 .nf-test.log

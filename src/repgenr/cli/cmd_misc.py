@@ -9,6 +9,7 @@ import typer
 from .base import (
     DEFAULT_THREADS,
     PIPELINE_BACTERIAL,
+    PIPELINE_LOCAL,
     PIPELINE_VIRAL,
     _derep_help,
     _run,
@@ -56,11 +57,16 @@ def status(
 
     cfg = Config.load(workdir)
     recorded = cfg.stages
-    viral = any(name in recorded for name in ("vmetadata", "vgenome"))
-    chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
+    chain: tuple[str, ...]
+    if "ingest" in recorded:
+        lineage, chain = "local", PIPELINE_LOCAL
+    elif any(name in recorded for name in ("vmetadata", "vgenome")):
+        lineage, chain = "viral", PIPELINE_VIRAL
+    else:
+        lineage, chain = "bacterial", PIPELINE_BACTERIAL
 
     typer.echo(f"RepGenR workdir: {workdir}")
-    typer.echo(f"Pipeline: {'viral' if viral else 'bacterial'}\n")
+    typer.echo(f"Pipeline: {lineage}\n")
 
     next_stage: str | None = None
     for stage in chain:

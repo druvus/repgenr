@@ -43,6 +43,8 @@ DEFAULT_THREADS = 16
 # `run --dry-run` to print the chain.
 PIPELINE_BACTERIAL = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
 PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
+# Offline chain: local genomes staged by `ingest` instead of downloaded.
+PIPELINE_LOCAL = ("ingest", "dereplicate", "phylo", "tree2tax")
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
@@ -54,6 +56,16 @@ def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
         ctx.genomes_dir if getattr(params, "all_genomes", False) else ctx.representatives_dir,
         ctx.outgroup_dir,
     ]
+
+
+def _ingest_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
+    paths = [Path(params.genomes_dir).expanduser()]
+    if getattr(params, "selection", None):
+        paths.append(Path(params.selection).expanduser())
+    outgroup = getattr(params, "outgroup", None)
+    if outgroup and Path(outgroup).expanduser().is_file():
+        paths.append(Path(outgroup).expanduser())
+    return paths
 
 
 def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
@@ -70,6 +82,8 @@ def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
 # Stages not listed digest no inputs and fingerprint on params alone.
 STAGE_INPUTS: dict[str, Any] = {
     "metadata": lambda ctx, p: [],  # network-only
+    # ingest reads paths outside the workdir; they are keyed absolute.
+    "ingest": _ingest_inputs,
     "vmetadata": lambda ctx, p: [],
     "genome": lambda ctx, p: [ctx.workdir / SELECTION_TSV],
     # vgenome WRITES selection.tsv, so its inputs are the vmetadata download

@@ -8,6 +8,26 @@ Live verification used a small GTDB/NCBI **Francisella** set (real download) and
 a closely-related **synthetic** set (for tools that need within-species
 divergence). Tools were installed via conda/mamba on macOS (Apple Silicon).
 
+## Re-running the checks: the live suite
+
+The records below were collected by hand. `tests/live/` holds the
+re-executable form: pytest tests marked `live` that run the installed
+`repgenr` console script against real tools on seeded synthetic genome sets
+(`benchmarks/genomegen.py`) staged with `repgenr ingest`. They are deselected
+by default and never run in CI. Copy `tests/live/live.example.toml` to
+`live.local.toml`, point it at the conda environments that hold each tool,
+and run:
+
+```bash
+conda run -n repgenr_dev --no-capture-output \
+    pytest tests/live -m live --live-config tests/live/live.local.toml -ra
+```
+
+Markers `network` and `container` select the tests that need GTDB/NCBI or
+Docker; `-m "live and not network and not container"` is the offline subset.
+Tests whose tool is not on PATH are skipped, not failed. See
+`tests/live/README.md`.
+
 ## Dereplicators
 
 | Tool | Unit | Live | Notes |
