@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import csv
 import logging
-import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +25,7 @@ from Bio.SeqRecord import SeqRecord
 from ..core.context import WorkdirContext
 from ..core.contracts import SELECTION_TSV, SelectionRow, write_selection
 from ..core.errors import UserInputError, WorkdirError
+from ..core.process import remove_tree
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -287,7 +287,7 @@ def _write_genomes(
 ) -> tuple[int, list[SelectionRow]]:
     genomes_dir = ctx.genomes_dir
     if genomes_dir.exists():
-        shutil.rmtree(genomes_dir)
+        remove_tree(genomes_dir)
     genomes_dir.mkdir(parents=True)
 
     rows: dict[str, SelectionRow] = {}

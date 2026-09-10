@@ -6,7 +6,13 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+- Clearing a scratch or output directory on a volume without native extended
+  attributes (an external exFAT disk) could fail with "No such file or
+  directory": macOS drops a file's AppleDouble twin the moment the data file
+  goes, and the removal walk then tried to unlink the vanished name. Every
+  such removal now tolerates entries that disappear mid-walk (found on a
+  genus-scale run whose workdir sat on an external volume).
 
 ## [2.1.0] - 2026-09-10
 

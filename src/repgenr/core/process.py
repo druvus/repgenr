@@ -275,3 +275,25 @@ def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> No
         os.link(src_s, dst_s)
     except OSError:
         shutil.copy2(src_s, dst_s)
+
+
+def _ignore_vanished(func, path, exc):  # noqa: ANN001
+    """rmtree error handler: an entry that disappeared mid-walk is not an error.
+
+    macOS removes a file's AppleDouble twin (``._name``) on volumes without
+    native extended attributes the moment the data file goes, so the walk
+    then fails to unlink a name that is already gone.
+    """
+    if isinstance(exc, FileNotFoundError):
+        return
+    raise exc
+
+
+def remove_tree(path: str | os.PathLike[str]) -> None:
+    """Remove a directory tree, tolerating entries that vanish during the walk."""
+    target = Path(path)
+    if not target.exists():
+        return
+    shutil.rmtree(target, onexc=_ignore_vanished)
+    if target.exists():  # a second pass catches what the first walk skipped
+        shutil.rmtree(target, onexc=_ignore_vanished)

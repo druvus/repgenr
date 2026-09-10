@@ -15,6 +15,7 @@ from pathlib import Path
 from ..core.context import WorkdirContext
 from ..core.contracts import list_fasta
 from ..core.errors import UserInputError, WorkdirError
+from ..core.process import remove_tree
 
 
 @dataclass
@@ -49,7 +50,7 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
 
     glance_wd = ctx.workdir / "glance_wd"
     if glance_wd.exists():
-        shutil.rmtree(glance_wd)
+        remove_tree(glance_wd)
 
     result = adapter.compare(genomes, glance_wd, params.threads, logger)
 
@@ -63,7 +64,7 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
         logger.warning("No similarity table produced; skipping plots")
 
     if not params.keep_files and glance_wd.exists():
-        shutil.rmtree(glance_wd)
+        remove_tree(glance_wd)
     ctx.config.record_stage(
         "glance",
         tool=params.tool,

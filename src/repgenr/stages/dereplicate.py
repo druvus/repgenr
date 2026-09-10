@@ -10,7 +10,6 @@ manifest derep status is updated.
 from __future__ import annotations
 
 import os
-import shutil
 import sqlite3
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -29,7 +28,7 @@ from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
 from ..core.integrity import check_genome_completeness
 from ..core.plugins import auto_select, scale_warning, warn_unconsumed_extras
-from ..core.process import link_or_copy
+from ..core.process import link_or_copy, remove_tree
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 
 
@@ -111,7 +110,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     scratch = ctx.scratch_dir / "dereplicate"
     if scratch.exists():
-        shutil.rmtree(scratch)
+        remove_tree(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
 
     if params.target_reps and params.target_reps > 0:
@@ -572,7 +571,7 @@ def _quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
 def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
     rep_dir = ctx.representatives_dir
     if rep_dir.exists():
-        shutil.rmtree(rep_dir)
+        remove_tree(rep_dir)
     rep_dir.mkdir(parents=True, exist_ok=True)
 
     for rep in result.representatives:
