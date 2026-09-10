@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import shlex
+import shutil
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool
+from ..core.containers import run_tool, runs_on_host
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Masker, MaskParams
@@ -119,11 +121,64 @@ def polymorphic_sites(records: dict[str, str]) -> dict[str, str]:
     return {n: "".join(s[i] for i in keep) for n, s in zip(names, seqs, strict=True)}
 
 
+# Gubbins asks for one of these whenever it runs with more than one thread;
+# some conda builds (osx-arm64 among them) ship only the single-threaded
+# ``raxmlHPC``, and Gubbins then exits without building a tree.
+MULTITHREADED_RAXML = (
+    "raxmlHPC-PTHREADS-AVX2",
+    "raxmlHPC-PTHREADS-AVX",
+    "raxmlHPC-PTHREADS-SSE3",
+    "raxmlHPC-PTHREADS",
+)
+IQTREE_BINARIES = ("iqtree2", "iqtree")
+
+
+def multithreaded_raxml_available() -> bool:
+    return any(shutil.which(name) for name in MULTITHREADED_RAXML)
+
+
+def resolve_tree_builder(
+    requested: str | None, threads: int, logger: logging.Logger, *, on_host: bool
+) -> tuple[str | None, int]:
+    """Pick the Gubbins tree builder and thread count that can actually run.
+
+    A requested builder is passed through unchanged. Otherwise Gubbins' own
+    default (RAxML) stands unless the run is native, multi-threaded and the
+    host has no multi-threaded RAxML build: then IQ-TREE is used when present,
+    else Gubbins runs single-threaded. Both fallbacks are logged.
+    """
+    if requested:
+        return requested, threads
+    if threads <= 1 or not on_host or multithreaded_raxml_available():
+        return None, threads
+    if any(shutil.which(name) for name in IQTREE_BINARIES):
+        logger.warning(
+            "No multi-threaded RAxML build (%s) on PATH; Gubbins would exit with "
+            "--threads %d. Using --tree-builder iqtree instead (set "
+            "--tool-arg gubbins_tree_builder=... to choose).",
+            "/".join(MULTITHREADED_RAXML),
+            threads,
+        )
+        return "iqtree", threads
+    logger.warning(
+        "No multi-threaded RAxML build (%s) or IQ-TREE on PATH; running Gubbins "
+        "with a single thread.",
+        "/".join(MULTITHREADED_RAXML),
+    )
+    return None, 1
+
+
 class GubbinsMasker(Masker):
     capabilities = ToolCapabilities(
         name="gubbins",
         required_binaries=(BinarySpec("run_gubbins.py", version_args=("--version",)),),
         conda=("bioconda::gubbins",),
+        # gubbins_tree_builder / gubbins_first_tree_builder name Gubbins'
+        # --tree-builder / --first-tree-builder; gubbins_args is a quoted
+        # string of further run_gubbins.py arguments.
+        accepted_extras=frozenset(
+            {"gubbins_tree_builder", "gubbins_first_tree_builder", "gubbins_args"}
+        ),
     )
 
     def mask(
@@ -153,14 +208,21 @@ class GubbinsMasker(Masker):
             gubbins_input = subset
         else:
             gubbins_input = cleaned
-        argv: list[str | Path] = [
-            "run_gubbins.py",
-            "--threads",
-            str(params.threads),
-            "--prefix",
-            prefix,
-            gubbins_input,
-        ]
+        requested = params.extra.get("gubbins_tree_builder")
+        tree_builder, threads = resolve_tree_builder(
+            str(requested) if requested else None,
+            params.threads,
+            logger,
+            on_host=runs_on_host(self.capabilities),
+        )
+        argv: list[str | Path] = ["run_gubbins.py", "--threads", str(threads)]
+        if tree_builder:
+            argv += ["--tree-builder", tree_builder]
+        first = params.extra.get("gubbins_first_tree_builder")
+        if first:
+            argv += ["--first-tree-builder", str(first)]
+        argv += shlex.split(str(params.extra.get("gubbins_args", "")))
+        argv += ["--prefix", prefix, gubbins_input]
         run_tool(
             self.capabilities,
             argv,

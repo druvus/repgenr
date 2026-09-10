@@ -18,6 +18,7 @@ def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
         Path(out_prefix).write_text(">a\nA\n", encoding="utf-8")
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGT\n", encoding="utf-8")
     masker = mod.GubbinsMasker()
@@ -26,7 +27,60 @@ def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
     argv = calls[0]
     assert argv[0] == "run_gubbins.py"
     assert argv[argv.index("--threads") + 1] == "4"
+    assert "--tree-builder" not in argv, "Gubbins' own default stands when RAxML can run"
     assert argv[-1] == str(full)
+
+
+def test_extras_select_gubbins_tree_builders(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list] = []
+
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        calls.append([str(a) for a in argv])
+        Path(str(kw["cwd"] / "gubbins") + ".filtered_polymorphic_sites.fasta").write_text(
+            ">a\nA\n", encoding="utf-8"
+        )
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: False)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGT\n", encoding="utf-8")
+    params = MaskParams(
+        threads=8,
+        extra={
+            "gubbins_tree_builder": "fasttree",
+            "gubbins_first_tree_builder": "rapidnj",
+            "gubbins_args": "--min-snps 5 --iterations 3",
+        },
+    )
+    mod.GubbinsMasker().mask(full, tmp_path / "gub", params, logging.getLogger("t"))
+    argv = calls[0]
+    assert argv[argv.index("--tree-builder") + 1] == "fasttree"
+    assert argv[argv.index("--first-tree-builder") + 1] == "rapidnj"
+    assert argv[argv.index("--min-snps") + 1] == "5"
+    assert argv[argv.index("--iterations") + 1] == "3"
+    assert argv[argv.index("--threads") + 1] == "8", "a chosen builder keeps the thread budget"
+    assert argv[-2] == "--prefix" or argv[-3] == "--prefix"
+
+
+def test_resolve_tree_builder_falls_back_without_threaded_raxml(monkeypatch, caplog) -> None:
+    """Gubbins exits when asked for threads without a PTHREADS RAxML build."""
+    logger = logging.getLogger("t")
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: False)
+
+    monkeypatch.setattr(mod.shutil, "which", lambda name: "/bin/x" if name == "iqtree2" else None)
+    with caplog.at_level(logging.WARNING):
+        assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == ("iqtree", 8)
+    assert "iqtree" in caplog.text
+
+    monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+    assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == (None, 1)
+
+    # One thread, a container run, or an explicit choice never trigger it.
+    assert mod.resolve_tree_builder(None, 1, logger, on_host=True) == (None, 1)
+    assert mod.resolve_tree_builder(None, 8, logger, on_host=False) == (None, 8)
+    assert mod.resolve_tree_builder("raxmlng", 8, logger, on_host=True) == ("raxmlng", 8)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == (None, 8)
 
 
 def test_sanitise_replaces_iupac_with_n(tmp_path, caplog) -> None:

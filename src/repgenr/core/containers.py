@@ -117,6 +117,18 @@ def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None)
     return None
 
 
+def runs_on_host(caps: ToolCapabilities) -> bool:
+    """True when :func:`run_tool` would execute this adapter's commands natively.
+
+    Adapters use it to gate checks that only make sense for the host PATH,
+    such as looking for a particular build of a helper binary.
+    """
+    config = _CONFIG
+    if not config.active:
+        return True
+    return resolve_image(caps, config) is None
+
+
 def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
     cache_key = (conda_spec, config.platform)
     if cache_key in _WAVE_CACHE:

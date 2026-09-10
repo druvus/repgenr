@@ -93,8 +93,15 @@ def snptype_core(
             ", ".join(alts) or "none",
         )
     typer = snp_registry.create(params.tool)
+    masker = None
+    if params.mask not in ("none", ""):
+        from ..maskers.base import registry as masker_registry
+
+        masker = masker_registry.create(params.mask)
     if warn_extras:
-        warn_unconsumed_extras(typer.capabilities, params.extra, logger, family="SNP typer")
+        # The typer and the masker read one extras dict; a key is unread
+        # only when neither declares it.
+        _warn_unread_extras(typer.capabilities, masker, params.extra, logger)
     versions = typer.preflight()
 
     ref = None
@@ -120,11 +127,9 @@ def snptype_core(
 
     core = snp_dir / CORE_SNP_FASTA
     masked = False
-    if params.mask not in ("none", ""):
+    if masker is not None:
         from ..maskers.base import MaskParams
-        from ..maskers.base import registry as masker_registry
 
-        masker = masker_registry.create(params.mask)
         if result.full_alignment is None:
             raise UserInputError(
                 f"--mask {params.mask} needs a whole-genome alignment, which SNP typer "
@@ -134,7 +139,11 @@ def snptype_core(
         filtered = masker.mask(
             result.full_alignment,
             scratch / params.mask,
-            MaskParams(threads=params.threads, exclude=frozenset(params.mask_exclude)),
+            MaskParams(
+                threads=params.threads,
+                exclude=frozenset(params.mask_exclude),
+                extra=dict(params.extra),
+            ),
             logger,
         )
         with atomic_path(core) as tmp:
@@ -168,6 +177,22 @@ def snptype_core(
         ),
         versions,
     )
+
+
+def _warn_unread_extras(typer_caps, masker, extra: dict, logger: logging.Logger) -> None:
+    if masker is None:
+        warn_unconsumed_extras(typer_caps, extra, logger, family="SNP typer")
+        return
+    known = set(typer_caps.accepted_extras) | set(typer_caps.default_params)
+    known |= set(masker.capabilities.accepted_extras) | set(masker.capabilities.default_params)
+    unread = sorted(set(extra) - known)
+    if unread:
+        logger.warning(
+            "Neither SNP typer '%s' nor masker '%s' reads extra parameter(s): %s",
+            typer_caps.name,
+            masker.capabilities.name,
+            ", ".join(unread),
+        )
 
 
 def run(ctx: WorkdirContext, params: SnptypeParams) -> SnpResult:
