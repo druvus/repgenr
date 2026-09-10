@@ -395,6 +395,10 @@ def test_run_bacterial_chain_end_to_end(run_repgenr, tmp_path: Path) -> None:
 @pytest.mark.requires_binary("sourmash", "mashtree")
 def test_run_viral_chain_end_to_end(run_repgenr, tmp_path: Path) -> None:
     wd = tmp_path / "vrun"
+    # run --viral has no --complete-only (design item D-3): the length window
+    # is what keeps this to a few hundred records. Without it (--group-segments
+    # skips the window) every hepatovirus record is kept, ~9500 mostly partial,
+    # and mashtree's tree step fails on that many taxa.
     run_repgenr(
         "run",
         "-wd",
@@ -419,3 +423,47 @@ def test_run_viral_chain_end_to_end(run_repgenr, tmp_path: Path) -> None:
     assert Config.load(wd).stages["vgenome"].params["no_outgroup"] is True
     assert Config.load(wd).stages["tree2tax"].params["include_dereplicated"] is False
     assert "Pipeline: viral" in run_repgenr("status", "-wd", wd).stdout
+
+
+def test_genome_fetch_step(run_repgenr, species_cache: Path, tmp_path: Path) -> None:
+    """The stateless download step on a cached selection.tsv."""
+    out = tmp_path / "fetched"
+    run_repgenr(
+        "genome-fetch",
+        "--selection",
+        species_cache / SELECTION_TSV,
+        "-o",
+        out,
+        "--keep-files",
+        "--versions-out",
+        tmp_path / "versions.yml",
+    )
+    assert len(list((out / "genomes").glob("*.fasta"))) == 10
+    assert len(list((out / "outgroup").glob("*.fasta"))) == 1
+    assert "datasets:" in (tmp_path / "versions.yml").read_text(encoding="utf-8")
+    assert any((out / "scratch").iterdir()), "--keep-files leaves the download scratch"
+
+
+def test_run_dry_run_reports_family_and_species_targets(run_repgenr, tmp_path: Path) -> None:
+    out = run_repgenr(
+        "run",
+        "-wd",
+        tmp_path / "dry",
+        "-d",
+        "rep",
+        "-l",
+        "species",
+        "-tf",
+        "Francisellaceae",
+        "-tg",
+        "Francisella",
+        "-ts",
+        "tularensis",
+        "--dry-run",
+        "--aligner",
+        "sibeliaz",
+        "--treebuilder",
+        "iqtree",
+    ).stdout
+    assert "family=Francisellaceae" in out and "species=tularensis" in out
+    assert "aligner=sibeliaz" in out, "the dry run names the aligner the chain would use"

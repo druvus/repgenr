@@ -53,6 +53,9 @@ Each adapter declares its container metadata in `ToolCapabilities`:
 
 - Docker runs as the host UID/GID so outputs are owned by you; the workdir and
   `TMPDIR` are bind-mounted at identical paths.
+- Symlinked inputs (a `genomes/` directory staged by `repgenr ingest`) are
+  followed: the directory each link points to is bound as well, so the tool
+  sees the same paths inside the container.
 - On Apple Silicon most BioContainers are `linux/amd64` (run via Docker
   emulation, or use `--wave` for arm64-native images).
 - The macOS SibeliaZ BSD-wrapper workaround is skipped automatically when running

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from ..core.process import warn_argv_bytes
+from ..core.process import warn_argv_bytes, write_fofn
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
 
@@ -34,7 +35,10 @@ class MashtreeBuilder(TreeBuilder):
         genomesize = params.extra.get("genomesize")
         if genomesize is not None:
             cmd += ["--genomesize", str(int(genomesize))]
-        cmd += ["--outmatrix", matrix, *genomes]
+        # Genome paths go through a file-of-files: a few thousand paths on the
+        # command line exceed ARG_MAX (seen live at ~9500 viral records).
+        fofn = write_fofn(genomes, matrix.parent / "genomes.fofn")
+        cmd += ["--outmatrix", matrix, "--file-of-files", fofn]
         return cmd
 
     def _run(
@@ -46,12 +50,16 @@ class MashtreeBuilder(TreeBuilder):
         matrix = out_dir / "distance_matrix.tsv"
         cmd = self._command(params, matrix, genomes)
         warn_argv_bytes("mashtree", cmd, logger)
+        # The genome paths live in the fofn, not argv: declare their directories
+        # so the container backend binds them.
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         run_tool(
             self.capabilities,
             cmd,
             logger=logger,
             log_prefix="mashtree",
             stdout_path=tree,
+            extra_mounts=genome_dirs,
         )
         return tree, matrix
 

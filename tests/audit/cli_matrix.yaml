@@ -42,7 +42,7 @@ global_flags:
     - docs/usage.md
     - docs/verification.md
     nextflow: null
-    live: 'todo: PR-H'
+    live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --container-engine:
     envvar: REPGENR_CONTAINER_ENGINE
     param: container.engine
@@ -51,7 +51,7 @@ global_flags:
     docs:
     - docs/containers.md
     nextflow: null
-    live: 'todo: PR-H'
+    live: tests/live/test_container_runs.py::test_container_engine_podman_is_reported_when_missing
   --container-cache:
     envvar: REPGENR_CONTAINER_CACHE
     param: container.cache_dir
@@ -61,7 +61,7 @@ global_flags:
     - docs/containers.md
     - docs/verification.md
     nextflow: null
-    live: 'todo: PR-H'
+    live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --platform:
     envvar: REPGENR_CONTAINER_PLATFORM
     param: container.platform
@@ -71,7 +71,7 @@ global_flags:
     - README.md
     - docs/containers.md
     nextflow: null
-    live: 'todo: PR-H'
+    live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --wave:
     secondary:
     - --no-wave
@@ -83,7 +83,7 @@ global_flags:
     - docs/containers.md
     - docs/swot-viral.md
     nextflow: null
-    live: 'todo: PR-H'
+    live: tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run
   --force:
     aliases:
     - -f
@@ -468,7 +468,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
         param: ChunkParams.keeper
         value: tool
@@ -478,7 +478,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
@@ -606,7 +606,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
         param: MergeParams.keeper
         value: tool
@@ -616,7 +616,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
@@ -689,7 +689,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_genome_fetch_step
       --out:
         aliases:
         - -o
@@ -698,20 +698,20 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_genome_fetch_step
       --keep-files:
         param: GenomeFetchParams.keep_files
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_genome_fetch_step
       --versions-out:
         param: GenomeFetchParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_network.py::test_genome_fetch_step
         observable: a versions YAML fragment is written
   glance:
     dispatch: stage
@@ -729,7 +729,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_container_runs.py::test_glance_drep_compare
         observable: the workdir is populated
       --tool:
         param: GlanceParams.tool
@@ -745,7 +745,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_container_runs.py::test_glance_drep_compare
       --threads:
         aliases:
         - -t
@@ -756,27 +756,27 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_container_runs.py::test_glance_drep_compare
       --plot-max:
         param: GlanceParams.plot_max
         value: '0.99'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-H'
+        live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --plot-min:
         param: GlanceParams.plot_min
         value: '0.5'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-H'
+        live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --keep-files:
         param: GlanceParams.keep_files
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_container_runs.py::test_glance_drep_compare
   ingest:
     dispatch: stage
     base_args:
@@ -1013,7 +1013,7 @@ commands:
         - README.md
         - docs/containers.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --snptyper:
         param: PhyloParams.snptyper
         value: ska2
@@ -1066,7 +1066,7 @@ commands:
         docs:
         - docs/adding-tools.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --threads:
         aliases:
         - -t
@@ -1077,7 +1077,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --mask:
         param: PhyloParams.extra
         value: gubbins
@@ -1157,7 +1157,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner:
         param: PhyloBuildParams.phylo.aligner
         value: sibeliaz
@@ -1166,7 +1166,7 @@ commands:
         - README.md
         - docs/containers.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --snptyper:
         param: PhyloBuildParams.phylo.snptyper
         value: ska2
@@ -1176,7 +1176,7 @@ commands:
         validated: registry
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --no-outgroup:
         param: PhyloBuildParams.phylo.no_outgroup
         validated: none
@@ -1194,7 +1194,7 @@ commands:
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
         observable: support labels in tree.nwk
       --reference:
         param: PhyloBuildParams.phylo.reference
@@ -1203,7 +1203,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner-arg:
         param: PhyloBuildParams.phylo.extra
         value: kmer=15
@@ -1212,7 +1212,7 @@ commands:
         docs:
         - docs/adding-tools.md
         nextflow: null
-        live: 'todo: PR-H'
+        live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --threads:
         aliases:
         - -t
@@ -1286,7 +1286,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --target-genus:
         aliases:
         - -tg
@@ -1305,7 +1305,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --release:
         aliases:
         - -r
@@ -1315,7 +1315,8 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
+          in test_network.py'
       --gtdb-version:
         param: MetadataParams.version
         value: bac120
@@ -1324,7 +1325,8 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
+          in test_network.py'
       --metadata-source:
         param: MetadataParams.source
         value: api
@@ -1368,7 +1370,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: 'n/a: forwarded to vgenome unchanged (wiring test); covered on vgenome in test_vgenome_selection_flags'
       --tool:
         param: DereplicateParams.tool
         value: sourmash
@@ -1446,7 +1448,7 @@ commands:
         - README.md
         - docs/containers.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --snptyper:
         param: PhyloParams.snptyper
         value: ska2

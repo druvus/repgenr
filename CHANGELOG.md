@@ -7,6 +7,15 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Container live tests (`-m "live and container"`,
+  `tests/live/test_container_runs.py`): skder, sourmash, dRep (`--virus`),
+  the simple SNP typer and sibeliaz in Wave-minted images with
+  `--container-cache`, the `REPGENR_CONTAINER*` variables and the rule that
+  a native result is never reused by a container run; progressiveMauve and
+  Cactus in their pinned amd64 images; `glance --tool drep`; the
+  `--container-engine podman` negative path. The module skips itself without
+  Docker, amd64 emulation and the Wave CLI.
+- `dereplicate-chunk --selection-tsv --keeper` covered live.
 - Live tests on the Francisella tularensis species set
   (`tests/live/test_species_set.py`): the simple, ska2 and parsnp SNP typers
   with `--reference`, `--all-genomes`, `--tool-arg` and `--allow-incomplete`;
@@ -59,6 +68,9 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- With `--container` but no `--wave`, an adapter that only declares a conda
+  spec runs on the host; the warning now says so and names the remedy
+  (`pass --wave`), instead of claiming the tool declares no image.
 - `Tree2taxParams.all_genomes`, a field no code read, is gone. It was part
   of the tree2tax resume fingerprint, so an existing workdir re-runs
   `tree2tax` once (seconds). `GlanceParams.threads` defaults to 16 like the
@@ -103,6 +115,14 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- mashtree received every genome path on its command line and failed with
+  "Argument list too long" at about 9500 genomes (a viral `run` without a
+  completeness filter). It now reads the paths from a file-of-files, and
+  the genome directories are declared as container mounts.
+- Container runs on a workdir populated by `repgenr ingest` (symlinked
+  genomes) failed inside the container with dangling links: only the
+  `genomes/` directory was bound, not the directories the links point to.
+  Every mounted directory's symlink targets are bound as well.
 - The simple SNP typer called variants with bcftools' diploid default, so
   heterozygous calls on haploid bacteria became IUPAC codes in the consensus
   and Gubbins refused the whole-genome alignment ("contains disallowed
