@@ -422,7 +422,7 @@ def test_run_viral_chain_end_to_end(run_repgenr, tmp_path: Path) -> None:
         "-wd",
         wd,
         "--viral",
-        "-t",
+        "--target",
         "hepatovirus",
         "-tg",
         "Hepatovirus",

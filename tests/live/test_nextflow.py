@@ -143,7 +143,7 @@ def test_main_viral_mode(run_nextflow) -> None:
         "test",
         "--mode",
         "viral",
-        "--vmetadata_args=-t hepatovirus --complete-only",
+        "--vmetadata_args=--target hepatovirus --complete-only",
         "--vgenome_args=-tg Hepatovirus --no-outgroup",
     )
     out = proc.outdir
