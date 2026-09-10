@@ -34,3 +34,12 @@ def test_tree2tax_step_writes_empty_versions(tmp_path: Path) -> None:
     )
     # tree2tax uses no external tool -> empty fragment (module still adds repgenr)
     assert versions.exists() and versions.read_text() == ""
+
+
+def test_fragment_into_missing_directory(tmp_path) -> None:
+    """The stateless steps write the fragment before -o exists (live audit finding)."""
+    from repgenr.core.versions import write_versions_fragment
+
+    target = tmp_path / "out" / "versions.yml"
+    write_versions_fragment(target, {"sourmash": "4.9.4"})
+    assert target.read_text(encoding="utf-8") == "    sourmash: 4.9.4\n"
