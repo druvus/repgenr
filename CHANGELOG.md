@@ -7,6 +7,14 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- A CLI matrix, `tests/audit/cli_matrix.yaml`, with one record per command
+  and flag (aliases, the parameter it sets, how it is validated, the docs
+  that mention it, its live test). `tests/unit/test_cli_matrix.py` checks the
+  records against the real command tree on every run: flag and alias sets,
+  help text, that each flag reaches its parameter, that a bad value is
+  rejected naming the flag, and that live and docs references resolve.
+  `scripts/render_cli_matrix.py` renders `docs/audit/cli-matrix.md`.
+- `list-tools` now lists the maskers family.
 - `repgenr ingest -wd WD --genomes-dir DIR [--selection TSV] [--outgroup NAME|FILE]
   [--copy]`: start a working directory from genomes already on disk. It
   writes the `selection.tsv` and manifest the download stages produce, links
@@ -27,6 +35,12 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- Every command-line option has help text (48 were blank: the ANI thresholds
+  and `--threads` on the dereplication commands, the GTDB target flags, most
+  `vgenome` selection flags, `glance` plot bounds, `derep-unpack
+  --no-representant`). Shared texts live in `cli/base.py` so the same flag
+  reads the same on every command. `run --snptyper` lists the registered SNP
+  typers like `snptype --tool` does.
 - `metadata --limit N` no longer keeps the first N genomes in GTDB file (or
   API) order. It round-robins over species, taking the best CheckM-scored
   genome of every species first, then each species' next best, until N;

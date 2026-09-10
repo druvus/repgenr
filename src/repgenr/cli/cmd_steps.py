@@ -16,6 +16,10 @@ from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
+    HELP_ALIGNED_FRACTION,
+    HELP_PRIMARY_ANI,
+    HELP_SECONDARY_ANI,
+    HELP_THREADS,
     _aligner_help,
     _derep_help,
     _parse_key_values,
@@ -64,10 +68,12 @@ def dereplicate_chunk_cmd(
     ),
     out_dir: Path = typer.Option(..., "-o", "--out", help="Output directory for the chunk result."),
     tool: str = typer.Option("skder", "--tool", help=_derep_help(auto=False)),
-    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
-    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
-    aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani", help=HELP_PRIMARY_ANI),
+    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani", help=HELP_SECONDARY_ANI),
+    aligned_fraction: float = typer.Option(
+        0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
+    ),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
@@ -145,7 +151,7 @@ def phylo_build_cmd(
     aligner_arg: list[str] = typer.Option(
         [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -261,10 +267,12 @@ def dereplicate_merge_cmd(
         None, "--chunk-fofn", help="File listing chunk result directories, one per line."
     ),
     tool: str = typer.Option("skder", "--tool", help=_derep_help(auto=False)),
-    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
-    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
-    aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani", help=HELP_PRIMARY_ANI),
+    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani", help=HELP_SECONDARY_ANI),
+    aligned_fraction: float = typer.Option(
+        0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
+    ),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."

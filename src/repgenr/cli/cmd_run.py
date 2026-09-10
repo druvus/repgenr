@@ -18,11 +18,21 @@ from ..core.logging import configure_logging
 from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
+    HELP_ALIGNED_FRACTION,
+    HELP_NO_OUTGROUP,
+    HELP_OUTGROUP_ACCESSION,
+    HELP_PRIMARY_ANI,
+    HELP_SECONDARY_ANI,
+    HELP_TARGET_FAMILY,
+    HELP_TARGET_GENUS,
+    HELP_TARGET_SPECIES,
+    HELP_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_VIRAL,
     _aligner_help,
     _derep_help,
     _run,
+    _snp_help,
     _tree_help,
     app,
     gated_extra,
@@ -100,22 +110,28 @@ def run(
     # --- selection: bacterial (GTDB) ---
     dataset: str = typer.Option("rep", "-d", "--dataset", help="all or rep (bacterial)."),
     level: str | None = typer.Option(None, "-l", "--level", help="family/genus/species."),
-    target_family: str | None = typer.Option(None, "-tf", "--target-family"),
-    target_genus: str | None = typer.Option(None, "-tg", "--target-genus"),
-    target_species: str | None = typer.Option(None, "-ts", "--target-species"),
+    target_family: str | None = typer.Option(
+        None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
+    ),
+    target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),
+    target_species: str | None = typer.Option(
+        None, "-ts", "--target-species", help=HELP_TARGET_SPECIES
+    ),
     release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
     gtdb_version: str | None = typer.Option(None, "--gtdb-version", help="bac120/ar53."),
     metadata_source: str = typer.Option("tsv", "--metadata-source", help="tsv or api."),
-    outgroup_accession: str | None = typer.Option(None, "--outgroup-accession"),
+    outgroup_accession: str | None = typer.Option(
+        None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
+    ),
     # --- selection: viral (NCBI Virus) ---
     target: str | None = typer.Option(None, "-t", "--target", help="Virus taxon (viral)."),
     viral_source: str = typer.Option("ncbi_virus", "--viral-source", help="ncbi_virus or bvbrc."),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- dereplication ---
     derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
-    primary_ani: float = typer.Option(0.90, "--primary-ani"),
-    secondary_ani: float = typer.Option(0.99, "--secondary-ani"),
-    aligned_fraction: float = typer.Option(0.50, "--aligned-fraction"),
+    primary_ani: float = typer.Option(0.90, "--primary-ani", help=HELP_PRIMARY_ANI),
+    secondary_ani: float = typer.Option(0.99, "--secondary-ani", help=HELP_SECONDARY_ANI),
+    aligned_fraction: float = typer.Option(0.50, "--aligned-fraction", help=HELP_ALIGNED_FRACTION),
     keeper: str = typer.Option(
         "quality",
         "--keeper",
@@ -126,8 +142,8 @@ def run(
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
-    snptyper: str = typer.Option("simple", "--snptyper", help="SNP typer for snptype source."),
-    no_outgroup: bool = typer.Option(False, "--no-outgroup"),
+    snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
     # --- taxonomy output ---
     include_dereplicated: bool = typer.Option(
         True,
@@ -135,7 +151,7 @@ def run(
         help="List redundant genomes under their representative in tree2tax.",
     ),
     # --- common ---
-    threads: int = typer.Option(DEFAULT_THREADS, "--threads", min=1),
+    threads: int = typer.Option(DEFAULT_THREADS, "--threads", min=1, help=HELP_THREADS),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the stages and key parameters, then exit."
     ),

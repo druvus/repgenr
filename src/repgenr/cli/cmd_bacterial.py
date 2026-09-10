@@ -6,7 +6,23 @@ from pathlib import Path
 
 import typer
 
-from .base import DEFAULT_THREADS, _derep_help, _parse_key_values, _run, app, gated_extra
+from .base import (
+    DEFAULT_THREADS,
+    HELP_ALIGNED_FRACTION,
+    HELP_KEEP_FILES,
+    HELP_OUTGROUP_ACCESSION,
+    HELP_PRIMARY_ANI,
+    HELP_SECONDARY_ANI,
+    HELP_TARGET_FAMILY,
+    HELP_TARGET_GENUS,
+    HELP_TARGET_SPECIES,
+    HELP_THREADS,
+    _derep_help,
+    _parse_key_values,
+    _run,
+    app,
+    gated_extra,
+)
 
 
 @app.command()
@@ -21,13 +37,28 @@ def metadata(
     gtdb_version: str | None = typer.Option(
         None, "--gtdb-version", help="bac120/ar53 (tsv source)."
     ),
-    target_family: str | None = typer.Option(None, "-tf", "--target-family"),
-    target_genus: str | None = typer.Option(None, "-tg", "--target-genus"),
-    target_species: str | None = typer.Option(None, "-ts", "--target-species"),
-    outgroup_accession: str | None = typer.Option(None, "--outgroup-accession"),
-    metadata_path: str | None = typer.Option(None, "--metadata-path"),
-    nodownload: bool = typer.Option(False, "--nodownload"),
-    limit: int | None = typer.Option(None, "--limit", min=1),
+    target_family: str | None = typer.Option(
+        None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
+    ),
+    target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),
+    target_species: str | None = typer.Option(
+        None, "-ts", "--target-species", help=HELP_TARGET_SPECIES
+    ),
+    outgroup_accession: str | None = typer.Option(
+        None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
+    ),
+    metadata_path: str | None = typer.Option(
+        None, "--metadata-path", help="Use this GTDB metadata table instead of downloading."
+    ),
+    nodownload: bool = typer.Option(
+        False, "--nodownload", help="Reuse a table already present in the workdir."
+    ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        min=1,
+        help="Keep at most N genomes, round-robin over species by CheckM quality.",
+    ),
 ) -> None:
     """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
     from .param_builders import metadata_params
@@ -54,8 +85,10 @@ def metadata(
 @app.command()
 def genome(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    accession_list_only: bool = typer.Option(False, "--accession-list-only"),
-    keep_files: bool = typer.Option(False, "--keep-files"),
+    accession_list_only: bool = typer.Option(
+        False, "--accession-list-only", help="Write the accession list and stop (no download)."
+    ),
+    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
 ) -> None:
     """Download and organize genomes selected by the metadata stage."""
     from .param_builders import genome_params
@@ -70,10 +103,12 @@ def genome(
 def dereplicate(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     tool: str = typer.Option("skder", "--tool", help=_derep_help()),
-    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani"),
-    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani"),
-    aligned_fraction: float = typer.Option(0.50, "-af", "--aligned-fraction"),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1),
+    primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani", help=HELP_PRIMARY_ANI),
+    secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani", help=HELP_SECONDARY_ANI),
+    aligned_fraction: float = typer.Option(
+        0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
+    ),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     process_size: int | None = typer.Option(
         None,
         "-s",
