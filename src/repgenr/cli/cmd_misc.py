@@ -14,6 +14,7 @@ from .base import (
     PIPELINE_LOCAL,
     PIPELINE_VIRAL,
     _derep_help,
+    _require_choice,
     _run,
     app,
 )
@@ -142,9 +143,11 @@ def glance(
     keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
 ) -> None:
     """Quick all-vs-all ANI overview (dRep compare dendrogram + plots)."""
+    from ..dereplicators.base import registry as _derep_registry
     from ..stages.glance import GlanceParams
 
     def build() -> GlanceParams:
+        _require_choice(tool, set(_derep_registry.names()), "--tool")
         return GlanceParams(
             tool=tool,
             threads=threads,
@@ -180,8 +183,10 @@ def derep_stock(
 ) -> None:
     """Store, load, list or delete named dereplication runs."""
     from ..stages.derep_stock import DerepStockParams
+    from .param_builders import DEREP_STOCK_ACTIONS
 
     def build() -> DerepStockParams:
+        _require_choice(action, DEREP_STOCK_ACTIONS, "--action")
         return DerepStockParams(action=action, name=name)
 
     _run("derep_stock", workdir, build)

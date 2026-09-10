@@ -31,6 +31,7 @@ from .base import (
     PIPELINE_VIRAL,
     _aligner_help,
     _derep_help,
+    _require_choice,
     _run,
     _snp_help,
     _tree_help,
@@ -158,6 +159,10 @@ def run(
 ) -> None:
     """Run the whole pipeline end to end (bacterial by default, --viral for viruses)."""
     from .param_builders import (
+        METADATA_DATASETS,
+        METADATA_LEVELS,
+        METADATA_SOURCES,
+        VIRAL_SOURCES,
         dereplicate_params,
         genome_params,
         metadata_params,
@@ -170,7 +175,13 @@ def run(
     logger = configure_logging(workdir if workdir.exists() else None, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
         # Fail fast before any stage runs; the same validation re-runs inside
-        # each stage's builder.
+        # each stage's builder. The selection sources are checked here under
+        # the names `run` gives them (the builders know them as --source).
+        _require_choice(metadata_source, METADATA_SOURCES, "--metadata-source")
+        _require_choice(viral_source, VIRAL_SOURCES, "--viral-source")
+        _require_choice(dataset, METADATA_DATASETS, "--dataset")
+        if level is not None:
+            _require_choice(level, METADATA_LEVELS, "--level")
         dereplicate_params(
             tool=derep_tool,
             primary_ani=primary_ani,

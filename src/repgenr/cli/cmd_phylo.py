@@ -40,10 +40,11 @@ def snptype(
     """Call SNPs and build a core-SNP alignment."""
     from ..snptypers.base import registry as _snp_registry
     from ..stages.snptype import SnptypeParams
+    from .param_builders import require_mask
 
     def build() -> SnptypeParams:
         _require_choice(tool, set(_snp_registry.names()), "--tool")
-        _require_choice(mask, {"none", "gubbins"}, "--mask")
+        require_mask(mask)
         return SnptypeParams(
             tool=tool,
             threads=threads,
