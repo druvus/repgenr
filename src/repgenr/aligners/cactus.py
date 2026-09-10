@@ -18,6 +18,7 @@ from ..converters.hal_to_maf import hal_to_maf
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import MSA_FASTA
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Aligner, AlignParams, AlignResult
@@ -86,7 +87,7 @@ class CactusAligner(Aligner):
 
         maf = out_dir / "pangenome.maf"
         hal_to_maf(hal, ref_name, maf, logger, caps=self.capabilities)
-        msa = out_dir / "msa.fasta"
+        msa = out_dir / MSA_FASTA
         # Drop the Minigraph-Cactus backbone pseudo-genome so it is not a taxon.
         maf_to_fasta(maf, ref_name, msa, exclude={"_MINIGRAPH_"})
         return AlignResult(msa_fasta=msa, native_format=hal)
