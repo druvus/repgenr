@@ -1439,6 +1439,19 @@ commands:
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
+      --mask:
+        param: PhyloBuildParams.phylo.extra
+        value: gubbins
+        with_args:
+        - --msa-source
+        - snptype
+        validated: registry
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.phylo_args
+        live: 'n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the
+          builder'
   run:
     dispatch: stage
     base_args:

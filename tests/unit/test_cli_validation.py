@@ -26,3 +26,27 @@ def test_unit_interval_accepts(value) -> None:
 def test_unit_interval_rejects(value) -> None:
     with pytest.raises(UserInputError, match="must be in"):
         _require_unit_interval(value, "--secondary-ani")
+
+
+def test_phylo_build_mask_needs_the_snptype_source(tmp_path) -> None:
+    """--mask on the stateless step is refused under the aligner source (D-6)."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    genomes = tmp_path / "g"
+    genomes.mkdir()
+    result = CliRunner().invoke(
+        app,
+        [
+            "phylo-build",
+            "--genomes-dir",
+            str(genomes),
+            "-o",
+            str(tmp_path / "o"),
+            "--mask",
+            "gubbins",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--msa-source snptype" in result.output + str(result.exception or "")
