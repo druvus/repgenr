@@ -5,7 +5,7 @@
 //         and task tags name the taxon. Falls back to the mode.
 //         Bacterial: the value after `-ts` in metadata_args, else after
 //         `-tg`, else after `-tf` (most specific rank first). Viral: the
-//         value after `-tg` in vgenome_args, else after `-t` in
+//         value after `-tg` in vgenome_args, else after `--target` in
 //         vmetadata_args. `target_after(args, flag)` returns the token after
 //         `flag` in `args`, or null when `flag` is absent.
 // mode -- 'bacterial' or 'viral'.
@@ -20,7 +20,7 @@ def run_meta(Map params) {
     def target = null
     if (params.mode == 'viral') {
         target = target_after(params.vgenome_args ?: '', '-tg')
-            ?: target_after(params.vmetadata_args ?: '', '-t')
+            ?: target_after(params.vmetadata_args ?: '', '--target')
     }
     else {
         def bact = params.metadata_args ?: ''

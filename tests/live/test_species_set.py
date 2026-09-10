@@ -337,7 +337,7 @@ def test_tree2tax_workdir_flags(run_repgenr, wd: Path) -> None:
         "--remove-outgroup",
         "--node-basename",
         "N",
-        "-r",
+        "--root-name",
         "top",
         "--collapse-support",
         "0.5",

@@ -104,7 +104,7 @@ def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
             "-wd",
             wd,
             "--viral",
-            "-t",
+            "--target",
             "adenoviridae",
             "-tg",
             "mastadenovirus",
@@ -119,7 +119,7 @@ def test_viral_run_matches_manual_commands(dispatched, tmp_path) -> None:
     dispatched.clear()
 
     for args in (
-        ["vmetadata", "-wd", wd, "-t", "adenoviridae"],
+        ["vmetadata", "-wd", wd, "--target", "adenoviridae"],
         ["vgenome", "-wd", wd, "-tg", "mastadenovirus"],
         # skder ignores extra["virus"], so `run --viral` no longer injects it;
         # the equivalent manual invocation omits --virus.

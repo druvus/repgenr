@@ -184,7 +184,7 @@ def test_vmetadata_released_after_and_host_narrow_the_set(
         "vmetadata",
         "-wd",
         recent,
-        "-t",
+        "--target",
         "hepatovirus",
         "--complete-only",
         "--released-after",
@@ -193,7 +193,14 @@ def test_vmetadata_released_after_and_host_narrow_the_set(
     assert 0 < count(recent) < base
     hosted = tmp_path / "host"
     run_repgenr(
-        "vmetadata", "-wd", hosted, "-t", "hepatovirus", "--complete-only", "--host", "Homo sapiens"
+        "vmetadata",
+        "-wd",
+        hosted,
+        "--target",
+        "hepatovirus",
+        "--complete-only",
+        "--host",
+        "Homo sapiens",
     )
     assert 0 < count(hosted) <= base
     assert "--host Homo sapiens" in log_text(hosted)
@@ -283,7 +290,7 @@ def test_vgenome_discard_glance_headers_keep_files(run_repgenr, viral_cache: Pat
 def bvbrc_cache(cached_workdir) -> Path:
     return cached_workdir(
         "hepatitis_e_bvbrc",
-        [["vmetadata", "-t", "hepatitis_e_virus", "--source", "bvbrc"]],
+        [["vmetadata", "--target", "hepatitis_e_virus", "--source", "bvbrc"]],
         "vmetadata",
     )
 
@@ -297,11 +304,11 @@ def test_vmetadata_bvbrc_source_and_filter(bvbrc_cache: Path, run_repgenr, copy_
         "vmetadata",
         "-wd",
         wd,
-        "-t",
+        "--target",
         "hepatitis_e_virus",
         "--source",
         "bvbrc",
-        "-f",
+        "--filter",
         "segment",
     )
     assert "Group FASTA already present" in log_text(wd)
@@ -346,7 +353,7 @@ def test_run_dry_run_prints_the_chain_without_network(run_repgenr, tmp_path: Pat
         assert f"- {stage}" in out
     assert "no work done" in out and not wd.exists()
     viral = run_repgenr(
-        "run", "-wd", wd, "--viral", "-t", "hepatovirus", "-tg", "Hepatovirus", "--dry-run"
+        "run", "-wd", wd, "--viral", "--target", "hepatovirus", "-tg", "Hepatovirus", "--dry-run"
     ).stdout
     assert "- vmetadata" in viral and "- vgenome" in viral
 

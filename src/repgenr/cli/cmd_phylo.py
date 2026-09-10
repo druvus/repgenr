@@ -117,7 +117,7 @@ def phylo(
 def tree2tax(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     node_basename: str | None = typer.Option(None, "--node-basename", help="Prefix for nodes."),
-    root_name: str = typer.Option("root", "-r", "--root-name", help="Name for the root node."),
+    root_name: str = typer.Option("root", "--root-name", help="Name for the root node."),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
     include_dereplicated: bool = typer.Option(
         True,

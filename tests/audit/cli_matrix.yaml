@@ -1571,8 +1571,6 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target:
-        aliases:
-        - -t
         param: VmetadataParams.target
         value: adenoviridae
         with_args:
@@ -1739,6 +1737,8 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
+        aliases:
+        - -t
       --dry-run:
         param: 'n/a: prints the chain and exits before any stage'
         validated: none
@@ -1900,8 +1900,6 @@ commands:
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
         observable: internal node names carry the prefix
       --root-name:
-        aliases:
-        - -r
         param: Tree2taxParams.root_name
         value: top
         validated: none
@@ -2022,8 +2020,6 @@ commands:
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: internal node names carry the prefix
       --root-name:
-        aliases:
-        - -r
         param: Tree2taxStepParams.root_name
         value: top
         validated: none
@@ -2318,8 +2314,6 @@ commands:
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
         observable: the workdir is populated
       --target:
-        aliases:
-        - -t
         param: VmetadataParams.target
         value: adenoviridae
         validated: none
@@ -2341,8 +2335,6 @@ commands:
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --filter:
-        aliases:
-        - -f
         param: VmetadataParams.filter
         value: segment
         validated: none
@@ -2379,8 +2371,6 @@ commands:
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --list:
-        aliases:
-        - -l
         param: VmetadataParams.list_targets
         validated: none
         docs:
@@ -2388,16 +2378,4 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc
-known_short_alias_collisions:
-  -t:
-  - --target
-  - --threads
-  -r:
-  - --release
-  - --root-name
-  -l:
-  - --level
-  - --list
-  -f:
-  - --filter
-  - --force
+known_short_alias_collisions: {}
