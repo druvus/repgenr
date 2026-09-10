@@ -224,6 +224,7 @@ Build a phylogeny from a genomes directory (stateless data-channel step).
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--mask` | `none` | Recombination masking for --msa-source snptype. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ## run

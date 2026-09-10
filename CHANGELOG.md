@@ -7,6 +7,9 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `phylo-build --mask` (D-6): the stateless step accepts the same
+  recombination masker as `phylo` for `--msa-source snptype`, so the
+  Nextflow layer can mask through `phylo_args`.
 - `docs/cli-reference.md`: every command with its options, defaults and
   help, generated from the command tree by `scripts/render_cli_matrix.py`
   and kept in sync by a test; a second test checks that every flag is

@@ -152,6 +152,9 @@ def phylo_build_cmd(
         [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    mask: str = typer.Option(
+        "none", "--mask", help="Recombination masking for --msa-source snptype."
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -161,6 +164,7 @@ def phylo_build_cmd(
     from ..snptypers.base import registry as _snp_registry
     from ..stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
     from ..treebuilders.base import registry as _tb_registry
+    from .param_builders import require_mask
 
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
@@ -170,6 +174,9 @@ def phylo_build_cmd(
             _require_choice(aligner, set(_aln_registry.names()), "--aligner")
         else:
             _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
+        require_mask(mask)
+        if mask != "none" and msa_source != "snptype":
+            raise UserInputError("--mask applies only with --msa-source snptype.")
 
         phylo_params = PhyloParams(
             treebuilder=treebuilder,
@@ -180,7 +187,10 @@ def phylo_build_cmd(
             bootstrap=bootstrap,
             reference=reference,
             threads=threads,
-            extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+            extra={
+                **_parse_key_values(aligner_arg, "--aligner-arg"),
+                **({"mask": mask} if mask != "none" else {}),
+            },
         )
         phylo_build(
             PhyloBuildParams(
