@@ -83,6 +83,9 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- `tree2tax-relations --include-dereplicated` is on by default, as on
+  `tree2tax` and `run`; `--no-include-dereplicated` turns it off. The
+  Nextflow `tree2tax_args` default is therefore empty (D-1).
 - With `--container` but no `--wave`, an adapter that only declares a conda
   spec runs on the host; the warning now says so and names the remedy
   (`pass --wave`), instead of claiming the tool declares no image.

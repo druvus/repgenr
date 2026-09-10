@@ -5,6 +5,6 @@
   "derep_secondary_ani": 0.95,
   "derep_process_size": 2000,
   "phylo_args": "--treebuilder mashtree",
-  "tree2tax_args": "--include-dereplicated",
+  "tree2tax_args": "",
   "outdir": "results"
 }

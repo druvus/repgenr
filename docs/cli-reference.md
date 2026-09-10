@@ -311,7 +311,7 @@ Emit FlexTaxD relations from a tree (stateless data-channel step).
 | `--node-basename` |  | Prefix for nodes. |
 | `-r`, `--root-name` | `root` | Name for the root node. |
 | `--remove-outgroup` | off | Drop outgroup. |
-| `--include-dereplicated` | off | List redundant genomes under their representative. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |

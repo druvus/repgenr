@@ -2050,6 +2050,8 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
+        secondary:
+        - --no-include-dereplicated
       --versions-out:
         param: Tree2taxStepParams.versions_out
         value: '{alt_file}'
