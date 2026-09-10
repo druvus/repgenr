@@ -174,6 +174,16 @@ The masker now estimates this fraction, warns above 10%, and reports the figure
 if Gubbins fails. Recombination masking belongs to a within-species run; a
 genus-level set is served by mashtree or an alignment-based path.
 
+Masking changes the answer where it does run. On the nine F. tularensis
+representatives, IQ-TREE with 1000 ultrafast bootstrap replicates took 27 s on
+the 105597 unmasked variable sites and 21 s on the 19723 Gubbins kept. The two
+topologies share no internal split (Robinson-Foulds 12 of a possible 12), and
+both carry high support: median 98 unmasked, 96 masked. Note what the sites
+rest on. These genomes were mapped to the alphabetically first genome of the
+whole genus, another species, and 5.1% of that reference's columns vary within
+a species usually described as clonal. A within-species run wants `--reference`
+pointed at a genome of that species; the stage warns when it falls back.
+
 Gubbins also needs a multi-threaded RAxML build (`raxmlHPC-PTHREADS*`) whenever
 it is given more than one thread. The osx-arm64 conda package has none, so the
 masker falls back to IQ-TREE, which cost 76 of the 87 minutes above on this
