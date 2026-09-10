@@ -123,6 +123,27 @@ Last run 2026-09-10 13:11 UTC: 75 passed, 0 failed, 0 errors, 0 skipped, 25 min 
 What each module covers, with the flags it exercises, is in
 `docs/audit/cli-matrix.md` (the `live` column) and `tests/live/README.md`.
 
+## Genus-scale run (real data, 2026-09-10)
+
+One `run` over every GTDB genome of a genus, on the audit machine (11 cores,
+18 GB), workdir on an external volume:
+
+```bash
+repgenr run -wd work/francisella_all -d all -l genus -tg Francisella \
+    --metadata-source api --tool skder --treebuilder mashtree -t 8 \
+    --keeper quality --collapse-support 0.5
+```
+
+| Stage | Result | Wall time |
+|---|---|---|
+| metadata (API, quality cards) | 1157 genomes, 937 of them F. tularensis; outgroup GCF_003574425.1 | 4 min |
+| genome | 1157 downloaded in one batch, 2.2 GB, none missing | 2.5 min |
+| dereplicate (skder) | 68 representatives; largest cluster 893 genomes, 36 singletons; quality keeper replaced 11 | 5.7 min |
+| phylo (mashtree, 8 threads) | 69 leaves, branch lengths 0.0001 to 0.22 (outgroup) | 1 s |
+| tree2tax | 136 relations, 1158 genomes mapped | under 1 s |
+
+12 minutes end to end, 25 CPU-minutes, 2.9 GB on disk, `doctor` clean.
+
 ## Platform notes (macOS / Apple Silicon)
 
 - Several tools lack osx-arm64 builds; some run via an osx-64 (Rosetta) conda env
