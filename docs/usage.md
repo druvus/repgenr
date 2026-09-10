@@ -58,7 +58,9 @@ typed configuration, supply a params file:
 nextflow run nextflow/main.nf -profile standard -params-file params.json
 ```
 
-A starting point is in `nextflow/assets/params_example.json`. A params file keeps
+A starting point is in `nextflow/assets/params_example.json`. On the command line, give a string parameter whose value starts with a dash
+as `--key=value` (for example `--tree2tax_args=--include-dereplicated`):
+Nextflow reads `--key --flag` as the boolean `key = true`. A params file keeps
 numeric values typed (e.g. `"derep_process_size": 2000`); on the command line
 they arrive as strings, which the schema also accepts for the numeric options.
 

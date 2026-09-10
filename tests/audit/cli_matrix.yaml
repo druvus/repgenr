@@ -28,6 +28,8 @@ global_flags:
     validated: none
     docs:
     - docs/adding-tools.md
+    - docs/cli-reference.md
+    - docs/audit/cli-matrix.md
     nextflow: 'n/a: prints the version and exits'
     live: 'n/a: unit test test_version_flag_prints_version'
   --container:
@@ -39,10 +41,11 @@ global_flags:
     docs:
     - README.md
     - docs/adding-tools.md
+    - docs/cli-reference.md
     - docs/containers.md
     - docs/swot-viral.md
     - docs/usage.md
-    - docs/verification.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --container-engine:
@@ -51,7 +54,9 @@ global_flags:
     value: podman
     validated: none
     docs:
+    - docs/cli-reference.md
     - docs/containers.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_container_engine_podman_is_reported_when_missing
   --container-cache:
@@ -60,8 +65,9 @@ global_flags:
     value: '{alt_dir}'
     validated: none
     docs:
+    - docs/cli-reference.md
     - docs/containers.md
-    - docs/verification.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --platform:
@@ -71,7 +77,9 @@ global_flags:
     validated: none
     docs:
     - README.md
+    - docs/cli-reference.md
     - docs/containers.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --wave:
@@ -82,8 +90,10 @@ global_flags:
     validated: none
     docs:
     - docs/adding-tools.md
+    - docs/cli-reference.md
     - docs/containers.md
     - docs/swot-viral.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run
   --force:
@@ -96,6 +106,8 @@ global_flags:
     validated: none
     docs:
     - README.md
+    - docs/cli-reference.md
+    - docs/audit/cli-matrix.md
     nextflow: 'n/a: resume is Nextflow''s -resume in the data-channel layer'
     live: tests/live/test_aux_commands.py::test_second_run_skips_and_force_reruns
     observable: a completed stage re-runs
@@ -106,6 +118,8 @@ global_flags:
     validated: none
     docs:
     - README.md
+    - docs/cli-reference.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: DEBUG lines in repgenr.log
@@ -114,7 +128,9 @@ global_flags:
     - -q
     param: state.log_level
     validated: none
-    docs: []
+    docs:
+    - docs/cli-reference.md
+    - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: no INFO lines on the console
@@ -134,8 +150,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: the workdir is populated
@@ -143,7 +161,9 @@ commands:
         param: DerepStockParams.action
         value: pack
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: pack/unpack/delete/list round trip
@@ -152,7 +172,9 @@ commands:
         value: run1
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
   derep-unpack:
@@ -168,15 +190,19 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: the workdir is populated
       --no-representant:
         param: DerepUnpackParams.no_representant
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: cluster dirs lack the representative
@@ -193,8 +219,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
@@ -205,12 +233,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_adapter_recovers_the_synthetic_partition
         observable: derep/clusters.tsv partition matches truth.json
@@ -221,7 +250,8 @@ commands:
         value: '0.85'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --secondary-ani:
@@ -231,9 +261,10 @@ commands:
         value: '0.95'
         validated: unit_interval
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_secondary_ani_sweep_changes_representative_count
         observable: representative count differs between -sani 0.95 and -sani 0.999
@@ -243,7 +274,9 @@ commands:
         param: DereplicateParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --threads:
@@ -254,7 +287,8 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --process-size:
@@ -265,9 +299,10 @@ commands:
         validated: none
         docs:
         - docs/architecture.md
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/swot-derep.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_process_size
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
         observable: chunk directories appear under scratch/
@@ -278,7 +313,8 @@ commands:
         value: '2'
         validated: none
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-primary-ani:
@@ -286,7 +322,8 @@ commands:
         value: '0.8'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-secondary-ani:
@@ -294,7 +331,8 @@ commands:
         value: '0.9'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --reduce:
@@ -302,8 +340,10 @@ commands:
         value: species
         validated: choice
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/swot-derep.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_reduce_species_keeps_one_representative_per_species
         observable: one representative per species
@@ -313,8 +353,10 @@ commands:
         validated: range
         invalid: '-1'
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/swot-derep.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_target_reps_lands_on_the_requested_count
         observable: representative count lands near the target
@@ -327,8 +369,9 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_virus_flag_on_auto_tool_is_reported_when_ignored
       --tool-arg:
@@ -338,14 +381,18 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_tool_arg_reaches_the_tool_command_line
         observable: the key=value reaches the tool command line in repgenr.log
       --allow-incomplete:
         param: DereplicateParams.allow_incomplete
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_allow_incomplete_gates_a_missing_genome
       --keeper:
@@ -354,8 +401,10 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_keeper_quality_promotes_the_best_scored_member
   dereplicate-chunk:
@@ -370,7 +419,9 @@ commands:
         param: ChunkParams.genomes
         value: '{alt_fofn}'
         validated: stage
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --out:
@@ -379,7 +430,10 @@ commands:
         param: ChunkParams.out_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --tool:
@@ -389,12 +443,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --primary-ani:
@@ -404,7 +459,8 @@ commands:
         value: '0.85'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_primary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
@@ -414,9 +470,10 @@ commands:
         value: '0.95'
         validated: unit_interval
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_secondary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
@@ -426,7 +483,9 @@ commands:
         param: ChunkParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_aligned_fraction
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
@@ -437,7 +496,8 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: task.cpus
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --virus:
@@ -449,8 +509,9 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
@@ -460,7 +521,9 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: not exposed; add it to ext.args in modules.config'
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
@@ -468,7 +531,9 @@ commands:
         param: ChunkParams.selection_tsv
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
@@ -477,15 +542,19 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
         observable: a versions YAML fragment is written
@@ -503,21 +572,28 @@ commands:
         param: MergeParams.out_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-dir:
         param: MergeParams.chunk_dirs
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-fofn:
         param: MergeParams.chunk_dirs
         value: '{fofn}'
         validated: stage
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_fofn
       --tool:
@@ -527,12 +603,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --primary-ani:
@@ -542,7 +619,8 @@ commands:
         value: '0.85'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_primary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
@@ -552,9 +630,10 @@ commands:
         value: '0.95'
         validated: unit_interval
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_secondary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
@@ -564,7 +643,9 @@ commands:
         param: MergeParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_aligned_fraction
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
@@ -575,7 +656,8 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: task.cpus
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --virus:
@@ -587,8 +669,9 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
@@ -598,7 +681,9 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: not exposed; add it to ext.args in modules.config'
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
@@ -606,7 +691,9 @@ commands:
         param: MergeParams.selection_tsv
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
@@ -615,15 +702,19 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_fofn
         observable: a versions YAML fragment is written
@@ -639,8 +730,10 @@ commands:
         param: 'n/a: query command, no stage parameters'
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome
         observable: exit 0 on a sound workdir, 1 after corrupting a genome
@@ -657,22 +750,28 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
       --accession-list-only:
         param: GenomeParams.accession_list_only
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_genome_accession_list_only_is_a_pure_query
         observable: accession list written, genomes/ empty
       --keep-files:
         param: GenomeParams.keep_files
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch
   genome-fetch:
@@ -689,7 +788,9 @@ commands:
         validated: stage
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
       --out:
@@ -698,20 +799,27 @@ commands:
         param: GenomeFetchParams.out_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
       --keep-files:
         param: GenomeFetchParams.keep_files
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: not exposed by the GENOME_FETCH module'
         live: tests/live/test_network.py::test_genome_fetch_step
       --versions-out:
         param: GenomeFetchParams.versions_out
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
         observable: a versions YAML fragment is written
@@ -728,8 +836,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
         observable: the workdir is populated
@@ -740,12 +850,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
       --threads:
@@ -756,27 +867,34 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
       --plot-max:
         param: GlanceParams.plot_max
         value: '0.99'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --plot-min:
         param: GlanceParams.plot_min
         value: '0.5'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --keep-files:
         param: GlanceParams.keep_files
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
   ingest:
@@ -794,8 +912,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
@@ -805,7 +925,9 @@ commands:
         validated: stage
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: genomes/ holds one link per source FASTA
@@ -815,7 +937,9 @@ commands:
         validated: stage
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset
       --outgroup:
@@ -824,7 +948,9 @@ commands:
         validated: stage
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: outgroup/ and outgroup_accession.txt written
@@ -833,7 +959,9 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: genomes/ entries are regular files
@@ -858,8 +986,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
@@ -869,7 +999,9 @@ commands:
         param: MetadataParams.dataset
         value: all
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --level:
@@ -878,7 +1010,9 @@ commands:
         param: MetadataParams.level
         value: species
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --source:
@@ -887,8 +1021,9 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --release:
@@ -899,6 +1034,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --gtdb-version:
@@ -907,7 +1044,9 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --target-family:
@@ -916,7 +1055,9 @@ commands:
         param: MetadataParams.target_family
         value: Francisellaceae
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --target-genus:
@@ -927,6 +1068,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_genus_representatives
       --target-species:
@@ -935,27 +1078,35 @@ commands:
         param: MetadataParams.target_species
         value: tularensis
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --metadata-path:
         param: MetadataParams.metadata_path
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --nodownload:
         param: MetadataParams.nodownload
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --limit:
@@ -964,9 +1115,11 @@ commands:
         validated: range
         invalid: '0'
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/swot-derep.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
         observable: selection.tsv has at most N rows
@@ -983,8 +1136,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
@@ -994,8 +1149,10 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives
       --msa-source:
@@ -1004,7 +1161,9 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
       --aligner:
@@ -1013,7 +1172,9 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --snptyper:
@@ -1023,20 +1184,26 @@ commands:
         - --msa-source
         - snptype
         validated: registry
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --all-genomes:
         param: PhyloParams.all_genomes
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree
         observable: leaf set is all genomes
       --no-outgroup:
         param: PhyloParams.no_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: no outgroup leaf in tree.nwk
@@ -1048,7 +1215,9 @@ commands:
         validated: range
         invalid: '-1'
         docs:
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
         observable: support labels in tree.nwk
@@ -1057,7 +1226,9 @@ commands:
         value: ref.fasta
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --aligner-arg:
@@ -1067,6 +1238,8 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --threads:
@@ -1077,7 +1250,8 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --mask:
@@ -1087,9 +1261,10 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_phylo_mask_gubbins
         with_args:
@@ -1098,7 +1273,9 @@ commands:
       --allow-incomplete:
         param: PhyloParams.allow_incomplete
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
   phylo-build:
@@ -1115,7 +1292,9 @@ commands:
         validated: stage
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
@@ -1124,21 +1303,28 @@ commands:
         param: PhyloBuildParams.out_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: PhyloBuildParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: PhyloBuildParams.outgroup_accession
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --treebuilder:
@@ -1147,8 +1333,10 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --msa-source:
@@ -1157,7 +1345,9 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner:
@@ -1166,7 +1356,9 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --snptyper:
@@ -1176,13 +1368,17 @@ commands:
         - --msa-source
         - snptype
         validated: registry
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --no-outgroup:
         param: PhyloBuildParams.phylo.no_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: no outgroup leaf in tree.nwk
@@ -1194,7 +1390,9 @@ commands:
         validated: range
         invalid: '-1'
         docs:
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
         observable: support labels in tree.nwk
@@ -1203,7 +1401,9 @@ commands:
         value: ref.fasta
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner-arg:
@@ -1213,6 +1413,8 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --threads:
@@ -1223,14 +1425,17 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: task.cpus
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: PhyloBuildParams.versions_out
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
@@ -1249,8 +1454,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
         observable: the workdir is populated
@@ -1259,6 +1466,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
         observable: viral chain stages recorded
@@ -1268,7 +1477,9 @@ commands:
         param: MetadataParams.dataset
         value: all
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --level:
@@ -1277,7 +1488,9 @@ commands:
         param: MetadataParams.level
         value: species
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-family:
@@ -1286,7 +1499,9 @@ commands:
         param: MetadataParams.target_family
         value: Francisellaceae
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --target-genus:
@@ -1297,6 +1512,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-species:
@@ -1305,7 +1522,9 @@ commands:
         param: MetadataParams.target_species
         value: tularensis
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --release:
@@ -1316,6 +1535,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
           in test_network.py'
@@ -1325,7 +1546,9 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
           in test_network.py'
@@ -1333,14 +1556,18 @@ commands:
         param: MetadataParams.source
         value: api
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target:
@@ -1353,6 +1580,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --viral-source:
@@ -1361,7 +1590,9 @@ commands:
         with_args:
         - --viral
         validated: choice
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --group-segments:
@@ -1371,6 +1602,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to vgenome unchanged (wiring test); covered on vgenome in test_vgenome_selection_flags'
       --tool:
@@ -1380,12 +1613,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --primary-ani:
@@ -1393,7 +1627,8 @@ commands:
         value: '0.85'
         validated: unit_interval
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --secondary-ani:
@@ -1401,16 +1636,19 @@ commands:
         value: '0.95'
         validated: unit_interval
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --aligned-fraction:
         param: DereplicateParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --keeper:
@@ -1419,8 +1657,10 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/swot-derep.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --treebuilder:
@@ -1429,8 +1669,10 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --msa-source:
@@ -1439,7 +1681,9 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --aligner:
@@ -1448,7 +1692,9 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/containers.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --snptyper:
@@ -1458,13 +1704,17 @@ commands:
         - --msa-source
         - snptype
         validated: registry
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --no-outgroup:
         param: PhyloParams.no_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --include-dereplicated:
@@ -1474,7 +1724,9 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --threads:
@@ -1483,13 +1735,16 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --dry-run:
         param: 'n/a: prints the chain and exits before any stage'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network
         observable: stage list printed, no workdir written
@@ -1506,8 +1761,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
         observable: the workdir is populated
@@ -1518,12 +1775,13 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/swot-derep.md
         - docs/swot-phylo.md
         - docs/swot-viral.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_parsnp_typer
         observable: snp/core_snp.fasta written
@@ -1532,13 +1790,17 @@ commands:
         value: ref.fasta
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --all-genomes:
         param: SnptypeParams.all_genomes
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_on_representatives_only
         observable: row count equals all genomes
@@ -1549,9 +1811,10 @@ commands:
         docs:
         - README.md
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_gubbins_mask_changes_the_core_alignment
         observable: masked alignment differs from unmasked
@@ -1563,7 +1826,8 @@ commands:
         validated: range
         invalid: '0'
         docs:
-        - docs/verification.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --tool-arg:
@@ -1573,13 +1837,17 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_typer_and_tool_arg
       --allow-incomplete:
         param: SnptypeParams.allow_incomplete
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_snptype_allow_incomplete
   status:
@@ -1594,8 +1862,10 @@ commands:
         param: 'n/a: query command, no stage parameters'
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: reports the local chain with every stage done
@@ -1612,8 +1882,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
@@ -1621,7 +1893,9 @@ commands:
         param: Tree2taxParams.node_basename
         value: node
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
         observable: internal node names carry the prefix
@@ -1631,13 +1905,17 @@ commands:
         param: Tree2taxParams.root_name
         value: top
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --remove-outgroup:
         param: Tree2taxParams.remove_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --include-dereplicated:
@@ -1647,7 +1925,9 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: genomes_map.tsv lists every genome
@@ -1657,8 +1937,10 @@ commands:
         validated: range
         invalid: '2'
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --collapse-length:
@@ -1667,8 +1949,10 @@ commands:
         validated: range
         invalid: '-1'
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
   tree2tax-relations:
@@ -1683,7 +1967,9 @@ commands:
         param: Tree2taxStepParams.tree
         value: '{alt_file}'
         validated: stage
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
@@ -1692,35 +1978,46 @@ commands:
         param: Tree2taxStepParams.out_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --clusters:
         param: Tree2taxStepParams.clusters
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: Tree2taxStepParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: Tree2taxStepParams.outgroup_accession
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --node-basename:
         param: Tree2taxStepParams.node_basename
         value: node
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: internal node names carry the prefix
@@ -1730,13 +2027,17 @@ commands:
         param: Tree2taxStepParams.root_name
         value: top
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --remove-outgroup:
         param: Tree2taxStepParams.remove_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --include-dereplicated:
@@ -1744,14 +2045,18 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: Tree2taxStepParams.versions_out
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
@@ -1761,8 +2066,10 @@ commands:
         validated: range
         invalid: '2'
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
       --collapse-length:
@@ -1771,8 +2078,10 @@ commands:
         validated: range
         invalid: '-1'
         docs:
+        - docs/cli-reference.md
         - docs/swot-phylo.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
   versions:
@@ -1787,15 +2096,19 @@ commands:
         param: 'n/a: query command, no stage parameters'
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_aux_commands.py::test_status_and_versions
       --versions-out:
         param: 'n/a: query command, no stage parameters'
         value: '{alt_file}'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_aux_commands.py::test_status_and_versions
         observable: YAML fragment written
@@ -1812,8 +2125,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_vgenome_selection_flags
         observable: the workdir is populated
@@ -1825,6 +2140,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-species:
@@ -1833,7 +2150,9 @@ commands:
         param: VgenomeParams.target_species
         value: Human mastadenovirus C
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-serotype:
@@ -1842,7 +2161,9 @@ commands:
         param: VgenomeParams.target_serotype
         value: '2'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-custom:
@@ -1851,14 +2172,18 @@ commands:
         param: VgenomeParams.target_custom
         value: host:human
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-all:
         param: VgenomeParams.length_all
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-deviation:
@@ -1866,7 +2191,9 @@ commands:
         value: '20'
         validated: range
         invalid: '-1'
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-method:
@@ -1874,9 +2201,11 @@ commands:
         value: mean
         validated: choice
         docs:
+        - docs/cli-reference.md
         - docs/scaling-audit.md
         - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-range:
@@ -1884,20 +2213,26 @@ commands:
         value: 25000-35000
         validated: none
         docs:
+        - docs/cli-reference.md
         - docs/usage.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --discard:
         param: VgenomeParams.discard
         value: partial
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --no-outgroup:
         param: VgenomeParams.no_outgroup
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --group-segments:
@@ -1905,45 +2240,59 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-candidates-taxid-min-genomes:
         param: VgenomeParams.outgroup_candidates_taxid_min_genomes
         value: '3'
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-treebuilder:
         param: VgenomeParams.outgroup_treebuilder
         validated: registry
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         wiring: 'n/a: mashtree is the only builder with distance_matrix, so no second valid value exists'
       --glance:
         param: VgenomeParams.glance
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         observable: selection printed, nothing written
       --print-fasta-headers:
         param: VgenomeParams.print_fasta_headers
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --ignore-duplicates:
         param: VgenomeParams.ignore_duplicates
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_bvbrc_needs_ignore_duplicates
       --keep-files:
         param: VgenomeParams.keep_files
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
   vmetadata:
@@ -1959,8 +2308,10 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
+        - docs/cli-reference.md
         - docs/containers.md
         - docs/output.md
+        - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
         observable: the workdir is populated
@@ -1972,6 +2323,8 @@ commands:
         validated: none
         docs:
         - README.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --source:
@@ -1980,8 +2333,9 @@ commands:
         validated: choice
         docs:
         - README.md
+        - docs/cli-reference.md
         - docs/usage.md
-        - docs/verification.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --filter:
@@ -1990,20 +2344,26 @@ commands:
         param: VmetadataParams.filter
         value: segment
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --host:
         param: VmetadataParams.host
         value: human
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --complete-only:
         param: VmetadataParams.complete_only
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --released-after:
@@ -2011,7 +2371,9 @@ commands:
         value: 01/31/2024
         validated: callback
         invalid: '2024-01-31'
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --list:
@@ -2019,7 +2381,9 @@ commands:
         - -l
         param: VmetadataParams.list_targets
         validated: none
-        docs: []
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc
 known_short_alias_collisions:

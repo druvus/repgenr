@@ -28,140 +28,100 @@ Docker; `-m "live and not network and not container"` is the offline subset.
 Tests whose tool is not on PATH are skipped, not failed. See
 `tests/live/README.md`.
 
-## Dereplicators
+## Results
 
-| Tool | Unit | Live | Notes |
-|------|------|------|-------|
-| skder | yes | yes | native + container (Wave); local scratch dir (exFAT-safe); membership from skani edges |
-| sourmash | yes | yes | native; k-mer + greedy clustering. Two back-ends: dense `sourmash compare` (default) and a **sparse** `manysketch` + `pairwise` path via the optional `sourmash_plugin_branchwater` plugin (auto-selected when present, dense fallback otherwise). On 1256 hepatitis E genomes (Jaccard 0.90) both back-ends gave the **same 1034 representatives and identical cluster partition**, sparse ~2x faster (2.5 s vs 5.6 s); the sparse path emits only above-threshold edges instead of the dense N x N matrix |
-| galah | yes | yes | native; cluster-definition parsed to representatives + members |
-| drep | — | yes | container (Wave, amd64); a full run needs CheckM + its DB, so verified with `--virus` (sets `--ignoreGenomeQuality`, skipping CheckM) -> 8 reps |
+The table below is rendered from the junit output of the last complete run
+on the audit machine (Apple Silicon, Docker Desktop with Rosetta) by
+`scripts/live_report.py`:
 
-## Aligners
+```bash
+python scripts/live_report.py /path/to/junit.xml --out docs/verification.md
+```
 
-| Tool | Unit | Live | Notes |
-|------|------|------|-------|
-| progressivemauve | yes (converter) | yes | container; full XMFA -> MSA -> tree on the synthetic set. progressiveMauve (libMems) needs boost-cpp 1.74; a naive `bioconda::mauve` Wave build solves against current conda-forge boost and fails at runtime (`undefined symbol _ZNK5boost...path8filenameEv`). **Both image paths are fixed and verified:** the adapter pins a **BioContainer** (`mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4`, ships boost-cpp 1.74) as the default, and the `conda` spec pins `conda-forge::boost-cpp=1.74.0` so the **Wave** build also works. `container` wins over `conda`, so the BioContainer is used unless that pin is removed |
-| sibeliaz | yes (converter) | yes (native + container) | native end-to-end → MAF → MSA → tree (closely-related genomes; 26 genus-level Francisella reps -> 168k-col MSA) and **container** verified on real divergent Francisella genomes (4 seqs -> 80-col MSA -> tree). Required a macOS fix: SibeliaZ's wrapper uses Linux-only `free`/`find -printf`/`stat -c`/`mktemp --suffix`; the adapter passes `-f` and runs a BSD-patched wrapper, and `maf_to_fasta` takes a seqid→genome name-map. **Memory note:** SibeliaZ's per-block alignment calls `spoa` with global (O(n^2)-memory) alignment and suppresses its stderr; on a single very large collinear block (e.g. the ~50 kb synthetic genomes, one block) spoa can be OOM-killed in a memory-limited container VM, leaving an empty MAF. The adapter now detects an empty MAF and raises a clear error (raise the container VM RAM or run natively); real genomes fragment into short LCBs and align fine |
-| cactus | — | yes | container (`cactus:v2.9.3`, amd64); full Minigraph-Cactus run -> HAL -> MAF -> MSA -> tree. Verified on the synthetic set and live on 5 real **F. tularensis** strains (intraspecific is the right granularity for a pangenome; genus-level inputs are too divergent and align only to the reference). Fixes: writable `HOME` for Toil; per-call bind mounts for `seqfile.txt` genome paths; `_find_hal` selects the combined `*.full.hal` (not a per-chromosome HAL under `chrom-alignments/`, which omits genomes); and the `_MINIGRAPH_` backbone pseudo-genome is excluded in `maf_to_fasta` so it is not a taxon (genomes Minigraph-Cactus drops from the graph are tolerated, not errored). Plus Rosetta emulation: the bundled `vg` cannot run under Docker's QEMU (even `vg version` hangs), so on Apple Silicon Docker Desktop must use the **Apple Virtualization framework with "Use Rosetta for x86/amd64"** enabled. On native amd64/Linux (HPC, the Singularity target) no emulation is involved |
+<!-- live-results:start -->
+Last run 2026-09-10 12:04 UTC: 75 passed, 0 failed, 0 errors, 0 skipped, 27 min in total.
 
-## SNP typers
+| module | test | result | seconds |
+|---|---|---|---|
+| test_aux_commands | test_derep_stock_round_trip | passed | 7 |
+| test_aux_commands | test_derep_unpack_with_and_without_representant | passed | 5 |
+| test_aux_commands | test_doctor_passes_then_fails_on_a_corrupt_genome | passed | 3 |
+| test_aux_commands | test_logging_flags_and_env | passed | 12 |
+| test_aux_commands | test_second_run_skips_and_force_reruns | passed | 10 |
+| test_aux_commands | test_status_and_versions | passed | 4 |
+| test_container_runs | test_cactus_pinned_image | passed | 126 |
+| test_container_runs | test_container_engine_podman_is_reported_when_missing | passed | 1 |
+| test_container_runs | test_drep_in_a_wave_container_with_virus_extra | passed | 10 |
+| test_container_runs | test_glance_drep_compare | passed | 6 |
+| test_container_runs | test_native_result_is_not_reused_by_a_container_run | passed | 9 |
+| test_container_runs | test_progressivemauve_pinned_image | passed | 9 |
+| test_container_runs | test_sibeliaz_in_a_wave_container | passed | 20 |
+| test_container_runs | test_simple_typer_multi_tool_image | passed | 21 |
+| test_container_runs | test_skder_in_a_wave_container_with_cache_and_env | passed | 5 |
+| test_dereplicators | test_adapter_recovers_the_synthetic_partition[galah] | passed | 1 |
+| test_dereplicators | test_adapter_recovers_the_synthetic_partition[skder] | passed | 6 |
+| test_dereplicators | test_adapter_recovers_the_synthetic_partition[sourmash] | passed | 3 |
+| test_dereplicators | test_allow_incomplete_gates_a_missing_genome | passed | 3 |
+| test_dereplicators | test_keeper_quality_promotes_the_best_scored_member | passed | 6 |
+| test_dereplicators | test_process_size_runs_the_chunked_path | passed | 6 |
+| test_dereplicators | test_reduce_species_keeps_one_representative_per_species | passed | 3 |
+| test_dereplicators | test_representatives_dir_matches_clusters | passed | 3 |
+| test_dereplicators | test_secondary_ani_sweep_changes_representative_count | passed | 7 |
+| test_dereplicators | test_target_reps_lands_on_the_requested_count | passed | 5 |
+| test_dereplicators | test_tool_arg_reaches_the_tool_command_line | passed | 3 |
+| test_dereplicators | test_virus_flag_on_auto_tool_is_reported_when_ignored | passed | 5 |
+| test_ingest_flags | test_outgroup_and_copy | passed | 0 |
+| test_ingest_flags | test_selection_table_drives_taxonomy_and_subset | passed | 0 |
+| test_network | test_api_genus_representatives | passed | 0 |
+| test_network | test_api_species_limit_and_explicit_outgroup | passed | 0 |
+| test_network | test_api_target_family_widens_the_selection | passed | 15 |
+| test_network | test_genome_accession_list_only_is_a_pure_query | passed | 1 |
+| test_network | test_genome_fetch_step | passed | 9 |
+| test_network | test_genome_keep_files_retains_the_download_scratch | passed | 86 |
+| test_network | test_run_bacterial_chain_end_to_end | passed | 16 |
+| test_network | test_run_dry_run_prints_the_chain_without_network | passed | 0 |
+| test_network | test_run_dry_run_reports_family_and_species_targets | passed | 0 |
+| test_network | test_run_viral_chain_end_to_end | passed | 35 |
+| test_network | test_tsv_nodownload_and_metadata_path_reuse_the_table | passed | 32 |
+| test_network | test_tsv_source_downloads_and_parses_the_release_table | passed | 0 |
+| test_network | test_vgenome_bvbrc_needs_ignore_duplicates | passed | 2 |
+| test_network | test_vgenome_discard_glance_headers_keep_files | passed | 2 |
+| test_network | test_vgenome_selection_flags | passed | 7 |
+| test_network | test_vmetadata_bvbrc_source_and_filter | passed | 5 |
+| test_network | test_vmetadata_list_targets_reaches_bvbrc | passed | 3 |
+| test_network | test_vmetadata_ncbi_virus_complete_only | passed | 0 |
+| test_network | test_vmetadata_released_after_and_host_narrow_the_set | passed | 15 |
+| test_nextflow | test_docker_profile_with_progressivemauve | passed | 18 |
+| test_nextflow | test_local_dataflow_variants[skder---treebuilder sourmash] | passed | 16 |
+| test_nextflow | test_local_dataflow_variants[sourmash---treebuilder mashtree] | passed | 12 |
+| test_nextflow | test_main_bacterial_test_profile | passed | 23 |
+| test_nextflow | test_main_viral_mode | passed | 25 |
+| test_smoke | test_offline_chain_sourmash_mashtree | passed | 5 |
+| test_species_set | test_fasttree_and_raxmlng_from_snptype | passed | 109 |
+| test_species_set | test_gubbins_mask_changes_the_core_alignment | passed | 135 |
+| test_species_set | test_iqtree_from_snptype_with_bootstrap_and_outgroup | passed | 126 |
+| test_species_set | test_parsnp_typer | passed | 34 |
+| test_species_set | test_phylo_mask_gubbins | passed | 91 |
+| test_species_set | test_simple_typer_all_genomes_with_explicit_reference | passed | 45 |
+| test_species_set | test_simple_typer_on_representatives_only | passed | 13 |
+| test_species_set | test_ska2_source_with_reference_and_allow_incomplete | passed | 314 |
+| test_species_set | test_ska2_typer_and_tool_arg | passed | 4 |
+| test_species_set | test_snptype_allow_incomplete | passed | 37 |
+| test_species_set | test_tree2tax_workdir_flags | passed | 8 |
+| test_steps | test_chunk_keeper_quality_from_selection_tsv | passed | 9 |
+| test_steps | test_chunk_results_carry_the_contract_and_versions | passed | 11 |
+| test_steps | test_merge_by_chunk_dir_recovers_the_partition | passed | 13 |
+| test_steps | test_merge_by_chunk_fofn | passed | 12 |
+| test_steps | test_phylo_build_aligner_and_snp_source_variants | passed | 31 |
+| test_steps | test_phylo_build_and_tree2tax_relations_with_outgroup | passed | 1 |
+| test_steps | test_tree2tax_relations_collapse_flags | passed | 1 |
+| test_treebuilders_offline | test_alignment_free_builder_on_representatives[mashtree] | passed | 7 |
+| test_treebuilders_offline | test_alignment_free_builder_on_representatives[sourmash] | passed | 7 |
+| test_treebuilders_offline | test_all_genomes_puts_every_genome_in_the_tree | passed | 4 |
+<!-- live-results:end -->
 
-| Tool | Unit | Live | Notes |
-|------|------|------|-------|
-| simple | yes | yes | native (samtools/bcftools 1.23 from a dedicated env ahead on PATH) + container (Wave multi-tool image); minimap2 + samtools/bcftools → core-SNP alignment + distance matrix |
-| parsnp | — | yes | native (parsnp 2.1.5 + harvesttools env) → core-SNP FASTA |
-| snippy | — | yes | container (Wave, amd64); per-genome calling + snippy-core → 2406 core SNP sites |
-| gubbins (mask) | — | yes | native; `--mask gubbins` in its own Python 3.10 env, converged and filtered |
-
-## Tree builders
-
-| Tool | Unit | Live | Notes |
-|------|------|------|-------|
-| iqtree | — | yes | ML tree from the SNP MSA |
-| fasttree | — | yes | approximate-ML tree from the SNP MSA |
-| raxmlng | — | yes | `--threads auto{N}` + `--redo` (fixes oversubscription / re-run) |
-| mashtree | — | yes | alignment-free; validated on the real Francisella set |
-| sourmash | yes | yes | alignment-free; k-mer distance + neighbor-joining |
-
-## Front-end stages
-
-| Stage | Live | Notes |
-|-------|------|-------|
-| metadata (GTDB) | yes | downloaded + parsed r207 bac120 (62,291 rep accessions) |
-| genome (NCBI datasets) | yes | downloaded 8 Francisella genomes + outgroup |
-| tree2tax | yes | FlexTaxD relations + genome map |
-| vmetadata / vgenome (viral) | yes | live Hepeviridae run: BV-BRC FTPS download + NCBI Entrez -> 1256 genomes -> skder 799 reps -> mashtree -> tree2tax. Required an FTPS/TLS-session-reuse fix (BV-BRC dropped plain FTP) |
-
-## End-to-end (genus Francisella, GTDB representatives)
-
-Live full-pipeline run starting from GTDB **representative** genomes
-(`metadata -d rep -l genus -tg Francisella --source api` -> 26 reps + outgroup
-`GCF_003574425.1`; `genome` via NCBI datasets). The same downloaded genomes were
-then re-run through different tool combinations to confirm tool-swappability; all
-four produced a consistent 27-leaf tree (26 reps + outgroup) and a 52-edge
-FlexTaxD `tree2tax.tsv` + 26-row `genomes_map.tsv`:
-
-| Run | Dereplicate | Phylo | Result |
-|-----|-------------|-------|--------|
-| 1 | skder | mashtree (alignment-free) | 27-leaf tree |
-| 2 | galah | sourmash (alignment-free) | 27-leaf tree |
-| 3 | sourmash | sibeliaz aligner + raxml-ng (ML) | 27-leaf ML tree from an 80-col SibeliaZ MSA; outgroup-rooted, recovers expected Francisella clades (tularensis/hispaniensis, orientalis/sciaenopsi/noatunensis/philomiragia, etc.) |
-| 4 | drep (container, `--virus`) | sibeliaz aligner + iqtree (ML) | 27-leaf ML tree from the SibeliaZ MSA; iqtree's ultrafast bootstrap finished quickly (no long bootstrap tail) |
-
-All four dereplicators returned 26/26 representatives (the GTDB reps are one per
-species, so divergent at genus level); see also the within-species threshold
-sweep below.
-
-Run 3 also exercised the bounded RAxML-NG bootstrap: the whole phylo (SibeliaZ
-MSA + ML search + `autoMRE{200}` bootstrap) finished in ~47 min, where the
-previous uncapped `autoMRE{1000}` default was still bootstrapping past 2 h.
-
-### Dereplicator ANI thresholds and chunking
-
-`--secondary-ani` is the shared clustering knob, honored by all four
-dereplicators (skder `-i`, galah `--ani`, sourmash similarity, drep `-sa`);
-`--primary-ani` only affects drep's two-stage algorithm. On the genus reps the
-threshold is a no-op (always 26 reps, one genome per species), but a
-within-species sweep on 5 *F. tularensis* strains shows it bite: the ANI tools
-(skder/galah/drep) collapse all 5 to 1 representative at <=99% ANI and split to 5
-at >=99.9% (so the strains sit at ~99-99.9% ANI), while sourmash's k-mer
-similarity is a different, faster-saturating metric (4 at 0.90, 5 at >=0.99).
-
-For 1000s-10000s genomes, `--process-size` runs a two-stage chunked
-dereplication for **any** tool (split -> per-chunk pass -> dereplicate the union
-of chunk reps), with `--num-processes` parallel chunk workers and optional looser
-stage-1 thresholds via `--pre-primary-ani`/`--pre-secondary-ani`. Verified live:
-`dereplicate --tool skder -s 10 -p 3 --pre-secondary-ani 0.95` on the 26 genus
-reps -> 3 stage-1 chunks at `skder -i 95`, stage-2 at `-i 99`, 26/26 reps.
-
-## Containers
-
-RepGenR can run any tool in a pinned container (`--container docker|singularity`;
-see `docs/containers.md`), pinning versions and unblocking tools that don't
-install on the host. The backend has unit tests (argv construction, mounts, UID,
-native vs wrapped) and **every tool was validated live in a container** on macOS
-+ Docker + Wave/BioContainers (all 16 tools; SibeliaZ has a memory note for
-single very large blocks, see its row above):
-- Dereplicators (4/4): `skder` -> 8 reps; `drep` (amd64, `--virus` skips CheckM)
-  -> 8 reps; `sourmash` -> 8 reps; `galah` -> 8 reps.
-- SNP typers (4/4): `simple` (Wave multi-tool image minimap2+samtools+bcftools)
-  -> 2413 sites; `snippy` (amd64) -> 2406 sites; `parsnp` -> 80 sites;
-  `--mask gubbins` -> 2413 sites.
-- Tree builders (5/5): `mashtree`, `sourmash`, `iqtree`, `fasttree`, `raxmlng`
-  all -> trees.
-- Aligners (3/3): `progressivemauve` (BioContainer); `cactus` (amd64 + Rosetta);
-  `sibeliaz` on real genomes (the synthetic single-large-block case OOM-kills
-  spoa in the VM -- see its row).
-
-Three backend fixes came out of these sweeps:
-- **Writable HOME.** Containers run as the host UID with no passwd entry, so HOME
-  defaults to `/` and is not writable. The Docker wrapper now sets
-  `-e HOME=<workdir>` (the mounted, writable working dir), which unblocks tools
-  that touch HOME — e.g. Toil/Cactus creating its config dir.
-- **Per-call extra mounts.** `run_tool(..., extra_mounts=[...])` lets an adapter
-  declare input directories that are referenced indirectly (paths listed inside a
-  manifest file rather than passed as argv tokens). Cactus uses this for the
-  genome paths in `seqfile.txt`; the sourmash dereplicator/tree builder use it for
-  the genomes listed in their `--from-file` fofn.
-- **Un-resolved fofn paths.** `write_fofn` emits `os.path.abspath` (not
-  `Path.resolve()`) paths so a fofn read inside a container matches the backend's
-  un-resolved bind mounts (macOS firmlinks resolve `/Users` to a path outside
-  Docker's shared dirs).
-
-Singularity/Apptainer is Linux-only (no macOS build), so it can't run natively on
-the macOS dev box. The exact command forms the backend emits were validated
-against real **apptainer 1.4.4** in a Linux container: `apptainer pull <sif>
-docker://<image>` (the `--container-cache` `.sif` behavior) and `apptainer exec
---bind <dir> --pwd <wd> <sif> <argv>`. On HPC/Linux this is the production engine.
-
-Notes: macOS firmlinked temp/home paths must be bind-mounted un-resolved (handled
-in the backend). Containers run as the host UID with no passwd entry, so the
-backend sets a writable `HOME` (the mounted workdir); adapters whose inputs are
-listed inside a manifest file declare those directories via `extra_mounts`. The
-freshly Wave-built `mauve` image is broken (boost ABI mismatch); the adapter pins
-a working BioContainer and a boost-pinned conda spec instead (see the aligners
-table).
+What each module covers, with the flags it exercises, is in
+`docs/audit/cli-matrix.md` (the `live` column) and `tests/live/README.md`.
 
 ## Platform notes (macOS / Apple Silicon)
 
