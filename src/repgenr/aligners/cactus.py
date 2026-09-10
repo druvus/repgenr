@@ -78,6 +78,9 @@ class CactusAligner(Aligner):
             ],
             logger=logger,
             log_prefix="cactus",
+            # Toil writes .toil/ under HOME, which the container backend points
+            # at the working directory; keep that inside the alignment dir.
+            cwd=out_dir,
             extra_mounts=genome_dirs,
         )
 

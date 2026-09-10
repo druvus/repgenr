@@ -17,7 +17,7 @@ import pytest
 from live_helpers import log_text
 
 from repgenr.core.config import Config
-from repgenr.core.contracts import SELECTION_TSV, TREE2TAX_TSV, read_selection
+from repgenr.core.contracts import SELECTION_TSV, TREE2TAX_TSV, list_fasta, read_selection
 
 pytestmark = [pytest.mark.live, pytest.mark.network]
 
@@ -37,7 +37,7 @@ def test_api_genus_representatives(genus_cache: Path) -> None:
     assert len(ingroup) == 26 and {r.genus for r in ingroup} == {"Francisella"}
     assert [r.accession for r in outgroup] == [GENUS_OUTGROUP]
     assert all(r.completeness is not None for r in ingroup), "API cards carry CheckM quality"
-    assert len(list((genus_cache / "genomes").glob("*.fasta"))) == 26
+    assert len(list_fasta(genus_cache / "genomes")) == 26
     assert (genus_cache / "outgroup").is_dir()
     assert (genus_cache / "outgroup_accession.txt").read_text().strip() == GENUS_OUTGROUP
 
@@ -47,7 +47,7 @@ def test_api_species_limit_and_explicit_outgroup(species_cache: Path) -> None:
     assert len(ingroup) == 10 and {r.species for r in ingroup} == {"tularensis"}
     assert [r.accession for r in outgroup] == [PHILOMIRAGIA_REP]
     assert "philomiragia" in outgroup[0].species
-    assert len(list((species_cache / "genomes").glob("*.fasta"))) == 10
+    assert len(list_fasta(species_cache / "genomes")) == 10
     assert "--limit" in log_text(species_cache) or "limit" in log_text(species_cache).lower()
 
 
@@ -151,7 +151,7 @@ def test_genome_keep_files_retains_the_download_scratch(
     wd = copy_of(species_cache)
     shutil.rmtree(wd / "genomes")
     run_repgenr("--force", "genome", "-wd", wd, "--keep-files")
-    assert len(list((wd / "genomes").glob("*.fasta"))) == 10
+    assert len(list_fasta(wd / "genomes")) == 10
     scratch = wd / "scratch" / "genome_download"
     assert scratch.is_dir() and any(scratch.iterdir()), "--keep-files keeps the datasets archives"
 
@@ -318,7 +318,7 @@ def test_vgenome_bvbrc_needs_ignore_duplicates(bvbrc_cache: Path, run_repgenr, c
         "vgenome", "-wd", wd, "-tg", "Paslahepevirus", "--ignore-duplicates", "--no-outgroup"
     )
     ingroup, _ = _rows(wd)
-    assert len(ingroup) > 0 and len(list((wd / "genomes").glob("*.fasta"))) == len(ingroup)
+    assert len(ingroup) > 0 and len(list_fasta(wd / "genomes")) == len(ingroup)
 
 
 # --- run -----------------------------------------------------------------------
@@ -438,8 +438,8 @@ def test_genome_fetch_step(run_repgenr, species_cache: Path, tmp_path: Path) -> 
         "--versions-out",
         tmp_path / "versions.yml",
     )
-    assert len(list((out / "genomes").glob("*.fasta"))) == 10
-    assert len(list((out / "outgroup").glob("*.fasta"))) == 1
+    assert len(list_fasta(out / "genomes")) == 10
+    assert len(list_fasta(out / "outgroup")) == 1
     assert "datasets:" in (tmp_path / "versions.yml").read_text(encoding="utf-8")
     assert any((out / "scratch").iterdir()), "--keep-files leaves the download scratch"
 

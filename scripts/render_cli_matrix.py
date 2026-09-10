@@ -13,6 +13,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "tests" / "audit" / "cli_matrix.yaml"
 OUT = ROOT / "docs" / "audit" / "cli-matrix.md"
+REFERENCE = ROOT / "docs" / "cli-reference.md"
+SKIP_OPTS = {"--help", "--install-completion", "--show-completion"}
 
 
 def _cell(value) -> str:
@@ -77,12 +79,66 @@ def render(matrix: dict) -> str:
     return "\n".join(lines)
 
 
+def _click_tree():
+    import typer
+
+    from repgenr.cli.main import app
+
+    return typer.main.get_command(app)
+
+
+def _option_rows(cmd) -> list[str]:
+    rows = ["| option | default | description |", "|---|---|---|"]
+    for p in cmd.params:
+        opts = getattr(p, "opts", None)
+        if not opts or opts[0] in SKIP_OPTS:
+            continue
+        names = ", ".join(f"`{o}`" for o in [*opts, *(getattr(p, "secondary_opts", None) or [])])
+        if getattr(p, "required", False):
+            default = "required"
+        elif getattr(p, "is_flag", False):
+            default = "off" if not p.default else "on"
+        else:
+            default = "" if p.default in (None, [], ()) else f"`{p.default}`"
+        rows.append(f"| {names} | {default} | {_cell(p.help or '')} |")
+    return rows
+
+
+def render_reference(cli=None) -> str:
+    """The command reference: every command with its options, defaults and help."""
+    cli = cli or _click_tree()
+    lines = [
+        "# Command reference",
+        "",
+        "Generated from the command tree by `scripts/render_cli_matrix.py`; the",
+        "matrix test keeps it in sync. Global options go before the command name",
+        "(`repgenr --container docker dereplicate ...`).",
+        "",
+        "## Global options",
+        "",
+        *_option_rows(cli),
+        "",
+    ]
+    for name in sorted(cli.commands):
+        cmd = cli.commands[name]
+        lines += [f"## {name}", "", (cmd.help or "").strip(), ""]
+        lines += (
+            _option_rows(cmd)
+            if any(getattr(p, "opts", None) for p in cmd.params)
+            else ["(no options)"]
+        )
+        lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> int:
     with open(MATRIX, encoding="utf-8") as fh:
         matrix = yaml.safe_load(fh)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render(matrix), encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")
+    REFERENCE.write_text(render_reference(), encoding="utf-8")
+    print(f"wrote {REFERENCE.relative_to(ROOT)}")
     return 0
 
 

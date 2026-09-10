@@ -336,6 +336,25 @@ def test_short_alias_collisions_are_the_known_ones() -> None:
     assert collisions == MATRIX["known_short_alias_collisions"]
 
 
+REFERENCE_PATH = ROOT / "docs" / "cli-reference.md"
+AUDIT_DOCS = {"docs/audit/cli-matrix.md"}
+
+
+def test_rendered_reference_in_sync() -> None:
+    from scripts.render_cli_matrix import render_reference
+
+    assert REFERENCE_PATH.read_text(encoding="utf-8") == render_reference(CLICK), (
+        "run: python scripts/render_cli_matrix.py"
+    )
+
+
+@pytest.mark.parametrize(("command", "flag", "rec"), RECORDS, ids=IDS)
+def test_every_flag_is_documented(command, flag, rec) -> None:
+    """Each flag appears in at least one document besides the audit matrix."""
+    docs = set(rec["docs"]) - AUDIT_DOCS
+    assert docs, f"{command} {flag} is not mentioned in any document"
+
+
 def test_rendered_matrix_in_sync() -> None:
     from scripts.render_cli_matrix import render
 

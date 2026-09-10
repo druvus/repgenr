@@ -7,6 +7,12 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `docs/cli-reference.md`: every command with its options, defaults and
+  help, generated from the command tree by `scripts/render_cli_matrix.py`
+  and kept in sync by a test; a second test checks that every flag is
+  mentioned in at least one document besides the audit matrix.
+  `docs/verification.md` is now a how-to plus a results table that
+  `scripts/live_report.py` renders from the live suite's junit output.
 - The CLI matrix carries a `nextflow` column: for every flag, the
   `params.*` key or `ext.args` string that reaches the Nextflow layer, or
   the reason it does not; a test checks each key against
@@ -124,6 +130,9 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- Cactus wrote Toil's `.toil/` state under the container's HOME, which
+  the backend points at the working directory; the aligner now runs in its
+  alignment directory, so nothing lands in the launch directory.
 - Containers started in the temp mount when the adapter gave no working
   directory, so a stateless step run with relative paths (`phylo-build -o .`
   under the docker profile) could not open its outputs

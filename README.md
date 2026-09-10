@@ -95,6 +95,9 @@ repgenr tree2tax -wd $WD --include-dereplicated
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
 out of the ingroup.
 
+Every command and option is listed in `docs/cli-reference.md`, generated
+from the command tree.
+
 ### Resume and `--force`
 
 Each stage records its parameters, the digests of its inputs, and the container
