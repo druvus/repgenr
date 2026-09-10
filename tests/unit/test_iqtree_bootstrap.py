@@ -40,3 +40,17 @@ def test_bootstrap_of_1000_is_passed_through(tmp_path: Path, monkeypatch) -> Non
     mod.IqtreeBuilder().build(_msa(tmp_path), tmp_path / "out", TreeParams(bootstrap=1000), _LOG)
     (cmd,) = calls
     assert cmd[cmd.index("-B") + 1] == "1000"
+
+
+def test_sequence_type_is_stated(tmp_path: Path, monkeypatch) -> None:
+    """A masked alignment is a fifth N; left to guess, IQ-TREE refuses it."""
+    calls: list[list[str]] = []
+
+    def fake(caps, cmd, **k):
+        cmd = [str(c) for c in cmd]
+        calls.append(cmd)
+        Path(cmd[cmd.index("-s") + 1] + ".treefile").write_text("(a,b);\n", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "run_tool", fake)
+    mod.IqtreeBuilder().build(_msa(tmp_path), tmp_path / "out", TreeParams(), _LOG)
+    assert calls[0][calls[0].index("-st") + 1] == "DNA"

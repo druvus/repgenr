@@ -19,6 +19,10 @@ All notable changes to RepGenR are documented here. The format follows
   and phylo stages.
 
 ### Fixed
+- IQ-TREE refused a recombination-masked alignment with "Unknown sequence
+  type": masking replaces recombinant bases with N, and a fifth of the
+  characters was enough to defeat its guess. The adapter now states `-st DNA`,
+  which every alignment this pipeline produces is.
 - Gubbins exited before its first iteration on hosts whose RAxML package has
   no multi-threaded build (`raxmlHPC-PTHREADS*`; the osx-arm64 conda build
   among them) whenever `--threads` was above one, and the only trace was one
