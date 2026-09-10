@@ -123,6 +123,14 @@ def vmetadata_params(
 
     if source is not _UNSET:
         _require_choice(source, VIRAL_SOURCES, "--source")
+    effective_source = source if source is not _UNSET else "ncbi_virus"
+    if filter not in (_UNSET, None) and effective_source != "bvbrc":
+        from ..core.errors import UserInputError
+
+        raise UserInputError(
+            "--filter is a BV-BRC header tag and has no effect on the NCBI Virus source; "
+            "use --complete-only (and --host, --released-after) there, or --source bvbrc."
+        )
     return _build(
         VmetadataParams,
         target=target,

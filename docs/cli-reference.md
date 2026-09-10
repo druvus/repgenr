@@ -362,7 +362,7 @@ Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
 | `-wd`, `--workdir` | required | Working directory (created). |
 | `--target` |  | Virus taxon/group/family. |
 | `--source` | `ncbi_virus` | ncbi_virus (NCBI Virus via datasets) or bvbrc. |
-| `--filter` | `complete genome` | BV-BRC header tag. |
+| `--filter` |  | bvbrc: keep records whose header carries this tag (default: complete genome). |
 | `--host` |  | ncbi_virus: restrict to a host species. |
 | `--complete-only` | off | ncbi_virus: only COMPLETE sequences. |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY. |

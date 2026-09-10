@@ -13,6 +13,7 @@ from repgenr.cli.param_builders import (
     phylo_params,
     require_mask,
     vgenome_params,
+    vmetadata_params,
 )
 from repgenr.core.errors import UserInputError
 
@@ -62,3 +63,12 @@ def test_vgenome_outgroup_treebuilder_needs_distance_matrix_support() -> None:
     assert vgenome_params(outgroup_treebuilder="mashtree").outgroup_treebuilder == "mashtree"
     with pytest.raises(UserInputError, match="--outgroup-treebuilder"):
         vgenome_params(outgroup_treebuilder="iqtree")
+
+
+def test_vmetadata_filter_is_bvbrc_only() -> None:
+    assert vmetadata_params(source="bvbrc", filter="segment").filter == "segment"
+    assert vmetadata_params(target="x").filter is None
+    with pytest.raises(UserInputError, match="--filter"):
+        vmetadata_params(filter="segment")
+    with pytest.raises(UserInputError, match="--complete-only"):
+        vmetadata_params(source="ncbi_virus", filter="segment")

@@ -2337,12 +2337,15 @@ commands:
       --filter:
         param: VmetadataParams.filter
         value: segment
-        validated: none
+        validated: stage
         docs:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
+        with_args:
+        - --source
+        - bvbrc
       --host:
         param: VmetadataParams.host
         value: human

@@ -55,7 +55,9 @@ def _bvbrc_connect(timeout: int = 120) -> _ReuseFTP_TLS:
 @dataclass
 class VmetadataParams:
     target: str | None = None
-    filter: str = "complete genome"
+    # BV-BRC header tag; None means the source default ("complete genome").
+    # Meaningless for ncbi_virus, which filters with complete_only.
+    filter: str | None = None
     list_targets: bool = False
     source: str = "ncbi_virus"  # ncbi_virus | bvbrc
     host: str | None = None  # ncbi_virus: restrict to a host species
@@ -160,7 +162,8 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
     else:
         logger.info("Group FASTA already present; reusing %s", download_fa)
 
-    base, all_taxids, taxid_bvbrc = _parse_fasta(download_fa, params.filter, logger)
+    tag = params.filter or "complete genome"
+    base, all_taxids, taxid_bvbrc = _parse_fasta(download_fa, tag, logger)
 
     logger.info("Enriching %d taxids via NCBI Entrez", len(all_taxids))
     ncbi_data, missing, _alts = get_taxon_data_from_entrez(all_taxids, logger)
@@ -180,7 +183,7 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
 
     ctx.config.record_stage(
         "vmetadata",
-        params={"target": target, "filter": params.filter, "taxids": len(all_taxids)},
+        params={"target": target, "filter": tag, "taxids": len(all_taxids)},
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
