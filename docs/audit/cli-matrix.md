@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 197 flags (88 with a live test or an n/a reason, 109 pending).
+22 commands, 197 flags (144 with a live test or an n/a reason, 53 pending).
 
 ## Global flags
 
@@ -114,9 +114,9 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--accession-list-only` |  | GenomeParams.accession_list_only | none | todo: PR-F |  |
-| `--keep-files` |  | GenomeParams.keep_files | none | todo: PR-F |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_network.py::test_api_genus_representatives | docs/containers.md, docs/output.md |
+| `--accession-list-only` |  | GenomeParams.accession_list_only | none | tests/live/test_network.py::test_genome_accession_list_only_is_a_pure_query |  |
+| `--keep-files` |  | GenomeParams.keep_files | none | tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch |  |
 
 ## genome-fetch
 
@@ -166,19 +166,19 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--dataset` | -d | MetadataParams.dataset | choice | todo: PR-F |  |
-| `--level` | -l | MetadataParams.level | choice | todo: PR-F |  |
-| `--source` |  | MetadataParams.source | choice | todo: PR-F | README.md, docs/usage.md, docs/verification.md |
-| `--release` | -r | MetadataParams.release | none | todo: PR-F | README.md |
-| `--gtdb-version` |  | MetadataParams.version | none | todo: PR-F | README.md, docs/usage.md |
-| `--target-family` | -tf | MetadataParams.target_family | none | todo: PR-F |  |
-| `--target-genus` | -tg | MetadataParams.target_genus | none | todo: PR-F | README.md |
-| `--target-species` | -ts | MetadataParams.target_species | none | todo: PR-F |  |
-| `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | todo: PR-F |  |
-| `--metadata-path` |  | MetadataParams.metadata_path | none | todo: PR-F |  |
-| `--nodownload` |  | MetadataParams.nodownload | none | todo: PR-F |  |
-| `--limit` |  | MetadataParams.limit | range | todo: PR-F | docs/scaling-audit.md, docs/swot-derep.md, docs/usage.md |
+| `--workdir` | -wd | workdir | stage | tests/live/test_network.py::test_api_genus_representatives | docs/containers.md, docs/output.md |
+| `--dataset` | -d | MetadataParams.dataset | choice | tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup |  |
+| `--level` | -l | MetadataParams.level | choice | tests/live/test_network.py::test_api_target_family_widens_the_selection |  |
+| `--source` |  | MetadataParams.source | choice | tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table | README.md, docs/usage.md, docs/verification.md |
+| `--release` | -r | MetadataParams.release | none | tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table | README.md |
+| `--gtdb-version` |  | MetadataParams.version | none | tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table | README.md, docs/usage.md |
+| `--target-family` | -tf | MetadataParams.target_family | none | tests/live/test_network.py::test_api_target_family_widens_the_selection |  |
+| `--target-genus` | -tg | MetadataParams.target_genus | none | tests/live/test_network.py::test_api_genus_representatives | README.md |
+| `--target-species` | -ts | MetadataParams.target_species | none | tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup |  |
+| `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup |  |
+| `--metadata-path` |  | MetadataParams.metadata_path | none | tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table |  |
+| `--nodownload` |  | MetadataParams.nodownload | none | tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table |  |
+| `--limit` |  | MetadataParams.limit | range | tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup | docs/scaling-audit.md, docs/swot-derep.md, docs/usage.md |
 
 ## phylo
 
@@ -227,33 +227,33 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--viral` |  | VmetadataParams | none | todo: PR-F | README.md |
-| `--dataset` | -d | MetadataParams.dataset | choice | todo: PR-F |  |
-| `--level` | -l | MetadataParams.level | choice | todo: PR-F |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/containers.md, docs/output.md |
+| `--viral` |  | VmetadataParams | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md |
+| `--dataset` | -d | MetadataParams.dataset | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
+| `--level` | -l | MetadataParams.level | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
 | `--target-family` | -tf | MetadataParams.target_family | none | todo: PR-F |  |
-| `--target-genus` | -tg | MetadataParams.target_genus | none | todo: PR-F | README.md |
+| `--target-genus` | -tg | MetadataParams.target_genus | none | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md |
 | `--target-species` | -ts | MetadataParams.target_species | none | todo: PR-F |  |
 | `--release` | -r | MetadataParams.release | none | todo: PR-F | README.md |
 | `--gtdb-version` |  | MetadataParams.version | none | todo: PR-F | README.md, docs/usage.md |
-| `--metadata-source` |  | MetadataParams.source | choice | todo: PR-F |  |
-| `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | todo: PR-F |  |
-| `--target` | -t | VmetadataParams.target | none | todo: PR-F | README.md |
-| `--viral-source` |  | VmetadataParams.source | choice | todo: PR-F |  |
+| `--metadata-source` |  | MetadataParams.source | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
+| `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
+| `--target` | -t | VmetadataParams.target | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md |
+| `--viral-source` |  | VmetadataParams.source | choice | tests/live/test_network.py::test_run_viral_chain_end_to_end |  |
 | `--group-segments` |  | VgenomeParams.group_segments | none | todo: PR-F | README.md |
-| `--tool` |  | DereplicateParams.tool | registry | todo: PR-F | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--primary-ani` |  | DereplicateParams.primary_ani | unit_interval | todo: PR-F | docs/verification.md |
-| `--secondary-ani` |  | DereplicateParams.secondary_ani | unit_interval | todo: PR-F | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
-| `--aligned-fraction` |  | DereplicateParams.aligned_fraction | unit_interval | todo: PR-F |  |
-| `--keeper` |  | DereplicateParams.keeper | choice | todo: PR-F | README.md, docs/swot-derep.md, docs/usage.md |
-| `--treebuilder` |  | PhyloParams.treebuilder | registry | todo: PR-F | README.md, docs/containers.md, docs/usage.md |
+| `--tool` |  | DereplicateParams.tool | registry | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--primary-ani` |  | DereplicateParams.primary_ani | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/verification.md |
+| `--secondary-ani` |  | DereplicateParams.secondary_ani | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
+| `--aligned-fraction` |  | DereplicateParams.aligned_fraction | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
+| `--keeper` |  | DereplicateParams.keeper | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/swot-derep.md, docs/usage.md |
+| `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/containers.md, docs/usage.md |
 | `--msa-source` |  | PhyloParams.msa_source | choice | todo: PR-F | README.md, docs/usage.md |
 | `--aligner` |  | PhyloParams.aligner | registry | todo: PR-F | README.md, docs/containers.md |
 | `--snptyper` |  | PhyloParams.snptyper | registry | todo: PR-F |  |
-| `--no-outgroup` |  | PhyloParams.no_outgroup | none | todo: PR-F |  |
-| `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | todo: PR-F | README.md, docs/usage.md |
-| `--threads` |  | DereplicateParams.threads | range | todo: PR-F | docs/verification.md |
-| `--dry-run` |  | n/a: prints the chain and exits before any stage | none | todo: PR-F |  |
+| `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_network.py::test_run_viral_chain_end_to_end |  |
+| `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/usage.md |
+| `--threads` |  | DereplicateParams.threads | range | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/verification.md |
+| `--dry-run` |  | n/a: prints the chain and exits before any stage | none | tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network |  |
 
 ## snptype
 
@@ -326,24 +326,24 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--target-genus` | -tg | VgenomeParams.target_genus | none | todo: PR-F | README.md |
-| `--target-species` | -ts | VgenomeParams.target_species | none | todo: PR-F |  |
-| `--target-serotype` | -tse | VgenomeParams.target_serotype | none | todo: PR-F |  |
-| `--target-custom` | -tc | VgenomeParams.target_custom | none | todo: PR-F |  |
-| `--length-all` |  | VgenomeParams.length_all | none | todo: PR-F | docs/usage.md |
-| `--length-deviation` |  | VgenomeParams.length_deviation | range | todo: PR-F |  |
-| `--length-method` |  | VgenomeParams.length_method | choice | todo: PR-F | docs/scaling-audit.md, docs/swot-viral.md, docs/usage.md |
-| `--length-range` |  | VgenomeParams.length_range | none | todo: PR-F | docs/usage.md |
-| `--discard` |  | VgenomeParams.discard | none | todo: PR-F |  |
-| `--no-outgroup` |  | VgenomeParams.no_outgroup | none | todo: PR-F |  |
-| `--group-segments` |  | VgenomeParams.group_segments | none | todo: PR-F | README.md |
-| `--outgroup-candidates-taxid-min-genomes` |  | VgenomeParams.outgroup_candidates_taxid_min_genomes | none | todo: PR-F |  |
-| `--outgroup-treebuilder` |  | VgenomeParams.outgroup_treebuilder | registry | todo: PR-F |  |
-| `--glance` |  | VgenomeParams.glance | none | todo: PR-F |  |
-| `--print-fasta-headers` |  | VgenomeParams.print_fasta_headers | none | todo: PR-F |  |
-| `--ignore-duplicates` |  | VgenomeParams.ignore_duplicates | none | todo: PR-F |  |
-| `--keep-files` |  | VgenomeParams.keep_files | none | todo: PR-F |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_network.py::test_vgenome_selection_flags | docs/containers.md, docs/output.md |
+| `--target-genus` | -tg | VgenomeParams.target_genus | none | tests/live/test_network.py::test_vgenome_selection_flags | README.md |
+| `--target-species` | -ts | VgenomeParams.target_species | none | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--target-serotype` | -tse | VgenomeParams.target_serotype | none | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--target-custom` | -tc | VgenomeParams.target_custom | none | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--length-all` |  | VgenomeParams.length_all | none | tests/live/test_network.py::test_vgenome_selection_flags | docs/usage.md |
+| `--length-deviation` |  | VgenomeParams.length_deviation | range | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--length-method` |  | VgenomeParams.length_method | choice | tests/live/test_network.py::test_vgenome_selection_flags | docs/scaling-audit.md, docs/swot-viral.md, docs/usage.md |
+| `--length-range` |  | VgenomeParams.length_range | none | tests/live/test_network.py::test_vgenome_selection_flags | docs/usage.md |
+| `--discard` |  | VgenomeParams.discard | none | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files |  |
+| `--no-outgroup` |  | VgenomeParams.no_outgroup | none | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--group-segments` |  | VgenomeParams.group_segments | none | tests/live/test_network.py::test_vgenome_selection_flags | README.md |
+| `--outgroup-candidates-taxid-min-genomes` |  | VgenomeParams.outgroup_candidates_taxid_min_genomes | none | tests/live/test_network.py::test_vgenome_selection_flags |  |
+| `--outgroup-treebuilder` |  | VgenomeParams.outgroup_treebuilder | registry | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files |  |
+| `--glance` |  | VgenomeParams.glance | none | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files |  |
+| `--print-fasta-headers` |  | VgenomeParams.print_fasta_headers | none | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files |  |
+| `--ignore-duplicates` |  | VgenomeParams.ignore_duplicates | none | tests/live/test_network.py::test_vgenome_bvbrc_needs_ignore_duplicates |  |
+| `--keep-files` |  | VgenomeParams.keep_files | none | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files |  |
 
 ## vmetadata
 
@@ -351,14 +351,14 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--target` | -t | VmetadataParams.target | none | todo: PR-F | README.md |
-| `--source` |  | VmetadataParams.source | choice | todo: PR-F | README.md, docs/usage.md, docs/verification.md |
-| `--filter` | -f | VmetadataParams.filter | none | todo: PR-F |  |
-| `--host` |  | VmetadataParams.host | none | todo: PR-F |  |
-| `--complete-only` |  | VmetadataParams.complete_only | none | todo: PR-F |  |
-| `--released-after` |  | VmetadataParams.released_after | callback | todo: PR-F |  |
-| `--list` | -l | VmetadataParams.list_targets | none | todo: PR-F |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/containers.md, docs/output.md |
+| `--target` | -t | VmetadataParams.target | none | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | README.md |
+| `--source` |  | VmetadataParams.source | choice | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | README.md, docs/usage.md, docs/verification.md |
+| `--filter` | -f | VmetadataParams.filter | none | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter |  |
+| `--host` |  | VmetadataParams.host | none | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set |  |
+| `--complete-only` |  | VmetadataParams.complete_only | none | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only |  |
+| `--released-after` |  | VmetadataParams.released_after | callback | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set |  |
+| `--list` | -l | VmetadataParams.list_targets | none | tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc |  |
 
 ## Short-alias collisions
 

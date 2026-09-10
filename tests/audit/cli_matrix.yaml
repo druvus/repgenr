@@ -658,21 +658,21 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
       --accession-list-only:
         param: GenomeParams.accession_list_only
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_genome_accession_list_only_is_a_pure_query
         observable: accession list written, genomes/ empty
       --keep-files:
         param: GenomeParams.keep_files
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch
   genome-fetch:
     dispatch: step:repgenr.stages.genome_steps.genome_fetch
     base_args:
@@ -859,7 +859,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
       --dataset:
         aliases:
@@ -869,7 +869,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --level:
         aliases:
         - -l
@@ -878,7 +878,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --source:
         param: MetadataParams.source
         value: api
@@ -888,7 +888,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --release:
         aliases:
         - -r
@@ -898,7 +898,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --gtdb-version:
         param: MetadataParams.version
         value: bac120
@@ -907,7 +907,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --target-family:
         aliases:
         - -tf
@@ -916,7 +916,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --target-genus:
         aliases:
         - -tg
@@ -926,7 +926,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_genus_representatives
       --target-species:
         aliases:
         - -ts
@@ -935,27 +935,27 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --metadata-path:
         param: MetadataParams.metadata_path
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --nodownload:
         param: MetadataParams.nodownload
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --limit:
         param: MetadataParams.limit
         value: '5'
@@ -966,7 +966,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
         observable: selection.tsv has at most N rows
   phylo:
     dispatch: stage
@@ -1250,7 +1250,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
         observable: the workdir is populated
       --viral:
         param: VmetadataParams
@@ -1258,7 +1258,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_viral_chain_end_to_end
         observable: viral chain stages recorded
       --dataset:
         aliases:
@@ -1268,7 +1268,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --level:
         aliases:
         - -l
@@ -1277,7 +1277,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-family:
         aliases:
         - -tf
@@ -1296,7 +1296,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-species:
         aliases:
         - -ts
@@ -1331,14 +1331,14 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target:
         aliases:
         - -t
@@ -1350,7 +1350,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --viral-source:
         param: VmetadataParams.source
         value: bvbrc
@@ -1359,7 +1359,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --group-segments:
         param: VgenomeParams.group_segments
         with_args:
@@ -1383,7 +1383,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --primary-ani:
         param: DereplicateParams.primary_ani
         value: '0.85'
@@ -1391,7 +1391,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --secondary-ani:
         param: DereplicateParams.secondary_ani
         value: '0.95'
@@ -1401,14 +1401,14 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --aligned-fraction:
         param: DereplicateParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --keeper:
         param: DereplicateParams.keeper
         value: tool
@@ -1418,7 +1418,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --treebuilder:
         param: PhyloParams.treebuilder
         value: fasttree
@@ -1428,7 +1428,7 @@ commands:
         - docs/containers.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --msa-source:
         param: PhyloParams.msa_source
         value: snptype
@@ -1462,7 +1462,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --include-dereplicated:
         secondary:
         - --no-include-dereplicated
@@ -1472,7 +1472,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --threads:
         param: DereplicateParams.threads
         value: '2'
@@ -1481,13 +1481,13 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --dry-run:
         param: 'n/a: prints the chain and exits before any stage'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network
         observable: stage list printed, no workdir written
   snptype:
     dispatch: stage
@@ -1811,7 +1811,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_network.py::test_vgenome_selection_flags
         observable: the workdir is populated
       --target-genus:
         aliases:
@@ -1822,7 +1822,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-species:
         aliases:
         - -ts
@@ -1831,7 +1831,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-serotype:
         aliases:
         - -tse
@@ -1840,7 +1840,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-custom:
         aliases:
         - -tc
@@ -1849,14 +1849,14 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-all:
         param: VgenomeParams.length_all
         validated: none
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-deviation:
         param: VgenomeParams.length_deviation
         value: '20'
@@ -1864,7 +1864,7 @@ commands:
         invalid: '-1'
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-method:
         param: VgenomeParams.length_method
         value: mean
@@ -1874,7 +1874,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-range:
         param: VgenomeParams.length_range
         value: 25000-35000
@@ -1882,66 +1882,66 @@ commands:
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --discard:
         param: VgenomeParams.discard
         value: partial
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --no-outgroup:
         param: VgenomeParams.no_outgroup
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --group-segments:
         param: VgenomeParams.group_segments
         validated: none
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-candidates-taxid-min-genomes:
         param: VgenomeParams.outgroup_candidates_taxid_min_genomes
         value: '3'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-treebuilder:
         param: VgenomeParams.outgroup_treebuilder
         validated: registry
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         wiring: 'n/a: mashtree is the only builder with distance_matrix, so no second valid value exists'
       --glance:
         param: VgenomeParams.glance
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         observable: selection printed, nothing written
       --print-fasta-headers:
         param: VgenomeParams.print_fasta_headers
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --ignore-duplicates:
         param: VgenomeParams.ignore_duplicates
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_bvbrc_needs_ignore_duplicates
       --keep-files:
         param: VgenomeParams.keep_files
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
   vmetadata:
     dispatch: stage
     base_args:
@@ -1958,7 +1958,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
         observable: the workdir is populated
       --target:
         aliases:
@@ -1969,7 +1969,7 @@ commands:
         docs:
         - README.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --source:
         param: VmetadataParams.source
         value: bvbrc
@@ -1979,7 +1979,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --filter:
         aliases:
         - -f
@@ -1988,20 +1988,20 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --host:
         param: VmetadataParams.host
         value: human
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --complete-only:
         param: VmetadataParams.complete_only
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --released-after:
         param: VmetadataParams.released_after
         value: 01/31/2024
@@ -2009,7 +2009,7 @@ commands:
         invalid: '2024-01-31'
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --list:
         aliases:
         - -l
@@ -2017,7 +2017,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc
 known_short_alias_collisions:
   -t:
   - --target

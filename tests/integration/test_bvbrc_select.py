@@ -117,3 +117,21 @@ def test_run_select_parses_fasta_once(workdir: Path, monkeypatch) -> None:
     params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
     bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
     assert calls["n"] == 1  # one metadata scan; sequences via SeqIO.index
+
+
+def test_run_select_publishes_selection_tsv(workdir: Path) -> None:
+    """The BV-BRC path writes the same selection.tsv hand-off as NCBI Virus (audit)."""
+    from repgenr.core.contracts import SELECTION_TSV, read_selection
+
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
+    n = bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    rows = read_selection(ctx.workdir / SELECTION_TSV)
+    assert len(rows) == n == 2
+    assert {r.filename for r in rows} == {p.name for p in (workdir / "genomes").iterdir()}
+    assert all(r.genus for r in rows) and not any(r.is_outgroup for r in rows)

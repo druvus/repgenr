@@ -248,6 +248,11 @@ def _download_one_batch(
 
     produced: set[str] = set()
     for fna in extract.rglob("*.fna"):
+        # Skip AppleDouble "._x.fna" side files that macOS writes next to
+        # every file on non-native volumes; they are not FASTA and would
+        # be reported as a discarded download for the same accession.
+        if fna.name.startswith("."):
+            continue
         name = filenames.get(fna.parent.name)
         if name:
             # Validate BEFORE moving into genomes/: a non-FASTA body (HTML error

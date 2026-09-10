@@ -232,3 +232,37 @@ def test_vgenome_records_no_taxonomy_match(workdir: Path) -> None:
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError):
         vgenome_run(ctx, VgenomeParams(target_genus="nonexistentgenus", no_outgroup=True))
+
+
+def test_group_segments_leaves_unannotated_isolates_separate(tmp_path) -> None:
+    """Same-isolate records without a segment annotation are not concatenated.
+
+    Found live on hepatovirus (non-segmented): --group-segments collapsed 366
+    complete genomes to 149 because re-submissions share isolate names.
+    """
+    import logging
+
+    from repgenr.viral.ncbi_virus import VirusRecord
+    from repgenr.viral.selection import _write_isolate_groups
+
+    class _Seq:
+        def __init__(self, acc: str) -> None:
+            self.seq = "ACGT"
+            self.description = acc
+
+    def rec(acc: str, isolate: str, segment: str) -> VirusRecord:
+        return VirusRecord(acc, "1", "v", "Fam", "Gen", "sp", 4, "COMPLETE", segment, isolate)
+
+    records = [
+        rec("A1", "RNA", "ANONYMOUS"),  # NCBI's labels for a non-segmented record
+        rec("A2", "RNA", "ANONYMOUS"),  # ... and a second one with the same junk isolate
+        rec("B1", "iso2", "S"),
+        rec("B2", "iso2", "L"),  # a real segment pair
+    ]
+    seqs = {r.accession: _Seq(r.accession) for r in records}
+    out = tmp_path / "g"
+    out.mkdir()
+    rows = _write_isolate_groups(out, records, seqs, logging.getLogger("t"))
+    accessions = sorted(r.accession for r in rows)
+    assert accessions[:2] == ["A1", "A2"], "unannotated same-isolate records stay separate"
+    assert len(rows) == 3, "the annotated pair is one grouped genome"
