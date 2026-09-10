@@ -35,6 +35,16 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- Closed-choice options are validated when the command is parsed rather
+  than deep in the stage: `metadata -d/-l/--source` (and the same values
+  under `run --dataset/--level/--metadata-source/--viral-source`, reported
+  under those names), `vgenome --length-method` and `--outgroup-treebuilder`
+  (any tree builder with distance-matrix support), `glance --tool`,
+  `derep-stock --action`, and `--mask` on `snptype` and `phylo`, which is
+  now checked against the masker registry instead of a fixed list. `phylo
+  --mask` with `--msa-source aligner` is an error; before, the mask was
+  silently dropped. `vgenome_params` has an explicit signature, so a
+  misspelt keyword is a `TypeError` instead of a dataclass error.
 - Every command-line option has help text (48 were blank: the ANI thresholds
   and `--threads` on the dereplication commands, the GTDB target flags, most
   `vgenome` selection flags, `glance` plot bounds, `derep-unpack

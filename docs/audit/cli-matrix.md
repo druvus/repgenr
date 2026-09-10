@@ -26,7 +26,7 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--action` |  | DerepStockParams.action | none | todo: PR-E |  |
+| `--action` |  | DerepStockParams.action | choice | todo: PR-E |  |
 | `--name` |  | DerepStockParams.name | none | todo: PR-E | docs/usage.md |
 
 ## derep-unpack
@@ -136,7 +136,7 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--tool` |  | GlanceParams.tool | none | todo: PR-H | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--tool` |  | GlanceParams.tool | registry | todo: PR-H | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
 | `--threads` | -t | GlanceParams.threads | range | todo: PR-H | docs/verification.md |
 | `--plot-max` |  | GlanceParams.plot_max | none | todo: PR-H |  |
 | `--plot-min` |  | GlanceParams.plot_min | none | todo: PR-H |  |
@@ -167,9 +167,9 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--dataset` | -d | MetadataParams.dataset | none | todo: PR-F |  |
-| `--level` | -l | MetadataParams.level | none | todo: PR-F |  |
-| `--source` |  | MetadataParams.source | none | todo: PR-F | README.md, docs/usage.md, docs/verification.md |
+| `--dataset` | -d | MetadataParams.dataset | choice | todo: PR-F |  |
+| `--level` | -l | MetadataParams.level | choice | todo: PR-F |  |
+| `--source` |  | MetadataParams.source | choice | todo: PR-F | README.md, docs/usage.md, docs/verification.md |
 | `--release` | -r | MetadataParams.release | none | todo: PR-F | README.md |
 | `--gtdb-version` |  | MetadataParams.version | none | todo: PR-F | README.md, docs/usage.md |
 | `--target-family` | -tf | MetadataParams.target_family | none | todo: PR-F |  |
@@ -197,7 +197,7 @@ dispatch: `stage`
 | `--reference` |  | PhyloParams.reference | none | todo: PR-G | docs/swot-phylo.md |
 | `--aligner-arg` |  | PhyloParams.extra | callback | todo: PR-H | docs/adding-tools.md |
 | `--threads` | -t | PhyloParams.threads | range | todo: PR-G | docs/verification.md |
-| `--mask` |  | PhyloParams.extra | none | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
+| `--mask` |  | PhyloParams.extra | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
 | `--allow-incomplete` |  | PhyloParams.allow_incomplete | none | todo: PR-G |  |
 
 ## phylo-build
@@ -229,14 +229,14 @@ dispatch: `stage`
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
 | `--viral` |  | VmetadataParams | none | todo: PR-F | README.md |
-| `--dataset` | -d | MetadataParams.dataset | none | todo: PR-F |  |
-| `--level` | -l | MetadataParams.level | none | todo: PR-F |  |
+| `--dataset` | -d | MetadataParams.dataset | choice | todo: PR-F |  |
+| `--level` | -l | MetadataParams.level | choice | todo: PR-F |  |
 | `--target-family` | -tf | MetadataParams.target_family | none | todo: PR-F |  |
 | `--target-genus` | -tg | MetadataParams.target_genus | none | todo: PR-F | README.md |
 | `--target-species` | -ts | MetadataParams.target_species | none | todo: PR-F |  |
 | `--release` | -r | MetadataParams.release | none | todo: PR-F | README.md |
 | `--gtdb-version` |  | MetadataParams.version | none | todo: PR-F | README.md, docs/usage.md |
-| `--metadata-source` |  | MetadataParams.source | none | todo: PR-F |  |
+| `--metadata-source` |  | MetadataParams.source | choice | todo: PR-F |  |
 | `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | todo: PR-F |  |
 | `--target` | -t | VmetadataParams.target | none | todo: PR-F | README.md |
 | `--viral-source` |  | VmetadataParams.source | choice | todo: PR-F |  |
@@ -265,7 +265,7 @@ dispatch: `stage`
 | `--tool` |  | SnptypeParams.tool | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
 | `--reference` |  | SnptypeParams.reference | none | todo: PR-G | docs/swot-phylo.md |
 | `--all-genomes` |  | SnptypeParams.all_genomes | none | todo: PR-G |  |
-| `--mask` |  | SnptypeParams.mask | choice | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
+| `--mask` |  | SnptypeParams.mask | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
 | `--threads` | -t | SnptypeParams.threads | range | todo: PR-G | docs/verification.md |
 | `--tool-arg` |  | SnptypeParams.extra | callback | todo: PR-G | docs/adding-tools.md, docs/usage.md |
 | `--allow-incomplete` |  | SnptypeParams.allow_incomplete | none | todo: PR-G |  |
@@ -333,13 +333,13 @@ dispatch: `stage`
 | `--target-custom` | -tc | VgenomeParams.target_custom | none | todo: PR-F |  |
 | `--length-all` |  | VgenomeParams.length_all | none | todo: PR-F | docs/usage.md |
 | `--length-deviation` |  | VgenomeParams.length_deviation | range | todo: PR-F |  |
-| `--length-method` |  | VgenomeParams.length_method | none | todo: PR-F | docs/scaling-audit.md, docs/swot-viral.md, docs/usage.md |
+| `--length-method` |  | VgenomeParams.length_method | choice | todo: PR-F | docs/scaling-audit.md, docs/swot-viral.md, docs/usage.md |
 | `--length-range` |  | VgenomeParams.length_range | none | todo: PR-F | docs/usage.md |
 | `--discard` |  | VgenomeParams.discard | none | todo: PR-F |  |
 | `--no-outgroup` |  | VgenomeParams.no_outgroup | none | todo: PR-F |  |
 | `--group-segments` |  | VgenomeParams.group_segments | none | todo: PR-F | README.md |
 | `--outgroup-candidates-taxid-min-genomes` |  | VgenomeParams.outgroup_candidates_taxid_min_genomes | none | todo: PR-F |  |
-| `--outgroup-treebuilder` |  | VgenomeParams.outgroup_treebuilder | none | todo: PR-F |  |
+| `--outgroup-treebuilder` |  | VgenomeParams.outgroup_treebuilder | registry | todo: PR-F |  |
 | `--glance` |  | VgenomeParams.glance | none | todo: PR-F |  |
 | `--print-fasta-headers` |  | VgenomeParams.print_fasta_headers | none | todo: PR-F |  |
 | `--ignore-duplicates` |  | VgenomeParams.ignore_duplicates | none | todo: PR-F |  |

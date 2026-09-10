@@ -11,6 +11,7 @@
 #                {file}, {alt_file}, {fofn}, {alt_fofn}, {out} are tmp paths);
 #                absent for boolean flags
 #   with_args    extra arguments needed for the flag to take effect
+#   wiring       `n/a: reason` when the reach test cannot run (no second valid value)
 #   validated    how a bad value is rejected: choice | registry | unit_interval
 #                | range | callback | stage (checked when the stage runs) | none
 #   invalid      the bad value the validation test passes (range/callback)
@@ -139,7 +140,7 @@ commands:
       --action:
         param: DerepStockParams.action
         value: pack
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-E'
@@ -733,7 +734,7 @@ commands:
       --tool:
         param: GlanceParams.tool
         value: skder
-        validated: none
+        validated: registry
         docs:
         - README.md
         - docs/adding-tools.md
@@ -865,7 +866,7 @@ commands:
         - -d
         param: MetadataParams.dataset
         value: all
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-F'
@@ -874,14 +875,14 @@ commands:
         - -l
         param: MetadataParams.level
         value: species
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-F'
       --source:
         param: MetadataParams.source
         value: api
-        validated: none
+        validated: choice
         docs:
         - README.md
         - docs/usage.md
@@ -1080,7 +1081,7 @@ commands:
       --mask:
         param: PhyloParams.extra
         value: gubbins
-        validated: none
+        validated: registry
         docs:
         - README.md
         - docs/adding-tools.md
@@ -1089,6 +1090,9 @@ commands:
         - docs/verification.md
         nextflow: null
         live: 'todo: PR-G'
+        with_args:
+        - --msa-source
+        - snptype
       --allow-incomplete:
         param: PhyloParams.allow_incomplete
         validated: none
@@ -1261,7 +1265,7 @@ commands:
         - -d
         param: MetadataParams.dataset
         value: all
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-F'
@@ -1270,7 +1274,7 @@ commands:
         - -l
         param: MetadataParams.level
         value: species
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-F'
@@ -1324,7 +1328,7 @@ commands:
       --metadata-source:
         param: MetadataParams.source
         value: api
-        validated: none
+        validated: choice
         docs: []
         nextflow: null
         live: 'todo: PR-F'
@@ -1353,7 +1357,6 @@ commands:
         with_args:
         - --viral
         validated: choice
-        reported_as: --source
         docs: []
         nextflow: null
         live: 'todo: PR-F'
@@ -1538,7 +1541,7 @@ commands:
       --mask:
         param: SnptypeParams.mask
         value: gubbins
-        validated: choice
+        validated: registry
         docs:
         - README.md
         - docs/adding-tools.md
@@ -1865,7 +1868,7 @@ commands:
       --length-method:
         param: VgenomeParams.length_method
         value: mean
-        validated: none
+        validated: choice
         docs:
         - docs/scaling-audit.md
         - docs/swot-viral.md
@@ -1909,11 +1912,11 @@ commands:
         live: 'todo: PR-F'
       --outgroup-treebuilder:
         param: VgenomeParams.outgroup_treebuilder
-        value: sourmash
-        validated: none
+        validated: registry
         docs: []
         nextflow: null
         live: 'todo: PR-F'
+        wiring: 'n/a: mashtree is the only builder with distance_matrix, so no second valid value exists'
       --glance:
         param: VgenomeParams.glance
         validated: none

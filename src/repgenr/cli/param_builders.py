@@ -30,9 +30,25 @@ if TYPE_CHECKING:
 # dataclass, whose own default then applies.
 _UNSET: Any = object()
 
+# Closed choice sets shared with `run`, which validates the same values under
+# its own flag names (--metadata-source, --viral-source).
+METADATA_DATASETS = frozenset({"all", "rep"})
+METADATA_LEVELS = frozenset({"family", "genus", "species"})
+METADATA_SOURCES = frozenset({"tsv", "api"})
+VIRAL_SOURCES = frozenset({"ncbi_virus", "bvbrc"})
+LENGTH_METHODS = frozenset({"median_of_medians", "mean"})
+DEREP_STOCK_ACTIONS = frozenset({"list", "pack", "unpack", "delete"})
+
 
 def _build(cls: type, **kwargs: Any):
     return cls(**{k: v for k, v in kwargs.items() if v is not _UNSET})
+
+
+def require_mask(mask: str) -> None:
+    """``--mask`` is ``none`` or a registered masker."""
+    from ..maskers.base import registry as _mask_registry
+
+    _require_choice(mask, {"none", *_mask_registry.names()}, "--mask")
 
 
 def metadata_params(
@@ -52,6 +68,10 @@ def metadata_params(
 ) -> MetadataParams:
     from ..stages.metadata import MetadataParams
 
+    _require_choice(dataset, METADATA_DATASETS, "--dataset")
+    _require_choice(level, METADATA_LEVELS, "--level")
+    if source is not _UNSET:
+        _require_choice(source, METADATA_SOURCES, "--source")
     return _build(
         MetadataParams,
         dataset=dataset,
@@ -102,7 +122,7 @@ def vmetadata_params(
     from ..stages.vmetadata import VmetadataParams
 
     if source is not _UNSET:
-        _require_choice(source, {"ncbi_virus", "bvbrc"}, "--source")
+        _require_choice(source, VIRAL_SOURCES, "--source")
     return _build(
         VmetadataParams,
         target=target,
@@ -115,10 +135,55 @@ def vmetadata_params(
     )
 
 
-def vgenome_params(**kwargs: Any) -> VgenomeParams:
+def vgenome_params(
+    *,
+    target_genus: Any = _UNSET,
+    target_species: Any = _UNSET,
+    target_serotype: Any = _UNSET,
+    target_custom: Any = _UNSET,
+    length_all: Any = _UNSET,
+    length_deviation: Any = _UNSET,
+    length_method: Any = _UNSET,
+    length_range: Any = _UNSET,
+    discard: Any = _UNSET,
+    no_outgroup: Any = _UNSET,
+    group_segments: Any = _UNSET,
+    outgroup_candidates_taxid_min_genomes: Any = _UNSET,
+    outgroup_treebuilder: Any = _UNSET,
+    glance: Any = _UNSET,
+    print_fasta_headers: Any = _UNSET,
+    ignore_duplicates: Any = _UNSET,
+    keep_files: Any = _UNSET,
+) -> VgenomeParams:
     from ..stages.vgenome import VgenomeParams
+    from ..viral._outgroup import distance_matrix_builders
 
-    return _build(VgenomeParams, **kwargs)
+    if length_method is not _UNSET:
+        _require_choice(length_method, LENGTH_METHODS, "--length-method")
+    if outgroup_treebuilder is not _UNSET:
+        _require_choice(
+            outgroup_treebuilder, set(distance_matrix_builders()), "--outgroup-treebuilder"
+        )
+    return _build(
+        VgenomeParams,
+        target_genus=target_genus,
+        target_species=target_species,
+        target_serotype=target_serotype,
+        target_custom=target_custom,
+        length_all=length_all,
+        length_deviation=length_deviation,
+        length_method=length_method,
+        length_range=length_range,
+        discard=discard,
+        no_outgroup=no_outgroup,
+        group_segments=group_segments,
+        outgroup_candidates_taxid_min_genomes=outgroup_candidates_taxid_min_genomes,
+        outgroup_treebuilder=outgroup_treebuilder,
+        glance=glance,
+        print_fasta_headers=print_fasta_headers,
+        ignore_duplicates=ignore_duplicates,
+        keep_files=keep_files,
+    )
 
 
 def dereplicate_params(
@@ -193,6 +258,7 @@ def phylo_params(
     allow_incomplete: Any = _UNSET,
 ) -> PhyloParams:
     from ..aligners.base import registry as _aln_registry
+    from ..core.errors import UserInputError
     from ..snptypers.base import registry as _snp_registry
     from ..stages.phylo import PhyloParams
     from ..treebuilders.base import registry as _tb_registry
@@ -206,6 +272,13 @@ def phylo_params(
             _require_choice(aligner, set(_aln_registry.names()), "--aligner")
     elif snptyper is not _UNSET:
         _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
+    # The phylo stage reads extra["mask"] only on the snptype path; a mask
+    # requested with the aligner source would be dropped without a trace.
+    mask = extra.get("mask") if extra is not _UNSET else None
+    if mask is not None:
+        require_mask(mask)
+        if effective_source != "snptype":
+            raise UserInputError("--mask applies only with --msa-source snptype.")
     return _build(
         PhyloParams,
         treebuilder=treebuilder,

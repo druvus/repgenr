@@ -34,6 +34,21 @@ RECORDS_LENGTH_TOLERANCE = 0.15
 BVBRC_LENGTH_TOLERANCE = 0.10
 
 
+def distance_matrix_builders() -> list[str]:
+    """Names of the registered tree builders that implement ``distance_matrix``.
+
+    These are the valid values of ``--outgroup-treebuilder``.
+    """
+    from ..treebuilders.base import TreeBuilder, registry
+
+    return sorted(
+        name
+        for name in registry.names()
+        if not registry.is_broken(name)
+        and registry.get(name).distance_matrix is not TreeBuilder.distance_matrix
+    )
+
+
 def resolve_outgroup_builder(tool: str):
     """Resolve the tree builder used for the outgroup distance matrix.
 
@@ -44,12 +59,7 @@ def resolve_outgroup_builder(tool: str):
 
     builder = registry.create(tool)
     if type(builder).distance_matrix is TreeBuilder.distance_matrix:
-        supporters = sorted(
-            name
-            for name in registry.names()
-            if not registry.is_broken(name)
-            and registry.get(name).distance_matrix is not TreeBuilder.distance_matrix
-        )
+        supporters = distance_matrix_builders()
         raise UserInputError(
             f"Tree builder '{tool}' cannot produce the outgroup distance "
             f"matrix. Tools with distance-matrix support: "

@@ -98,8 +98,10 @@ def test_record_shape(command: str, flag: str, rec: dict) -> None:
     assert "live" in rec and "nextflow" in rec and "docs" in rec
     if p.is_flag:
         assert "value" not in rec, "boolean flags take no sample value"
-    elif not rec["param"].startswith("n/a"):
+    elif not rec["param"].startswith("n/a") and "wiring" not in rec:
         assert "value" in rec, "a valued option needs a sample value for the wiring test"
+    if "wiring" in rec:
+        assert rec["wiring"].startswith("n/a: "), "wiring is either absent or an n/a reason"
 
 
 @pytest.mark.parametrize(("command", "flag", "rec"), RECORDS, ids=IDS)
@@ -204,7 +206,11 @@ def _lookup(calls: list[Any], param: str):
     raise AssertionError(f"no dispatched params object of type {cls}")
 
 
-WIRED = [(c, f, r) for c, f, r in RECORDS if c != "<global>" and not r["param"].startswith("n/a")]
+WIRED = [
+    (c, f, r)
+    for c, f, r in RECORDS
+    if c != "<global>" and not r["param"].startswith("n/a") and "wiring" not in r
+]
 
 
 @pytest.mark.parametrize(("command", "flag", "rec"), WIRED, ids=[f"{c} {f}" for c, f, _ in WIRED])
