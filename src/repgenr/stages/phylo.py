@@ -383,6 +383,9 @@ def _build_msa(
             all_genomes=params.all_genomes,
             mask=params.extra.get("mask", "none"),
             extra=_adapter_extra(params.extra),
+            # A species-level outgroup breaks the recombination scan; the
+            # masker runs on the ingroup and applies its regions to all.
+            mask_exclude=(outgroup_file.stem,) if outgroup_file is not None else (),
         )
         snp_reference: Path | None = (
             _resolve_reference(params.reference, genomes, outgroup_file, logger)

@@ -39,6 +39,8 @@ class SnptypeParams:
     all_genomes: bool = False
     mask: str = "none"  # none | gubbins
     allow_incomplete: bool = False
+    # Record ids the masker leaves out of its scan (the outgroup) but keeps.
+    mask_exclude: tuple[str, ...] = ()
     extra: dict = field(default_factory=dict)
 
 
@@ -131,7 +133,7 @@ def snptype_core(
         filtered = masker.mask(
             result.full_alignment,
             scratch / params.mask,
-            MaskParams(threads=params.threads),
+            MaskParams(threads=params.threads, exclude=frozenset(params.mask_exclude)),
             logger,
         )
         with atomic_path(core) as tmp:

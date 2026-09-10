@@ -247,3 +247,58 @@ def test_unknown_masker_lists_available(tmp_path, monkeypatch) -> None:
             SnptypeParams(tool="x", mask="nosuchmask"),
             logging.getLogger("test"),
         )
+
+
+def test_snptype_core_hands_the_mask_exclusion_to_the_masker(tmp_path, register_tool) -> None:
+    """D-10: SnptypeParams.mask_exclude reaches MaskParams.exclude."""
+    import logging
+
+    from repgenr.maskers.base import Masker, MaskParams
+    from repgenr.maskers.base import registry as masker_registry
+    from repgenr.snptypers.base import SnpResult, SnpTyper
+    from repgenr.snptypers.base import registry as snp_registry
+    from repgenr.stages.snptype import SnptypeParams, snptype_core
+
+    seen: dict = {}
+
+    class _Typer(SnpTyper):
+        capabilities = ToolCapabilities(name="excltyper")
+        requires_reference = False
+
+        def preflight(self):
+            return {}
+
+        def call(self, genomes, reference, out_dir, params, logger):
+            out_dir.mkdir(parents=True, exist_ok=True)
+            core = out_dir / "core.fasta"
+            core.write_text(">a\nA\n", encoding="utf-8")
+            full = out_dir / "full.fasta"
+            full.write_text(">a\nAC\n>og\nAT\n", encoding="utf-8")
+            return SnpResult(core_snp_fasta=core, full_alignment=full)
+
+    class _Masker(Masker):
+        capabilities = ToolCapabilities(name="exclmasker")
+
+        def preflight(self):
+            return {}
+
+        def mask(self, full_alignment, out_dir, params: MaskParams, logger):
+            seen["exclude"] = params.exclude
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / "masked.fasta"
+            out.write_text(full_alignment.read_text(encoding="utf-8"), encoding="utf-8")
+            return out
+
+    register_tool(snp_registry, "excltyper", _Typer)
+    register_tool(masker_registry, "exclmasker", _Masker)
+    g = tmp_path / "a.fasta"
+    g.write_text(">a\nACGT\n", encoding="utf-8")
+    snptype_core(
+        [g],
+        None,
+        tmp_path / "snp",
+        tmp_path / "scratch",
+        SnptypeParams(tool="excltyper", mask="exclmasker", mask_exclude=("og",)),
+        logging.getLogger("t"),
+    )
+    assert seen["exclude"] == frozenset({"og"})

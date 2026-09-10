@@ -21,9 +21,15 @@ registry: Registry[Masker] = Registry("repgenr.maskers")
 
 @dataclass
 class MaskParams:
-    """Tuning passed to every ``Masker.mask`` call."""
+    """Tuning passed to every ``Masker.mask`` call.
+
+    ``exclude`` names records (by FASTA id) that the masker must leave out of
+    its own analysis but keep in the output: the outgroup. Recombination
+    scanners expect closely related isolates and abort on a distant one.
+    """
 
     threads: int = 16
+    exclude: frozenset[str] = frozenset()
 
 
 class Masker(ABC):

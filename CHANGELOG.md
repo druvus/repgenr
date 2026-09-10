@@ -94,6 +94,13 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- Recombination masking with an outgroup (D-10): Gubbins now scans the
+  ingroup only and its predicted regions are masked in the whole-genome
+  alignment for every genome, outgroup included, before the variable
+  sites are extracted. A species-level outgroup used to abort Gubbins'
+  scan ("gubbins ... exit 1"), which forced `--no-outgroup` on masked
+  trees. The masked alignment for a run without an outgroup is Gubbins'
+  own filtered file, as before.
 - The Nextflow `standard` profile caps process resource requests to the
   host's CPUs and memory (D-11). A laptop run used to fail with "Process
   requirement exceeds available CPUs -- req: 32" unless `-profile test`

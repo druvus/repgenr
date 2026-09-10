@@ -41,6 +41,84 @@ def sanitise_alignment(source: Path, dest: Path, logger: logging.Logger) -> Path
     return source
 
 
+def read_fasta(path: Path) -> dict[str, str]:
+    """Record id -> sequence (single-line or wrapped), in file order."""
+    records: dict[str, str] = {}
+    name: str | None = None
+    parts: list[str] = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith(">"):
+                if name is not None:
+                    records[name] = "".join(parts)
+                name = line[1:].split()[0]
+                parts = []
+            else:
+                parts.append(line.strip())
+    if name is not None:
+        records[name] = "".join(parts)
+    return records
+
+
+def write_fasta(path: Path, records: dict[str, str]) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        for name, seq in records.items():
+            fh.write(f">{name}\n{seq}\n")
+
+
+def read_recombination_gff(path: Path) -> dict[str, list[tuple[int, int]]]:
+    """Recombinant regions per taxon from Gubbins' GFF3 (1-based, inclusive).
+
+    Each feature line carries ``taxa="  a  b"`` in its attributes; a region
+    applies to every taxon listed there.
+    """
+    regions: dict[str, list[tuple[int, int]]] = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("#") or not line.strip():
+                continue
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) < 9:
+                continue
+            start, end = int(cols[3]), int(cols[4])
+            attrs = cols[8]
+            key = 'taxa="'
+            i = attrs.find(key)
+            if i < 0:
+                continue
+            taxa = attrs[i + len(key) : attrs.find('"', i + len(key))].split()
+            for taxon in taxa:
+                regions.setdefault(taxon, []).append((start, end))
+    return regions
+
+
+def apply_masks(
+    records: dict[str, str], regions: dict[str, list[tuple[int, int]]]
+) -> dict[str, str]:
+    """Set the recombinant regions to N in the taxa they were predicted for."""
+    out: dict[str, str] = {}
+    for name, seq in records.items():
+        spans = regions.get(name)
+        if not spans:
+            out[name] = seq
+            continue
+        chars = list(seq)
+        for start, end in spans:
+            lo, hi = max(start - 1, 0), min(end, len(chars))
+            chars[lo:hi] = ["N"] * (hi - lo)
+        out[name] = "".join(chars)
+    return out
+
+
+def polymorphic_sites(records: dict[str, str]) -> dict[str, str]:
+    """Columns with two or more distinct bases among ACGT (N and gaps ignored)."""
+    names = list(records)
+    seqs = [records[n].upper() for n in names]
+    length = min(len(s) for s in seqs) if seqs else 0
+    keep = [i for i in range(length) if len({s[i] for s in seqs if s[i] in "ACGT"}) >= 2]
+    return {n: "".join(s[i] for i in keep) for n, s in zip(names, seqs, strict=True)}
+
+
 class GubbinsMasker(Masker):
     capabilities = ToolCapabilities(
         name="gubbins",
@@ -60,13 +138,28 @@ class GubbinsMasker(Masker):
         out_dir.mkdir(parents=True, exist_ok=True)
         prefix = out_dir / "gubbins"
         cleaned = sanitise_alignment(full_alignment, out_dir / "input_alignment.fasta", logger)
+        records = read_fasta(cleaned)
+        excluded = {name for name in records if name in params.exclude}
+        if excluded:
+            # Gubbins sees the ingroup only; its predictions are applied to
+            # every record below, so the excluded outgroup keeps its place.
+            subset = out_dir / "ingroup_alignment.fasta"
+            write_fasta(subset, {n: s for n, s in records.items() if n not in excluded})
+            logger.info(
+                "Gubbins runs on %d ingroup genome(s); %s stay(s) out of the scan.",
+                len(records) - len(excluded),
+                ", ".join(sorted(excluded)),
+            )
+            gubbins_input = subset
+        else:
+            gubbins_input = cleaned
         argv: list[str | Path] = [
             "run_gubbins.py",
             "--threads",
             str(params.threads),
             "--prefix",
             prefix,
-            cleaned,
+            gubbins_input,
         ]
         run_tool(
             self.capabilities,
@@ -75,7 +168,22 @@ class GubbinsMasker(Masker):
             cwd=out_dir,
             log_prefix="gubbins",
         )
-        filtered = Path(str(prefix) + ".filtered_polymorphic_sites.fasta")
-        if not filtered.exists():
-            raise WorkdirError("Gubbins did not produce a filtered polymorphic sites FASTA")
-        return filtered
+        if not excluded:
+            filtered = Path(str(prefix) + ".filtered_polymorphic_sites.fasta")
+            if not filtered.exists():
+                raise WorkdirError("Gubbins did not produce a filtered polymorphic sites FASTA")
+            return filtered
+        gff = Path(str(prefix) + ".recombination_predictions.gff")
+        if not gff.exists():
+            raise WorkdirError("Gubbins did not produce a recombination predictions GFF")
+        regions = read_recombination_gff(gff)
+        masked = apply_masks(records, regions)
+        n_sites = sum(len(r) for r in regions.values())
+        logger.info(
+            "Masked %d recombinant region(s) across %d genome(s); extracting variable sites.",
+            n_sites,
+            len(regions),
+        )
+        out = Path(str(prefix) + ".masked_polymorphic_sites.fasta")
+        write_fasta(out, polymorphic_sites(masked))
+        return out
