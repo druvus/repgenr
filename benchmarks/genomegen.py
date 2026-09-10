@@ -69,21 +69,23 @@ def _cluster_plan(
 ) -> list[tuple[str, int, float, float]]:
     """(cluster_id, size, founder_divergence, member_divergence) per cluster."""
     if scenario == "clonal":
-        clone_size = max(2, round(clone_fraction * n))
+        clone_size = min(n, max(2, round(clone_fraction * n)))
         rest = n - clone_size
         plan = [("clone", clone_size, _FOUNDER_DIVERGENCE, _CLONE_DIVERGENCE)]
         plan += _balanced_plan(rest, start=1)
-        return plan
-    if scenario == "balanced":
-        return _balanced_plan(n, start=1)
-    if scenario == "mixed":
+    elif scenario == "balanced":
+        plan = _balanced_plan(n, start=1)
+    elif scenario == "mixed":
         n_clusters = max(2, n // 50)
         sizes = _split_sizes(n, n_clusters)
-        return [
+        plan = [
             (f"m{i + 1}", size, 0.005 + 0.045 * i / max(1, n_clusters - 1), _MEMBER_DIVERGENCE)
             for i, size in enumerate(sizes)
         ]
-    raise ValueError(f"Unknown scenario '{scenario}' (balanced|clonal|mixed).")
+    else:
+        raise ValueError(f"Unknown scenario '{scenario}' (balanced|clonal|mixed).")
+    # Small n (the live suite uses n < 10) can leave a cluster with no members.
+    return [entry for entry in plan if entry[1] > 0]
 
 
 def _balanced_plan(n: int, start: int) -> list[tuple[str, int, float, float]]:

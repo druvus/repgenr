@@ -37,7 +37,11 @@ from benchmarks.metrics import (
 
 REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "benchmarks" / "results"
-STORAGE = Path("/Volumes/sekvens2/repgenr")
+# Where the synthetic sets, work directories and logs live. The default is
+# the audit machine's external volume; override with REPGENR_BENCH_STORAGE or
+# --storage.
+DEFAULT_STORAGE = Path("/Volumes/sekvens2/repgenr")
+STORAGE = Path(os.environ.get("REPGENR_BENCH_STORAGE", DEFAULT_STORAGE))
 _RSS_RE = re.compile(r"(\d+)\s+maximum resident set size")
 
 
@@ -279,13 +283,22 @@ def collect() -> Path:
 
 
 def main() -> None:
+    global STORAGE
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--tier", choices=["smoke", "mid", "heavy"])
     parser.add_argument("--only", help="fnmatch pattern over cell ids")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--collect", action="store_true")
+    parser.add_argument(
+        "--storage",
+        type=Path,
+        default=STORAGE,
+        help="Root for sets/, work/ and logs/ "
+        f"(default: $REPGENR_BENCH_STORAGE or {DEFAULT_STORAGE}).",
+    )
     args = parser.parse_args()
+    STORAGE = args.storage
 
     if args.collect:
         print(f"wrote {collect()}")

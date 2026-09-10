@@ -18,7 +18,7 @@ from ..core.errors import UserInputError, WorkdirError
 
 @dataclass
 class GlanceParams:
-    threads: int = 24
+    threads: int = 16  # same default as the CLI's -t
     tool: str = "drep"
     plot_max: float = 1.0
     plot_min: float = 0.0

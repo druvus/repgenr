@@ -16,6 +16,7 @@ from pathlib import Path
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import get_config, run_tool
+from ..core.contracts import MSA_FASTA
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import warn_argv_bytes
@@ -121,7 +122,7 @@ class SibeliazAligner(Aligner):
         # SibeliaZ's MAF uses sequence/contig IDs (FASTA header first token), not
         # genome filenames; build the seqid -> genome-stem map for the converter.
         name_map = _build_seqid_map(genomes)
-        msa = out_dir / "msa.fasta"
+        msa = out_dir / MSA_FASTA
         maf_to_fasta(maf, reference.stem, msa, name_map=name_map)
         return AlignResult(msa_fasta=msa, native_format=maf)
 

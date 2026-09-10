@@ -35,6 +35,13 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- `Tree2taxParams.all_genomes`, a field no code read, is gone. It was part
+  of the tree2tax resume fingerprint, so an existing workdir re-runs
+  `tree2tax` once (seconds). `GlanceParams.threads` defaults to 16 like the
+  CLI, and the three aligners take the MSA filename from the shared
+  contract constant. Synthetic sets at very small n no longer carry an
+  empty cluster. `benchmarks/run_bench.py` reads its storage root from
+  `REPGENR_BENCH_STORAGE` (or `--storage`) instead of a fixed volume path.
 - Closed-choice options are validated when the command is parsed rather
   than deep in the stage: `metadata -d/-l/--source` (and the same values
   under `run --dataset/--level/--metadata-source/--viral-source`, reported

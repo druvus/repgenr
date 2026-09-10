@@ -16,6 +16,7 @@ from pathlib import Path
 from ..converters.xmfa_to_fasta import xmfa_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import MSA_FASTA
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
@@ -89,7 +90,7 @@ class ProgressiveMauveAligner(Aligner):
 
         per_query_fastas = parallel_map(align_query, queries, params.threads, logger=logger)
 
-        msa = out_dir / "msa.fasta"
+        msa = out_dir / MSA_FASTA
         _concatenate(per_query_fastas, reference, msa)
         return AlignResult(msa_fasta=msa)
 
