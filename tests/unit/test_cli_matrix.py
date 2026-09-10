@@ -251,6 +251,7 @@ def test_version_flag_prints_version() -> None:
 # --- validation -------------------------------------------------------------------
 
 _BAD = {"choice": "__bogus__", "registry": "__bogus__", "unit_interval": "1.5"}
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 VALIDATED = [
     (c, f, r)
     for c, f, r in RECORDS
@@ -270,7 +271,9 @@ def test_invalid_value_is_rejected_naming_the_flag(monkeypatch, tmp_path, comman
     rec_bad = {**rec, "value": bad}
     result = _runner.invoke(app, _argv(command, flag, rec_bad, ph, use_flag=True))
     assert result.exit_code != 0, f"{command} {flag}={bad} was accepted"
-    text = result.output + str(result.exception or "")
+    # Rich colours the usage panel under CI (FORCE_COLOR) and splits the flag
+    # name with escape codes; strip them before matching.
+    text = _ANSI.sub("", result.output + str(result.exception or ""))
     assert rec.get("reported_as", flag) in text, f"rejection does not name {flag}: {text}"
 
 
