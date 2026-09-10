@@ -27,7 +27,7 @@ global_flags:
     docs:
     - docs/adding-tools.md
     nextflow: null
-    live: 'todo: PR-E'
+    live: 'n/a: unit test test_version_flag_prints_version'
   --container:
     envvar: REPGENR_CONTAINER
     param: container.backend
@@ -95,7 +95,7 @@ global_flags:
     docs:
     - README.md
     nextflow: null
-    live: 'todo: PR-E'
+    live: tests/live/test_aux_commands.py::test_second_run_skips_and_force_reruns
     observable: a completed stage re-runs
   --verbose:
     aliases:
@@ -105,7 +105,7 @@ global_flags:
     docs:
     - README.md
     nextflow: null
-    live: 'todo: PR-E'
+    live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: DEBUG lines in repgenr.log
   --quiet:
     aliases:
@@ -114,7 +114,7 @@ global_flags:
     validated: none
     docs: []
     nextflow: null
-    live: 'todo: PR-E'
+    live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: no INFO lines on the console
 commands:
   derep-stock:
@@ -135,7 +135,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: the workdir is populated
       --action:
         param: DerepStockParams.action
@@ -143,7 +143,7 @@ commands:
         validated: choice
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: pack/unpack/delete/list round trip
       --name:
         param: DerepStockParams.name
@@ -152,7 +152,7 @@ commands:
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
   derep-unpack:
     dispatch: stage
     base_args:
@@ -169,14 +169,14 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: the workdir is populated
       --no-representant:
         param: DerepUnpackParams.no_representant
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: cluster dirs lack the representative
   dereplicate:
     dispatch: stage
@@ -210,7 +210,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_dereplicators.py::test_adapter_recovers_the_synthetic_partition
         observable: derep/clusters.tsv partition matches truth.json
       --primary-ani:
         aliases:
@@ -221,7 +221,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --secondary-ani:
         aliases:
         - -sani
@@ -233,7 +233,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_secondary_ani_sweep_changes_representative_count
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
         aliases:
@@ -243,7 +243,7 @@ commands:
         validated: unit_interval
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --threads:
         aliases:
         - -t
@@ -254,7 +254,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --process-size:
         aliases:
         - -s
@@ -267,7 +267,7 @@ commands:
         - docs/swot-derep.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
         observable: chunk directories appear under scratch/
       --num-processes:
         aliases:
@@ -278,7 +278,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-primary-ani:
         param: DereplicateParams.pre_primary_ani
         value: '0.8'
@@ -286,7 +286,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-secondary-ani:
         param: DereplicateParams.pre_secondary_ani
         value: '0.9'
@@ -294,7 +294,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --reduce:
         param: DereplicateParams.reduce
         value: species
@@ -303,7 +303,7 @@ commands:
         - docs/scaling-audit.md
         - docs/swot-derep.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_reduce_species_keeps_one_representative_per_species
         observable: one representative per species
       --target-reps:
         param: DereplicateParams.target_reps
@@ -314,7 +314,7 @@ commands:
         - docs/scaling-audit.md
         - docs/swot-derep.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_target_reps_lands_on_the_requested_count
         observable: representative count lands near the target
       --virus:
         param: DereplicateParams.extra
@@ -328,7 +328,7 @@ commands:
         - docs/swot-derep.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_virus_flag_on_auto_tool_is_reported_when_ignored
       --tool-arg:
         param: DereplicateParams.extra
         value: mode=greedy
@@ -338,14 +338,14 @@ commands:
         - docs/adding-tools.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_tool_arg_reaches_the_tool_command_line
         observable: the key=value reaches the tool command line in repgenr.log
       --allow-incomplete:
         param: DereplicateParams.allow_incomplete
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_allow_incomplete_gates_a_missing_genome
       --keeper:
         param: DereplicateParams.keeper
         value: tool
@@ -355,7 +355,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_dereplicators.py::test_keeper_quality_promotes_the_best_scored_member
   dereplicate-chunk:
     dispatch: step:repgenr.stages.derep_steps.dereplicate_chunk
     base_args:
@@ -370,7 +370,7 @@ commands:
         validated: stage
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --out:
         aliases:
         - -o
@@ -379,7 +379,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --tool:
         param: ChunkParams.tool
         value: sourmash
@@ -394,7 +394,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --primary-ani:
         aliases:
         - -pani
@@ -404,7 +404,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
         aliases:
         - -sani
@@ -416,7 +416,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
         aliases:
@@ -426,7 +426,7 @@ commands:
         validated: unit_interval
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
         aliases:
         - -t
@@ -437,7 +437,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --virus:
         param: ChunkParams.extra
         with_args:
@@ -450,7 +450,7 @@ commands:
         - docs/swot-derep.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
         param: ChunkParams.extra
         value: mode=greedy
@@ -460,7 +460,7 @@ commands:
         - docs/adding-tools.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
       --selection-tsv:
         param: ChunkParams.selection_tsv
@@ -468,7 +468,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --keeper:
         param: ChunkParams.keeper
         value: tool
@@ -478,14 +478,14 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
         observable: a versions YAML fragment is written
   dereplicate-merge:
     dispatch: step:repgenr.stages.derep_steps.dereplicate_merge
@@ -503,21 +503,21 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-dir:
         param: MergeParams.chunk_dirs
         value: '{alt_dir}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-fofn:
         param: MergeParams.chunk_dirs
         value: '{fofn}'
         validated: stage
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_fofn
       --tool:
         param: MergeParams.tool
         value: sourmash
@@ -532,7 +532,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --primary-ani:
         aliases:
         - -pani
@@ -542,7 +542,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
         aliases:
         - -sani
@@ -554,7 +554,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
         aliases:
@@ -564,7 +564,7 @@ commands:
         validated: unit_interval
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
         aliases:
         - -t
@@ -575,7 +575,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --virus:
         param: MergeParams.extra
         with_args:
@@ -588,7 +588,7 @@ commands:
         - docs/swot-derep.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
         param: MergeParams.extra
         value: mode=greedy
@@ -598,7 +598,7 @@ commands:
         - docs/adding-tools.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
       --selection-tsv:
         param: MergeParams.selection_tsv
@@ -606,7 +606,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --keeper:
         param: MergeParams.keeper
         value: tool
@@ -616,14 +616,14 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_merge_by_chunk_fofn
         observable: a versions YAML fragment is written
   doctor:
     dispatch: query
@@ -640,7 +640,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome
         observable: exit 0 on a sound workdir, 1 after corrupting a genome
   genome:
     dispatch: stage
@@ -711,7 +711,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
         observable: a versions YAML fragment is written
   glance:
     dispatch: stage
@@ -815,7 +815,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset
       --outgroup:
         param: IngestParams.outgroup
         value: GCF_000001.1
@@ -824,7 +824,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: outgroup/ and outgroup_accession.txt written
       --copy:
         param: IngestParams.copy
@@ -833,7 +833,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: genomes/ entries are regular files
   list-tools:
     dispatch: query
@@ -995,7 +995,7 @@ commands:
         - docs/containers.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives
       --msa-source:
         param: PhyloParams.msa_source
         value: snptype
@@ -1029,7 +1029,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree
         observable: leaf set is all genomes
       --no-outgroup:
         param: PhyloParams.no_outgroup
@@ -1115,7 +1115,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
         aliases:
         - -o
@@ -1124,21 +1124,21 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: PhyloBuildParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: PhyloBuildParams.outgroup_accession
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --treebuilder:
         param: PhyloBuildParams.phylo.treebuilder
         value: fasttree
@@ -1148,7 +1148,7 @@ commands:
         - docs/containers.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --msa-source:
         param: PhyloBuildParams.phylo.msa_source
         value: snptype
@@ -1157,7 +1157,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --aligner:
         param: PhyloBuildParams.phylo.aligner
         value: sibeliaz
@@ -1176,7 +1176,7 @@ commands:
         validated: registry
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --no-outgroup:
         param: PhyloBuildParams.phylo.no_outgroup
         validated: none
@@ -1194,7 +1194,7 @@ commands:
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
         observable: support labels in tree.nwk
       --reference:
         param: PhyloBuildParams.phylo.reference
@@ -1203,7 +1203,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --aligner-arg:
         param: PhyloBuildParams.phylo.extra
         value: kmer=15
@@ -1223,14 +1223,14 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: PhyloBuildParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
   run:
     dispatch: stage
@@ -1619,7 +1619,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
         observable: internal node names carry the prefix
       --root-name:
         aliases:
@@ -1629,13 +1629,13 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --remove-outgroup:
         param: Tree2taxParams.remove_outgroup
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --include-dereplicated:
         secondary:
         - --no-include-dereplicated
@@ -1656,7 +1656,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
       --collapse-length:
         param: Tree2taxParams.collapse_length
         value: '0.01'
@@ -1666,7 +1666,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: 'todo: PR-G'
   tree2tax-relations:
     dispatch: step:repgenr.stages.tree2tax.tree2tax_relations
     base_args:
@@ -1681,7 +1681,7 @@ commands:
         validated: stage
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
         aliases:
         - -o
@@ -1690,35 +1690,35 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --clusters:
         param: Tree2taxStepParams.clusters
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: Tree2taxStepParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: Tree2taxStepParams.outgroup_accession
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --node-basename:
         param: Tree2taxStepParams.node_basename
         value: node
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: internal node names carry the prefix
       --root-name:
         aliases:
@@ -1728,13 +1728,13 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --remove-outgroup:
         param: Tree2taxStepParams.remove_outgroup
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --include-dereplicated:
         param: Tree2taxStepParams.include_dereplicated
         validated: none
@@ -1742,14 +1742,14 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: Tree2taxStepParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
       --collapse-support:
         param: Tree2taxStepParams.collapse_support
@@ -1760,7 +1760,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
       --collapse-length:
         param: Tree2taxStepParams.collapse_length
         value: '0.01'
@@ -1770,7 +1770,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
   versions:
     dispatch: query
     base_args:
@@ -1786,14 +1786,14 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_status_and_versions
       --versions-out:
         param: 'n/a: query command, no stage parameters'
         value: '{alt_file}'
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-E'
+        live: tests/live/test_aux_commands.py::test_status_and_versions
         observable: YAML fragment written
   vgenome:
     dispatch: stage

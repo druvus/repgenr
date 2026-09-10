@@ -3,21 +3,21 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 197 flags (19 with a live test or an n/a reason, 178 pending).
+22 commands, 197 flags (88 with a live test or an n/a reason, 109 pending).
 
 ## Global flags
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--version` |  | n/a: prints the version and exits | none | todo: PR-E | docs/adding-tools.md |
+| `--version` |  | n/a: prints the version and exits | none | n/a: unit test test_version_flag_prints_version | docs/adding-tools.md |
 | `--container` |  | container.backend | choice | todo: PR-H | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
 | `--container-engine` |  | container.engine | none | todo: PR-H | docs/containers.md |
 | `--container-cache` |  | container.cache_dir | none | todo: PR-H | docs/containers.md, docs/verification.md |
 | `--platform` |  | container.platform | none | todo: PR-H | README.md, docs/containers.md |
 | `--wave` |  | container.wave_enabled | none | todo: PR-H | docs/adding-tools.md, docs/containers.md, docs/swot-viral.md |
-| `--force` | -f | state.force | none | todo: PR-E | README.md |
-| `--verbose` | -v | state.log_level | none | todo: PR-E | README.md |
-| `--quiet` | -q | state.log_level | none | todo: PR-E |  |
+| `--force` | -f | state.force | none | tests/live/test_aux_commands.py::test_second_run_skips_and_force_reruns | README.md |
+| `--verbose` | -v | state.log_level | none | tests/live/test_aux_commands.py::test_logging_flags_and_env | README.md |
+| `--quiet` | -q | state.log_level | none | tests/live/test_aux_commands.py::test_logging_flags_and_env |  |
 
 ## derep-stock
 
@@ -25,9 +25,9 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--action` |  | DerepStockParams.action | choice | todo: PR-E |  |
-| `--name` |  | DerepStockParams.name | none | todo: PR-E | docs/usage.md |
+| `--workdir` | -wd | workdir | stage | tests/live/test_aux_commands.py::test_derep_stock_round_trip | docs/containers.md, docs/output.md |
+| `--action` |  | DerepStockParams.action | choice | tests/live/test_aux_commands.py::test_derep_stock_round_trip |  |
+| `--name` |  | DerepStockParams.name | none | tests/live/test_aux_commands.py::test_derep_stock_round_trip | docs/usage.md |
 
 ## derep-unpack
 
@@ -35,8 +35,8 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--no-representant` |  | DerepUnpackParams.no_representant | none | todo: PR-E |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant | docs/containers.md, docs/output.md |
+| `--no-representant` |  | DerepUnpackParams.no_representant | none | tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant |  |
 
 ## dereplicate
 
@@ -45,21 +45,21 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--tool` |  | DereplicateParams.tool | registry | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--primary-ani` | -pani | DereplicateParams.primary_ani | unit_interval | todo: PR-E | docs/verification.md |
-| `--secondary-ani` | -sani | DereplicateParams.secondary_ani | unit_interval | todo: PR-E | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
-| `--aligned-fraction` | -af | DereplicateParams.aligned_fraction | unit_interval | todo: PR-E |  |
-| `--threads` | -t | DereplicateParams.threads | range | todo: PR-E | docs/verification.md |
-| `--process-size` | -s | DereplicateParams.process_size | none | todo: PR-E | docs/architecture.md, docs/scaling-audit.md, docs/swot-derep.md, docs/verification.md |
-| `--num-processes` | -p | DereplicateParams.num_processes | none | todo: PR-E | docs/verification.md |
-| `--pre-primary-ani` |  | DereplicateParams.pre_primary_ani | unit_interval | todo: PR-E | docs/verification.md |
-| `--pre-secondary-ani` |  | DereplicateParams.pre_secondary_ani | unit_interval | todo: PR-E | docs/verification.md |
-| `--reduce` |  | DereplicateParams.reduce | choice | todo: PR-E | docs/scaling-audit.md, docs/swot-derep.md |
-| `--target-reps` |  | DereplicateParams.target_reps | range | todo: PR-E | docs/scaling-audit.md, docs/swot-derep.md |
-| `--virus` |  | DereplicateParams.extra | none | todo: PR-E | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
-| `--tool-arg` |  | DereplicateParams.extra | callback | todo: PR-E | docs/adding-tools.md, docs/usage.md |
-| `--allow-incomplete` |  | DereplicateParams.allow_incomplete | none | todo: PR-E |  |
-| `--keeper` |  | DereplicateParams.keeper | choice | todo: PR-E | README.md, docs/swot-derep.md, docs/usage.md |
+| `--tool` |  | DereplicateParams.tool | registry | tests/live/test_dereplicators.py::test_adapter_recovers_the_synthetic_partition | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--primary-ani` | -pani | DereplicateParams.primary_ani | unit_interval | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/verification.md |
+| `--secondary-ani` | -sani | DereplicateParams.secondary_ani | unit_interval | tests/live/test_dereplicators.py::test_secondary_ani_sweep_changes_representative_count | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
+| `--aligned-fraction` | -af | DereplicateParams.aligned_fraction | unit_interval | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path |  |
+| `--threads` | -t | DereplicateParams.threads | range | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/verification.md |
+| `--process-size` | -s | DereplicateParams.process_size | none | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/architecture.md, docs/scaling-audit.md, docs/swot-derep.md, docs/verification.md |
+| `--num-processes` | -p | DereplicateParams.num_processes | none | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/verification.md |
+| `--pre-primary-ani` |  | DereplicateParams.pre_primary_ani | unit_interval | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/verification.md |
+| `--pre-secondary-ani` |  | DereplicateParams.pre_secondary_ani | unit_interval | tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path | docs/verification.md |
+| `--reduce` |  | DereplicateParams.reduce | choice | tests/live/test_dereplicators.py::test_reduce_species_keeps_one_representative_per_species | docs/scaling-audit.md, docs/swot-derep.md |
+| `--target-reps` |  | DereplicateParams.target_reps | range | tests/live/test_dereplicators.py::test_target_reps_lands_on_the_requested_count | docs/scaling-audit.md, docs/swot-derep.md |
+| `--virus` |  | DereplicateParams.extra | none | tests/live/test_dereplicators.py::test_virus_flag_on_auto_tool_is_reported_when_ignored | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
+| `--tool-arg` |  | DereplicateParams.extra | callback | tests/live/test_dereplicators.py::test_tool_arg_reaches_the_tool_command_line | docs/adding-tools.md, docs/usage.md |
+| `--allow-incomplete` |  | DereplicateParams.allow_incomplete | none | tests/live/test_dereplicators.py::test_allow_incomplete_gates_a_missing_genome |  |
+| `--keeper` |  | DereplicateParams.keeper | choice | tests/live/test_dereplicators.py::test_keeper_quality_promotes_the_best_scored_member | README.md, docs/swot-derep.md, docs/usage.md |
 
 ## dereplicate-chunk
 
@@ -67,18 +67,18 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_chunk`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--genomes-fofn` |  | ChunkParams.genomes | stage | todo: PR-E |  |
-| `--out` | -o | ChunkParams.out_dir | none | todo: PR-E |  |
-| `--tool` |  | ChunkParams.tool | registry | todo: PR-E | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--primary-ani` | -pani | ChunkParams.primary_ani | unit_interval | todo: PR-E | docs/verification.md |
-| `--secondary-ani` | -sani | ChunkParams.secondary_ani | unit_interval | todo: PR-E | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
-| `--aligned-fraction` | -af | ChunkParams.aligned_fraction | unit_interval | todo: PR-E |  |
-| `--threads` | -t | ChunkParams.threads | range | todo: PR-E | docs/verification.md |
-| `--virus` |  | ChunkParams.extra | none | todo: PR-E | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
-| `--tool-arg` |  | ChunkParams.extra | callback | todo: PR-E | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | ChunkParams.selection_tsv | none | todo: PR-E |  |
-| `--keeper` |  | ChunkParams.keeper | choice | todo: PR-E | README.md, docs/swot-derep.md, docs/usage.md |
-| `--versions-out` |  | ChunkParams.versions_out | none | todo: PR-E |  |
+| `--genomes-fofn` |  | ChunkParams.genomes | stage | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions |  |
+| `--out` | -o | ChunkParams.out_dir | none | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions |  |
+| `--tool` |  | ChunkParams.tool | registry | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--primary-ani` | -pani | ChunkParams.primary_ani | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/verification.md |
+| `--secondary-ani` | -sani | ChunkParams.secondary_ani | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
+| `--aligned-fraction` | -af | ChunkParams.aligned_fraction | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) |  |
+| `--threads` | -t | ChunkParams.threads | range | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions | docs/verification.md |
+| `--virus` |  | ChunkParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
+| `--tool-arg` |  | ChunkParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
+| `--selection-tsv` |  | ChunkParams.selection_tsv | none | todo: PR-G |  |
+| `--keeper` |  | ChunkParams.keeper | choice | todo: PR-G | README.md, docs/swot-derep.md, docs/usage.md |
+| `--versions-out` |  | ChunkParams.versions_out | none | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions |  |
 
 ## dereplicate-merge
 
@@ -86,19 +86,19 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_merge`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--out` | -o | MergeParams.out_dir | none | todo: PR-E |  |
-| `--chunk-dir` |  | MergeParams.chunk_dirs | none | todo: PR-E |  |
-| `--chunk-fofn` |  | MergeParams.chunk_dirs | stage | todo: PR-E |  |
-| `--tool` |  | MergeParams.tool | registry | todo: PR-E | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--primary-ani` | -pani | MergeParams.primary_ani | unit_interval | todo: PR-E | docs/verification.md |
-| `--secondary-ani` | -sani | MergeParams.secondary_ani | unit_interval | todo: PR-E | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
-| `--aligned-fraction` | -af | MergeParams.aligned_fraction | unit_interval | todo: PR-E |  |
-| `--threads` | -t | MergeParams.threads | range | todo: PR-E | docs/verification.md |
-| `--virus` |  | MergeParams.extra | none | todo: PR-E | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
-| `--tool-arg` |  | MergeParams.extra | callback | todo: PR-E | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | MergeParams.selection_tsv | none | todo: PR-E |  |
-| `--keeper` |  | MergeParams.keeper | choice | todo: PR-E | README.md, docs/swot-derep.md, docs/usage.md |
-| `--versions-out` |  | MergeParams.versions_out | none | todo: PR-E |  |
+| `--out` | -o | MergeParams.out_dir | none | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition |  |
+| `--chunk-dir` |  | MergeParams.chunk_dirs | none | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition |  |
+| `--chunk-fofn` |  | MergeParams.chunk_dirs | stage | tests/live/test_steps.py::test_merge_by_chunk_fofn |  |
+| `--tool` |  | MergeParams.tool | registry | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--primary-ani` | -pani | MergeParams.primary_ani | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/verification.md |
+| `--secondary-ani` | -sani | MergeParams.secondary_ani | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
+| `--aligned-fraction` | -af | MergeParams.aligned_fraction | unit_interval | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) |  |
+| `--threads` | -t | MergeParams.threads | range | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition | docs/verification.md |
+| `--virus` |  | MergeParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
+| `--tool-arg` |  | MergeParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
+| `--selection-tsv` |  | MergeParams.selection_tsv | none | todo: PR-G |  |
+| `--keeper` |  | MergeParams.keeper | choice | todo: PR-G | README.md, docs/swot-derep.md, docs/usage.md |
+| `--versions-out` |  | MergeParams.versions_out | none | tests/live/test_steps.py::test_merge_by_chunk_fofn |  |
 
 ## doctor
 
@@ -106,7 +106,7 @@ dispatch: `query`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | n/a: query command, no stage parameters | none | todo: PR-E | docs/containers.md, docs/output.md |
+| `--workdir` | -wd | n/a: query command, no stage parameters | none | tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome | docs/containers.md, docs/output.md |
 
 ## genome
 
@@ -127,7 +127,7 @@ dispatch: `step:repgenr.stages.genome_steps.genome_fetch`
 | `--selection` |  | GenomeFetchParams.selection_tsv | stage | todo: PR-F | README.md, docs/usage.md |
 | `--out` | -o | GenomeFetchParams.out_dir | none | todo: PR-F |  |
 | `--keep-files` |  | GenomeFetchParams.keep_files | none | todo: PR-F |  |
-| `--versions-out` |  | GenomeFetchParams.versions_out | none | todo: PR-E |  |
+| `--versions-out` |  | GenomeFetchParams.versions_out | none | todo: PR-G |  |
 
 ## glance
 
@@ -150,9 +150,9 @@ dispatch: `stage`
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
 | `--genomes-dir` |  | IngestParams.genomes_dir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | README.md, docs/usage.md |
-| `--selection` |  | IngestParams.selection | stage | todo: PR-E | README.md, docs/usage.md |
-| `--outgroup` |  | IngestParams.outgroup | stage | todo: PR-E | README.md, docs/usage.md |
-| `--copy` |  | IngestParams.copy | none | todo: PR-E | README.md, docs/usage.md |
+| `--selection` |  | IngestParams.selection | stage | tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset | README.md, docs/usage.md |
+| `--outgroup` |  | IngestParams.outgroup | stage | tests/live/test_ingest_flags.py::test_outgroup_and_copy | README.md, docs/usage.md |
+| `--copy` |  | IngestParams.copy | none | tests/live/test_ingest_flags.py::test_outgroup_and_copy | README.md, docs/usage.md |
 
 ## list-tools
 
@@ -187,11 +187,11 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--treebuilder` |  | PhyloParams.treebuilder | registry | todo: PR-G | README.md, docs/containers.md, docs/usage.md |
+| `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives | README.md, docs/containers.md, docs/usage.md |
 | `--msa-source` |  | PhyloParams.msa_source | choice | todo: PR-G | README.md, docs/usage.md |
 | `--aligner` |  | PhyloParams.aligner | registry | todo: PR-H | README.md, docs/containers.md |
 | `--snptyper` |  | PhyloParams.snptyper | registry | todo: PR-G |  |
-| `--all-genomes` |  | PhyloParams.all_genomes | none | todo: PR-G |  |
+| `--all-genomes` |  | PhyloParams.all_genomes | none | tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree |  |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree |  |
 | `--bootstrap` | -B | PhyloParams.bootstrap | range | todo: PR-G | docs/usage.md |
 | `--reference` |  | PhyloParams.reference | none | todo: PR-G | docs/swot-phylo.md |
@@ -206,20 +206,20 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--genomes-dir` |  | PhyloBuildParams.genomes_dir | stage | todo: PR-E | README.md, docs/usage.md |
-| `--out` | -o | PhyloBuildParams.out_dir | none | todo: PR-E |  |
-| `--outgroup-dir` |  | PhyloBuildParams.outgroup_dir | none | todo: PR-E |  |
-| `--outgroup-accession` |  | PhyloBuildParams.outgroup_accession | none | todo: PR-E |  |
-| `--treebuilder` |  | PhyloBuildParams.phylo.treebuilder | registry | todo: PR-E | README.md, docs/containers.md, docs/usage.md |
-| `--msa-source` |  | PhyloBuildParams.phylo.msa_source | choice | todo: PR-E | README.md, docs/usage.md |
+| `--genomes-dir` |  | PhyloBuildParams.genomes_dir | stage | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | README.md, docs/usage.md |
+| `--out` | -o | PhyloBuildParams.out_dir | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--outgroup-dir` |  | PhyloBuildParams.outgroup_dir | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--outgroup-accession` |  | PhyloBuildParams.outgroup_accession | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--treebuilder` |  | PhyloBuildParams.phylo.treebuilder | registry | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | README.md, docs/containers.md, docs/usage.md |
+| `--msa-source` |  | PhyloBuildParams.phylo.msa_source | choice | todo: PR-G | README.md, docs/usage.md |
 | `--aligner` |  | PhyloBuildParams.phylo.aligner | registry | todo: PR-H | README.md, docs/containers.md |
-| `--snptyper` |  | PhyloBuildParams.phylo.snptyper | registry | todo: PR-E |  |
+| `--snptyper` |  | PhyloBuildParams.phylo.snptyper | registry | todo: PR-G |  |
 | `--no-outgroup` |  | PhyloBuildParams.phylo.no_outgroup | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree |  |
-| `--bootstrap` | -B | PhyloBuildParams.phylo.bootstrap | range | todo: PR-E | docs/usage.md |
-| `--reference` |  | PhyloBuildParams.phylo.reference | none | todo: PR-E | docs/swot-phylo.md |
+| `--bootstrap` | -B | PhyloBuildParams.phylo.bootstrap | range | todo: PR-G | docs/usage.md |
+| `--reference` |  | PhyloBuildParams.phylo.reference | none | todo: PR-G | docs/swot-phylo.md |
 | `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | todo: PR-H | docs/adding-tools.md |
-| `--threads` | -t | PhyloBuildParams.phylo.threads | range | todo: PR-E | docs/verification.md |
-| `--versions-out` |  | PhyloBuildParams.versions_out | none | todo: PR-E |  |
+| `--threads` | -t | PhyloBuildParams.phylo.threads | range | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/verification.md |
+| `--versions-out` |  | PhyloBuildParams.versions_out | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
 
 ## run
 
@@ -285,12 +285,12 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--node-basename` |  | Tree2taxParams.node_basename | none | todo: PR-E |  |
-| `--root-name` | -r | Tree2taxParams.root_name | none | todo: PR-E |  |
-| `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | todo: PR-E |  |
+| `--node-basename` |  | Tree2taxParams.node_basename | none | todo: PR-G |  |
+| `--root-name` | -r | Tree2taxParams.root_name | none | todo: PR-G |  |
+| `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | todo: PR-G |  |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | README.md, docs/usage.md |
-| `--collapse-support` |  | Tree2taxParams.collapse_support | range | todo: PR-E | docs/swot-phylo.md, docs/usage.md |
-| `--collapse-length` |  | Tree2taxParams.collapse_length | range | todo: PR-E | docs/swot-phylo.md, docs/usage.md |
+| `--collapse-support` |  | Tree2taxParams.collapse_support | range | todo: PR-G | docs/swot-phylo.md, docs/usage.md |
+| `--collapse-length` |  | Tree2taxParams.collapse_length | range | todo: PR-G | docs/swot-phylo.md, docs/usage.md |
 
 ## tree2tax-relations
 
@@ -298,18 +298,18 @@ dispatch: `step:repgenr.stages.tree2tax.tree2tax_relations`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--tree` |  | Tree2taxStepParams.tree | stage | todo: PR-E |  |
-| `--out` | -o | Tree2taxStepParams.out_dir | none | todo: PR-E |  |
-| `--clusters` |  | Tree2taxStepParams.clusters | none | todo: PR-E |  |
-| `--outgroup-dir` |  | Tree2taxStepParams.outgroup_dir | none | todo: PR-E |  |
-| `--outgroup-accession` |  | Tree2taxStepParams.outgroup_accession | none | todo: PR-E |  |
-| `--node-basename` |  | Tree2taxStepParams.node_basename | none | todo: PR-E |  |
-| `--root-name` | -r | Tree2taxStepParams.root_name | none | todo: PR-E |  |
-| `--remove-outgroup` |  | Tree2taxStepParams.remove_outgroup | none | todo: PR-E |  |
-| `--include-dereplicated` |  | Tree2taxStepParams.include_dereplicated | none | todo: PR-E | README.md, docs/usage.md |
-| `--versions-out` |  | Tree2taxStepParams.versions_out | none | todo: PR-E |  |
-| `--collapse-support` |  | Tree2taxStepParams.collapse_support | range | todo: PR-E | docs/swot-phylo.md, docs/usage.md |
-| `--collapse-length` |  | Tree2taxStepParams.collapse_length | range | todo: PR-E | docs/swot-phylo.md, docs/usage.md |
+| `--tree` |  | Tree2taxStepParams.tree | stage | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--out` | -o | Tree2taxStepParams.out_dir | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--clusters` |  | Tree2taxStepParams.clusters | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--outgroup-dir` |  | Tree2taxStepParams.outgroup_dir | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--outgroup-accession` |  | Tree2taxStepParams.outgroup_accession | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--node-basename` |  | Tree2taxStepParams.node_basename | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--root-name` | -r | Tree2taxStepParams.root_name | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--remove-outgroup` |  | Tree2taxStepParams.remove_outgroup | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--include-dereplicated` |  | Tree2taxStepParams.include_dereplicated | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | README.md, docs/usage.md |
+| `--versions-out` |  | Tree2taxStepParams.versions_out | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
+| `--collapse-support` |  | Tree2taxStepParams.collapse_support | range | tests/live/test_steps.py::test_tree2tax_relations_collapse_flags | docs/swot-phylo.md, docs/usage.md |
+| `--collapse-length` |  | Tree2taxStepParams.collapse_length | range | tests/live/test_steps.py::test_tree2tax_relations_collapse_flags | docs/swot-phylo.md, docs/usage.md |
 
 ## versions
 
@@ -317,8 +317,8 @@ dispatch: `query`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | n/a: query command, no stage parameters | none | todo: PR-E | docs/containers.md, docs/output.md |
-| `--versions-out` |  | n/a: query command, no stage parameters | none | todo: PR-E |  |
+| `--workdir` | -wd | n/a: query command, no stage parameters | none | tests/live/test_aux_commands.py::test_status_and_versions | docs/containers.md, docs/output.md |
+| `--versions-out` |  | n/a: query command, no stage parameters | none | tests/live/test_aux_commands.py::test_status_and_versions |  |
 
 ## vgenome
 

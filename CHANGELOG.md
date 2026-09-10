@@ -7,6 +7,15 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Live tests for the offline stages (`tests/live/`, 29 tests, about three
+  minutes): skder, sourmash and galah recover the synthetic partition; every
+  `dereplicate` flag has an observable effect; `dereplicate-chunk` x3 plus
+  `dereplicate-merge` by directory and by file list; `phylo-build` and
+  `tree2tax-relations` with an outgroup, the collapse thresholds and
+  `--versions-out`; the mashtree and sourmash tree builders; `derep-unpack`,
+  `derep-stock`, `status`, `versions`, `doctor`; `--force`, `--quiet`,
+  `--verbose`, `REPGENR_FORCE` and `REPGENR_LOG_LEVEL`; `ingest --outgroup`,
+  `--copy` and `--selection`.
 - A CLI matrix, `tests/audit/cli_matrix.yaml`, with one record per command
   and flag (aliases, the parameter it sets, how it is validated, the docs
   that mention it, its live test). `tests/unit/test_cli_matrix.py` checks the
@@ -79,6 +88,9 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- `--versions-out` on the stateless steps failed with "No such file or
+  directory" when the fragment path sat in the not-yet-created output
+  directory; the parent is now created first.
 - Six small defects noted in the 2026-09-01 audit's self-review: `phylo`
   publishes `tree/tree.nwk` through the atomic copy used by every other
   deliverable; the Nextflow retry window no longer includes exit 130 and 131

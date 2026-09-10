@@ -24,4 +24,7 @@ def write_versions_fragment(path: str | Path, versions: dict[str, str]) -> None:
     """
     lines = [f"    {tool}: {ver}" for tool, ver in sorted(versions.items())]
     text = "\n".join(lines) + "\n" if lines else ""
+    # The steps write this before their output directory exists (a Nextflow
+    # task writes it into the task cwd, a manual run often into -o).
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
