@@ -314,3 +314,22 @@ def test_tree_published_through_atomic_path(workdir: Path, monkeypatch, register
     assert tree.read_text(encoding="utf-8") == "(new);\n"
     assert published_via == [ctx.tree_dir / "tree.nwk"]
     assert not list(ctx.tree_dir.glob("*.part")) and not list(ctx.tree_dir.glob(".*tmp*"))
+
+
+def test_snptype_source_types_the_outgroup_too(
+    workdir: Path, fake_phylo_tools, fake_snptyper
+) -> None:
+    """The outgroup joins the SNP typing run (live audit: the ska2/simple SNP
+    trees had no outgroup leaf to root on)."""
+    _make_reps(workdir)
+    outgroup = workdir / "outgroup"
+    outgroup.mkdir()
+    (outgroup / "Fam_gen_og_GCA_000009.fasta").write_text(">og\nACGTACGT\n")
+    (workdir / "outgroup_accession.txt").write_text("GCA_000009\n")
+    ctx = WorkdirContext(workdir, create=True)
+    run(
+        ctx,
+        PhyloParams(treebuilder="faketree_msa", msa_source="snptype", snptyper="fakesnptyper"),
+    )
+    core = (workdir / "snp" / "core_snp.fasta").read_text()
+    assert core.count(">") == 4 and ">Fam_gen_og_GCA_000009" in core

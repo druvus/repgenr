@@ -389,8 +389,11 @@ def _build_msa(
             if params.reference
             else None
         )
+        # The outgroup must be typed with the ingroup (`inputs`, as on the
+        # aligner path); typing `genomes` alone left it out of the alignment,
+        # so the tree had no outgroup leaf to root on.
         snp_result, versions = snptype_core(
-            genomes,
+            inputs,
             snp_reference,
             dirs.snp_dir,
             dirs.scratch_dir / "snptype",

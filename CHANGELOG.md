@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Live tests on the Francisella tularensis species set
+  (`tests/live/test_species_set.py`): the simple, ska2 and parsnp SNP typers
+  with `--reference`, `--all-genomes`, `--tool-arg` and `--allow-incomplete`;
+  `--mask gubbins` changing the core alignment (and refused on ska2);
+  IQ-TREE with `-B 1000` support labels and `--no-outgroup`, FastTree and
+  RAxML-NG from the SNP source, `--mask` through `phylo`; every workdir
+  `tree2tax` flag.
 - Network live tests (`-m "live and network"`, `tests/live/test_network.py`):
   GTDB API selections at genus, species (`--limit`, `--outgroup-accession`)
   and family level; the GTDB TSV table with `--nodownload` and
@@ -96,6 +103,19 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- The simple SNP typer called variants with bcftools' diploid default, so
+  heterozygous calls on haploid bacteria became IUPAC codes in the consensus
+  and Gubbins refused the whole-genome alignment ("contains disallowed
+  characters"). Calling is haploid now (`--ploidy 1`), and the Gubbins
+  masker replaces any remaining non-ACGTN symbol with N before running.
+- `snptype` without `--reference` picked the alphabetically first genome
+  silently on the workdir path; it now logs the same warning the stateless
+  path always did, naming the genome it chose.
+- `phylo --msa-source snptype` typed only the ingroup, so the outgroup never
+  reached the SNP alignment and the tree could not be rooted on it. The
+  outgroup is now typed with the ingroup, as on the aligner path.
+- `phylo --treebuilder fasttree --bootstrap N` was silently ignored; N is
+  now FastTree's `-boot` resample count for its local support values.
 - `vgenome --group-segments` concatenated every set of records that shared
   an isolate name, segmented or not; on hepatovirus (one segment) it turned
   367 complete genomes into 149 (216 records share the isolate name "RNA"

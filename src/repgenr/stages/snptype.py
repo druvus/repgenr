@@ -100,12 +100,7 @@ def snptype_core(
             ref = reference
         else:
             ref = genomes[0]
-            logger.warning(
-                "No --reference given; SNP calling against the alphabetically "
-                "first genome '%s'. Reference-private errors bias every SNP "
-                "distance; pass --reference to choose deliberately.",
-                ref.name,
-            )
+            _warn_default_reference(ref, logger)
 
     snp_dir.mkdir(parents=True, exist_ok=True)
     if scratch.exists():
@@ -181,7 +176,7 @@ def run(ctx: WorkdirContext, params: SnptypeParams) -> SnpResult:
 
     reference = None
     if snp_registry.create(params.tool).requires_reference:
-        reference = _reference_path(ctx, params.reference, genomes)
+        reference = _reference_path(ctx, params.reference, genomes, logger)
 
     result, versions = snptype_core(
         genomes, reference, ctx.snp_dir, ctx.scratch_dir / "snptype", params, logger
@@ -208,7 +203,16 @@ def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
     return list_fasta(source)
 
 
-def _reference_path(ctx, reference_name, genomes) -> Path:
+def _warn_default_reference(ref: Path, logger: logging.Logger) -> None:
+    logger.warning(
+        "No --reference given; SNP calling against the alphabetically "
+        "first genome '%s'. Reference-private errors bias every SNP "
+        "distance; pass --reference to choose deliberately.",
+        ref.name,
+    )
+
+
+def _reference_path(ctx, reference_name, genomes, logger: logging.Logger) -> Path:
     if reference_name:
         # Resolved against the workdir genome dirs only: a path component would
         # let the lookup escape them.
@@ -221,4 +225,7 @@ def _reference_path(ctx, reference_name, genomes) -> Path:
             if cand.exists():
                 return cand
         raise UserInputError(f"Reference genome not found: {reference_name}")
+    # The workdir path resolves the default itself (so the record names it);
+    # warn here exactly as the core does when it falls back.
+    _warn_default_reference(genomes[0], logger)
     return genomes[0]
