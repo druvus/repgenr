@@ -244,21 +244,38 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--gtdb-version` |  | bac120/ar53. |
 | `--metadata-source` | `tsv` | tsv or api. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
+| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality (bacterial). |
 | `--target` |  | Virus taxon (viral). |
 | `--viral-source` | `ncbi_virus` | ncbi_virus or bvbrc. |
+| `--complete-only` | off | ncbi_virus: only COMPLETE sequences (viral). |
+| `--host` |  | ncbi_virus: restrict to a host species (viral). |
+| `--released-after` |  | ncbi_virus: MM/DD/YYYY (viral). |
 | `--group-segments` | off | Group viral segments. |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
+| `-s`, `--process-size` |  | Chunk size for two-stage dereplication. |
+| `-p`, `--num-processes` | `0` | Parallel chunk workers (0 = auto). |
+| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species or genus. |
+| `--target-reps` | `0` | Target representative count (0 = off). |
+| `--tool-arg` |  | Dereplicator tuning as key=value (repeatable). |
 | `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
 | `--msa-source` | `aligner` | aligner or snptype. |
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--all-genomes` | off | Build the tree from all genomes, not the representatives. |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000 for IQ-TREE). |
+| `--reference` |  | Reference genome filename. |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
+| `--mask` | `none` | Recombination masking for --msa-source snptype. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
+| `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
+| `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--allow-incomplete` | off | Proceed with a warning when genomes/ is missing selected genomes. |
 | `--dry-run` | off | Print the stages and key parameters, then exit. |
 
 ## snptype

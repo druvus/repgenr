@@ -1761,6 +1761,196 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network
         observable: stage list printed, no workdir written
+      --limit:
+        param: MetadataParams.limit
+        value: '5'
+        invalid: '0'
+        validated: range
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --complete-only:
+        param: VmetadataParams.complete_only
+        with_args:
+        - --viral
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --host:
+        param: VmetadataParams.host
+        value: human
+        with_args:
+        - --viral
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --released-after:
+        param: VmetadataParams.released_after
+        value: 01/31/2024
+        with_args:
+        - --viral
+        invalid: '2024-01-31'
+        validated: callback
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --process-size:
+        param: DereplicateParams.process_size
+        value: '4'
+        aliases:
+        - -s
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --num-processes:
+        param: DereplicateParams.num_processes
+        value: '2'
+        aliases:
+        - -p
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --reduce:
+        param: DereplicateParams.reduce
+        value: species
+        validated: choice
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --target-reps:
+        param: DereplicateParams.target_reps
+        value: '3'
+        invalid: '-1'
+        validated: range
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --tool-arg:
+        param: DereplicateParams.extra
+        value: mode=greedy
+        invalid: noequals
+        validated: callback
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --all-genomes:
+        param: PhyloParams.all_genomes
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --bootstrap:
+        param: PhyloParams.bootstrap
+        value: '1000'
+        aliases:
+        - -B
+        invalid: '-1'
+        validated: range
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --reference:
+        param: PhyloParams.reference
+        value: ref.fasta
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --aligner-arg:
+        param: PhyloParams.extra
+        value: kmer=15
+        invalid: noequals
+        validated: callback
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --mask:
+        param: PhyloParams.extra
+        value: gubbins
+        with_args:
+        - --msa-source
+        - snptype
+        validated: registry
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --collapse-support:
+        param: Tree2taxParams.collapse_support
+        value: '0.5'
+        invalid: '2'
+        validated: range
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --collapse-length:
+        param: Tree2taxParams.collapse_length
+        value: '0.01'
+        invalid: '-1'
+        validated: range
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --allow-incomplete:
+        param: DereplicateParams.allow_incomplete
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
   snptype:
     dispatch: stage
     base_args:
