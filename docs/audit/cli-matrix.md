@@ -3,18 +3,18 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 197 flags (164 with a live test or an n/a reason, 33 pending).
+22 commands, 197 flags (197 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--version` |  | n/a: prints the version and exits | none | n/a: unit test test_version_flag_prints_version | docs/adding-tools.md |
-| `--container` |  | container.backend | choice | todo: PR-H | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--container-engine` |  | container.engine | none | todo: PR-H | docs/containers.md |
-| `--container-cache` |  | container.cache_dir | none | todo: PR-H | docs/containers.md, docs/verification.md |
-| `--platform` |  | container.platform | none | todo: PR-H | README.md, docs/containers.md |
-| `--wave` |  | container.wave_enabled | none | todo: PR-H | docs/adding-tools.md, docs/containers.md, docs/swot-viral.md |
+| `--container` |  | container.backend | choice | tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--container-engine` |  | container.engine | none | tests/live/test_container_runs.py::test_container_engine_podman_is_reported_when_missing | docs/containers.md |
+| `--container-cache` |  | container.cache_dir | none | tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env | docs/containers.md, docs/verification.md |
+| `--platform` |  | container.platform | none | tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env | README.md, docs/containers.md |
+| `--wave` |  | container.wave_enabled | none | tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run | docs/adding-tools.md, docs/containers.md, docs/swot-viral.md |
 | `--force` | -f | state.force | none | tests/live/test_aux_commands.py::test_second_run_skips_and_force_reruns | README.md |
 | `--verbose` | -v | state.log_level | none | tests/live/test_aux_commands.py::test_logging_flags_and_env | README.md |
 | `--quiet` | -q | state.log_level | none | tests/live/test_aux_commands.py::test_logging_flags_and_env |  |
@@ -76,8 +76,8 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_chunk`
 | `--threads` | -t | ChunkParams.threads | range | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions | docs/verification.md |
 | `--virus` |  | ChunkParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
 | `--tool-arg` |  | ChunkParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | ChunkParams.selection_tsv | none | todo: PR-H |  |
-| `--keeper` |  | ChunkParams.keeper | choice | todo: PR-H | README.md, docs/swot-derep.md, docs/usage.md |
+| `--selection-tsv` |  | ChunkParams.selection_tsv | none | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv |  |
+| `--keeper` |  | ChunkParams.keeper | choice | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | README.md, docs/swot-derep.md, docs/usage.md |
 | `--versions-out` |  | ChunkParams.versions_out | none | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions |  |
 
 ## dereplicate-merge
@@ -96,8 +96,8 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_merge`
 | `--threads` | -t | MergeParams.threads | range | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition | docs/verification.md |
 | `--virus` |  | MergeParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
 | `--tool-arg` |  | MergeParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | MergeParams.selection_tsv | none | todo: PR-H |  |
-| `--keeper` |  | MergeParams.keeper | choice | todo: PR-H | README.md, docs/swot-derep.md, docs/usage.md |
+| `--selection-tsv` |  | MergeParams.selection_tsv | none | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv |  |
+| `--keeper` |  | MergeParams.keeper | choice | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | README.md, docs/swot-derep.md, docs/usage.md |
 | `--versions-out` |  | MergeParams.versions_out | none | tests/live/test_steps.py::test_merge_by_chunk_fofn |  |
 
 ## doctor
@@ -124,10 +124,10 @@ dispatch: `step:repgenr.stages.genome_steps.genome_fetch`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--selection` |  | GenomeFetchParams.selection_tsv | stage | todo: PR-F | README.md, docs/usage.md |
-| `--out` | -o | GenomeFetchParams.out_dir | none | todo: PR-F |  |
-| `--keep-files` |  | GenomeFetchParams.keep_files | none | todo: PR-F |  |
-| `--versions-out` |  | GenomeFetchParams.versions_out | none | todo: PR-G |  |
+| `--selection` |  | GenomeFetchParams.selection_tsv | stage | tests/live/test_network.py::test_genome_fetch_step | README.md, docs/usage.md |
+| `--out` | -o | GenomeFetchParams.out_dir | none | tests/live/test_network.py::test_genome_fetch_step |  |
+| `--keep-files` |  | GenomeFetchParams.keep_files | none | tests/live/test_network.py::test_genome_fetch_step |  |
+| `--versions-out` |  | GenomeFetchParams.versions_out | none | tests/live/test_network.py::test_genome_fetch_step |  |
 
 ## glance
 
@@ -135,12 +135,12 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--tool` |  | GlanceParams.tool | registry | todo: PR-H | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--threads` | -t | GlanceParams.threads | range | todo: PR-H | docs/verification.md |
-| `--plot-max` |  | GlanceParams.plot_max | none | todo: PR-H |  |
-| `--plot-min` |  | GlanceParams.plot_min | none | todo: PR-H |  |
-| `--keep-files` |  | GlanceParams.keep_files | none | todo: PR-H |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_container_runs.py::test_glance_drep_compare | docs/containers.md, docs/output.md |
+| `--tool` |  | GlanceParams.tool | registry | tests/live/test_container_runs.py::test_glance_drep_compare | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--threads` | -t | GlanceParams.threads | range | tests/live/test_container_runs.py::test_glance_drep_compare | docs/verification.md |
+| `--plot-max` |  | GlanceParams.plot_max | none | n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare) |  |
+| `--plot-min` |  | GlanceParams.plot_min | none | n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare) |  |
+| `--keep-files` |  | GlanceParams.keep_files | none | tests/live/test_container_runs.py::test_glance_drep_compare |  |
 
 ## ingest
 
@@ -189,14 +189,14 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
 | `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives | README.md, docs/containers.md, docs/usage.md |
 | `--msa-source` |  | PhyloParams.msa_source | choice | tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup | README.md, docs/usage.md |
-| `--aligner` |  | PhyloParams.aligner | registry | todo: PR-H | README.md, docs/containers.md |
+| `--aligner` |  | PhyloParams.aligner | registry | tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container | README.md, docs/containers.md |
 | `--snptyper` |  | PhyloParams.snptyper | registry | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete |  |
 | `--all-genomes` |  | PhyloParams.all_genomes | none | tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree |  |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree |  |
 | `--bootstrap` | -B | PhyloParams.bootstrap | range | tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup | docs/usage.md |
 | `--reference` |  | PhyloParams.reference | none | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete | docs/swot-phylo.md |
-| `--aligner-arg` |  | PhyloParams.extra | callback | todo: PR-H | docs/adding-tools.md |
-| `--threads` | -t | PhyloParams.threads | range | todo: PR-G | docs/verification.md |
+| `--aligner-arg` |  | PhyloParams.extra | callback | tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container | docs/adding-tools.md |
+| `--threads` | -t | PhyloParams.threads | range | tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container | docs/verification.md |
 | `--mask` |  | PhyloParams.extra | registry | tests/live/test_species_set.py::test_phylo_mask_gubbins | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
 | `--allow-incomplete` |  | PhyloParams.allow_incomplete | none | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete |  |
 
@@ -211,13 +211,13 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--outgroup-dir` |  | PhyloBuildParams.outgroup_dir | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
 | `--outgroup-accession` |  | PhyloBuildParams.outgroup_accession | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
 | `--treebuilder` |  | PhyloBuildParams.phylo.treebuilder | registry | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | README.md, docs/containers.md, docs/usage.md |
-| `--msa-source` |  | PhyloBuildParams.phylo.msa_source | choice | todo: PR-G | README.md, docs/usage.md |
-| `--aligner` |  | PhyloBuildParams.phylo.aligner | registry | todo: PR-H | README.md, docs/containers.md |
-| `--snptyper` |  | PhyloBuildParams.phylo.snptyper | registry | todo: PR-G |  |
+| `--msa-source` |  | PhyloBuildParams.phylo.msa_source | choice | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | README.md, docs/usage.md |
+| `--aligner` |  | PhyloBuildParams.phylo.aligner | registry | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | README.md, docs/containers.md |
+| `--snptyper` |  | PhyloBuildParams.phylo.snptyper | registry | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants |  |
 | `--no-outgroup` |  | PhyloBuildParams.phylo.no_outgroup | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree |  |
-| `--bootstrap` | -B | PhyloBuildParams.phylo.bootstrap | range | todo: PR-G | docs/usage.md |
-| `--reference` |  | PhyloBuildParams.phylo.reference | none | todo: PR-G | docs/swot-phylo.md |
-| `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | todo: PR-H | docs/adding-tools.md |
+| `--bootstrap` | -B | PhyloBuildParams.phylo.bootstrap | range | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/usage.md |
+| `--reference` |  | PhyloBuildParams.phylo.reference | none | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/swot-phylo.md |
+| `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/adding-tools.md |
 | `--threads` | -t | PhyloBuildParams.phylo.threads | range | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/verification.md |
 | `--versions-out` |  | PhyloBuildParams.versions_out | none | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup |  |
 
@@ -231,16 +231,16 @@ dispatch: `stage`
 | `--viral` |  | VmetadataParams | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md |
 | `--dataset` | -d | MetadataParams.dataset | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
 | `--level` | -l | MetadataParams.level | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
-| `--target-family` | -tf | MetadataParams.target_family | none | todo: PR-F |  |
+| `--target-family` | -tf | MetadataParams.target_family | none | tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets |  |
 | `--target-genus` | -tg | MetadataParams.target_genus | none | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md |
-| `--target-species` | -ts | MetadataParams.target_species | none | todo: PR-F |  |
-| `--release` | -r | MetadataParams.release | none | todo: PR-F | README.md |
-| `--gtdb-version` |  | MetadataParams.version | none | todo: PR-F | README.md, docs/usage.md |
+| `--target-species` | -ts | MetadataParams.target_species | none | tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets |  |
+| `--release` | -r | MetadataParams.release | none | n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata in test_network.py | README.md |
+| `--gtdb-version` |  | MetadataParams.version | none | n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata in test_network.py | README.md, docs/usage.md |
 | `--metadata-source` |  | MetadataParams.source | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
 | `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
 | `--target` | -t | VmetadataParams.target | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md |
 | `--viral-source` |  | VmetadataParams.source | choice | tests/live/test_network.py::test_run_viral_chain_end_to_end |  |
-| `--group-segments` |  | VgenomeParams.group_segments | none | todo: PR-F | README.md |
+| `--group-segments` |  | VgenomeParams.group_segments | none | n/a: forwarded to vgenome unchanged (wiring test); covered on vgenome in test_vgenome_selection_flags | README.md |
 | `--tool` |  | DereplicateParams.tool | registry | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
 | `--primary-ani` |  | DereplicateParams.primary_ani | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/verification.md |
 | `--secondary-ani` |  | DereplicateParams.secondary_ani | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/scaling-audit.md, docs/usage.md, docs/verification.md |
@@ -248,7 +248,7 @@ dispatch: `stage`
 | `--keeper` |  | DereplicateParams.keeper | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/swot-derep.md, docs/usage.md |
 | `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/containers.md, docs/usage.md |
 | `--msa-source` |  | PhyloParams.msa_source | choice | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) | README.md, docs/usage.md |
-| `--aligner` |  | PhyloParams.aligner | registry | todo: PR-F | README.md, docs/containers.md |
+| `--aligner` |  | PhyloParams.aligner | registry | tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets | README.md, docs/containers.md |
 | `--snptyper` |  | PhyloParams.snptyper | registry | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) |  |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_network.py::test_run_viral_chain_end_to_end |  |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/usage.md |

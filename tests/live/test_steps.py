@@ -3,6 +3,7 @@ tree2tax-relations, and --versions-out on each."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -194,3 +195,127 @@ def test_tree2tax_relations_collapse_flags(run_repgenr, tmp_path: Path) -> None:
         "the support-40 node merges into its parent"
     )
     assert len(rows(by_length)) == len(rows(plain)) - 1, "the 0.001 branch merges into its parent"
+
+
+def test_chunk_keeper_quality_from_selection_tsv(
+    run_repgenr, synthetic_set, selection_for, tmp_path: Path
+) -> None:
+    """--selection-tsv gives the chunk step quality columns; --keeper quality
+    promotes the best-scored member and --keeper tool keeps the adapter's pick."""
+    genomes = synthetic_set("clonal", n=8, length=50_000)
+    truth = truth_of(genomes)
+    clone = sorted(n for n, c in truth["clusters"].items() if c == "clone")
+    best = clone[-1]
+    quality = {name: (90.0, 2.0) for name in truth["clusters"]}
+    quality[best] = (99.9, 0.1)
+    sel = selection_for(genomes, quality=quality, path=tmp_path / "sel.tsv")
+    fofn = tmp_path / "all.fofn"
+    fofn.write_text("".join(f"{f}\n" for f in sorted(genomes.glob("*.fasta"))), encoding="utf-8")
+
+    by_quality = tmp_path / "q"
+    run_repgenr(
+        "dereplicate-chunk",
+        "--genomes-fofn",
+        fofn,
+        "-o",
+        by_quality,
+        "--tool",
+        "sourmash",
+        "-t",
+        "2",
+        "--selection-tsv",
+        sel,
+        "--keeper",
+        "quality",
+    )
+    assert best in read_clusters(by_quality / CLUSTERS_TSV)
+    by_tool = tmp_path / "t"
+    run_repgenr(
+        "dereplicate-chunk",
+        "--genomes-fofn",
+        fofn,
+        "-o",
+        by_tool,
+        "--tool",
+        "sourmash",
+        "-t",
+        "2",
+        "--selection-tsv",
+        sel,
+        "--keeper",
+        "tool",
+    )
+    assert best not in read_clusters(by_tool / CLUSTERS_TSV)
+
+    merged = tmp_path / "m"
+    run_repgenr(
+        "dereplicate-merge",
+        "-o",
+        merged,
+        "--chunk-dir",
+        by_tool,
+        "--tool",
+        "sourmash",
+        "-t",
+        "2",
+        "--selection-tsv",
+        sel,
+        "--keeper",
+        "quality",
+    )
+    assert (merged / CLUSTERS_TSV).is_file()
+
+
+@pytest.mark.requires_binary("sibeliaz", "FastTree", "minimap2", "samtools", "bcftools", "iqtree")
+def test_phylo_build_aligner_and_snp_source_variants(
+    run_repgenr, synthetic_set, tmp_path: Path
+) -> None:
+    """phylo-build through an aligner (with --aligner-arg) and through the SNP
+    source (with --snptyper, --reference and --bootstrap)."""
+    genomes = synthetic_set("balanced", n=4, length=20_000)
+    names = sorted(p.name for p in genomes.glob("*.fasta"))
+    aligned = tmp_path / "aligned"
+    run_repgenr(
+        "phylo-build",
+        "--genomes-dir",
+        genomes,
+        "-o",
+        aligned,
+        "--no-outgroup",
+        "--msa-source",
+        "aligner",
+        "--aligner",
+        "sibeliaz",
+        "--aligner-arg",
+        "kmer=15",
+        "--treebuilder",
+        "fasttree",
+        "-t",
+        "2",
+    )
+    assert len(newick_leaves((aligned / "tree" / TREE_NWK).read_text(encoding="utf-8"))) == 4
+
+    snp = tmp_path / "snp"
+    run_repgenr(
+        "phylo-build",
+        "--genomes-dir",
+        genomes,
+        "-o",
+        snp,
+        "--no-outgroup",
+        "--msa-source",
+        "snptype",
+        "--snptyper",
+        "simple",
+        "--reference",
+        names[1],
+        "--treebuilder",
+        "iqtree",
+        "-B",
+        "1000",
+        "-t",
+        "2",
+    )
+    tree = (snp / "tree" / TREE_NWK).read_text(encoding="utf-8")
+    assert len(newick_leaves(tree)) == 4
+    assert re.search(r"\)\d+(\.\d+)?:", tree), "bootstrap support labels present"

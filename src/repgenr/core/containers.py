@@ -197,6 +197,22 @@ def _default_mounts(
             d = p if p.is_dir() else p.parent
             if d.exists():
                 mounts.append(absp(d))
+    # Genomes staged by `ingest` (and outgroup files) are symlinks whose
+    # targets can live anywhere on the host; a bind of the link's directory
+    # alone leaves a dangling link inside the container. Bind each target's
+    # directory as well (one level: the entries of every mounted directory).
+    for d in list(mounts):
+        if not d.is_dir():
+            continue
+        try:
+            entries = list(d.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_symlink():
+                target = Path(os.path.abspath(os.path.join(d, os.readlink(entry))))
+                if target.parent.exists():
+                    mounts.append(target.parent)
     # de-duplicate, dropping any mount nested under another
     unique: list[Path] = []
     for m in sorted(set(mounts), key=lambda p: len(str(p))):
@@ -305,10 +321,16 @@ def run_tool(
     image = resolve_image(caps, config) if config.active else None
     if image is None:
         if config.active:
+            hint = (
+                "pass --wave to mint one from its conda spec"
+                if caps.conda
+                else "it declares neither a container image nor a conda spec"
+            )
             logger.warning(
-                "Tool '%s' declares no container/conda image; running on the "
+                "Tool '%s' has no container image to run in (%s); running on the "
                 "host despite --container %s.",
                 caps.name,
+                hint,
                 config.backend,
             )
         return process.run(

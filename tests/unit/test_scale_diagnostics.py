@@ -36,17 +36,24 @@ def test_warn_argv_bytes_quiet_for_small_argv(caplog):
     assert not caplog.records
 
 
-def test_mashtree_build_preflights_argv(tmp_path, monkeypatch, caplog):
+def test_mashtree_reads_genomes_from_a_file_of_files(tmp_path, monkeypatch, caplog):
+    """40000 paths never reach argv (live audit: ARG_MAX at ~9500 viral records)."""
     from repgenr.treebuilders import mashtree as mt
 
-    monkeypatch.setattr(mt, "run_tool", lambda *a, **k: None)
+    calls = []
+    monkeypatch.setattr(mt, "run_tool", lambda caps, cmd, **k: calls.append((cmd, k)))
     genomes = [tmp_path / f"very/long/prefix/genome_{i:06d}.fasta" for i in range(40000)]
     adapter = mt.MashtreeBuilder()
     from repgenr.treebuilders.base import TreeParams
 
     with caplog.at_level(logging.WARNING):
         adapter.build(genomes, tmp_path / "out", TreeParams(threads=2), _LOGGER)
-    assert any("ARG_MAX" in rec.message for rec in caplog.records)
+    assert not any("ARG_MAX" in rec.message for rec in caplog.records)
+    ((cmd, kwargs),) = calls
+    argv = [str(c) for c in cmd]
+    fofn = argv[argv.index("--file-of-files") + 1]
+    assert len(open(fofn, encoding="utf-8").read().splitlines()) == 40000
+    assert str(tmp_path / "very/long/prefix") in kwargs["extra_mounts"]
 
 
 # --- sourmash dense memory message --------------------------------------------
@@ -181,7 +188,10 @@ def test_mashtree_tree_and_matrix_share_flags(tmp_path, monkeypatch):
         return out
 
     # threads, mindepth and genomesize are passed identically to both calls
-    assert flags(build_cmd) == flags(matrix_cmd)
+    per_call = {"--outmatrix", "--file-of-files"}  # output paths differ per call
+    assert {k: v for k, v in flags(build_cmd).items() if k not in per_call} == {
+        k: v for k, v in flags(matrix_cmd).items() if k not in per_call
+    }
     assert flags(build_cmd)["--numcpus"] == "4"
     assert flags(build_cmd)["--mindepth"] == "0"
     assert flags(build_cmd)["--genomesize"] == "1500000"

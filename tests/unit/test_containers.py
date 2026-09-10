@@ -239,3 +239,22 @@ def test_wave_cache_is_keyed_by_platform(monkeypatch, _wave_env) -> None:
         _wave_caps(), ContainerConfig(backend="docker", wave_enabled=True, platform="linux/amd64")
     )
     assert len(minted) == 2
+
+
+def test_symlinked_genome_targets_are_bound(tmp_path, monkeypatch) -> None:
+    """A genomes/ directory of symlinks (repgenr ingest) needs the targets'
+    directory bound too, or the links dangle inside the container."""
+    from repgenr.core import containers as c
+
+    source = tmp_path / "elsewhere" / "set"
+    source.mkdir(parents=True)
+    (source / "a.fasta").write_text(">a\nACGT\n", encoding="utf-8")
+    wd = tmp_path / "wd"
+    genomes = wd / "genomes"
+    genomes.mkdir(parents=True)
+    (genomes / "a.fasta").symlink_to(source / "a.fasta")
+    monkeypatch.setattr(c.tempfile, "gettempdir", lambda: str(tmp_path / "tmp"))
+    (tmp_path / "tmp").mkdir()
+
+    mounts = c._default_mounts(c.ContainerConfig(backend="docker"), wd, [str(genomes)])
+    assert any(m == source or str(source).startswith(str(m)) for m in mounts), mounts
