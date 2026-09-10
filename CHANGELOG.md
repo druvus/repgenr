@@ -7,6 +7,14 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `run` exposes the stage flags it used to leave at their defaults (D-3):
+  `--limit`; `--complete-only`, `--host`, `--released-after` for the viral
+  chain; `--process-size`, `--num-processes`, `--reduce`, `--target-reps`,
+  `--tool-arg`, `--allow-incomplete` for dereplication; `--all-genomes`,
+  `--bootstrap`, `--reference`, `--aligner-arg`, `--mask` for the
+  phylogeny; `--collapse-support` and `--collapse-length` for tree2tax.
+  Each goes through the same builder as the per-stage command, so
+  validation and the resume fingerprint are identical.
 - `phylo-build --mask` (D-6): the stateless step accepts the same
   recombination masker as `phylo` for `--msa-source snptype`, so the
   Nextflow layer can mask through `phylo_args`.

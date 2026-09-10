@@ -389,12 +389,23 @@ def test_run_bacterial_chain_end_to_end(run_repgenr, tmp_path: Path) -> None:
         "0.85",
         "--aligned-fraction",
         "0.3",
+        "--limit",
+        "12",
+        "--process-size",
+        "6",
+        "--collapse-support",
+        "0.5",
+        "--all-genomes",
     )
     assert (wd / TREE2TAX_TSV).is_file()
     status = run_repgenr("status", "-wd", wd).stdout
     assert "All stages complete" in status
     stages = Config.load(wd).stages
     assert stages["dereplicate"].params["secondary_ani"] == 0.98
+    assert stages["dereplicate"].params["process_size"] == 6
+    assert stages["phylo"].params["all_genomes"] is True
+    assert stages["tree2tax"].params["collapse_support"] == 0.5
+    assert len(list_fasta(wd / "genomes")) <= 12, "--limit reached the metadata stage"
     assert stages["dereplicate"].params["keeper"] == "tool"
     assert (wd / "outgroup_accession.txt").read_text(encoding="utf-8").strip() == GENUS_OUTGROUP
 

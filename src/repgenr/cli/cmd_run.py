@@ -31,6 +31,7 @@ from .base import (
     PIPELINE_VIRAL,
     _aligner_help,
     _derep_help,
+    _parse_key_values,
     _require_choice,
     _run,
     _snp_help,
@@ -39,6 +40,7 @@ from .base import (
     gated_extra,
     stage_errors,
 )
+from .cmd_viral import _validate_released_after
 
 
 def _virus_extra(derep_tool: str, viral: bool) -> dict:
@@ -124,9 +126,27 @@ def run(
     outgroup_accession: str | None = typer.Option(
         None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
     ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        min=1,
+        help="Keep at most N genomes, round-robin over species by CheckM quality (bacterial).",
+    ),
     # --- selection: viral (NCBI Virus) ---
     target: str | None = typer.Option(None, "--target", help="Virus taxon (viral)."),
     viral_source: str = typer.Option("ncbi_virus", "--viral-source", help="ncbi_virus or bvbrc."),
+    complete_only: bool = typer.Option(
+        False, "--complete-only", help="ncbi_virus: only COMPLETE sequences (viral)."
+    ),
+    host: str | None = typer.Option(
+        None, "--host", help="ncbi_virus: restrict to a host species (viral)."
+    ),
+    released_after: str | None = typer.Option(
+        None,
+        "--released-after",
+        callback=_validate_released_after,
+        help="ncbi_virus: MM/DD/YYYY (viral).",
+    ),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- dereplication ---
     derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
@@ -139,20 +159,66 @@ def run(
         help="Representative choice per cluster: quality (CheckM score from GTDB) "
         "or tool (adapter's own).",
     ),
+    process_size: int | None = typer.Option(
+        None, "-s", "--process-size", help="Chunk size for two-stage dereplication."
+    ),
+    num_processes: int = typer.Option(
+        0, "-p", "--num-processes", help="Parallel chunk workers (0 = auto)."
+    ),
+    reduce: str = typer.Option(
+        "none", "--reduce", help="Taxonomy-aware reduction after ANI: none, species or genus."
+    ),
+    target_reps: int = typer.Option(
+        0, "--target-reps", help="Target representative count (0 = off)."
+    ),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Dereplicator tuning as key=value (repeatable)."
+    ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
     msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    all_genomes: bool = typer.Option(
+        False, "--all-genomes", help="Build the tree from all genomes, not the representatives."
+    ),
+    bootstrap: int = typer.Option(
+        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000 for IQ-TREE)."
+    ),
+    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
+    aligner_arg: list[str] = typer.Option(
+        [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
+    ),
+    mask: str = typer.Option(
+        "none", "--mask", help="Recombination masking for --msa-source snptype."
+    ),
     # --- taxonomy output ---
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
         help="List redundant genomes under their representative in tree2tax.",
     ),
+    collapse_support: float | None = typer.Option(
+        None,
+        "--collapse-support",
+        min=0.0,
+        max=1.0,
+        help="Merge nodes whose support is below this fraction into their parent.",
+    ),
+    collapse_length: float | None = typer.Option(
+        None,
+        "--collapse-length",
+        min=0.0,
+        help="Merge nodes whose branch is shorter than this length into their parent.",
+    ),
     # --- common ---
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    allow_incomplete: bool = typer.Option(
+        False,
+        "--allow-incomplete",
+        help="Proceed with a warning when genomes/ is missing selected genomes.",
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the stages and key parameters, then exit."
     ),
@@ -182,18 +248,30 @@ def run(
         _require_choice(dataset, METADATA_DATASETS, "--dataset")
         if level is not None:
             _require_choice(level, METADATA_LEVELS, "--level")
+        derep_extra = {
+            **_parse_key_values(tool_arg, "--tool-arg"),
+            **_virus_extra(derep_tool, viral),
+        }
+        phylo_extra = {
+            **_parse_key_values(aligner_arg, "--aligner-arg"),
+            **({"mask": mask} if mask != "none" else {}),
+        }
         dereplicate_params(
             tool=derep_tool,
             primary_ani=primary_ani,
             secondary_ani=secondary_ani,
             aligned_fraction=aligned_fraction,
             keeper=keeper,
+            reduce=reduce,
+            target_reps=target_reps,
+            extra=derep_extra,
         )
         phylo_params(
             treebuilder=treebuilder,
             msa_source=msa_source,
             aligner=aligner,
             snptyper=snptyper,
+            extra=phylo_extra,
         )
         if not viral and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
@@ -229,6 +307,9 @@ def run(
             lambda: vmetadata_params(
                 target=target,
                 source=viral_source,
+                complete_only=complete_only,
+                host=host,
+                released_after=released_after,
             ),
             create=True,
         )
@@ -256,6 +337,7 @@ def run(
                 target_genus=target_genus,
                 target_species=target_species,
                 outgroup_accession=outgroup_accession,
+                limit=limit,
             ),
             create=True,
         )
@@ -270,8 +352,13 @@ def run(
             secondary_ani=secondary_ani,
             aligned_fraction=aligned_fraction,
             threads=threads,
-            extra=_virus_extra(derep_tool, viral),
+            process_size=process_size,
+            num_processes=num_processes,
+            reduce=reduce,
+            target_reps=target_reps,
+            extra=derep_extra,
             keeper=keeper,
+            allow_incomplete=allow_incomplete,
         ),
     )
     _run(
@@ -283,7 +370,12 @@ def run(
             aligner=aligner,
             snptyper=snptyper,
             no_outgroup=no_outgroup,
+            all_genomes=all_genomes,
+            bootstrap=bootstrap,
+            reference=reference,
             threads=threads,
+            extra=phylo_extra,
+            allow_incomplete=allow_incomplete,
         ),
     )
     _run(
@@ -291,6 +383,8 @@ def run(
         workdir,
         lambda: tree2tax_params(
             include_dereplicated=include_dereplicated,
+            collapse_support=collapse_support,
+            collapse_length=collapse_length,
         ),
     )
 
