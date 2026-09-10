@@ -304,6 +304,29 @@ def test_docs_references_resolve(command, flag, rec) -> None:
         assert flag in (ROOT / doc).read_text(encoding="utf-8"), f"{doc} lacks {flag}"
 
 
+SCHEMA_PATH = ROOT / "nextflow" / "nextflow_schema.json"
+
+
+def _schema_params() -> set[str]:
+    import json
+
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    keys: set[str] = set(schema.get("properties", {}))
+    for group in schema.get("$defs", schema.get("definitions", {})).values():
+        keys |= set(group.get("properties", {}))
+    return keys
+
+
+@pytest.mark.parametrize(("command", "flag", "rec"), RECORDS, ids=IDS)
+def test_nextflow_carrier_resolves(command, flag, rec) -> None:
+    carrier = rec["nextflow"]
+    assert isinstance(carrier, str) and carrier, f"{command} {flag}: nextflow carrier missing"
+    if carrier.startswith("params."):
+        assert carrier[len("params.") :] in _schema_params(), f"{carrier} is not a schema parameter"
+    else:
+        assert carrier == "task.cpus" or carrier.startswith(("module:", "n/a:")), carrier
+
+
 def test_short_alias_collisions_are_the_known_ones() -> None:
     seen: dict[str, set[str]] = {}
     for _command, flag, rec in RECORDS:

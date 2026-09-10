@@ -7,6 +7,15 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The CLI matrix carries a `nextflow` column: for every flag, the
+  `params.*` key or `ext.args` string that reaches the Nextflow layer, or
+  the reason it does not; a test checks each key against
+  `nextflow_schema.json`. A stub test asserts the dereplication `ext.args`
+  composed from `params.derep_*` and the viral mode reaches the process.
+  Live Nextflow tests (`tests/live/test_nextflow.py`): the local
+  data-channel harness with two dereplicator and tree-builder pairs,
+  `main.nf` in bacterial and viral mode, and the docker profile with
+  progressiveMauve.
 - Container live tests (`-m "live and container"`,
   `tests/live/test_container_runs.py`): skder, sourmash, dRep (`--virus`),
   the simple SNP typer and sibeliaz in Wave-minted images with
@@ -115,6 +124,16 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- Containers started in the temp mount when the adapter gave no working
+  directory, so a stateless step run with relative paths (`phylo-build -o .`
+  under the docker profile) could not open its outputs
+  (`align/xmfa/...`). The container now starts in the host process's working
+  directory, which is also bound.
+- Nextflow: a run without an outgroup (viral `--no-outgroup`, or a GTDB
+  selection with no outgroup candidate) aborted in the data-channel
+  subworkflows with "Invalid method invocation `call`": the optional
+  outgroup join emitted a bare meta map. The join now carries a placeholder
+  tuple; the VACQUIRE stub honours `--no-outgroup` so a stub test covers it.
 - mashtree received every genome path on its command line and failed with
   "Argument list too long" at about 9500 genomes (a viral `run` without a
   completeness filter). It now reads the paths from a file-of-files, and

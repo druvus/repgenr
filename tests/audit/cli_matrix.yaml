@@ -17,7 +17,9 @@
 #   invalid      the bad value the validation test passes (range/callback)
 #   reported_as  the name the rejection message uses when it is not the flag
 #   docs         Markdown files that mention the long flag
-#   nextflow     params.* or ext.args carrier in the Nextflow layer (PR-I)
+#   nextflow     how the flag reaches the Nextflow layer: params.<key> (a schema
+#                parameter, either a typed value or an ext.args string), task.cpus,
+#                `module: ...` (fixed by the process script), or `n/a: reason`
 #   live         tests/live node id, `n/a: reason`, or `todo: PR-<letter>`
 #   observable   what the live test asserts
 global_flags:
@@ -26,7 +28,7 @@ global_flags:
     validated: none
     docs:
     - docs/adding-tools.md
-    nextflow: null
+    nextflow: 'n/a: prints the version and exits'
     live: 'n/a: unit test test_version_flag_prints_version'
   --container:
     envvar: REPGENR_CONTAINER
@@ -41,7 +43,7 @@ global_flags:
     - docs/swot-viral.md
     - docs/usage.md
     - docs/verification.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --container-engine:
     envvar: REPGENR_CONTAINER_ENGINE
@@ -50,7 +52,7 @@ global_flags:
     validated: none
     docs:
     - docs/containers.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_container_engine_podman_is_reported_when_missing
   --container-cache:
     envvar: REPGENR_CONTAINER_CACHE
@@ -60,7 +62,7 @@ global_flags:
     docs:
     - docs/containers.md
     - docs/verification.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --platform:
     envvar: REPGENR_CONTAINER_PLATFORM
@@ -70,7 +72,7 @@ global_flags:
     docs:
     - README.md
     - docs/containers.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
   --wave:
     secondary:
@@ -82,7 +84,7 @@ global_flags:
     - docs/adding-tools.md
     - docs/containers.md
     - docs/swot-viral.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run
   --force:
     aliases:
@@ -94,7 +96,7 @@ global_flags:
     validated: none
     docs:
     - README.md
-    nextflow: null
+    nextflow: 'n/a: resume is Nextflow''s -resume in the data-channel layer'
     live: tests/live/test_aux_commands.py::test_second_run_skips_and_force_reruns
     observable: a completed stage re-runs
   --verbose:
@@ -104,7 +106,7 @@ global_flags:
     validated: none
     docs:
     - README.md
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: DEBUG lines in repgenr.log
   --quiet:
@@ -113,7 +115,7 @@ global_flags:
     param: state.log_level
     validated: none
     docs: []
-    nextflow: null
+    nextflow: params.repgenr_opts
     live: tests/live/test_aux_commands.py::test_logging_flags_and_env
     observable: no INFO lines on the console
 commands:
@@ -134,7 +136,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: the workdir is populated
       --action:
@@ -142,7 +144,7 @@ commands:
         value: pack
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
         observable: pack/unpack/delete/list round trip
       --name:
@@ -151,7 +153,7 @@ commands:
         validated: none
         docs:
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
   derep-unpack:
     dispatch: stage
@@ -168,14 +170,14 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: the workdir is populated
       --no-representant:
         param: DerepUnpackParams.no_representant
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: cluster dirs lack the representative
   dereplicate:
@@ -193,7 +195,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
       --tool:
@@ -209,7 +211,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_adapter_recovers_the_synthetic_partition
         observable: derep/clusters.tsv partition matches truth.json
       --primary-ani:
@@ -220,7 +222,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --secondary-ani:
         aliases:
@@ -232,7 +234,7 @@ commands:
         - docs/scaling-audit.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_secondary_ani_sweep_changes_representative_count
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
@@ -242,7 +244,7 @@ commands:
         value: '0.6'
         validated: unit_interval
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --threads:
         aliases:
@@ -253,7 +255,7 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --process-size:
         aliases:
@@ -266,7 +268,7 @@ commands:
         - docs/scaling-audit.md
         - docs/swot-derep.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_process_size
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
         observable: chunk directories appear under scratch/
       --num-processes:
@@ -277,7 +279,7 @@ commands:
         validated: none
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-primary-ani:
         param: DereplicateParams.pre_primary_ani
@@ -285,7 +287,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --pre-secondary-ani:
         param: DereplicateParams.pre_secondary_ani
@@ -293,7 +295,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
       --reduce:
         param: DereplicateParams.reduce
@@ -302,7 +304,7 @@ commands:
         docs:
         - docs/scaling-audit.md
         - docs/swot-derep.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_reduce_species_keeps_one_representative_per_species
         observable: one representative per species
       --target-reps:
@@ -313,7 +315,7 @@ commands:
         docs:
         - docs/scaling-audit.md
         - docs/swot-derep.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_target_reps_lands_on_the_requested_count
         observable: representative count lands near the target
       --virus:
@@ -327,7 +329,7 @@ commands:
         - docs/adding-tools.md
         - docs/swot-derep.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_virus_flag_on_auto_tool_is_reported_when_ignored
       --tool-arg:
         param: DereplicateParams.extra
@@ -337,14 +339,14 @@ commands:
         docs:
         - docs/adding-tools.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_tool_arg_reaches_the_tool_command_line
         observable: the key=value reaches the tool command line in repgenr.log
       --allow-incomplete:
         param: DereplicateParams.allow_incomplete
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_allow_incomplete_gates_a_missing_genome
       --keeper:
         param: DereplicateParams.keeper
@@ -354,7 +356,7 @@ commands:
         - README.md
         - docs/swot-derep.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_keeper_quality_promotes_the_best_scored_member
   dereplicate-chunk:
     dispatch: step:repgenr.stages.derep_steps.dereplicate_chunk
@@ -369,7 +371,7 @@ commands:
         value: '{alt_fofn}'
         validated: stage
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --out:
         aliases:
@@ -378,7 +380,7 @@ commands:
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --tool:
         param: ChunkParams.tool
@@ -393,7 +395,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --primary-ani:
         aliases:
@@ -403,7 +405,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_primary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
         aliases:
@@ -415,7 +417,7 @@ commands:
         - docs/scaling-audit.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_secondary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
@@ -425,7 +427,7 @@ commands:
         value: '0.6'
         validated: unit_interval
         docs: []
-        nextflow: null
+        nextflow: params.derep_aligned_fraction
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
         aliases:
@@ -436,7 +438,7 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: task.cpus
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
       --virus:
         param: ChunkParams.extra
@@ -449,7 +451,7 @@ commands:
         - docs/adding-tools.md
         - docs/swot-derep.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
         param: ChunkParams.extra
@@ -459,7 +461,7 @@ commands:
         docs:
         - docs/adding-tools.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: not exposed; add it to ext.args in modules.config'
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
       --selection-tsv:
@@ -467,7 +469,7 @@ commands:
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
         param: ChunkParams.keeper
@@ -477,14 +479,14 @@ commands:
         - README.md
         - docs/swot-derep.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
         observable: a versions YAML fragment is written
   dereplicate-merge:
@@ -502,21 +504,21 @@ commands:
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-dir:
         param: MergeParams.chunk_dirs
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --chunk-fofn:
         param: MergeParams.chunk_dirs
         value: '{fofn}'
         validated: stage
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_fofn
       --tool:
         param: MergeParams.tool
@@ -531,7 +533,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --primary-ani:
         aliases:
@@ -541,7 +543,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_primary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --secondary-ani:
         aliases:
@@ -553,7 +555,7 @@ commands:
         - docs/scaling-audit.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.derep_secondary_ani
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: representative count differs between -sani 0.95 and -sani 0.999
       --aligned-fraction:
@@ -563,7 +565,7 @@ commands:
         value: '0.6'
         validated: unit_interval
         docs: []
-        nextflow: null
+        nextflow: params.derep_aligned_fraction
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --threads:
         aliases:
@@ -574,7 +576,7 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: task.cpus
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
       --virus:
         param: MergeParams.extra
@@ -587,7 +589,7 @@ commands:
         - docs/adding-tools.md
         - docs/swot-derep.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
       --tool-arg:
         param: MergeParams.extra
@@ -597,7 +599,7 @@ commands:
         docs:
         - docs/adding-tools.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: not exposed; add it to ext.args in modules.config'
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
         observable: the key=value reaches the tool command line in repgenr.log
       --selection-tsv:
@@ -605,7 +607,7 @@ commands:
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --keeper:
         param: MergeParams.keeper
@@ -615,14 +617,14 @@ commands:
         - README.md
         - docs/swot-derep.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_merge_by_chunk_fofn
         observable: a versions YAML fragment is written
   doctor:
@@ -639,7 +641,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome
         observable: exit 0 on a sound workdir, 1 after corrupting a genome
   genome:
@@ -657,21 +659,21 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
       --accession-list-only:
         param: GenomeParams.accession_list_only
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_genome_accession_list_only_is_a_pure_query
         observable: accession list written, genomes/ empty
       --keep-files:
         param: GenomeParams.keep_files
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch
   genome-fetch:
     dispatch: step:repgenr.stages.genome_steps.genome_fetch
@@ -688,7 +690,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
       --out:
         aliases:
@@ -697,20 +699,20 @@ commands:
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
       --keep-files:
         param: GenomeFetchParams.keep_files
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: not exposed by the GENOME_FETCH module'
         live: tests/live/test_network.py::test_genome_fetch_step
       --versions-out:
         param: GenomeFetchParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
         observable: a versions YAML fragment is written
   glance:
@@ -728,7 +730,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
         observable: the workdir is populated
       --tool:
@@ -744,7 +746,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
       --threads:
         aliases:
@@ -755,27 +757,27 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
       --plot-max:
         param: GlanceParams.plot_max
         value: '0.99'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --plot-min:
         param: GlanceParams.plot_min
         value: '0.5'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
       --keep-files:
         param: GlanceParams.keep_files
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
   ingest:
     dispatch: stage
@@ -794,7 +796,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
       --genomes-dir:
@@ -804,7 +806,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: genomes/ holds one link per source FASTA
       --selection:
@@ -814,7 +816,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset
       --outgroup:
         param: IngestParams.outgroup
@@ -823,7 +825,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: outgroup/ and outgroup_accession.txt written
       --copy:
@@ -832,7 +834,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
         observable: genomes/ entries are regular files
   list-tools:
@@ -858,7 +860,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_api_genus_representatives
         observable: the workdir is populated
       --dataset:
@@ -868,7 +870,7 @@ commands:
         value: all
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --level:
         aliases:
@@ -877,7 +879,7 @@ commands:
         value: species
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --source:
         param: MetadataParams.source
@@ -887,7 +889,7 @@ commands:
         - README.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --release:
         aliases:
@@ -897,7 +899,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --gtdb-version:
         param: MetadataParams.version
@@ -906,7 +908,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
       --target-family:
         aliases:
@@ -915,7 +917,7 @@ commands:
         value: Francisellaceae
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_target_family_widens_the_selection
       --target-genus:
         aliases:
@@ -925,7 +927,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_genus_representatives
       --target-species:
         aliases:
@@ -934,27 +936,27 @@ commands:
         value: tularensis
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
       --metadata-path:
         param: MetadataParams.metadata_path
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --nodownload:
         param: MetadataParams.nodownload
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table
       --limit:
         param: MetadataParams.limit
@@ -965,7 +967,7 @@ commands:
         - docs/scaling-audit.md
         - docs/swot-derep.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.metadata_args
         live: tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup
         observable: selection.tsv has at most N rows
   phylo:
@@ -983,7 +985,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
       --treebuilder:
@@ -994,7 +996,7 @@ commands:
         - README.md
         - docs/containers.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives
       --msa-source:
         param: PhyloParams.msa_source
@@ -1003,7 +1005,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
       --aligner:
         param: PhyloParams.aligner
@@ -1012,7 +1014,7 @@ commands:
         docs:
         - README.md
         - docs/containers.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --snptyper:
         param: PhyloParams.snptyper
@@ -1022,20 +1024,20 @@ commands:
         - snptype
         validated: registry
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --all-genomes:
         param: PhyloParams.all_genomes
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree
         observable: leaf set is all genomes
       --no-outgroup:
         param: PhyloParams.no_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: no outgroup leaf in tree.nwk
       --bootstrap:
@@ -1047,7 +1049,7 @@ commands:
         invalid: '-1'
         docs:
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
         observable: support labels in tree.nwk
       --reference:
@@ -1056,7 +1058,7 @@ commands:
         validated: none
         docs:
         - docs/swot-phylo.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --aligner-arg:
         param: PhyloParams.extra
@@ -1065,7 +1067,7 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --threads:
         aliases:
@@ -1076,7 +1078,7 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
       --mask:
         param: PhyloParams.extra
@@ -1088,7 +1090,7 @@ commands:
         - docs/output.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_phylo_mask_gubbins
         with_args:
         - --msa-source
@@ -1097,7 +1099,7 @@ commands:
         param: PhyloParams.allow_incomplete
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
   phylo-build:
     dispatch: step:repgenr.stages.phylo.phylo_build
@@ -1114,7 +1116,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
         aliases:
@@ -1123,21 +1125,21 @@ commands:
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: PhyloBuildParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: PhyloBuildParams.outgroup_accession
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --treebuilder:
         param: PhyloBuildParams.phylo.treebuilder
@@ -1147,7 +1149,7 @@ commands:
         - README.md
         - docs/containers.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --msa-source:
         param: PhyloBuildParams.phylo.msa_source
@@ -1156,7 +1158,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner:
         param: PhyloBuildParams.phylo.aligner
@@ -1165,7 +1167,7 @@ commands:
         docs:
         - README.md
         - docs/containers.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --snptyper:
         param: PhyloBuildParams.phylo.snptyper
@@ -1175,13 +1177,13 @@ commands:
         - snptype
         validated: registry
         docs: []
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --no-outgroup:
         param: PhyloBuildParams.phylo.no_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: no outgroup leaf in tree.nwk
       --bootstrap:
@@ -1193,7 +1195,7 @@ commands:
         invalid: '-1'
         docs:
         - docs/usage.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
         observable: support labels in tree.nwk
       --reference:
@@ -1202,7 +1204,7 @@ commands:
         validated: none
         docs:
         - docs/swot-phylo.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --aligner-arg:
         param: PhyloBuildParams.phylo.extra
@@ -1211,7 +1213,7 @@ commands:
         invalid: noequals
         docs:
         - docs/adding-tools.md
-        nextflow: null
+        nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
       --threads:
         aliases:
@@ -1222,14 +1224,14 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: task.cpus
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: PhyloBuildParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
   run:
@@ -1249,7 +1251,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
         observable: the workdir is populated
       --viral:
@@ -1257,7 +1259,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
         observable: viral chain stages recorded
       --dataset:
@@ -1267,7 +1269,7 @@ commands:
         value: all
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --level:
         aliases:
@@ -1276,7 +1278,7 @@ commands:
         value: species
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-family:
         aliases:
@@ -1285,7 +1287,7 @@ commands:
         value: Francisellaceae
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --target-genus:
         aliases:
@@ -1295,7 +1297,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target-species:
         aliases:
@@ -1304,7 +1306,7 @@ commands:
         value: tularensis
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --release:
         aliases:
@@ -1314,7 +1316,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
           in test_network.py'
       --gtdb-version:
@@ -1324,7 +1326,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata
           in test_network.py'
       --metadata-source:
@@ -1332,14 +1334,14 @@ commands:
         value: api
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --outgroup-accession:
         param: MetadataParams.outgroup_accession
         value: GCF_000001.1
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --target:
         aliases:
@@ -1351,7 +1353,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --viral-source:
         param: VmetadataParams.source
@@ -1360,7 +1362,7 @@ commands:
         - --viral
         validated: choice
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --group-segments:
         param: VgenomeParams.group_segments
@@ -1369,7 +1371,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: forwarded to vgenome unchanged (wiring test); covered on vgenome in test_vgenome_selection_flags'
       --tool:
         param: DereplicateParams.tool
@@ -1384,7 +1386,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --primary-ani:
         param: DereplicateParams.primary_ani
@@ -1392,7 +1394,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --secondary-ani:
         param: DereplicateParams.secondary_ani
@@ -1402,14 +1404,14 @@ commands:
         - docs/scaling-audit.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --aligned-fraction:
         param: DereplicateParams.aligned_fraction
         value: '0.6'
         validated: unit_interval
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --keeper:
         param: DereplicateParams.keeper
@@ -1419,7 +1421,7 @@ commands:
         - README.md
         - docs/swot-derep.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --treebuilder:
         param: PhyloParams.treebuilder
@@ -1429,7 +1431,7 @@ commands:
         - README.md
         - docs/containers.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --msa-source:
         param: PhyloParams.msa_source
@@ -1438,7 +1440,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --aligner:
         param: PhyloParams.aligner
@@ -1447,7 +1449,7 @@ commands:
         docs:
         - README.md
         - docs/containers.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
       --snptyper:
         param: PhyloParams.snptyper
@@ -1457,13 +1459,13 @@ commands:
         - snptype
         validated: registry
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --no-outgroup:
         param: PhyloParams.no_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --include-dereplicated:
         secondary:
@@ -1473,7 +1475,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
       --threads:
         param: DereplicateParams.threads
@@ -1482,13 +1484,13 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
       --dry-run:
         param: 'n/a: prints the chain and exits before any stage'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network
         observable: stage list printed, no workdir written
   snptype:
@@ -1506,7 +1508,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
         observable: the workdir is populated
       --tool:
@@ -1522,7 +1524,7 @@ commands:
         - docs/swot-viral.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_parsnp_typer
         observable: snp/core_snp.fasta written
       --reference:
@@ -1531,13 +1533,13 @@ commands:
         validated: none
         docs:
         - docs/swot-phylo.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --all-genomes:
         param: SnptypeParams.all_genomes
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_on_representatives_only
         observable: row count equals all genomes
       --mask:
@@ -1550,7 +1552,7 @@ commands:
         - docs/output.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_gubbins_mask_changes_the_core_alignment
         observable: masked alignment differs from unmasked
       --threads:
@@ -1562,7 +1564,7 @@ commands:
         invalid: '0'
         docs:
         - docs/verification.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --tool-arg:
         param: SnptypeParams.extra
@@ -1572,13 +1574,13 @@ commands:
         docs:
         - docs/adding-tools.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_typer_and_tool_arg
       --allow-incomplete:
         param: SnptypeParams.allow_incomplete
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_snptype_allow_incomplete
   status:
     dispatch: query
@@ -1594,7 +1596,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: reports the local chain with every stage done
   tree2tax:
@@ -1612,7 +1614,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: the workdir is populated
       --node-basename:
@@ -1620,7 +1622,7 @@ commands:
         value: node
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
         observable: internal node names carry the prefix
       --root-name:
@@ -1630,13 +1632,13 @@ commands:
         value: top
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --remove-outgroup:
         param: Tree2taxParams.remove_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --include-dereplicated:
         secondary:
@@ -1646,7 +1648,7 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: genomes_map.tsv lists every genome
       --collapse-support:
@@ -1657,7 +1659,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --collapse-length:
         param: Tree2taxParams.collapse_length
@@ -1667,7 +1669,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         - docs/usage.md
-        nextflow: null
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
   tree2tax-relations:
     dispatch: step:repgenr.stages.tree2tax.tree2tax_relations
@@ -1682,7 +1684,7 @@ commands:
         value: '{alt_file}'
         validated: stage
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --out:
         aliases:
@@ -1691,35 +1693,35 @@ commands:
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --clusters:
         param: Tree2taxStepParams.clusters
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-dir:
         param: Tree2taxStepParams.outgroup_dir
         value: '{alt_dir}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --outgroup-accession:
         param: Tree2taxStepParams.outgroup_accession
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --node-basename:
         param: Tree2taxStepParams.node_basename
         value: node
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: internal node names carry the prefix
       --root-name:
@@ -1729,13 +1731,13 @@ commands:
         value: top
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --remove-outgroup:
         param: Tree2taxStepParams.remove_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --include-dereplicated:
         param: Tree2taxStepParams.include_dereplicated
@@ -1743,14 +1745,14 @@ commands:
         docs:
         - README.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
       --versions-out:
         param: Tree2taxStepParams.versions_out
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
       --collapse-support:
@@ -1761,7 +1763,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
       --collapse-length:
         param: Tree2taxStepParams.collapse_length
@@ -1771,7 +1773,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_tree2tax_relations_collapse_flags
   versions:
     dispatch: query
@@ -1787,14 +1789,14 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_aux_commands.py::test_status_and_versions
       --versions-out:
         param: 'n/a: query command, no stage parameters'
         value: '{alt_file}'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_aux_commands.py::test_status_and_versions
         observable: YAML fragment written
   vgenome:
@@ -1812,7 +1814,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_vgenome_selection_flags
         observable: the workdir is populated
       --target-genus:
@@ -1823,7 +1825,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-species:
         aliases:
@@ -1832,7 +1834,7 @@ commands:
         value: Human mastadenovirus C
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-serotype:
         aliases:
@@ -1841,7 +1843,7 @@ commands:
         value: '2'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --target-custom:
         aliases:
@@ -1850,14 +1852,14 @@ commands:
         value: host:human
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-all:
         param: VgenomeParams.length_all
         validated: none
         docs:
         - docs/usage.md
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-deviation:
         param: VgenomeParams.length_deviation
@@ -1865,7 +1867,7 @@ commands:
         validated: range
         invalid: '-1'
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-method:
         param: VgenomeParams.length_method
@@ -1875,7 +1877,7 @@ commands:
         - docs/scaling-audit.md
         - docs/swot-viral.md
         - docs/usage.md
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --length-range:
         param: VgenomeParams.length_range
@@ -1883,66 +1885,66 @@ commands:
         validated: none
         docs:
         - docs/usage.md
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --discard:
         param: VgenomeParams.discard
         value: partial
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --no-outgroup:
         param: VgenomeParams.no_outgroup
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --group-segments:
         param: VgenomeParams.group_segments
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-candidates-taxid-min-genomes:
         param: VgenomeParams.outgroup_candidates_taxid_min_genomes
         value: '3'
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
       --outgroup-treebuilder:
         param: VgenomeParams.outgroup_treebuilder
         validated: registry
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         wiring: 'n/a: mashtree is the only builder with distance_matrix, so no second valid value exists'
       --glance:
         param: VgenomeParams.glance
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
         observable: selection printed, nothing written
       --print-fasta-headers:
         param: VgenomeParams.print_fasta_headers
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
       --ignore-duplicates:
         param: VgenomeParams.ignore_duplicates
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_bvbrc_needs_ignore_duplicates
       --keep-files:
         param: VgenomeParams.keep_files
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
   vmetadata:
     dispatch: stage
@@ -1959,7 +1961,7 @@ commands:
         docs:
         - docs/containers.md
         - docs/output.md
-        nextflow: null
+        nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
         observable: the workdir is populated
       --target:
@@ -1970,7 +1972,7 @@ commands:
         validated: none
         docs:
         - README.md
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --source:
         param: VmetadataParams.source
@@ -1980,7 +1982,7 @@ commands:
         - README.md
         - docs/usage.md
         - docs/verification.md
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --filter:
         aliases:
@@ -1989,20 +1991,20 @@ commands:
         value: segment
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter
       --host:
         param: VmetadataParams.host
         value: human
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --complete-only:
         param: VmetadataParams.complete_only
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only
       --released-after:
         param: VmetadataParams.released_after
@@ -2010,7 +2012,7 @@ commands:
         validated: callback
         invalid: '2024-01-31'
         docs: []
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set
       --list:
         aliases:
@@ -2018,7 +2020,7 @@ commands:
         param: VmetadataParams.list_targets
         validated: none
         docs: []
-        nextflow: null
+        nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc
 known_short_alias_collisions:
   -t:

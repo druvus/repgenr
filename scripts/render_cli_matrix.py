@@ -24,11 +24,15 @@ def _cell(value) -> str:
 
 
 def _table(flags: dict) -> list[str]:
-    rows = ["| flag | aliases | param | validated | live | docs |", "|---|---|---|---|---|---|"]
+    rows = [
+        "| flag | aliases | param | validated | nextflow | live | docs |",
+        "|---|---|---|---|---|---|---|",
+    ]
     for flag, rec in flags.items():
         rows.append(
             f"| `{flag}` | {_cell(rec.get('aliases'))} | {_cell(rec['param'])} | "
-            f"{_cell(rec['validated'])} | {_cell(rec['live'])} | {_cell(rec['docs'])} |"
+            f"{_cell(rec['validated'])} | {_cell(rec.get('nextflow'))} | {_cell(rec['live'])} | "
+            f"{_cell(rec['docs'])} |"
         )
     return rows
 
