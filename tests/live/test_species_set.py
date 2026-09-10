@@ -289,9 +289,8 @@ def test_ska2_source_with_reference_and_allow_incomplete(run_repgenr, wd: Path) 
 
 @pytest.mark.requires_binary("minimap2", "samtools", "bcftools", "run_gubbins.py", "FastTree")
 def test_phylo_mask_gubbins(run_repgenr, wd: Path) -> None:
-    # Gubbins expects closely related isolates; with the F. philomiragia
-    # outgroup in the alignment its recombination scan aborts (design item:
-    # mask the ingroup only), so the masked tree is built without it.
+    # Gubbins scans the ingroup only and its regions are masked in the full
+    # alignment, so the F. philomiragia outgroup keeps its place (D-10).
     run_repgenr(
         "phylo",
         "-wd",
@@ -305,11 +304,10 @@ def test_phylo_mask_gubbins(run_repgenr, wd: Path) -> None:
         "gubbins",
         "--treebuilder",
         "fasttree",
-        "--no-outgroup",
         "-t",
         "4",
     )
-    assert len(newick_leaves(_tree(wd))) == 10
+    assert len(newick_leaves(_tree(wd))) == 11
     assert "run_gubbins.py" in log_text(wd), "the masker ran inside the phylo stage"
     assert Config.load(wd).stages["phylo"].completed
 

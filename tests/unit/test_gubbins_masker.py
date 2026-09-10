@@ -52,3 +52,54 @@ def test_sanitise_keeps_a_clean_alignment(tmp_path) -> None:
     src.write_text(">a\nACGT\n", encoding="utf-8")
     assert sanitise_alignment(src, tmp_path / "clean.fasta", logging.getLogger("t")) == src
     assert not (tmp_path / "clean.fasta").exists()
+
+
+def test_exclude_runs_gubbins_on_the_ingroup_and_masks_everyone(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """D-10: the outgroup stays out of the scan but keeps its place in the output."""
+    calls: list[list] = []
+
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        calls.append([str(a) for a in argv])
+        prefix = str(kw["cwd"] / "gubbins")
+        # Gubbins predicts a recombinant block in `a` over columns 2-3.
+        Path(prefix + ".recombination_predictions.gff").write_text(
+            "##gff-version 3\n"
+            'SEQUENCE\tGUBBINS\tCDS\t2\t3\t0.0\t.\t.\tnode="a";taxa="  a";snp_count="2"\n',
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nATTTA\n>og\nGGGGG\n", encoding="utf-8")
+    out = mod.GubbinsMasker().mask(
+        full,
+        tmp_path / "gub",
+        MaskParams(threads=2, exclude=frozenset({"og"})),
+        logging.getLogger("t"),
+    )
+    argv = calls[0]
+    ingroup = mod.read_fasta(Path(argv[-1]))
+    assert set(ingroup) == {"a", "b", "c"}, "the outgroup is not handed to Gubbins"
+    masked = mod.read_fasta(out)
+    assert set(masked) == {"a", "b", "c", "og"}, "the outgroup is in the masked alignment"
+    # Column 1 (A/G) and column 5 (A/G) vary; columns 2-3 of `a` are N so only
+    # b/c/og decide those: T vs G still varies. Column 4: T/T/T/G varies.
+    assert masked["og"] == "GGGGG"
+    assert masked["a"].startswith("A") and "N" in masked["a"]
+
+
+def test_gff_regions_and_polymorphic_sites(tmp_path: Path) -> None:
+    gff = tmp_path / "p.gff"
+    gff.write_text(
+        'SEQ\tGUBBINS\tCDS\t1\t2\t0\t.\t.\tnode="x";taxa="  a  b";snp_count="1"\n'
+        'SEQ\tGUBBINS\tCDS\t4\t4\t0\t.\t.\tnode="y";taxa="  b";snp_count="1"\n',
+        encoding="utf-8",
+    )
+    regions = mod.read_recombination_gff(gff)
+    assert regions == {"a": [(1, 2)], "b": [(1, 2), (4, 4)]}
+    masked = mod.apply_masks({"a": "ACGT", "b": "ACGT", "c": "TCGA"}, regions)
+    assert masked == {"a": "NNGT", "b": "NNGN", "c": "TCGA"}
+    sites = mod.polymorphic_sites(masked)
+    assert sites == {"a": "T", "b": "N", "c": "A"}, "only column 4 still varies among ACGT"
