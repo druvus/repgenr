@@ -66,6 +66,11 @@ they arrive as strings, which the schema also accepts for the numeric options.
 
 ## Profiles
 
+The `standard` profile (the default, local executor) caps every process's
+CPU and memory request to what the machine has; `base.config` asks for up to
+32 CPUs and 128 GB for the heavy processes, which the local executor would
+otherwise refuse. `slurm` and `cloud` leave the requests as they are.
+
 Combine an executor profile with an optional container profile, e.g.
 `-profile slurm,singularity`.
 
