@@ -1,0 +1,45 @@
+nextflow_process {
+
+    name "DEREP_CHUNK ext.args is composed from the derep params"
+    script "../modules/local/derep_chunk.nf"
+    tag "stub"
+    process "DEREP_CHUNK"
+    options "-stub"
+    config "./derep_debug.config"
+
+    test("params.derep_* and the viral mode land verbatim in the process command") {
+        when {
+            params {
+                derep_tool = "sourmash"
+                derep_primary_ani = 0.85
+                derep_secondary_ani = 0.97
+                derep_aligned_fraction = 0.4
+                derep_keeper = "tool"
+                mode = "viral"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.chunk_0', mode: 'viral', run: [id: 'test', mode: 'viral']],
+                    [
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta")
+                    ]
+                )
+                input[1] = []
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert line.contains('--tool sourmash')
+            assert line.contains('--primary-ani 0.85')
+            assert line.contains('--secondary-ani 0.97')
+            assert line.contains('--aligned-fraction 0.4')
+            assert line.contains('--keeper tool')
+            assert line.contains('--virus')
+        }
+    }
+}

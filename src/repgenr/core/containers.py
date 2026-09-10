@@ -178,8 +178,10 @@ def _default_mounts(
         return Path(os.path.abspath(p))
 
     mounts: list[Path] = []
-    if cwd is not None:
-        mounts.append(absp(cwd))
+    # No explicit cwd means "the host process's working directory": relative
+    # paths in argv (a stateless step run with `-o .`) must resolve there,
+    # not in the temp mount.
+    mounts.append(absp(cwd) if cwd is not None else absp(os.getcwd()))
     mounts.append(absp(tempfile.gettempdir()))
     mounts.extend(absp(m) for m in config.extra_mounts)
     # Per-call mounts for inputs referenced indirectly (e.g. genome paths listed
@@ -278,7 +280,7 @@ def wrap_command(
 ) -> list[str]:
     """Build the engine command that runs ``argv`` inside ``image``."""
     mounts = _default_mounts(config, cwd, argv, extra_mounts)
-    workdir = str(Path(os.path.abspath(cwd))) if cwd is not None else str(mounts[0])
+    workdir = str(Path(os.path.abspath(cwd if cwd is not None else os.getcwd())))
 
     if config.backend == DOCKER:
         cmd = [config.engine_binary(), "run", "--rm", "--entrypoint", ""]

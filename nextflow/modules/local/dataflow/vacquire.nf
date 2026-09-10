@@ -54,11 +54,18 @@ process VACQUIRE {
     """
     echo "ext.args: ${args}"
     echo "ext.args2: ${args2}"
-    mkdir -p out/genomes out/outgroup
+    mkdir -p out/genomes
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp1_iso1.fasta
     printf '>x\\nACGT\\n' > out/genomes/Vir_gen_sp2_iso2.fasta
-    printf '>x\\nACGT\\n' > out/outgroup/Vir_out_grp_iso9.fasta
-    printf 'iso9\\n' > outgroup_accession.txt
+    # Mirror the real stage: --no-outgroup leaves no outgroup dir and an
+    # empty accession file, so the optional output path stays unmatched.
+    case "${args2}" in
+        *--no-outgroup*) : > outgroup_accession.txt ;;
+        *)
+            mkdir -p out/outgroup
+            printf '>x\\nACGT\\n' > out/outgroup/Vir_out_grp_iso9.fasta
+            printf 'iso9\\n' > outgroup_accession.txt ;;
+    esac
     touch versions.yml
     """
 }

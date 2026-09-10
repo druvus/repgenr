@@ -26,9 +26,12 @@ workflow ACQUIRE {
     // The outgroup output is optional: join with remainder so a run without one
     // still emits tuple(meta, []) and downstream joins on the meta keep working.
     def ch_outgroup = ch_genomes
-        .map { meta, _files -> meta }
+        // A placeholder tuple, not a bare meta: with remainder, an unmatched
+        // bare value is emitted as-is and the next closure gets one argument
+        // (seen live on a viral run with --no-outgroup).
+        .map { meta, _files -> tuple(meta, []) }
         .join(GENOME.out.outgroup, by: 0, remainder: true)
-        .map { meta, files ->
+        .map { meta, _placeholder, files ->
             def list = files == null ? [] : (files instanceof List ? files : [files])
             tuple(meta, list)
         }

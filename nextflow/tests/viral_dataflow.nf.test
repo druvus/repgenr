@@ -20,4 +20,23 @@ nextflow_pipeline {
             assert path("$outputDir/phylo/tree/tree.nwk").exists()
         }
     }
+
+    test("a run without an outgroup still reaches phylo and tree2tax") {
+        // The optional outgroup output stays unmatched; the join placeholder
+        // keeps the downstream tuples well-formed (live audit finding).
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 1
+                derep_tool = 'sourmash'
+                vgenome_args = '-tg mastadenovirus --no-outgroup'
+                phylo_args = '--treebuilder mashtree --no-outgroup'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+        }
+    }
 }

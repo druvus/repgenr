@@ -258,3 +258,26 @@ def test_symlinked_genome_targets_are_bound(tmp_path, monkeypatch) -> None:
 
     mounts = c._default_mounts(c.ContainerConfig(backend="docker"), wd, [str(genomes)])
     assert any(m == source or str(source).startswith(str(m)) for m in mounts), mounts
+
+
+def test_container_workdir_defaults_to_the_host_cwd(tmp_path, monkeypatch) -> None:
+    """A stateless step run with `-o .` hands the tool relative paths; the
+    container must start in the host cwd, not in the temp mount (live audit:
+    progressiveMauve under the docker profile could not open align/xmfa/...)."""
+    from repgenr.core import containers as c
+
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(c.tempfile, "gettempdir", lambda: str(sys_tmp))
+    task = tmp_path / "task"
+    task.mkdir()
+    monkeypatch.chdir(task)
+    cmd = c.wrap_command(
+        "img:1",
+        ["tool", "align/out.xmfa"],
+        config=c.ContainerConfig(backend="docker"),
+        cwd=None,
+        logger=_LOG,
+    )
+    assert cmd[cmd.index("-w") + 1] == str(task.resolve()) or cmd[cmd.index("-w") + 1] == str(task)
+    assert any(x.startswith(f"{task}:") or x.startswith(f"{task.resolve()}:") for x in cmd)

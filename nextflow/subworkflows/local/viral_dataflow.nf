@@ -28,9 +28,12 @@ workflow VIRAL_DATAFLOW {
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     def ch_outgroup = ch_genomes
-        .map { meta, _files -> meta }
+        // A placeholder tuple, not a bare meta: with remainder, an unmatched
+        // bare value is emitted as-is and the next closure gets one argument
+        // (seen live on a viral run with --no-outgroup).
+        .map { meta, _files -> tuple(meta, []) }
         .join(VACQUIRE.out.outgroup, by: 0, remainder: true)
-        .map { meta, files ->
+        .map { meta, _placeholder, files ->
             def list = files == null ? [] : (files instanceof List ? files : [files])
             tuple(meta, list)
         }
