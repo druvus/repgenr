@@ -19,6 +19,7 @@ from .base import _require_choice, _require_unit_interval
 if TYPE_CHECKING:
     from ..stages.dereplicate import DereplicateParams
     from ..stages.genome import GenomeParams
+    from ..stages.ingest import IngestParams
     from ..stages.metadata import MetadataParams
     from ..stages.phylo import PhyloParams
     from ..stages.tree2tax import Tree2taxParams
@@ -72,6 +73,20 @@ def genome_params(*, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET
     from ..stages.genome import GenomeParams
 
     return _build(GenomeParams, accession_list_only=accession_list_only, keep_files=keep_files)
+
+
+def ingest_params(
+    *,
+    genomes_dir: str,
+    selection: Any = _UNSET,
+    outgroup: Any = _UNSET,
+    copy: Any = _UNSET,
+) -> IngestParams:
+    from ..stages.ingest import IngestParams
+
+    return _build(
+        IngestParams, genomes_dir=genomes_dir, selection=selection, outgroup=outgroup, copy=copy
+    )
 
 
 def vmetadata_params(

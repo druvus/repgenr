@@ -103,7 +103,13 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "requires_binary: test needs an external bioinformatics binary present on PATH",
+    "live: runs real tools through the repgenr console script; see tests/live/README.md",
+    "network: live test that reaches GTDB or NCBI (results cached under the live cache dir)",
+    "container: live test that runs a tool through --container docker",
 ]
+# Live tests never run by default or in CI: `pytest tests/live -m live` opts in
+# (a command-line -m replaces this one).
+addopts = "-m 'not live'"
 
 [tool.coverage.run]
 source = ["repgenr"]

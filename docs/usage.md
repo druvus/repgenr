@@ -12,6 +12,9 @@ matching FlexTaxD taxonomy. The pipeline runs five stages in order:
 4. **phylo** -- build a phylogeny from the representatives.
 5. **tree2tax** -- emit a FlexTaxD-compatible taxonomy from the tree.
 
+The CLI can also start from genomes already on disk: `repgenr ingest` stands
+in for the first two stages (see "Starting from local genomes" below).
+
 The Nextflow layer runs these stages as typed data channels: each stage emits its
 outputs (the metadata selection, genome FASTAs, per-chunk and merged
 representatives, the tree, the taxonomy) as staged files that the next stage
@@ -170,6 +173,22 @@ and emits them as a channel feeding the scatter-gather dereplication; `phylo` an
 `tree2tax` run in task-local working directories and emit `tree.nwk`,
 `tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
 quick wiring check without external tools.
+
+### Starting from local genomes
+
+`repgenr ingest -wd WD --genomes-dir DIR` populates a working directory from
+local FASTA files instead of downloading: files are linked (or copied with
+`--copy`) into `genomes/`, `selection.tsv` and the SQLite manifest are written
+in the same format `metadata`/`genome` produce, and the stage is recorded so
+`status` reports the local chain (`ingest -> dereplicate -> phylo -> tree2tax`)
+and a second `ingest` on an unchanged directory skips. Taxonomy and quality
+columns come from `--selection selection.tsv` when given, otherwise from the
+canonical `Family_genus_species_ACCESSION.fasta` filename. `--outgroup` sets
+one genome aside (a name under `--genomes-dir`, or a path to a FASTA file
+elsewhere) under `outgroup/` and writes `outgroup_accession.txt`, so `phylo`
+roots on it exactly as after a download. This is the CLI counterpart of the
+Nextflow harness `nextflow/tests/local_dataflow.nf`, which takes a genome
+directory straight into `DEREPLICATE_SCATTER`.
 
 ### Representative selection
 

@@ -15,6 +15,7 @@ import sys
 # shared app. Imported for side effects only.
 from . import (  # noqa: F401  (registration side effects)
     cmd_bacterial,
+    cmd_ingest,
     cmd_misc,
     cmd_phylo,
     cmd_run,

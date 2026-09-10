@@ -8,6 +8,17 @@ from pathlib import Path
 import pytest
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    # Registered here (an initial conftest under `testpaths`) so the option is
+    # known from any invocation; the live suite's own conftest consumes it.
+    parser.addoption(
+        "--live-config",
+        default=None,
+        help="TOML mapping tools to bin dirs and setting cache_dir for tests/live "
+        "(see tests/live/live.example.toml).",
+    )
+
+
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """Skip tests marked ``requires_binary("name")`` when the tool is absent."""
     for marker in item.iter_markers(name="requires_binary"):

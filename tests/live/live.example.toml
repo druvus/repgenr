@@ -1,0 +1,13 @@
+# Copy to tests/live/live.local.toml (gitignored) and adjust for this machine.
+# Run: pytest tests/live -m live --live-config tests/live/live.local.toml
+
+# Where network fixtures cache their downloads and where junit output goes.
+cache_dir = "/Volumes/sekvens2/repgenr/live-cache"
+
+# Directories prepended to PATH for every repgenr subprocess, keyed by the
+# tool they provide. Tools already on PATH (the environment pytest runs in)
+# need no entry.
+[bin_dirs]
+ska = "~/miniforge3/envs/repgenr_ska/bin"
+parsnp = "~/miniforge3/envs/repgenr_parsnp/bin"
+gubbins = "~/miniforge3/envs/repgenr_gubbins/bin"

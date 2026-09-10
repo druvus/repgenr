@@ -7,6 +7,18 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr ingest -wd WD --genomes-dir DIR [--selection TSV] [--outgroup NAME|FILE]
+  [--copy]`: start a working directory from genomes already on disk. It
+  writes the `selection.tsv` and manifest the download stages produce, links
+  (or copies) the files into `genomes/`, stages an optional outgroup, records
+  itself as a stage (resume, `status` with the local chain, `doctor`), and
+  takes taxonomy and CheckM quality from the selection table or the canonical
+  filename.
+- A live verification suite under `tests/live/` (markers `live`, `network`,
+  `container`; deselected by default via `addopts`; `--live-config` maps
+  tools to bin directories). The first test runs ingest, sourmash, mashtree
+  and tree2tax on a seeded synthetic set and checks the recovered partition
+  against the generator's truth.
 - `tree2tax --collapse-length L` and `--collapse-support S` (also on the
   `tree2tax-relations` step): internal nodes whose branch is shorter than L,
   or whose support is below the fraction S (percentage trees are normalised),
