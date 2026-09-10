@@ -195,19 +195,36 @@ def _list_targets(logger) -> None:
     logger.info("Available targets:\n%s", "\n".join(targets))
 
 
+def resolve_group_name(target: str, listing: list[str]) -> str | None:
+    """The BV-BRC group file stem matching ``target``, ignoring case.
+
+    Group files are named like ``Hepatitis_E_virus.fna``; users type the
+    target in any case (the CLI lower-cases it), so the listing decides.
+    """
+    wanted = target.lower()
+    for entry in listing:
+        stem = entry[:-4] if entry.endswith(".fna") else entry
+        if stem.lower() == wanted:
+            return stem
+    return None
+
+
 def _download_group(target: str, dest: Path, logger) -> None:
-    capitalized = target[0].upper() + target[1:]
-    logger.info("Downloading %s from BV-BRC (FTPS)", capitalized)
     with _bvbrc_connect() as ftp:
-        remote = f"{BVBRC_FTP_DIR}/{capitalized}.fna"
+        ftp.cwd(BVBRC_FTP_DIR)
+        group = resolve_group_name(target, ftp.nlst())
+        if group is None:
+            raise WorkdirError(
+                f"Could not find virus group '{target}' at BV-BRC. "
+                "Check the name (try --list), or download all with --target viruses."
+            )
+        logger.info("Downloading %s from BV-BRC (FTPS)", group)
+        remote = f"{group}.fna"  # relative to BVBRC_FTP_DIR after the cwd above
         ftp.sendcmd("TYPE I")
         try:
             remote_size = ftp.size(remote)
         except Exception as exc:
-            raise WorkdirError(
-                f"Could not find virus group '{capitalized}' at BV-BRC. "
-                "Check the name (try --list), or download all with --target viruses."
-            ) from exc
+            raise WorkdirError(f"Could not size '{remote}' at BV-BRC: {exc}") from exc
         # Binary transfer with an exact size check: ASCII mode + a 1000-byte
         # tolerance previously let a silently-truncated FASTA pass as complete.
         with open(dest, "wb") as fo:

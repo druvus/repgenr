@@ -202,6 +202,11 @@ def _isolate_token(isolate: str) -> str:
     return f"iso-{token or 'NA'}"
 
 
+def _segment_labels(recs) -> set[str]:
+    """Distinct real segment labels of a record set (empty/ANONYMOUS ignored)."""
+    return {r.segment for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"}
+
+
 def _write_isolate_groups(genomes_dir, records, seqs, logger):
     """Combine each isolate's segments into one genome; keep singletons as-is.
 
@@ -215,7 +220,12 @@ def _write_isolate_groups(genomes_dir, records, seqs, logger):
     for r in records:
         (groups.setdefault(r.isolate, []) if r.isolate else singletons).append(r)
     for iso, recs in list(groups.items()):
-        if iso and len(recs) <= 1:
+        # An isolate is a segment set only when its records carry at least two
+        # distinct segment labels. NCBI marks every non-segmented record
+        # "ANONYMOUS", and isolate names repeat across re-submissions (or are
+        # junk such as "RNA"), so grouping on the name alone concatenated
+        # whole genomes of non-segmented viruses.
+        if iso and (len(recs) <= 1 or len(_segment_labels(recs)) < 2):
             singletons.extend(recs)
             del groups[iso]
 

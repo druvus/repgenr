@@ -62,6 +62,49 @@ def live_cache_dir(live_config: dict) -> Path:
     return cache
 
 
+def _stage_done(workdir: Path, stage: str) -> bool:
+    from repgenr.core.config import CONFIG_FILENAME, Config
+
+    if not (workdir / CONFIG_FILENAME).is_file():
+        return False
+    record = Config.load(workdir).stages.get(stage)
+    return bool(record is not None and record.completed)
+
+
+@pytest.fixture(scope="session")
+def cached_workdir(live_cache_dir: Path, repgenr_cmd: list[str]):
+    """Build a workdir once under the cache directory and reuse it later.
+
+    ``steps`` are argument lists (without ``-wd``); the workdir is rebuilt
+    from scratch unless ``done_stage`` already shows as completed. Network
+    fixtures use this so GTDB and NCBI are hit once per machine; tests copy
+    the result with :func:`copy_workdir` before touching it.
+    """
+
+    def _get(name: str, steps: list[list[str]], done_stage: str) -> Path:
+        wd = live_cache_dir / name
+        if _stage_done(wd, done_stage):
+            return wd
+        shutil.rmtree(wd, ignore_errors=True)
+        for args in steps:
+            argv = [*repgenr_cmd, args[0], "-wd", str(wd), *args[1:]]
+            proc = subprocess.run(argv, capture_output=True, text=True, check=False)
+            if proc.returncode != 0:
+                shutil.rmtree(wd, ignore_errors=True)
+                pytest.fail(
+                    f"cache build failed ({proc.returncode}): {' '.join(argv)}\n{proc.stderr}"
+                )
+        return wd
+
+    return _get
+
+
+def copy_workdir(src: Path, dst: Path) -> Path:
+    """Copy a cached workdir (symlinks kept, mtimes preserved so resume holds)."""
+    shutil.copytree(src, dst, symlinks=True, ignore=shutil.ignore_patterns("._*", ".DS_Store"))
+    return dst
+
+
 @pytest.fixture(scope="session")
 def repgenr_cmd() -> list[str]:
     """Command prefix for the console script (falls back to ``python -m``)."""

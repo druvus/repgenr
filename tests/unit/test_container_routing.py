@@ -99,10 +99,10 @@ def test_bvbrc_outgroup_mashtree_routed_through_run_tool(tmp_path, monkeypatch) 
         outgroup_treebuilder="mashtree",
     )
 
-    versions = bvbrc._determine_outgroup(
+    versions, outgroup_id = bvbrc._determine_outgroup(
         ctx, records, sequences, base, kept, (90, 110), params, _LOG
     )
-    assert versions == {"mashtree": "9.9"}
+    assert versions == {"mashtree": "9.9"} and outgroup_id == "O1"
     assert [name for name, _ in calls] == ["mashtree"]
     assert (tmp_path / "outgroup_accession.txt").read_text().strip() == "O1"
 

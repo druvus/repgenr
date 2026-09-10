@@ -24,6 +24,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 from ..core.context import WorkdirContext
+from ..core.contracts import SELECTION_TSV, SelectionRow, write_selection
 from ..core.errors import UserInputError, WorkdirError
 from . import _outgroup
 from ._common import (
@@ -75,13 +76,18 @@ def run_select(
         return 0
 
     sequences = _open_sequences(fasta, params.ignore_duplicates)
-    n_written = _write_genomes(ctx, records, sequences, kept, params, logger)
+    n_written, rows = _write_genomes(ctx, records, sequences, kept, ncbi, params, logger)
 
     tool_versions: dict[str, str] = {}
     if not params.no_outgroup:
-        tool_versions = _determine_outgroup(
+        tool_versions, outgroup_id = _determine_outgroup(
             ctx, records, sequences, base, kept, length_range, params, logger
         )
+        og_taxid = next((r.taxid for r in records if r.name == outgroup_id), "")
+        rows.append(_selection_row(outgroup_id, og_taxid, ncbi, is_outgroup=True))
+    # The same hand-off the NCBI Virus path and the bacterial stages publish,
+    # so dereplicate, tree2tax and doctor see one contract.
+    write_selection(ctx.workdir / SELECTION_TSV, rows)
 
     ctx.config.record_stage(
         "vgenome",
@@ -258,13 +264,33 @@ def _write_record(seq: SeqRecord, dest: Path) -> None:
     dest.write_text(f">{seq.description}\n{seq.seq}\n", encoding="utf-8")
 
 
-def _write_genomes(ctx, records, sequences, kept, params: VgenomeParams, logger) -> int:
+def _tax_name(ncbi: dict, taxid: str, level: str) -> str:
+    for entry in ncbi.get(taxid, []):
+        if entry["taxlevelname"] == level:
+            return entry["taxname"]
+    return ""
+
+
+def _selection_row(name: str, taxid: str, ncbi: dict, *, is_outgroup: bool) -> SelectionRow:
+    return SelectionRow(
+        name,
+        _tax_name(ncbi, taxid, "family"),
+        _tax_name(ncbi, taxid, "genus"),
+        _tax_name(ncbi, taxid, "species"),
+        is_outgroup,
+        f"{name}.fasta",
+    )
+
+
+def _write_genomes(
+    ctx, records, sequences, kept, ncbi, params: VgenomeParams, logger
+) -> tuple[int, list[SelectionRow]]:
     genomes_dir = ctx.genomes_dir
     if genomes_dir.exists():
         shutil.rmtree(genomes_dir)
     genomes_dir.mkdir(parents=True)
 
-    written = 0
+    rows: dict[str, SelectionRow] = {}
     for rec in records:
         if rec.taxid not in kept or rec.bvbrc_id not in kept[rec.taxid]:
             continue
@@ -276,14 +302,14 @@ def _write_genomes(ctx, records, sequences, kept, params: VgenomeParams, logger)
                 )
             logger.warning("Duplicate sequence id %s; overwriting", rec.name)
         _write_record(sequences[rec.name], target)
-        written += 1
-    return written
+        rows[rec.name] = _selection_row(rec.name, rec.taxid, ncbi, is_outgroup=False)
+    return len(rows), list(rows.values())
 
 
 def _determine_outgroup(
     ctx, records, sequences, base, kept, length_range, params: VgenomeParams, logger
-) -> dict[str, str]:
-    """Pick an outgroup via mashtree; return the resolved tool versions."""
+) -> tuple[dict[str, str], str]:
+    """Pick an outgroup via mashtree; return the resolved tool versions and its id."""
     builder = _outgroup.resolve_outgroup_builder(params.outgroup_treebuilder)
     versions = _outgroup.preflight_outgroup_builder(builder)
     outgroup_wd, genomes_dir = _outgroup.prepare_workdir(ctx)
@@ -334,4 +360,4 @@ def _determine_outgroup(
         _write_record(sequences[outgroup_id], ctx.outgroup_dir / f"{outgroup_id}.fasta")
     logger.info("Selected outgroup: %s", outgroup_id)
     _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
-    return versions
+    return versions, outgroup_id

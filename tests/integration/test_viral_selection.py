@@ -19,7 +19,9 @@ from repgenr.viral.selection import (
 _LOG = logging.getLogger("test")
 
 
-def _rec(acc, species, length, *, genus="Mastadenovirus", isolate="", organism=None):
+def _rec(
+    acc, species, length, *, genus="Mastadenovirus", isolate="", organism=None, segment="ANONYMOUS"
+):
     return VirusRecord(
         accession=acc,
         taxid="1",
@@ -29,7 +31,7 @@ def _rec(acc, species, length, *, genus="Mastadenovirus", isolate="", organism=N
         species=species,
         length=length,
         completeness="COMPLETE",
-        segment="ANONYMOUS",
+        segment=segment,
         isolate=isolate,
     )
 
@@ -63,8 +65,8 @@ def test_isolate_token_sanitises() -> None:
 def test_write_isolate_groups(tmp_path, monkeypatch) -> None:
     # two segments of one isolate + one standalone record
     recs = [
-        _rec("seg1", "Influenza A", 1000, isolate="A/duck/2019"),
-        _rec("seg2", "Influenza A", 800, isolate="A/duck/2019"),
+        _rec("seg1", "Influenza A", 1000, isolate="A/duck/2019", segment="4"),
+        _rec("seg2", "Influenza A", 800, isolate="A/duck/2019", segment="6"),
         _rec("solo", "Influenza A", 1300, isolate=""),
     ]
     seqs = {

@@ -7,6 +7,14 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Network live tests (`-m "live and network"`, `tests/live/test_network.py`):
+  GTDB API selections at genus, species (`--limit`, `--outgroup-accession`)
+  and family level; the GTDB TSV table with `--nodownload` and
+  `--metadata-path`; `genome --accession-list-only` and `--keep-files`; NCBI
+  Virus with `--complete-only`, `--released-after`, `--host`; every `vgenome`
+  selection flag; BV-BRC `--list`, `--source bvbrc` and `--filter`; `run
+  --dry-run` and the bacterial and viral chains end to end. Downloads are
+  built once under the live cache directory and reused.
 - Live tests for the offline stages (`tests/live/`, 29 tests, about three
   minutes): skder, sourmash and galah recover the synthetic partition; every
   `dereplicate` flag has an observable effect; `dereplicate-chunk` x3 plus
@@ -88,6 +96,23 @@ All notable changes to RepGenR are documented here. The format follows
   adapt to the tuple shapes.
 
 ### Fixed
+- `vgenome --group-segments` concatenated every set of records that shared
+  an isolate name, segmented or not; on hepatovirus (one segment) it turned
+  367 complete genomes into 149 (216 records share the isolate name "RNA"
+  and every one is labelled segment "ANONYMOUS"). An isolate is grouped
+  only when its records carry at least two distinct real segment labels.
+- `vgenome` on the BV-BRC source wrote the genomes but no `selection.tsv`,
+  unlike the NCBI Virus path and the bacterial stages, so the downstream
+  contract was incomplete. It now publishes the same table (taxonomy from
+  the Entrez names, outgroup row included).
+- The genome stage logged "Discarding non-FASTA download for <accession>
+  (error page?)" for every accession after a successful batch on macOS
+  volumes without native extended attributes: the extraction loop picked up
+  the AppleDouble `._*.fna` twins. They are skipped now.
+- `vmetadata --source bvbrc --target hepatitis_e_virus` failed with "Could
+  not find virus group": the group name was capitalised on its first letter
+  only, but BV-BRC names groups like `Hepatitis_E_virus`. The name is now
+  resolved against the server listing, ignoring case.
 - `--versions-out` on the stateless steps failed with "No such file or
   directory" when the fragment path sat in the not-yet-created output
   directory; the parent is now created first.
