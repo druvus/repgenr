@@ -24,6 +24,7 @@ from ..core.containers import run_tool_with_retries
 from ..core.contracts import atomic_path
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import remove_tree
 
 DATASETS_CAPS = ToolCapabilities(
     name="datasets",
@@ -135,7 +136,7 @@ def fetch(
     zip_path = out_dir / "ncbi_virus.zip"
     extract = out_dir / "ncbi_virus_pkg"
     if extract.exists():
-        shutil.rmtree(extract)
+        remove_tree(extract)
 
     cmd = [
         "datasets",

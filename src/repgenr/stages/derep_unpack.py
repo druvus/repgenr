@@ -6,7 +6,6 @@ Reads the derep ``clusters.tsv`` contract and copies each cluster's genomes
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,7 +13,7 @@ from pathlib import Path
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, read_clusters
 from ..core.errors import WorkdirError
-from ..core.process import link_or_copy
+from ..core.process import link_or_copy, remove_tree
 
 
 @dataclass
@@ -31,7 +30,7 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
 
     unpack_dir = ctx.derep_dir / "unpacked"
     if unpack_dir.exists():
-        shutil.rmtree(unpack_dir)
+        remove_tree(unpack_dir)
     unpack_dir.mkdir(parents=True)
 
     empty = 0

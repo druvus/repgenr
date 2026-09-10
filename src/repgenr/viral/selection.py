@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +23,7 @@ from Bio.SeqRecord import SeqRecord
 from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
+from ..core.process import remove_tree
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -74,7 +74,7 @@ def run_records(
 
     genomes_dir = ctx.genomes_dir
     if genomes_dir.exists():
-        shutil.rmtree(genomes_dir)
+        remove_tree(genomes_dir)
     genomes_dir.mkdir(parents=True)
     if params.group_segments:
         selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger)

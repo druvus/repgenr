@@ -69,3 +69,21 @@ def test_contract_writer_failure_preserves_previous_pair(tmp_path: Path, monkeyp
     with pytest.raises(OSError):
         write_clusters(clusters, {"other.fasta": []})
     assert clusters.read_text(encoding="utf-8") == before
+
+
+def test_remove_tree_tolerates_entries_that_vanish(tmp_path, monkeypatch) -> None:
+    """A file removed by the OS mid-walk (an AppleDouble twin on an external
+    volume) is not an error; other failures still raise (live audit)."""
+    from repgenr.core.process import _ignore_vanished, remove_tree
+
+    d = tmp_path / "scratch"
+    (d / "sub").mkdir(parents=True)
+    (d / "sub" / "a.txt").write_text("x", encoding="utf-8")
+    remove_tree(d)
+    assert not d.exists()
+    remove_tree(d)  # already gone: a no-op
+    _ignore_vanished(None, "gone", FileNotFoundError("gone"))
+    import pytest
+
+    with pytest.raises(PermissionError):
+        _ignore_vanished(None, "kept", PermissionError("kept"))

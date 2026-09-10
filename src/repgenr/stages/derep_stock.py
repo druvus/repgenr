@@ -16,6 +16,7 @@ from pathlib import Path
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, GENOME_STATUS_TSV
 from ..core.errors import UserInputError
+from ..core.process import remove_tree
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV)
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -67,7 +68,7 @@ def _list(store: Path, logger) -> None:
 
 def _pack(ctx: WorkdirContext, run_path: Path) -> None:
     if run_path.exists():
-        shutil.rmtree(run_path)
+        remove_tree(run_path)
     run_path.mkdir(parents=True)
     for name in _FLAT_FILES:
         src = ctx.derep_dir / name
@@ -88,7 +89,7 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         if src.exists():
             shutil.copy2(src, ctx.derep_dir / name)
     if ctx.representatives_dir.exists():
-        shutil.rmtree(ctx.representatives_dir)
+        remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
     for rep in (run_path / "representatives").iterdir():
         shutil.copy2(ctx.genomes_dir / rep.name, ctx.representatives_dir / rep.name)
@@ -98,4 +99,4 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
 def _delete(run_path: Path) -> None:
     if not run_path.exists():
         raise UserInputError(f"No stored run named '{run_path.name}'")
-    shutil.rmtree(run_path)
+    remove_tree(run_path)

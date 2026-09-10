@@ -27,6 +27,7 @@ from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fas
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import scale_warning, warn_unconsumed_extras
+from ..core.process import remove_tree
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -106,7 +107,7 @@ def snptype_core(
 
     snp_dir.mkdir(parents=True, exist_ok=True)
     if scratch.exists():
-        shutil.rmtree(scratch)
+        remove_tree(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
 
     snp_params = SnpParams(

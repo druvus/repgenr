@@ -39,7 +39,7 @@ from ..core.contracts import (
 )
 from ..core.errors import WorkdirError
 from ..core.plugins import warn_unconsumed_extras
-from ..core.process import link_or_copy
+from ..core.process import link_or_copy, remove_tree
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 from .derep_keeper import rescore_representatives
@@ -255,7 +255,7 @@ def _write_step_contract(out_dir: Path, result: DerepResult, fallback_dirs: list
     """Write representatives/ + clusters.tsv + genome_status.tsv under ``out_dir``."""
     rep_dir = out_dir / _REPRESENTATIVES_DIR
     if rep_dir.exists():
-        shutil.rmtree(rep_dir)
+        remove_tree(rep_dir)
     rep_dir.mkdir(parents=True, exist_ok=True)
     for rep in result.representatives:
         source = rep if rep.exists() else _find(fallback_dirs, rep.name)
@@ -282,6 +282,6 @@ def _find(dirs: list[Path], name: str) -> Path | None:
 
 def _fresh(path: Path) -> Path:
     if path.exists():
-        shutil.rmtree(path)
+        remove_tree(path)
     path.mkdir(parents=True, exist_ok=True)
     return path

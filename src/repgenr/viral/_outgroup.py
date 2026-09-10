@@ -29,6 +29,7 @@ from pathlib import Path
 
 from ..core.errors import UserInputError
 from ..core.plugins import preflight
+from ..core.process import remove_tree
 
 RECORDS_LENGTH_TOLERANCE = 0.15
 BVBRC_LENGTH_TOLERANCE = 0.10
@@ -81,7 +82,7 @@ def prepare_workdir(ctx) -> tuple[Path, Path]:
     """Reset the outgroup scratch dir; return (outgroup_wd, genomes_dir)."""
     outgroup_wd = ctx.workdir / "virus_outgroup_wd"
     if outgroup_wd.exists():
-        shutil.rmtree(outgroup_wd)
+        remove_tree(outgroup_wd)
     genomes_dir = outgroup_wd / "genomes"
     genomes_dir.mkdir(parents=True)
     return outgroup_wd, genomes_dir

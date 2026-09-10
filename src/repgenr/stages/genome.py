@@ -22,6 +22,7 @@ from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, genome_file
 from ..core.errors import WorkdirError
 from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
+from ..core.process import remove_tree
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
 DATASETS_CAPS = ToolCapabilities(
@@ -220,7 +221,7 @@ def _download_one_batch(
     zip_path = scratch_dir / f"ncbi_download_{bi}.zip"
     extract = scratch_dir / f"ncbi_extract_{bi}"
     if extract.exists():
-        shutil.rmtree(extract)
+        remove_tree(extract)
 
     _run_cmd(
         [

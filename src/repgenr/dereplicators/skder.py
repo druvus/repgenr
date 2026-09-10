@@ -34,7 +34,7 @@ from ..core.containers import run_tool
 from ..core.contracts import FASTA_SUFFIXES, list_fasta
 from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import link_or_copy
+from ..core.process import link_or_copy, remove_tree
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -104,7 +104,7 @@ class SkderDereplicator(Dereplicator):
             run_tool(self.capabilities, cmd, logger=logger, log_prefix="skder")
             staged = out_dir / "skder_out"
             if staged.exists():
-                shutil.rmtree(staged)
+                remove_tree(staged)
             # Hardlink the result files when possible (no extra disk; the temp dir
             # is removed below, but hardlinks keep the data alive). Falls back to a
             # copy across filesystems (temp vs workdir) or on exFAT.
