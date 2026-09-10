@@ -161,6 +161,11 @@ def build_tree(
         source_caps = _msa_source_capabilities(params)
         if source_caps is not None:
             participating.append(source_caps)
+        mask = str(params.extra.get("mask", "none"))
+        if params.msa_source == "snptype" and mask not in ("none", ""):
+            from ..maskers.base import registry as masker_registry
+
+            participating.append(masker_registry.get(mask).capabilities)
     _warn_stage_extras(participating, _adapter_extra(params.extra), logger)
 
     tree_params = TreeParams(

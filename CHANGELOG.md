@@ -6,7 +6,20 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `--mask gubbins` reads `--tool-arg gubbins_tree_builder=...`,
+  `gubbins_first_tree_builder=...` and `gubbins_args="..."` (Gubbins'
+  `--tree-builder`, `--first-tree-builder` and any further arguments). The
+  masker's keys count as read in the unread-extras warning of the snptype
+  and phylo stages.
+
 ### Fixed
+- Gubbins exited before its first iteration on hosts whose RAxML package has
+  no multi-threaded build (`raxmlHPC-PTHREADS*`; the osx-arm64 conda build
+  among them) whenever `--threads` was above one, and the only trace was one
+  stderr line. A native run without such a build now uses IQ-TREE as the
+  Gubbins tree builder, or one thread when IQ-TREE is missing too, and logs
+  the switch.
 - Clearing a scratch or output directory on a volume without native extended
   attributes (an external exFAT disk) could fail with "No such file or
   directory": macOS drops a file's AppleDouble twin the moment the data file

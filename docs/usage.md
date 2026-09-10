@@ -239,6 +239,16 @@ gubbins`) runs on the typer's whole-genome alignment and replaces the
 core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
 emit variable sites cannot be masked.
 
+Gubbins builds a tree in every iteration, by default with RAxML, and with more
+than one thread it needs a multi-threaded RAxML build (`raxmlHPC-PTHREADS*`).
+Some conda builds ship only the single-threaded binary, and Gubbins then exits
+before its first iteration. When repgenr runs Gubbins natively and finds no
+such build it switches to IQ-TREE (or to one thread when IQ-TREE is missing
+too) and says so in the log. `--tool-arg gubbins_tree_builder=raxmlng`,
+`--tool-arg gubbins_first_tree_builder=rapidnj` and
+`--tool-arg gubbins_args="--min-snps 5"` pass the choice, the first-iteration
+builder and any further `run_gubbins.py` arguments through.
+
 `--tool ska2` (split k-mer analysis) is reference-free: every genome is an
 ordinary sample, so no assembly's private errors bias the SNP distances, and
 the alphabetical-first-genome reference default does not apply. It emits a

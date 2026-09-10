@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..core.plugins import Registry, ToolCapabilities, preflight
@@ -30,6 +30,9 @@ class MaskParams:
 
     threads: int = 16
     exclude: frozenset[str] = frozenset()
+    # Tool tuning from ``--tool-arg``; each masker declares the keys it reads
+    # in ``capabilities.accepted_extras``.
+    extra: dict = field(default_factory=dict)
 
 
 class Masker(ABC):
