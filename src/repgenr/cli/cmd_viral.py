@@ -35,7 +35,11 @@ def vmetadata(
     source: str = typer.Option(
         "ncbi_virus", "--source", help="ncbi_virus (NCBI Virus via datasets) or bvbrc."
     ),
-    filter: str = typer.Option("complete genome", "--filter", help="BV-BRC header tag."),
+    filter: str | None = typer.Option(
+        None,
+        "--filter",
+        help="bvbrc: keep records whose header carries this tag (default: complete genome).",
+    ),
     host: str | None = typer.Option(None, "--host", help="ncbi_virus: restrict to a host species."),
     complete_only: bool = typer.Option(
         False, "--complete-only", help="ncbi_virus: only COMPLETE sequences."

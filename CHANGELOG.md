@@ -83,6 +83,10 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- `vmetadata --filter` is a BV-BRC option (D-4): it has no default on the
+  command line, BV-BRC applies "complete genome" when it is unset, and
+  passing it with the NCBI Virus source is an error that points at
+  `--complete-only`. It used to be accepted and silently ignored there.
 - Short options mean one thing everywhere (D-2): `-t` is `--threads` on
   every command that has threads, including `run`; `--target` on
   `vmetadata` and `run`, `--filter` and `--list` on `vmetadata`, and

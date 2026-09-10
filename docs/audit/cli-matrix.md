@@ -354,7 +354,7 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | module: fixed by the process script | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/cli-reference.md, docs/containers.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--target` |  | VmetadataParams.target | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--source` |  | VmetadataParams.source | choice | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
-| `--filter` |  | VmetadataParams.filter | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--filter` |  | VmetadataParams.filter | stage | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--host` |  | VmetadataParams.host | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--complete-only` |  | VmetadataParams.complete_only | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--released-after` |  | VmetadataParams.released_after | callback | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set | docs/cli-reference.md, docs/audit/cli-matrix.md |
