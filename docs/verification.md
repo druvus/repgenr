@@ -144,6 +144,42 @@ repgenr run -wd work/francisella_all -d all -l genus -tg Francisella \
 
 12 minutes end to end, 25 CPU-minutes, 2.9 GB on disk, `doctor` clean.
 
+## SNP phylogeny on the genus-scale set (2026-09-10)
+
+The 68 Francisella representatives plus the outgroup, three ways, on the same
+machine. `simple` maps every genome to one reference with minimap2 and calls
+haploid consensus SNPs; the reference here was the alphabetically first genome,
+a different species from most of the set.
+
+| Path | Wall time | Sites | Outcome |
+|---|---|---|---|
+| mashtree (alignment-free) | 1 s | mash sketches | 69 leaves |
+| ska2 + IQ-TREE, 8 threads | 7.4 min | 1737 variable | 32 zero-length branches, median UFBoot 75, 15 of 66 splits shared with mashtree |
+| simple + Gubbins + IQ-TREE, 8 threads | 87 min, then failed | 812015 core SNP, 2054227 alignment columns | Gubbins crashed in its recombination scan |
+
+The genus alignment is 39% variable. Gubbins is built for isolates of one
+species; its scan allocates per-SNP arrays on the thread stack and dies with a
+bus error on input this diverse, whatever tree builder it uses and however many
+threads. Where the boundary sits, measured on subsets of the same alignment:
+
+| Subset | Genomes | Variable columns | Gubbins |
+|---|---|---|---|
+| F. tularensis | 9 | 19723 (1.0%) | 5 iterations in 1.9 min, 3234 recombinant regions |
+| F. philomiragia | 18 | 170342 (8.3%) | 5 iterations in 4.4 min, 8427 recombinant regions |
+| tularensis + one philomiragia | 10 | 271022 (13.2%) | bus error |
+| tularensis + philomiragia | 27 | 345308 (16.8%) | bus error |
+| whole genus | 68 | 809060 (39.4%) | bus error |
+
+The masker now estimates this fraction, warns above 10%, and reports the figure
+if Gubbins fails. Recombination masking belongs to a within-species run; a
+genus-level set is served by mashtree or an alignment-based path.
+
+Gubbins also needs a multi-threaded RAxML build (`raxmlHPC-PTHREADS*`) whenever
+it is given more than one thread. The osx-arm64 conda package has none, so the
+masker falls back to IQ-TREE, which cost 76 of the 87 minutes above on this
+alignment. `--tool-arg gubbins_tree_builder=fasttree` with
+`gubbins_first_tree_builder=rapidnj` did the same work in 6 minutes.
+
 ## Platform notes (macOS / Apple Silicon)
 
 - Several tools lack osx-arm64 builds; some run via an osx-64 (Rosetta) conda env

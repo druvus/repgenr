@@ -239,6 +239,11 @@ gubbins`) runs on the typer's whole-genome alignment and replaces the
 core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
 emit variable sites cannot be masked.
 
+Gubbins expects isolates of one species. The masker estimates how much of the
+alignment is variable, warns above 10%, and repeats the figure if Gubbins
+fails: on a genus-level set its scan can die with a bus error (see
+`docs/verification.md`).
+
 Gubbins builds a tree in every iteration, by default with RAxML, and with more
 than one thread it needs a multi-threaded RAxML build (`raxmlHPC-PTHREADS*`).
 Some conda builds ship only the single-threaded binary, and Gubbins then exits

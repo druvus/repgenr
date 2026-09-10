@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool, runs_on_host
-from ..core.errors import WorkdirError
+from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Masker, MaskParams
 
@@ -168,6 +168,27 @@ def resolve_tree_builder(
     return None, 1
 
 
+# Above this fraction of variable columns a set is far outside what a
+# recombination scanner is built for: Gubbins expects isolates of one species.
+DIVERGENCE_WARN_FRACTION = 0.10
+
+
+def variable_fraction(records: dict[str, str], sample: int = 200_000) -> tuple[float, int]:
+    """Fraction of columns with more than one base among ACGT, and the length.
+
+    Estimated on up to ``sample`` evenly spaced columns so a genus-scale
+    alignment (tens of genomes, millions of columns) costs a second or two.
+    """
+    seqs = [s.upper() for s in records.values()]
+    length = min((len(s) for s in seqs), default=0)
+    if length == 0 or len(seqs) < 2:
+        return 0.0, length
+    step = max(1, length // sample)
+    columns = range(0, length, step)
+    varying = sum(1 for i in columns if len({s[i] for s in seqs if s[i] in "ACGT"}) >= 2)
+    return varying / len(list(columns)), length
+
+
 class GubbinsMasker(Masker):
     capabilities = ToolCapabilities(
         name="gubbins",
@@ -215,6 +236,22 @@ class GubbinsMasker(Masker):
             logger,
             on_host=runs_on_host(self.capabilities),
         )
+        scan_records = read_fasta(gubbins_input) if excluded else records
+        fraction, length = variable_fraction(scan_records)
+        logger.info(
+            "Gubbins input: %d genome(s), %d columns, about %.1f%% variable.",
+            len(scan_records),
+            length,
+            100 * fraction,
+        )
+        if fraction > DIVERGENCE_WARN_FRACTION:
+            logger.warning(
+                "About %.0f%% of the alignment is variable. Gubbins is built for "
+                "isolates of one species, where a few percent is usual; on a set "
+                "this diverse it may exhaust its stack or return regions that mean "
+                "little. Consider a species-level target or --mask none.",
+                100 * fraction,
+            )
         argv: list[str | Path] = ["run_gubbins.py", "--threads", str(threads)]
         if tree_builder:
             argv += ["--tree-builder", tree_builder]
@@ -223,13 +260,22 @@ class GubbinsMasker(Masker):
             argv += ["--first-tree-builder", str(first)]
         argv += shlex.split(str(params.extra.get("gubbins_args", "")))
         argv += ["--prefix", prefix, gubbins_input]
-        run_tool(
-            self.capabilities,
-            argv,
-            logger=logger,
-            cwd=out_dir,
-            log_prefix="gubbins",
-        )
+        try:
+            run_tool(
+                self.capabilities,
+                argv,
+                logger=logger,
+                cwd=out_dir,
+                log_prefix="gubbins",
+            )
+        except ToolExecutionError as exc:
+            raise WorkdirError(
+                f"Gubbins failed on an alignment of {len(scan_records)} genome(s) "
+                f"whose columns are about {100 * fraction:.0f}% variable. Its "
+                "recombination scan allocates per-SNP arrays on the thread stack "
+                "and dies on very diverse input; a within-species set is what it "
+                "expects. Run the stage with --mask none, or narrow the target."
+            ) from exc
         if not excluded:
             filtered = Path(str(prefix) + ".filtered_polymorphic_sites.fasta")
             if not filtered.exists():

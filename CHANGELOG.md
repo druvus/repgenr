@@ -7,6 +7,11 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The Gubbins masker reports how much of the alignment is variable, warns above
+  10%, and repeats the figure when Gubbins fails, instead of leaving a bare
+  non-zero exit. Measured on Francisella subsets, a set of one species (1-8%
+  variable) is masked in minutes while a two-species or genus-level set
+  (13-39%) crashes Gubbins' recombination scan.
 - `--mask gubbins` reads `--tool-arg gubbins_tree_builder=...`,
   `gubbins_first_tree_builder=...` and `gubbins_args="..."` (Gubbins'
   `--tree-builder`, `--first-tree-builder` and any further arguments). The

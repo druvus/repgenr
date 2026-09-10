@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import pytest
+
 from repgenr.maskers import gubbins as mod
 from repgenr.maskers.base import MaskParams
 
@@ -157,3 +159,42 @@ def test_gff_regions_and_polymorphic_sites(tmp_path: Path) -> None:
     assert masked == {"a": "NNGT", "b": "NNGN", "c": "TCGA"}
     sites = mod.polymorphic_sites(masked)
     assert sites == {"a": "T", "b": "N", "c": "A"}, "only column 4 still varies among ACGT"
+
+
+def test_variable_fraction_estimates_divergence() -> None:
+    """One varying column in eight, whatever the sampling stride."""
+    records = {"a": "ACGTACGT", "b": "ACGTACGA", "c": "ACGTACGT"}
+    fraction, length = mod.variable_fraction(records)
+    assert (round(fraction, 3), length) == (0.125, 8)
+    assert mod.variable_fraction({"a": "ACGT"}) == (0.0, 4)
+    assert mod.variable_fraction({}) == (0.0, 0)
+
+
+def test_divergent_alignment_warns_before_gubbins_runs(tmp_path: Path, monkeypatch, caplog) -> None:
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        Path(str(kw["cwd"] / "gubbins") + ".filtered_polymorphic_sites.fasta").write_text(
+            ">a\nA\n", encoding="utf-8"
+        )
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
+    assert "variable" in caplog.text and "--mask none" in caplog.text
+
+
+def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> None:
+    """A crash in the scan is reported with the figure that explains it."""
+    from repgenr.core.errors import ToolExecutionError, WorkdirError
+
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        raise ToolExecutionError(["run_gubbins.py"], 1, "Bus error")
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
+    with pytest.raises(WorkdirError, match="within-species"):
+        mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
