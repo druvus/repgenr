@@ -27,3 +27,28 @@ def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
     assert argv[0] == "run_gubbins.py"
     assert argv[argv.index("--threads") + 1] == "4"
     assert argv[-1] == str(full)
+
+
+def test_sanitise_replaces_iupac_with_n(tmp_path, caplog) -> None:
+    """IUPAC codes from a diploid-style consensus become N before Gubbins."""
+    import logging
+
+    from repgenr.maskers.gubbins import sanitise_alignment
+
+    src = tmp_path / "aln.fasta"
+    src.write_text(">a\nACGTRYACGT\n>b\nACGTACGT-N\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        out = sanitise_alignment(src, tmp_path / "clean.fasta", logging.getLogger("t"))
+    assert out.read_text(encoding="utf-8") == ">a\nACGTNNACGT\n>b\nACGTACGT-N\n"
+    assert "2 ambiguous base(s)" in caplog.text
+
+
+def test_sanitise_keeps_a_clean_alignment(tmp_path) -> None:
+    import logging
+
+    from repgenr.maskers.gubbins import sanitise_alignment
+
+    src = tmp_path / "aln.fasta"
+    src.write_text(">a\nACGT\n", encoding="utf-8")
+    assert sanitise_alignment(src, tmp_path / "clean.fasta", logging.getLogger("t")) == src
+    assert not (tmp_path / "clean.fasta").exists()

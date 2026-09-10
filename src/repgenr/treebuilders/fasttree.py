@@ -41,9 +41,15 @@ class FasttreeBuilder(TreeBuilder):
             binary = "fasttree"
         else:
             binary = "FastTree" if shutil.which("FastTree") else "fasttree"
+        cmd: list = [binary, "-nt", "-gtr"]
+        if params.bootstrap > 0:
+            # FastTree's SH-like local supports are computed from `-boot N`
+            # resamples (default 1000); --bootstrap N sets N instead of being
+            # dropped on the floor.
+            cmd += ["-boot", str(params.bootstrap)]
         run_tool(
             self.capabilities,
-            [binary, "-nt", "-gtr", msa],
+            [*cmd, msa],
             logger=logger,
             log_prefix="fasttree",
             stdout_path=tree,

@@ -468,7 +468,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: 'todo: PR-H'
       --keeper:
         param: ChunkParams.keeper
         value: tool
@@ -478,7 +478,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: 'todo: PR-H'
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
@@ -606,7 +606,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: 'todo: PR-H'
       --keeper:
         param: MergeParams.keeper
         value: tool
@@ -616,7 +616,7 @@ commands:
         - docs/swot-derep.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: 'todo: PR-H'
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
@@ -1004,7 +1004,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
       --aligner:
         param: PhyloParams.aligner
         value: sibeliaz
@@ -1023,7 +1023,7 @@ commands:
         validated: registry
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --all-genomes:
         param: PhyloParams.all_genomes
         validated: none
@@ -1048,7 +1048,7 @@ commands:
         docs:
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
         observable: support labels in tree.nwk
       --reference:
         param: PhyloParams.reference
@@ -1057,7 +1057,7 @@ commands:
         docs:
         - docs/swot-phylo.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
       --aligner-arg:
         param: PhyloParams.extra
         value: kmer=15
@@ -1089,7 +1089,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_phylo_mask_gubbins
         with_args:
         - --msa-source
         - snptype
@@ -1098,7 +1098,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
   phylo-build:
     dispatch: step:repgenr.stages.phylo.phylo_build
     base_args:
@@ -1437,7 +1437,7 @@ commands:
         - README.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-F'
+        live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --aligner:
         param: PhyloParams.aligner
         value: sibeliaz
@@ -1456,7 +1456,7 @@ commands:
         validated: registry
         docs: []
         nextflow: null
-        live: 'todo: PR-F'
+        live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
       --no-outgroup:
         param: PhyloParams.no_outgroup
         validated: none
@@ -1505,7 +1505,7 @@ commands:
         - docs/containers.md
         - docs/output.md
         nextflow: null
-        live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
+        live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
         observable: the workdir is populated
       --tool:
         param: SnptypeParams.tool
@@ -1521,7 +1521,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_parsnp_typer
         observable: snp/core_snp.fasta written
       --reference:
         param: SnptypeParams.reference
@@ -1530,13 +1530,13 @@ commands:
         docs:
         - docs/swot-phylo.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --all-genomes:
         param: SnptypeParams.all_genomes
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_simple_typer_on_representatives_only
         observable: row count equals all genomes
       --mask:
         param: SnptypeParams.mask
@@ -1549,7 +1549,7 @@ commands:
         - docs/usage.md
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_gubbins_mask_changes_the_core_alignment
         observable: masked alignment differs from unmasked
       --threads:
         aliases:
@@ -1561,7 +1561,7 @@ commands:
         docs:
         - docs/verification.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
       --tool-arg:
         param: SnptypeParams.extra
         value: k=21
@@ -1571,13 +1571,13 @@ commands:
         - docs/adding-tools.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_ska2_typer_and_tool_arg
       --allow-incomplete:
         param: SnptypeParams.allow_incomplete
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_snptype_allow_incomplete
   status:
     dispatch: query
     base_args:
@@ -1619,7 +1619,7 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
         observable: internal node names carry the prefix
       --root-name:
         aliases:
@@ -1629,13 +1629,13 @@ commands:
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --remove-outgroup:
         param: Tree2taxParams.remove_outgroup
         validated: none
         docs: []
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --include-dereplicated:
         secondary:
         - --no-include-dereplicated
@@ -1656,7 +1656,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
       --collapse-length:
         param: Tree2taxParams.collapse_length
         value: '0.01'
@@ -1666,7 +1666,7 @@ commands:
         - docs/swot-phylo.md
         - docs/usage.md
         nextflow: null
-        live: 'todo: PR-G'
+        live: tests/live/test_species_set.py::test_tree2tax_workdir_flags
   tree2tax-relations:
     dispatch: step:repgenr.stages.tree2tax.tree2tax_relations
     base_args:

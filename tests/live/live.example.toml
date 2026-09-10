@@ -7,7 +7,11 @@ cache_dir = "/Volumes/sekvens2/repgenr/live-cache"
 # Directories prepended to PATH for every repgenr subprocess, keyed by the
 # tool they provide. Tools already on PATH (the environment pytest runs in)
 # need no entry.
+# Order matters: the first entry ends up first on PATH. Put an environment
+# with modern samtools/bcftools/minimap2 first when another one (or the
+# base environment) carries a legacy 0.1.x samtools that shadows them.
 [bin_dirs]
+snptools = "~/miniforge3/envs/repgenr_snptools/bin"
 ska = "~/miniforge3/envs/repgenr_ska/bin"
 parsnp = "~/miniforge3/envs/repgenr_parsnp/bin"
 gubbins = "~/miniforge3/envs/repgenr_gubbins/bin"

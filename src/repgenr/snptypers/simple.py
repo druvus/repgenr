@@ -110,7 +110,10 @@ def _call_one(genome: Path, ref: Path, work: Path, params: SnpParams, logger) ->
     tool(["samtools", "sort", "-o", bam, sam], log_prefix="samtools")
     tool(["samtools", "index", bam], log_prefix="samtools")
     tool(["bcftools", "mpileup", "-f", ref, "-o", pileup, bam], log_prefix=log)
-    tool(["bcftools", "call", "-mv", "-Ov", "-o", calls, pileup], log_prefix=log)
+    # Haploid calling: the diploid default emits heterozygous genotypes on
+    # bacterial genomes, which `bcftools consensus` renders as IUPAC codes
+    # that Gubbins (and most alignment tools) reject.
+    tool(["bcftools", "call", "-mv", "--ploidy", "1", "-Ov", "-o", calls, pileup], log_prefix=log)
     tool(["bcftools", "view", "-v", "snps", "-Oz", "-o", snps, calls], log_prefix=log)
     tool(["bcftools", "index", snps], log_prefix=log)
     tool(["bcftools", "consensus", "-f", ref, "-o", cons, snps], log_prefix=log)

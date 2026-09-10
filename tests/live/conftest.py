@@ -246,3 +246,95 @@ def ingested_workdir(tmp_path: Path, run_repgenr: RunRepgenr) -> Callable[..., P
         return wd
 
     return _ingest
+
+
+# --- cached reference sets (network) ------------------------------------------
+# Built once per machine under the cache directory; see tests/live/README.md.
+
+GTDB_RELEASE = "232.0"
+GENUS_OUTGROUP = (
+    "GCF_003574425.1"  # Caedibacter halobius, the GTDB API's pick for genus Francisella
+)
+PHILOMIRAGIA_REP = "GCF_000156715.1"  # Francisella philomiragia representative
+
+
+@pytest.fixture(scope="session")
+def genus_cache(cached_workdir) -> Path:
+    return cached_workdir(
+        "francisella_genus_api",
+        [
+            ["metadata", "-d", "rep", "-l", "genus", "-tg", "Francisella", "--source", "api"],
+            ["genome"],
+        ],
+        "genome",
+    )
+
+
+@pytest.fixture(scope="session")
+def species_cache(cached_workdir) -> Path:
+    return cached_workdir(
+        "francisella_tularensis_api10",
+        [
+            [
+                "metadata",
+                "-d",
+                "all",
+                "-l",
+                "species",
+                "-tg",
+                "Francisella",
+                "-ts",
+                "tularensis",
+                "--source",
+                "api",
+                "--limit",
+                "10",
+                "--outgroup-accession",
+                PHILOMIRAGIA_REP,
+            ],
+            ["genome"],
+        ],
+        "genome",
+    )
+
+
+@pytest.fixture(scope="session")
+def tsv_cache(cached_workdir) -> Path:
+    return cached_workdir(
+        f"francisella_genus_tsv_r{GTDB_RELEASE}",
+        [
+            [
+                "metadata",
+                "-d",
+                "rep",
+                "-l",
+                "genus",
+                "-tg",
+                "Francisella",
+                "--source",
+                "tsv",
+                "-r",
+                GTDB_RELEASE,
+                "--gtdb-version",
+                "bac120",
+            ]
+        ],
+        "metadata",
+    )
+
+
+@pytest.fixture(scope="session")
+def viral_cache(cached_workdir) -> Path:
+    return cached_workdir(
+        "hepatovirus_ncbi_virus",
+        [["vmetadata", "-t", "hepatovirus", "--complete-only"], ["vgenome", "-tg", "Hepatovirus"]],
+        "vgenome",
+    )
+
+
+@pytest.fixture
+def copy_of(tmp_path: Path):
+    def _copy(cache: Path) -> Path:
+        return copy_workdir(cache, tmp_path / "wd")
+
+    return _copy

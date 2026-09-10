@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 197 flags (144 with a live test or an n/a reason, 53 pending).
+22 commands, 197 flags (164 with a live test or an n/a reason, 33 pending).
 
 ## Global flags
 
@@ -76,8 +76,8 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_chunk`
 | `--threads` | -t | ChunkParams.threads | range | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions | docs/verification.md |
 | `--virus` |  | ChunkParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
 | `--tool-arg` |  | ChunkParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | ChunkParams.selection_tsv | none | todo: PR-G |  |
-| `--keeper` |  | ChunkParams.keeper | choice | todo: PR-G | README.md, docs/swot-derep.md, docs/usage.md |
+| `--selection-tsv` |  | ChunkParams.selection_tsv | none | todo: PR-H |  |
+| `--keeper` |  | ChunkParams.keeper | choice | todo: PR-H | README.md, docs/swot-derep.md, docs/usage.md |
 | `--versions-out` |  | ChunkParams.versions_out | none | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions |  |
 
 ## dereplicate-merge
@@ -96,8 +96,8 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_merge`
 | `--threads` | -t | MergeParams.threads | range | tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition | docs/verification.md |
 | `--virus` |  | MergeParams.extra | none | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | README.md, docs/adding-tools.md, docs/swot-derep.md, docs/verification.md |
 | `--tool-arg` |  | MergeParams.extra | callback | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/adding-tools.md, docs/usage.md |
-| `--selection-tsv` |  | MergeParams.selection_tsv | none | todo: PR-G |  |
-| `--keeper` |  | MergeParams.keeper | choice | todo: PR-G | README.md, docs/swot-derep.md, docs/usage.md |
+| `--selection-tsv` |  | MergeParams.selection_tsv | none | todo: PR-H |  |
+| `--keeper` |  | MergeParams.keeper | choice | todo: PR-H | README.md, docs/swot-derep.md, docs/usage.md |
 | `--versions-out` |  | MergeParams.versions_out | none | tests/live/test_steps.py::test_merge_by_chunk_fofn |  |
 
 ## doctor
@@ -188,17 +188,17 @@ dispatch: `stage`
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
 | `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_treebuilders_offline.py::test_alignment_free_builder_on_representatives | README.md, docs/containers.md, docs/usage.md |
-| `--msa-source` |  | PhyloParams.msa_source | choice | todo: PR-G | README.md, docs/usage.md |
+| `--msa-source` |  | PhyloParams.msa_source | choice | tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup | README.md, docs/usage.md |
 | `--aligner` |  | PhyloParams.aligner | registry | todo: PR-H | README.md, docs/containers.md |
-| `--snptyper` |  | PhyloParams.snptyper | registry | todo: PR-G |  |
+| `--snptyper` |  | PhyloParams.snptyper | registry | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete |  |
 | `--all-genomes` |  | PhyloParams.all_genomes | none | tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree |  |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree |  |
-| `--bootstrap` | -B | PhyloParams.bootstrap | range | todo: PR-G | docs/usage.md |
-| `--reference` |  | PhyloParams.reference | none | todo: PR-G | docs/swot-phylo.md |
+| `--bootstrap` | -B | PhyloParams.bootstrap | range | tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup | docs/usage.md |
+| `--reference` |  | PhyloParams.reference | none | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete | docs/swot-phylo.md |
 | `--aligner-arg` |  | PhyloParams.extra | callback | todo: PR-H | docs/adding-tools.md |
 | `--threads` | -t | PhyloParams.threads | range | todo: PR-G | docs/verification.md |
-| `--mask` |  | PhyloParams.extra | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
-| `--allow-incomplete` |  | PhyloParams.allow_incomplete | none | todo: PR-G |  |
+| `--mask` |  | PhyloParams.extra | registry | tests/live/test_species_set.py::test_phylo_mask_gubbins | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
+| `--allow-incomplete` |  | PhyloParams.allow_incomplete | none | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete |  |
 
 ## phylo-build
 
@@ -247,9 +247,9 @@ dispatch: `stage`
 | `--aligned-fraction` |  | DereplicateParams.aligned_fraction | unit_interval | tests/live/test_network.py::test_run_bacterial_chain_end_to_end |  |
 | `--keeper` |  | DereplicateParams.keeper | choice | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/swot-derep.md, docs/usage.md |
 | `--treebuilder` |  | PhyloParams.treebuilder | registry | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/containers.md, docs/usage.md |
-| `--msa-source` |  | PhyloParams.msa_source | choice | todo: PR-F | README.md, docs/usage.md |
+| `--msa-source` |  | PhyloParams.msa_source | choice | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) | README.md, docs/usage.md |
 | `--aligner` |  | PhyloParams.aligner | registry | todo: PR-F | README.md, docs/containers.md |
-| `--snptyper` |  | PhyloParams.snptyper | registry | todo: PR-F |  |
+| `--snptyper` |  | PhyloParams.snptyper | registry | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) |  |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | tests/live/test_network.py::test_run_viral_chain_end_to_end |  |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/usage.md |
 | `--threads` |  | DereplicateParams.threads | range | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/verification.md |
@@ -261,14 +261,14 @@ dispatch: `stage`
 
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
-| `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--tool` |  | SnptypeParams.tool | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
-| `--reference` |  | SnptypeParams.reference | none | todo: PR-G | docs/swot-phylo.md |
-| `--all-genomes` |  | SnptypeParams.all_genomes | none | todo: PR-G |  |
-| `--mask` |  | SnptypeParams.mask | registry | todo: PR-G | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
-| `--threads` | -t | SnptypeParams.threads | range | todo: PR-G | docs/verification.md |
-| `--tool-arg` |  | SnptypeParams.extra | callback | todo: PR-G | docs/adding-tools.md, docs/usage.md |
-| `--allow-incomplete` |  | SnptypeParams.allow_incomplete | none | todo: PR-G |  |
+| `--workdir` | -wd | workdir | stage | tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference | docs/containers.md, docs/output.md |
+| `--tool` |  | SnptypeParams.tool | registry | tests/live/test_species_set.py::test_parsnp_typer | README.md, docs/adding-tools.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/verification.md |
+| `--reference` |  | SnptypeParams.reference | none | tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference | docs/swot-phylo.md |
+| `--all-genomes` |  | SnptypeParams.all_genomes | none | tests/live/test_species_set.py::test_simple_typer_on_representatives_only |  |
+| `--mask` |  | SnptypeParams.mask | registry | tests/live/test_species_set.py::test_gubbins_mask_changes_the_core_alignment | README.md, docs/adding-tools.md, docs/output.md, docs/usage.md, docs/verification.md |
+| `--threads` | -t | SnptypeParams.threads | range | tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference | docs/verification.md |
+| `--tool-arg` |  | SnptypeParams.extra | callback | tests/live/test_species_set.py::test_ska2_typer_and_tool_arg | docs/adding-tools.md, docs/usage.md |
+| `--allow-incomplete` |  | SnptypeParams.allow_incomplete | none | tests/live/test_species_set.py::test_snptype_allow_incomplete |  |
 
 ## status
 
@@ -285,12 +285,12 @@ dispatch: `stage`
 | flag | aliases | param | validated | live | docs |
 |---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/containers.md, docs/output.md |
-| `--node-basename` |  | Tree2taxParams.node_basename | none | todo: PR-G |  |
-| `--root-name` | -r | Tree2taxParams.root_name | none | todo: PR-G |  |
-| `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | todo: PR-G |  |
+| `--node-basename` |  | Tree2taxParams.node_basename | none | tests/live/test_species_set.py::test_tree2tax_workdir_flags |  |
+| `--root-name` | -r | Tree2taxParams.root_name | none | tests/live/test_species_set.py::test_tree2tax_workdir_flags |  |
+| `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | tests/live/test_species_set.py::test_tree2tax_workdir_flags |  |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | README.md, docs/usage.md |
-| `--collapse-support` |  | Tree2taxParams.collapse_support | range | todo: PR-G | docs/swot-phylo.md, docs/usage.md |
-| `--collapse-length` |  | Tree2taxParams.collapse_length | range | todo: PR-G | docs/swot-phylo.md, docs/usage.md |
+| `--collapse-support` |  | Tree2taxParams.collapse_support | range | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/swot-phylo.md, docs/usage.md |
+| `--collapse-length` |  | Tree2taxParams.collapse_length | range | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/swot-phylo.md, docs/usage.md |
 
 ## tree2tax-relations
 
