@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
@@ -50,6 +51,10 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
             _delete(run_path)
         case _:
             raise UserInputError(f"Unknown action '{params.action}'")
+    ctx.config.record_stage(
+        "derep_stock", params=asdict(params), completed=datetime.now(UTC).isoformat()
+    )
+    ctx.save_config()
 
 
 def _list(store: Path, logger) -> None:

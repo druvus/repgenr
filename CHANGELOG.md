@@ -86,6 +86,11 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- `glance`, `derep-unpack` and `derep-stock` (pack, unpack, delete) record
+  a stage like every other command (D-7): `status` lists them under the
+  optional stages, `doctor` sees them, and an identical repeat skips on
+  the resume records (genomes and clusters are digested as inputs).
+  `derep-stock --action list` stays a query and records nothing.
 - `vmetadata --filter` is a BV-BRC option (D-4): it has no default on the
   command line, BV-BRC applies "complete genome" when it is unset, and
   passing it with the NCBI Virus source is an error that points at
