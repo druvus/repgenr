@@ -54,6 +54,11 @@ class IqtreeBuilder(TreeBuilder):
             str(params.threads),
             "-s",
             work_msa,
+            # Every alignment this pipeline produces is nucleotide. Left to
+            # guess, IQ-TREE refuses a recombination-masked alignment, where
+            # a fifth of the characters can be N ("Unknown sequence type").
+            "-st",
+            "DNA",
             "-redo",  # overwrite checkpoints from a previous run at this path
         ]
         if params.outgroup:
