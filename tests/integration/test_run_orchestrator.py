@@ -53,7 +53,7 @@ def test_run_viral_chain(monkeypatch, tmp_path) -> None:
             "-wd",
             str(tmp_path),
             "--viral",
-            "-t",
+            "--target",
             "mastadenovirus",
             "-tg",
             "Mastadenovirus",

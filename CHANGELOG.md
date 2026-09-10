@@ -83,6 +83,13 @@ All notable changes to RepGenR are documented here. The format follows
   never collapse. Provenance records the thresholds and the collapsed count.
 
 ### Changed
+- Short options mean one thing everywhere (D-2): `-t` is `--threads` on
+  every command that has threads, including `run`; `--target` on
+  `vmetadata` and `run`, `--filter` and `--list` on `vmetadata`, and
+  `--root-name` on `tree2tax` and `tree2tax-relations` have no short form
+  any more (`-t`, `-f`, `-l` and `-r` used to collide with `--threads`,
+  `--force`, `--level` and `--release`). Nextflow's `vmetadata_args`
+  default and the run id derivation use `--target`.
 - `tree2tax-relations --include-dereplicated` is on by default, as on
   `tree2tax` and `run`; `--no-include-dereplicated` turns it off. The
   Nextflow `tree2tax_args` default is therefore empty (D-1).

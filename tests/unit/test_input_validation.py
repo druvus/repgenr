@@ -61,7 +61,7 @@ def test_length_deviation_negative_rejected(tmp_path) -> None:
 def test_released_after_malformed_rejected(tmp_path, raw) -> None:
     result = _runner.invoke(
         app,
-        ["vmetadata", "-wd", str(tmp_path), "-t", "coronavirus", "--released-after", raw],
+        ["vmetadata", "-wd", str(tmp_path), "--target", "coronavirus", "--released-after", raw],
     )
     assert result.exit_code == 2
     assert "MM/DD/YYYY" in _plain(result.output)

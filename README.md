@@ -142,7 +142,7 @@ repgenr vgenome   -wd $WD --target-genus Hepatovirus      # add --group-segments
 repgenr dereplicate -wd $WD --tool skder --virus
 repgenr phylo -wd $WD --treebuilder mashtree
 repgenr tree2tax -wd $WD --include-dereplicated
-# or: repgenr run -wd $WD --viral -t hepatovirus -tg Hepatovirus --treebuilder mashtree
+# or: repgenr run -wd $WD --viral --target hepatovirus -tg Hepatovirus --treebuilder mashtree
 ```
 
 ## Troubleshooting

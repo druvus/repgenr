@@ -31,11 +31,11 @@ def _validate_released_after(value: str | None) -> str | None:
 @app.command()
 def vmetadata(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
-    target: str | None = typer.Option(None, "-t", "--target", help="Virus taxon/group/family."),
+    target: str | None = typer.Option(None, "--target", help="Virus taxon/group/family."),
     source: str = typer.Option(
         "ncbi_virus", "--source", help="ncbi_virus (NCBI Virus via datasets) or bvbrc."
     ),
-    filter: str = typer.Option("complete genome", "-f", "--filter", help="BV-BRC header tag."),
+    filter: str = typer.Option("complete genome", "--filter", help="BV-BRC header tag."),
     host: str | None = typer.Option(None, "--host", help="ncbi_virus: restrict to a host species."),
     complete_only: bool = typer.Option(
         False, "--complete-only", help="ncbi_virus: only COMPLETE sequences."
@@ -46,7 +46,7 @@ def vmetadata(
         callback=_validate_released_after,
         help="ncbi_virus: MM/DD/YYYY.",
     ),
-    list_targets: bool = typer.Option(False, "-l", "--list", help="List BV-BRC targets and exit."),
+    list_targets: bool = typer.Option(False, "--list", help="List BV-BRC targets and exit."),
 ) -> None:
     """Retrieve viral metadata from NCBI Virus (default) or BV-BRC."""
     from .param_builders import vmetadata_params

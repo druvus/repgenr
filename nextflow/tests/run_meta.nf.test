@@ -42,7 +42,7 @@ nextflow_function {
             function {
                 """
                 input[0] = [mode: 'viral', metadata_args: '',
-                            vmetadata_args: '-t adenoviridae', vgenome_args: '-tg Mastadenovirus']
+                            vmetadata_args: '--target adenoviridae', vgenome_args: '-tg Mastadenovirus']
                 """
             }
         }

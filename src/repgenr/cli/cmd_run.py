@@ -125,7 +125,7 @@ def run(
         None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
     ),
     # --- selection: viral (NCBI Virus) ---
-    target: str | None = typer.Option(None, "-t", "--target", help="Virus taxon (viral)."),
+    target: str | None = typer.Option(None, "--target", help="Virus taxon (viral)."),
     viral_source: str = typer.Option("ncbi_virus", "--viral-source", help="ncbi_virus or bvbrc."),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- dereplication ---
@@ -152,7 +152,7 @@ def run(
         help="List redundant genomes under their representative in tree2tax.",
     ),
     # --- common ---
-    threads: int = typer.Option(DEFAULT_THREADS, "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the stages and key parameters, then exit."
     ),

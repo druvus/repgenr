@@ -238,7 +238,7 @@ dispatch: `stage`
 | `--gtdb-version` |  | MetadataParams.version | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to metadata unchanged (wiring test); the TSV path is exercised on metadata in test_network.py | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--metadata-source` |  | MetadataParams.source | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup-accession` |  | MetadataParams.outgroup_accession | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
-| `--target` | -t | VmetadataParams.target | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target` |  | VmetadataParams.target | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--viral-source` |  | VmetadataParams.source | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--group-segments` |  | VgenomeParams.group_segments | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to vgenome unchanged (wiring test); covered on vgenome in test_vgenome_selection_flags | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--tool` |  | DereplicateParams.tool | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | README.md, docs/adding-tools.md, docs/cli-reference.md, docs/containers.md, docs/swot-derep.md, docs/swot-phylo.md, docs/swot-viral.md, docs/usage.md, docs/audit/cli-matrix.md |
@@ -252,7 +252,7 @@ dispatch: `stage`
 | `--snptyper` |  | PhyloParams.snptyper | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
-| `--threads` |  | DereplicateParams.threads | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--threads` | -t | DereplicateParams.threads | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--dry-run` |  | n/a: prints the chain and exits before any stage | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## snptype
@@ -286,7 +286,7 @@ dispatch: `stage`
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/cli-reference.md, docs/containers.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--node-basename` |  | Tree2taxParams.node_basename | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
-| `--root-name` | -r | Tree2taxParams.root_name | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root-name` |  | Tree2taxParams.root_name | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--collapse-support` |  | Tree2taxParams.collapse_support | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_tree2tax_workdir_flags | docs/cli-reference.md, docs/swot-phylo.md, docs/usage.md, docs/audit/cli-matrix.md |
@@ -304,7 +304,7 @@ dispatch: `step:repgenr.stages.tree2tax.tree2tax_relations`
 | `--outgroup-dir` |  | Tree2taxStepParams.outgroup_dir | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup-accession` |  | Tree2taxStepParams.outgroup_accession | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--node-basename` |  | Tree2taxStepParams.node_basename | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
-| `--root-name` | -r | Tree2taxStepParams.root_name | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root-name` |  | Tree2taxStepParams.root_name | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--remove-outgroup` |  | Tree2taxStepParams.remove_outgroup | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxStepParams.include_dereplicated | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | Tree2taxStepParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
@@ -352,17 +352,13 @@ dispatch: `stage`
 | flag | aliases | param | validated | nextflow | live | docs |
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | module: fixed by the process script | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/cli-reference.md, docs/containers.md, docs/output.md, docs/audit/cli-matrix.md |
-| `--target` | -t | VmetadataParams.target | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target` |  | VmetadataParams.target | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--source` |  | VmetadataParams.source | choice | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | README.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
-| `--filter` | -f | VmetadataParams.filter | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--filter` |  | VmetadataParams.filter | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--host` |  | VmetadataParams.host | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--complete-only` |  | VmetadataParams.complete_only | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--released-after` |  | VmetadataParams.released_after | callback | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set | docs/cli-reference.md, docs/audit/cli-matrix.md |
-| `--list` | -l | VmetadataParams.list_targets | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--list` |  | VmetadataParams.list_targets | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## Short-alias collisions
 
-- `-t`: `--target`, `--threads`
-- `-r`: `--release`, `--root-name`
-- `-l`: `--level`, `--list`
-- `-f`: `--filter`, `--force`

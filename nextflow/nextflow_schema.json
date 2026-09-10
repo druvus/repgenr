@@ -41,7 +41,7 @@
                 },
                 "vmetadata_args": {
                     "type": "string",
-                    "default": "-t adenoviridae",
+                    "default": "--target adenoviridae",
                     "description": "Arguments for the viral metadata stage (NCBI Virus by default, BV-BRC via --source bvbrc). Reaches the process as task.ext.args; a site config can override it with withName.",
                     "fa_icon": "fas fa-table"
                 },

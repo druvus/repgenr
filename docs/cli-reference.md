@@ -243,7 +243,7 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--gtdb-version` |  | bac120/ar53. |
 | `--metadata-source` | `tsv` | tsv or api. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `-t`, `--target` |  | Virus taxon (viral). |
+| `--target` |  | Virus taxon (viral). |
 | `--viral-source` | `ncbi_virus` | ncbi_virus or bvbrc. |
 | `--group-segments` | off | Group viral segments. |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
@@ -257,7 +257,7 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
-| `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--dry-run` | off | Print the stages and key parameters, then exit. |
 
 ## snptype
@@ -291,7 +291,7 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 | `--node-basename` |  | Prefix for nodes. |
-| `-r`, `--root-name` | `root` | Name for the root node. |
+| `--root-name` | `root` | Name for the root node. |
 | `--remove-outgroup` | off | Drop outgroup. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
@@ -309,7 +309,7 @@ Emit FlexTaxD relations from a tree (stateless data-channel step).
 | `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
 | `--outgroup-accession` |  | File naming the outgroup accession. |
 | `--node-basename` |  | Prefix for nodes. |
-| `-r`, `--root-name` | `root` | Name for the root node. |
+| `--root-name` | `root` | Name for the root node. |
 | `--remove-outgroup` | off | Drop outgroup. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
@@ -360,10 +360,10 @@ Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `-t`, `--target` |  | Virus taxon/group/family. |
+| `--target` |  | Virus taxon/group/family. |
 | `--source` | `ncbi_virus` | ncbi_virus (NCBI Virus via datasets) or bvbrc. |
-| `-f`, `--filter` | `complete genome` | BV-BRC header tag. |
+| `--filter` | `complete genome` | BV-BRC header tag. |
 | `--host` |  | ncbi_virus: restrict to a host species. |
 | `--complete-only` | off | ncbi_virus: only COMPLETE sequences. |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY. |
-| `-l`, `--list` | off | List BV-BRC targets and exit. |
+| `--list` | off | List BV-BRC targets and exit. |

@@ -163,7 +163,7 @@ def test_phylo_build_and_tree2tax_relations_with_outgroup(
         "--remove-outgroup",
         "--node-basename",
         "N",
-        "-r",
+        "--root-name",
         "top",
         "--versions-out",
         rel / "versions.yml",
