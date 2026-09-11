@@ -281,3 +281,56 @@ def test_container_workdir_defaults_to_the_host_cwd(tmp_path, monkeypatch) -> No
     )
     assert cmd[cmd.index("-w") + 1] == str(task.resolve()) or cmd[cmd.index("-w") + 1] == str(task)
     assert any(x.startswith(f"{task}:") or x.startswith(f"{task.resolve()}:") for x in cmd)
+
+
+def test_run_chain_runs_one_container_for_the_whole_sequence(tmp_path, monkeypatch, caplog):
+    """Containerized, a per-genome chain is one engine invocation, not one per tool."""
+    import logging
+
+    from repgenr.core import containers as mod
+
+    runs: list[list[str]] = []
+    monkeypatch.setattr(mod.process, "run", lambda cmd, **kw: runs.append([str(c) for c in cmd]))
+    monkeypatch.setattr(mod, "resolve_image", lambda caps, config=None: "example/image:1")
+    mod.configure_container(backend="docker")
+    try:
+        caps = ToolCapabilities(name="chained", container="example/image:1")
+        with caplog.at_level(logging.INFO):
+            mod.run_chain(
+                caps,
+                [
+                    ("minimap2", ["minimap2", "-o", tmp_path / "a.sam", tmp_path / "ref.fa"]),
+                    ("samtools", ["samtools", "sort", "-o", tmp_path / "a.bam"]),
+                ],
+                logger=logging.getLogger("t"),
+            )
+    finally:
+        mod.configure_container(backend="none")
+
+    assert len(runs) == 1, "one container for the chain"
+    script = runs[0][-1]
+    assert runs[0][-2] == "-c" and runs[0][-3] == "sh"
+    assert script.startswith("set -e\n"), "the chain stops at the first failure"
+    assert "minimap2" in script and "samtools sort" in script
+    assert str(tmp_path) in " ".join(runs[0][:-1]), "the paths in the script are mounted"
+    assert "[minimap2] $" in caplog.text and "[samtools] $" in caplog.text
+
+
+def test_run_chain_on_the_host_runs_each_command_itself(tmp_path, monkeypatch):
+    """Without a container the chain is just a loop, keeping per-tool logging."""
+    import logging
+
+    from repgenr.core import containers as mod
+
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        mod,
+        "run_tool",
+        lambda caps, cmd, **kw: calls.append((kw.get("log_prefix"), [str(c) for c in cmd])),
+    )
+    mod.run_chain(
+        ToolCapabilities(name="plain"),
+        [("one", ["echo", "1"]), ("two", ["echo", "2"])],
+        logger=logging.getLogger("t"),
+    )
+    assert [prefix for prefix, _ in calls] == ["one", "two"]

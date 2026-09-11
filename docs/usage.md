@@ -270,7 +270,9 @@ concurrent genomes first and threads inside one genome's chain only when there
 are more threads than genomes. Its per-genome intermediates are written
 compressed and removed as soon as that genome's consensus has been read, so
 scratch stays at a few hundred megabytes whatever the genome count. A genome
-whose chain fails keeps its intermediates for inspection.
+whose chain fails keeps its intermediates for inspection. Under a container
+backend each genome's chain of tools runs in a single container, so a genome
+costs one engine start rather than eight.
 
 `--tool ska2` (split k-mer analysis) is reference-free: every genome is an
 ordinary sample, so no assembly's private errors bias the SNP distances, and

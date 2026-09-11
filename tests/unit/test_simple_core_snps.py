@@ -74,7 +74,11 @@ def test_per_genome_chain_is_threaded_and_clears_its_scratch(tmp_path: Path, mon
         elif out is not None:
             Path(out).write_text("", encoding="utf-8")
 
-    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    def fake_run_chain(caps, steps, *, logger, **kwargs):
+        for prefix, command in steps:
+            fake_run_tool(caps, command, log_prefix=prefix)
+
+    monkeypatch.setattr(mod, "run_chain", fake_run_chain)
     work = tmp_path / "per_genome"
     work.mkdir()
     ref = tmp_path / "reference.fasta"
@@ -94,3 +98,36 @@ def test_per_genome_chain_is_threaded_and_clears_its_scratch(tmp_path: Path, mon
     pileup = [c for c in calls if c[:2] == ["bcftools", "mpileup"]][0]
     assert "-Ob" in pileup, "the pileup is written compressed"
     assert list(work.iterdir()) == [], "nothing is left behind once the consensus is read"
+
+
+def test_columns_are_found_across_block_boundaries(tmp_path: Path, monkeypatch) -> None:
+    """The scan reads the alignment in column blocks; a site must not fall between two."""
+    from repgenr.snptypers import simple as mod
+
+    monkeypatch.setattr(mod, "_COLUMN_BLOCK", 4)
+    consensuses = {
+        "ref": "AAAAAAAAAAAA",
+        "s1": "AAATAAAATAAA",  # last column of block 1, first of block 3
+    }
+    n = mod._write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
+    assert n == 2
+    assert _read_fasta(tmp_path / "core.fasta")["s1"] == "TT"
+    assert (tmp_path / "dist.tsv").read_text().splitlines()[1].split("\t")[1:] == ["0", "2"]
+
+
+def test_ambiguous_and_gap_characters_count_as_differences(tmp_path: Path) -> None:
+    """An N or a gap against a base is a difference, as it was before."""
+    from repgenr.snptypers.simple import _write_core_snps
+
+    consensuses = {"ref": "ACGT", "s1": "ANGT", "s2": "A-GT"}
+    n = _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
+    assert n == 1
+    assert _read_fasta(tmp_path / "core.fasta") == {"ref": "C", "s1": "N", "s2": "-"}
+
+
+def test_ragged_consensuses_are_truncated_to_the_shortest(tmp_path: Path) -> None:
+    from repgenr.snptypers.simple import _write_core_snps
+
+    consensuses = {"ref": "ACGTACGT", "s1": "ACGA", "s2": "ACGT"}
+    n = _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
+    assert n == 1, "only the columns every genome has are compared"

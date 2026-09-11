@@ -80,7 +80,7 @@ def _make_fake_run_tool(recorded: list[list[str]]):
             if cmd[1] == "sort":
                 _write(Path(_flag_value(cmd, "-o")), "")
         elif tool == "minimap2":
-            _write(Path(stdout_path), "@SQ\n")
+            _write(Path(_flag_value(cmd, "-o") if "-o" in cmd else stdout_path), "@SQ\n")
         elif tool == "bcftools":
             if cmd[1] == "consensus":
                 out = Path(_flag_value(cmd, "-o"))
@@ -127,14 +127,26 @@ def _make_fake_run_tool(recorded: list[list[str]]):
     return fake_run_tool
 
 
+def _make_fake_run_chain(fake_run_tool):
+    """Adapters that run a chain of commands as one unit (the simple typer)."""
+
+    def fake_run_chain(caps, steps, *, logger, **kwargs):
+        for prefix, command in steps:
+            fake_run_tool(caps, command, logger=logger, log_prefix=prefix)
+
+    return fake_run_chain
+
+
 @pytest.fixture()
 def recorded(monkeypatch) -> list[list[str]]:
     calls: list[list[str]] = []
     fake = _make_fake_run_tool(calls)
+    fake_chain = _make_fake_run_chain(fake)
     for reg in (snp_registry, align_registry):
         for name in reg.names():
             module = sys.modules[reg.get(name).__module__]
             monkeypatch.setattr(module, "run_tool", fake, raising=False)
+            monkeypatch.setattr(module, "run_chain", fake_chain, raising=False)
     import repgenr.converters.hal_to_maf as h2m
     import repgenr.maskers.gubbins as gubbins
 

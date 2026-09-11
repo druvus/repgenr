@@ -136,9 +136,17 @@ own package's metadata. Programmatic registration (tests, embedders) goes
 through the public API: `registry.register("mytool", MyDereplicator)` /
 `registry.unregister("mytool")`, or the `register_tool` pytest fixture.
 
+When one unit of work is several commands in a row, such as a per-genome
+mapping and calling chain, `run_chain(self.capabilities, [(prefix, argv), ...],
+logger=logger)` runs them in order. On the host that is a loop over `run_tool`;
+under a container backend the whole sequence runs in one container, which
+matters when a chain is half a dozen commands and every start costs time.
+Steps are plain argument vectors, so a tool that writes to stdout needs an
+output flag, and paths must be absolute to be mounted.
+
 ## 3. Test it
 
-Unit-test by patching your adapter module's `run_tool` to assert the exact
+Unit-test by patching your adapter module's `run_tool` (or `run_chain`) to assert the exact
 argument vector and to drop canned tool output, then assert the returned
 dataclass. For an in-tree adapter, add the tool to the parametrized contract
 suite (`tests/unit/test_adapter_contracts.py` /
