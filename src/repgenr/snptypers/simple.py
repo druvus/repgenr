@@ -20,8 +20,11 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
+import numpy.typing as npt
+
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool
+from ..core.containers import run_chain, run_tool
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
@@ -138,41 +141,50 @@ def _call_one(genome: Path, ref: Path, work: Path, threads: int, params: SnpPara
 
     nt = str(threads)
     log = "bcftools"
-    caps = _CAPABILITIES
 
-    def tool(cmd, **kw):
-        run_tool(caps, cmd, logger=logger, **kw)
-
-    tool(
-        ["minimap2", "-a", "-t", nt, ref, genome.resolve()],
-        log_prefix="minimap2",
-        stdout_path=sam,
+    # One unit of work: these run in order, and in a single container when one
+    # is in use. minimap2 writes with -o rather than to stdout so that every
+    # step is a plain argument vector.
+    run_chain(
+        _CAPABILITIES,
+        [
+            ("minimap2", ["minimap2", "-a", "-t", nt, "-o", sam, ref, genome.resolve()]),
+            ("samtools", ["samtools", "sort", "-@", nt, "-o", bam, sam]),
+            ("samtools", ["samtools", "index", "-@", nt, bam]),
+            (
+                "bcftools",
+                ["bcftools", "mpileup", "--threads", nt, "-Ob", "-f", ref, "-o", pileup, bam],
+            ),
+            # Haploid calling: the diploid default emits heterozygous genotypes
+            # on bacterial genomes, which `bcftools consensus` renders as IUPAC
+            # codes that Gubbins (and most alignment tools) reject.
+            (
+                log,
+                [
+                    "bcftools",
+                    "call",
+                    "--threads",
+                    nt,
+                    "-mv",
+                    "--ploidy",
+                    "1",
+                    "-Ob",
+                    "-o",
+                    calls,
+                    pileup,
+                ],
+            ),
+            (log, ["bcftools", "view", "--threads", nt, "-v", "snps", "-Oz", "-o", snps, calls]),
+            (log, ["bcftools", "index", snps]),
+            (log, ["bcftools", "consensus", "-f", ref, "-o", cons, snps]),
+        ],
+        logger=logger,
+        extra_mounts=[genome.resolve().parent, work, ref.parent],
     )
-    tool(["samtools", "sort", "-@", nt, "-o", bam, sam], log_prefix="samtools")
-    sam.unlink(missing_ok=True)
-    tool(["samtools", "index", "-@", nt, bam], log_prefix="samtools")
-    tool(
-        ["bcftools", "mpileup", "--threads", nt, "-Ob", "-f", ref, "-o", pileup, bam],
-        log_prefix=log,
-    )
-    # Haploid calling: the diploid default emits heterozygous genotypes on
-    # bacterial genomes, which `bcftools consensus` renders as IUPAC codes
-    # that Gubbins (and most alignment tools) reject.
-    tool(
-        ["bcftools", "call", "--threads", nt, "-mv", "--ploidy", "1", "-Ob", "-o", calls, pileup],
-        log_prefix=log,
-    )
-    pileup.unlink(missing_ok=True)
-    tool(
-        ["bcftools", "view", "--threads", nt, "-v", "snps", "-Oz", "-o", snps, calls],
-        log_prefix=log,
-    )
-    tool(["bcftools", "index", snps], log_prefix=log)
-    tool(["bcftools", "consensus", "-f", ref, "-o", cons, snps], log_prefix=log)
     consensus = _concat_fasta(cons)
     # The consensus is in memory now; nothing downstream reads this genome's
     # intermediates. Keep them on failure, where they are the evidence.
-    for leftover in (bam, Path(f"{bam}.bai"), calls, snps, Path(f"{snps}.csi"), cons):
+    for leftover in (sam, bam, Path(f"{bam}.bai"), pileup, calls, snps, Path(f"{snps}.csi"), cons):
         leftover.unlink(missing_ok=True)
     return consensus
 
@@ -185,27 +197,53 @@ def _concat_fasta(path: Path) -> str:
     return "".join(parts)
 
 
+# Columns per pass when reducing the stacked consensuses. One block of every
+# genome is held as bytes at a time, so peak memory follows the genome count
+# rather than the reference length.
+_COLUMN_BLOCK = 1 << 20
+
+
+def _core_columns(seqs: list[str], length: int) -> npt.NDArray[np.uint8]:
+    """Stack the variable columns of ``seqs`` as a (genomes x sites) byte array.
+
+    A column is variable when any genome differs from the first, which is what
+    comparing every pair in the column amounts to. Characters are compared as
+    bytes, so an N or a gap counts as a difference exactly as before.
+    """
+    kept: list[npt.NDArray[np.uint8]] = []
+    for start in range(0, length, _COLUMN_BLOCK):
+        end = min(start + _COLUMN_BLOCK, length)
+        block = np.frombuffer(
+            b"".join(s[start:end].encode("ascii", "replace") for s in seqs), dtype=np.uint8
+        ).reshape(len(seqs), end - start)
+        varying = (block != block[0]).any(axis=0)
+        if varying.any():
+            kept.append(block[:, varying])
+    if not kept:
+        return np.empty((len(seqs), 0), dtype=np.uint8)
+    return np.concatenate(kept, axis=1)
+
+
 def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: Path) -> int:
     names = list(consensuses)
     seqs = [consensuses[n] for n in names]
     length = min(len(s) for s in seqs) if seqs else 0
 
-    variable_cols = [col for col in range(length) if len({s[col] for s in seqs}) > 1]
+    core = _core_columns(seqs, length)
+    n_sites = int(core.shape[1])
     with open(core_fasta, "w", encoding="utf-8") as fo:
-        for name, seq in zip(names, seqs, strict=True):
-            snp_seq = "".join(seq[c] for c in variable_cols)
+        for name, row in zip(names, core, strict=True):
+            snp_seq = row.tobytes().decode("ascii")
             fo.write(f">{name}\n")
-            for pos in range(0, len(snp_seq), 80):
+            for pos in range(0, n_sites, 80):
                 fo.write(snp_seq[pos : pos + 80] + "\n")
 
-    # pairwise SNP distance matrix
-    snp_rows = {name: "".join(seqs[i][c] for c in variable_cols) for i, name in enumerate(names)}
+    # Pairwise SNP distances over those columns. Each row is compared against
+    # the whole matrix at once; the work is still quadratic in genomes, but
+    # each pair costs a vector comparison instead of a Python loop.
     with open(snp_matrix, "w", encoding="utf-8") as fo:
         fo.write("\t" + "\t".join(names) + "\n")
-        for a in names:
-            dists = [
-                str(sum(1 for x, y in zip(snp_rows[a], snp_rows[b], strict=True) if x != y))
-                for b in names
-            ]
-            fo.write(a + "\t" + "\t".join(dists) + "\n")
-    return len(variable_cols)
+        for name, row in zip(names, core, strict=True):
+            dists = (core != row).sum(axis=1)
+            fo.write(name + "\t" + "\t".join(str(int(d)) for d in dists) + "\n")
+    return n_sites

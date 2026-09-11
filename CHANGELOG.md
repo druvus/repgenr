@@ -7,6 +7,16 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- The `simple` SNP typer's core-SNP reduction is vectorised. It compared every
+  pair of genomes character by character in Python, which cost about 8 ms per
+  pair at 200000 sites and made the adapter's advertised limit of 2000 genomes
+  unreachable. The output is byte for byte what it was; 40 genomes went from
+  3.7 s to 0.13, and 500 genomes now take 35 s. The work is still quadratic in
+  genomes, but each pair is now a vector comparison.
+- Under a container backend, the `simple` typer runs each genome's chain of
+  tools in one container instead of starting one per command. The live
+  containerised test went from 21.2 s to 12.6 for 8 genomes, and its run log
+  shows 9 engine invocations where it previously needed 58.
 - The `simple` SNP typer runs genomes concurrently and passes a thread count to
   minimap2, samtools and bcftools; it previously mapped one genome at a time on
   one core whatever `--threads` said. On 69 Francisella genomes with 8 threads

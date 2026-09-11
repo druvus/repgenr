@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
 import shutil
 import tempfile
 import time
@@ -382,6 +383,69 @@ def run_tool(
         check=check,
         stdout_path=stdout_path,
         log_prefix=log_prefix or caps.name,
+        timeout=timeout,
+    )
+
+
+def run_chain(
+    caps: ToolCapabilities,
+    steps: Sequence[tuple[str, Sequence[str | os.PathLike[str]]]],
+    *,
+    logger: logging.Logger,
+    cwd: str | os.PathLike[str] | None = None,
+    env: Mapping[str, str] | None = None,
+    extra_mounts: Sequence[str | os.PathLike[str]] = (),
+    timeout: float | None = None,
+) -> None:
+    """Run a sequence of commands that form one unit of work.
+
+    Each step is ``(log_prefix, argv)`` and they run in order, stopping at the
+    first failure. On the host this is exactly a loop over :func:`run_tool`.
+    Containerized, the whole sequence runs inside a single container: starting
+    one per command costs seconds each under an emulated engine, and a
+    per-genome chain is half a dozen commands.
+
+    The steps must be plain argument vectors. Redirection and pipes are not
+    supported, so a tool that writes to stdout needs its own output flag.
+    """
+    config = _CONFIG
+    image = resolve_image(caps, config) if config.active else None
+    if image is None:
+        for prefix, command in steps:
+            run_tool(
+                caps,
+                command,
+                logger=logger,
+                cwd=cwd,
+                env=env,
+                log_prefix=prefix,
+                extra_mounts=extra_mounts,
+                timeout=timeout,
+            )
+        return
+
+    argvs = [[str(part) for part in command] for _, command in steps]
+    for (prefix, _), argv in zip(steps, argvs, strict=True):
+        logger.info("[%s] $ %s", prefix, " ".join(argv))
+    # The commands live inside a script string, so the mount scan cannot see
+    # their paths in argv; hand it every absolute path they name.
+    paths = [token for argv in argvs for token in argv if token.startswith("/")]
+    script = "set -e\n" + "\n".join(shlex.join(argv) for argv in argvs) + "\n"
+    wrapped = wrap_command(
+        image,
+        ["sh", "-c", script],
+        config=config,
+        cwd=cwd,
+        logger=logger,
+        extra_mounts=[*extra_mounts, *paths],
+    )
+    merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
+    process.run(
+        wrapped,
+        logger=logger,
+        cwd=cwd,
+        env=merged_env,
+        log_prefix=caps.name,
         timeout=timeout,
     )
 
