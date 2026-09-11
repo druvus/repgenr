@@ -11,16 +11,19 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
 from ..core.contracts import (
+    CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
     accession_from_filename,
     list_fasta,
+    write_cluster_summary,
     write_clusters,
     write_genome_status,
 )
@@ -30,6 +33,7 @@ from ..core.integrity import check_genome_completeness
 from ..core.plugins import auto_select, scale_warning, warn_unconsumed_extras
 from ..core.process import link_or_copy, remove_tree
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
+from .cluster_summary import summarise_clusters
 
 
 @dataclass
@@ -148,7 +152,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         )
 
     check_result_complete(result, [g.name for g in genomes])
-    _write_contract(ctx, result)
+    # The summary reports quality whichever keeper rule was used, so a
+    # --keeper tool run still shows where a member outscores the keeper.
+    _write_contract(ctx, result, quality or _quality_lookup(ctx))
     _update_manifest(ctx, result)
 
     ctx.config.record_stage(
@@ -568,7 +574,9 @@ def _quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
         return {}
 
 
-def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
+def _write_contract(
+    ctx: WorkdirContext, result: DerepResult, quality: Mapping[str, tuple[float, float]]
+) -> None:
     rep_dir = ctx.representatives_dir
     if rep_dir.exists():
         remove_tree(rep_dir)
@@ -587,6 +595,9 @@ def _write_contract(ctx: WorkdirContext, result: DerepResult) -> None:
 
     write_clusters(ctx.derep_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(ctx.derep_dir / GENOME_STATUS_TSV, result.genome_status)
+    write_cluster_summary(
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality)
+    )
 
 
 def _update_manifest(ctx: WorkdirContext, result: DerepResult) -> None:

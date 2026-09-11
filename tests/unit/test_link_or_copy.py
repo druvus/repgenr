@@ -66,4 +66,4 @@ def test_step_contract_rejects_empty_representative(tmp_path: Path) -> None:
         genome_status={empty.name: STATUS_REPRESENTATIVE},
     )
     with pytest.raises(WorkdirError, match="empty"):
-        _write_step_contract(tmp_path / "out", result, [])
+        _write_step_contract(tmp_path / "out", result, [], {})

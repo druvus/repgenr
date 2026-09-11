@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 217 flags (217 with a live test or an n/a reason, 0 pending).
+23 commands, 218 flags (218 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -28,6 +28,14 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_derep_stock_round_trip | docs/cli-reference.md, docs/containers.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--action` |  | DerepStockParams.action | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_derep_stock_round_trip | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--name` |  | DerepStockParams.name | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_derep_stock_round_trip | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+
+## cluster-summary
+
+dispatch: `stage`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--workdir` | -wd | workdir | stage | n/a: workdir command; the dereplicate-chunk and dereplicate-merge steps write the summary themselves | tests/live/test_aux_commands.py::test_cluster_summary_regenerates | docs/cli-reference.md, docs/output.md, docs/audit/cli-matrix.md |
 
 ## derep-unpack
 

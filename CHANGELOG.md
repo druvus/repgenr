@@ -6,6 +6,21 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `derep/cluster_summary.tsv`: one row per representative with the member
+  count, the species the cluster spans and the keeper's CheckM quality against
+  its members, including which genome scores best. `dereplicate` writes it
+  alongside `clusters.tsv` (the Nextflow chunk and merge steps too), and
+  `repgenr cluster-summary -wd <workdir>` regenerates it for an existing
+  working directory without rerunning the dereplicator.
+
+### Fixed
+- The contract TSVs (`clusters.tsv`, `genome_status.tsv`, `selection.tsv`,
+  `tree2tax.tsv`, `genomes_map.tsv`) ended their rows with `\r\n`, the
+  `csv` module's default, so the last column of every row carried a stray
+  `\r`: `awk -F'\t' '$2=="x"'` on `clusters.tsv` never matched. They now
+  end with `\n`. Readers were unaffected either way.
+
 ### Changed
 - The `simple` SNP typer's core-SNP reduction is vectorised. It compared every
   pair of genomes character by character in Python, which cost about 8 ms per

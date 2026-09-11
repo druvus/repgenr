@@ -8,8 +8,10 @@ import pytest
 
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import (
+    CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    read_cluster_summary,
     read_clusters,
 )
 from repgenr.core.plugins import ToolCapabilities
@@ -88,6 +90,8 @@ def test_dereplicate_writes_contract(workdir: Path, genome_files, fake_tool) -> 
     assert clusters[genome_files[0].name] == [genome_files[1].name, genome_files[2].name]
 
     assert (ctx.derep_dir / GENOME_STATUS_TSV).exists()
+    (summary,) = read_cluster_summary(ctx.derep_dir / CLUSTER_SUMMARY_TSV)
+    assert summary.representative == genome_files[0].name and summary.n_members == 2
     assert (workdir / "repgenr.yaml").exists()
     assert ctx.config.stages["dereplicate"].tool == "fake"
 
@@ -235,6 +239,9 @@ def test_keeper_quality_with_manifest_quality_records_quality(
         )
     run(ctx, DereplicateParams(tool="fake", keeper="quality"))
     assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
+    (summary,) = read_cluster_summary(ctx.derep_dir / CLUSTER_SUMMARY_TSV)
+    assert (summary.rep_completeness, summary.rep_contamination) == (99.0, 0.5)
+    assert summary.member_max_completeness == 99.0
 
 
 def test_stage1_uses_pre_thresholds(workdir: Path, genome_files, fake_tool) -> None:

@@ -177,6 +177,25 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_stock_round_trip
+  cluster-summary:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/cli-reference.md
+        - docs/output.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the dereplicate-chunk and dereplicate-merge steps write the summary themselves'
+        live: tests/live/test_aux_commands.py::test_cluster_summary_regenerates
+        observable: the workdir is populated
   derep-unpack:
     dispatch: stage
     base_args:

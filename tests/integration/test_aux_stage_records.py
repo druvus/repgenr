@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from repgenr.cli import base as cli
 from repgenr.cli.main import app
 from repgenr.core.config import Config
-from repgenr.core.contracts import CLUSTERS_TSV
+from repgenr.core.contracts import CLUSTER_SUMMARY_TSV, CLUSTERS_TSV, read_cluster_summary
 
 _runner = CliRunner()
 
@@ -52,6 +52,22 @@ def test_derep_unpack_records_and_skips(tmp_path: Path, monkeypatch) -> None:
     assert second.exit_code == 0 and Config.load(wd).stages["derep_unpack"].completed == stamp
     status = _runner.invoke(app, ["status", "-wd", str(wd)]).stdout
     assert "optional stages run" in status and "derep_unpack" in status
+
+
+def test_cluster_summary_regenerates_from_clusters_tsv(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    first = _runner.invoke(app, ["cluster-summary", "-wd", str(wd)])
+    assert first.exit_code == 0, first.output
+    (row,) = read_cluster_summary(wd / "derep" / CLUSTER_SUMMARY_TSV)
+    assert row.representative == "Fam_Gen_sp1_GCA_000001.1.fasta"
+    assert (row.n_members, row.n_species, row.species) == (1, 2, "sp1,sp2")
+    assert row.rep_completeness is None and row.best_member == ""
+    rec = Config.load(wd).stages["cluster_summary"]
+    assert rec.completed and rec.inputs
+    stamp = rec.completed
+    second = _runner.invoke(app, ["cluster-summary", "-wd", str(wd)])
+    assert second.exit_code == 0 and Config.load(wd).stages["cluster_summary"].completed == stamp
 
 
 def test_derep_stock_list_is_a_query_but_pack_is_recorded(tmp_path: Path, monkeypatch) -> None:

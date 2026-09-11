@@ -175,6 +175,16 @@ def derep_unpack(
     _run("derep_unpack", workdir, build)
 
 
+@app.command(name="cluster-summary")
+def cluster_summary(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+) -> None:
+    """Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster)."""
+    from ..stages.cluster_summary import ClusterSummaryParams
+
+    _run("cluster_summary", workdir, ClusterSummaryParams)
+
+
 @app.command(name="derep-stock")
 def derep_stock(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
