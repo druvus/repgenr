@@ -9,7 +9,7 @@ The threshold is on sourmash's ANI estimate, the same scale skder and galah
 use — not on raw sketch similarity. At k=31 a genome pair at 99.6 percent ANI
 has Jaccard only ~0.8, so thresholding the raw similarity at an ANI-style 0.99
 would leave nearly everything a singleton (verified against skani on synthetic
-sets; see docs/scaling-audit.md).
+sets; see docs/audit/scaling-audit.md).
 
 Two back-ends compute the pairwise similarities, picked automatically:
 

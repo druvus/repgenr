@@ -17,7 +17,7 @@ from ..core.process import write_fofn
 from ..tree.newick import neighbor_joining
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
-# Measured (docs/scaling-audit.md): the pure-Python NJ is ~30 s of the 142 s
+# Measured (docs/audit/scaling-audit.md): the pure-Python NJ is ~30 s of the 142 s
 # total at n=1000 and cubic beyond; refuse sizes that extrapolate to hours.
 _NJ_MAX_GENOMES = 5000
 

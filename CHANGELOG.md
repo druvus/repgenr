@@ -14,6 +14,16 @@ All notable changes to RepGenR are documented here. The format follows
   `repgenr cluster-summary -wd <workdir>` regenerates it for an existing
   working directory without rerunning the dereplicator.
 
+### Changed
+- The documentation is consolidated from fifteen pages to six plus two audit
+  records. `docs/usage.md` is the one how-to (command line, Nextflow,
+  containers, troubleshooting; it absorbs `containers.md` and the README's
+  longer sections), `docs/developing.md` merges `architecture.md` and
+  `adding-tools.md`, and the scaling audit and its three SWOT pages are one
+  record under `docs/audit/`. `docs/README.md` indexes the pages. The
+  executed plans under `docs/superpowers/` and the unreferenced legacy figures
+  under `docs/images/` are removed; git history keeps them.
+
 ### Fixed
 - The contract TSVs (`clusters.tsv`, `genome_status.tsv`, `selection.tsv`,
   `tree2tax.tsv`, `genomes_map.tsv`) ended their rows with `\r\n`, the
