@@ -23,7 +23,7 @@ communicate through a single working directory whose state is recorded in
 ## Pluggable tools
 
 Tools are discovered through Python entry points; adding one needs no change to
-the core (see `docs/adding-tools.md`).
+the core (see [docs/developing.md](docs/developing.md)).
 
 | Family | Built-in adapters |
 |--------|-------------------|
@@ -48,127 +48,21 @@ pip install .
 
 Cactus is distributed separately (containers/binaries); see its documentation.
 
-## Usage
+## Quick start
 
 ```bash
 WD=./francisella
-
-# Full GTDB table (release-pinned):
-repgenr metadata -wd $WD -r 232.0 --gtdb-version bac120 -d rep -l genus -tg francisella
-# Or query just the target taxon via the GTDB API (no full-table download):
-repgenr metadata -wd $WD --source api -d rep -l genus -tg francisella
-
-repgenr genome -wd $WD
-repgenr dereplicate -wd $WD --tool skder -t 16
-repgenr phylo -wd $WD --aligner progressivemauve --treebuilder iqtree
-repgenr tree2tax -wd $WD --include-dereplicated
-```
-
-Or run the whole chain in one command (bacterial by default; `--viral` for the
-NCBI Virus path), then check progress at any time:
-
-```bash
 repgenr run -wd $WD -d rep -l genus -tg francisella --tool skder --treebuilder iqtree
 repgenr status -wd $WD     # which stages are done, and what to run next
 ```
 
-### Starting from local genomes
+`run` chains `metadata -> genome -> dereplicate -> phylo -> tree2tax`; each stage
+is also its own subcommand, and `repgenr ingest` starts from genomes already on
+disk. `--viral` selects the NCBI Virus path. Re-running a stage is a no-op
+unless its parameters or inputs changed (`--force` overrides).
 
-`repgenr ingest` replaces the `metadata` + `genome` front for genomes that are
-already on disk. It stages every FASTA under `--genomes-dir` into `genomes/`
-(symlinks by default, `--copy` to duplicate), writes the same `selection.tsv`
-and manifest the download stages produce, and records itself as a stage so
-`status`, `doctor` and resume work as usual. Taxonomy comes from an optional
-`--selection` table (the eight-column `selection.tsv` format, which may also
-carry CheckM completeness and contamination for `--keeper quality`) or from
-canonical `Family_genus_species_ACCESSION.fasta` filenames; other filenames
-give an empty taxonomy and the stem as accession.
-
-```bash
-repgenr ingest -wd $WD --genomes-dir ./my_genomes --outgroup GCF_003574425.1
-repgenr dereplicate -wd $WD --tool skder
-repgenr phylo -wd $WD --treebuilder mashtree
-repgenr tree2tax -wd $WD --include-dereplicated
-```
-
-`--outgroup` names a genome under `--genomes-dir` (filename, stem or
-accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
-out of the ingroup.
-
-Every command and option is listed in `docs/cli-reference.md`, generated
-from the command tree.
-
-### Resume and `--force`
-
-Each stage records its parameters, the digests of its inputs, and the container
-identity in `repgenr.yaml`; re-running a stage is a safe no-op only when all
-three are unchanged (it logs that it skipped). Re-running an upstream stage
-(e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
-downstream stage re-runs automatically the next time it is invoked. Change a
-parameter, switch `--container`, or pass `--force` to re-run explicitly. A
-stage that crashed mid-run has no completion stamp and so always re-runs. `repgenr
-doctor -wd <wd>` verifies a workdir's outputs against its records (missing or
-corrupt genomes, manifest drift, truncated deliverables, interrupted stages)
-and exits non-zero on failures.
-
-Two limitations, both covered by `--force`: input directories are digested from
-file metadata (name, size, mtime), so an in-place edit that preserves size and
-mtime is not detected; and upgrading a natively installed tool binary does not
-invalidate previous results (switching the container backend or platform does).
-Workdirs created by older RepGenR versions re-run each stage once (the
-fingerprint format changed).
-
-Alternatives:
-
-```bash
-# Scalable dereplication then an alignment-free tree
-repgenr dereplicate -wd $WD --tool skder
-repgenr phylo -wd $WD --treebuilder mashtree
-
-# SNP-based phylogeny (core-SNP alignment as the MSA source)
-repgenr snptype -wd $WD --tool simple
-repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
-```
-
-### Viruses
-
-The viral path selects from NCBI Virus by default (via the `datasets` CLI);
-`vmetadata --source bvbrc` uses the legacy BV-BRC FTP path instead.
-
-```bash
-WD=./hav
-repgenr vmetadata -wd $WD --target hepatovirus            # NCBI Virus (default)
-repgenr vgenome   -wd $WD --target-genus Hepatovirus      # add --group-segments for segmented viruses
-repgenr dereplicate -wd $WD --tool skder --virus
-repgenr phylo -wd $WD --treebuilder mashtree
-repgenr tree2tax -wd $WD --include-dereplicated
-# or: repgenr run -wd $WD --viral --target hepatovirus -tg Hepatovirus --treebuilder mashtree
-```
-
-## Troubleshooting
-
-- **`MissingBinaryError` / a tool is not found.** The Python package does not
-  install the bioinformatics tools. Use the conda environment
-  (`mamba env create -f environment.yml`) or put the tool on `PATH`. Run
-  `repgenr list-tools` to see the adapters and `--container docker` (or
-  `singularity`) to run tools in pinned images instead.
-- **Apple Silicon / arm64.** BioContainers are amd64; pass
-  `--platform linux/amd64` (and enable Rosetta) so emulated images run.
-- **A stage failed; where are the details?** Errors print a concise message; the
-  full traceback is in `<workdir>/repgenr.log`. Re-run with `--verbose` to see it
-  on the console. `repgenr status -wd <WD>` shows what completed and what is next.
-- **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
-  (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
-  `--source api` mode fetches only the target taxon (no full-table download).
-- **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
-  optionally `NCBI_EMAIL`) to raise the request-rate limit.
-- **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
-  external tool; on expiry the process group is killed with a clear error.
-
-## Nextflow
-
-The Nextflow layer runs the pipeline as typed data channels (no shared working
-directory); results are published under `--outdir`.
+The same pipeline runs as typed Nextflow data channels (no shared working
+directory) for HPC and cloud:
 
 ```bash
 nextflow run nextflow/main.nf -profile standard --outdir results \
@@ -176,29 +70,18 @@ nextflow run nextflow/main.nf -profile standard --outdir results \
     --derep_tool sourmash --phylo_args "--treebuilder mashtree"
 ```
 
-`--mode viral` runs the viral path instead (NCBI Virus by default; BV-BRC is
-available via `--vmetadata_args "--source bvbrc"`). Profiles: `standard` (local),
-`slurm`, `cloud`, `test` (add a container profile such as `singularity` to run
-the tools in pinned images). Resource labels (`process_low/medium/high`) are
-tuned per profile; heavy aligners such as Cactus use `process_high`. Set
-`--derep_process_size` to scatter dereplication across tasks for large inputs.
-Nextflow 26.04 or later is required. Per-process tool flags and publishing
-are configured in `nextflow/conf/modules.config` (see `docs/usage.md`,
-"Configuring processes").
+Nextflow 26.04 or later is required.
 
-## Development
+## Documentation
 
-```bash
-pip install -e ".[dev]"
-ruff check src/ tests/
-mypy src/repgenr
-pytest -q
-```
-
-See `docs/architecture.md` for the design and `docs/adding-tools.md` for writing
-a new adapter. Example figures live in `docs/images/`; the synthetic-genome
-generator is `scripts/fasta_simulate_sequences.py`. The legacy 10 MB mock
-dataset is no longer tracked; generate a test set with `benchmarks/genomegen.py`.
+| Page | What it covers |
+|------|----------------|
+| [docs/usage.md](docs/usage.md) | Running the pipeline: CLI stages, local genomes, viruses, resume, representative selection, SNP typing and masking, Nextflow parameters and profiles, containers, troubleshooting. |
+| [docs/cli-reference.md](docs/cli-reference.md) | Every command and option, generated from the command tree. |
+| [docs/output.md](docs/output.md) | The files each stage writes. |
+| [docs/developing.md](docs/developing.md) | Architecture, data contracts, and how to add a tool adapter. |
+| [docs/verification.md](docs/verification.md) | Which adapters have been run against their real tools, and measured runs. |
+| [docs/audit/](docs/audit/README.md) | Records: the CLI matrix and the scaling and bias audit. |
 
 ## License
 

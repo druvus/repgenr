@@ -27,7 +27,7 @@ global_flags:
     param: 'n/a: prints the version and exits'
     validated: none
     docs:
-    - docs/adding-tools.md
+    - docs/developing.md
     - docs/cli-reference.md
     - docs/audit/cli-matrix.md
     nextflow: 'n/a: prints the version and exits'
@@ -39,12 +39,10 @@ global_flags:
     validated: choice
     reported_as: container backend
     docs:
-    - README.md
-    - docs/adding-tools.md
-    - docs/cli-reference.md
-    - docs/containers.md
-    - docs/swot-viral.md
     - docs/usage.md
+    - docs/developing.md
+    - docs/cli-reference.md
+    - docs/audit/scaling-audit.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
@@ -55,7 +53,7 @@ global_flags:
     validated: none
     docs:
     - docs/cli-reference.md
-    - docs/containers.md
+    - docs/usage.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_container_engine_podman_is_reported_when_missing
@@ -66,7 +64,7 @@ global_flags:
     validated: none
     docs:
     - docs/cli-reference.md
-    - docs/containers.md
+    - docs/usage.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
@@ -76,9 +74,8 @@ global_flags:
     value: linux/amd64
     validated: none
     docs:
-    - README.md
+    - docs/usage.md
     - docs/cli-reference.md
-    - docs/containers.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_skder_in_a_wave_container_with_cache_and_env
@@ -89,10 +86,10 @@ global_flags:
     param: container.wave_enabled
     validated: none
     docs:
-    - docs/adding-tools.md
+    - docs/developing.md
     - docs/cli-reference.md
-    - docs/containers.md
-    - docs/swot-viral.md
+    - docs/usage.md
+    - docs/audit/scaling-audit.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run
@@ -117,7 +114,7 @@ global_flags:
     param: state.log_level
     validated: none
     docs:
-    - README.md
+    - docs/usage.md
     - docs/cli-reference.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
@@ -151,7 +148,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -210,7 +207,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -239,7 +236,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -251,13 +248,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_adapter_recovers_the_synthetic_partition
@@ -281,7 +275,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -317,10 +311,9 @@ commands:
         value: '4'
         validated: none
         docs:
-        - docs/architecture.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/scaling-audit.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_process_size
         live: tests/live/test_dereplicators.py::test_process_size_runs_the_chunked_path
@@ -360,8 +353,7 @@ commands:
         validated: choice
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_reduce_species_keeps_one_representative_per_species
@@ -373,8 +365,7 @@ commands:
         invalid: '-1'
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_target_reps_lands_on_the_requested_count
@@ -386,10 +377,10 @@ commands:
         - drep
         validated: none
         docs:
-        - README.md
-        - docs/adding-tools.md
+        - docs/usage.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_virus_flag_on_auto_tool_is_reported_when_ignored
@@ -399,7 +390,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -419,10 +410,9 @@ commands:
         value: tool
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
-        - docs/swot-derep.md
         - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_dereplicators.py::test_keeper_quality_promotes_the_best_scored_member
@@ -461,13 +451,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions
@@ -490,7 +477,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_secondary_ani
@@ -526,10 +513,10 @@ commands:
         - drep
         validated: none
         docs:
-        - README.md
-        - docs/adding-tools.md
+        - docs/usage.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
@@ -539,7 +526,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -560,10 +547,9 @@ commands:
         value: tool
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
-        - docs/swot-derep.md
         - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
@@ -621,13 +607,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_tool
         live: tests/live/test_steps.py::test_merge_by_chunk_dir_recovers_the_partition
@@ -650,7 +633,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_secondary_ani
@@ -686,10 +669,10 @@ commands:
         - drep
         validated: none
         docs:
-        - README.md
-        - docs/adding-tools.md
+        - docs/usage.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.mode
         live: 'n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py)'
@@ -699,7 +682,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -720,10 +703,9 @@ commands:
         value: tool
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
-        - docs/swot-derep.md
         - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
@@ -750,7 +732,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -770,7 +752,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -806,9 +788,8 @@ commands:
         value: '{alt_file}'
         validated: stage
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_network.py::test_genome_fetch_step
@@ -856,7 +837,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -868,13 +849,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_glance_drep_compare
@@ -932,7 +910,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -943,9 +921,8 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
@@ -955,9 +932,8 @@ commands:
         value: '{alt_file}'
         validated: stage
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset
@@ -966,9 +942,8 @@ commands:
         value: GCF_000001.1
         validated: stage
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
@@ -977,9 +952,8 @@ commands:
         param: IngestParams.copy
         validated: none
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_ingest_flags.py::test_outgroup_and_copy
@@ -1006,7 +980,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
@@ -1039,9 +1013,8 @@ commands:
         value: api
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
         live: tests/live/test_network.py::test_tsv_source_downloads_and_parses_the_release_table
@@ -1052,7 +1025,7 @@ commands:
         value: '232.0'
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
@@ -1086,7 +1059,7 @@ commands:
         value: Francisella
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
@@ -1135,8 +1108,7 @@ commands:
         invalid: '0'
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
-        - docs/swot-derep.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
@@ -1156,7 +1128,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1169,7 +1141,6 @@ commands:
         docs:
         - README.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1179,9 +1150,8 @@ commands:
         value: snptype
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup
@@ -1190,9 +1160,8 @@ commands:
         value: sibeliaz
         validated: registry
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container
@@ -1246,7 +1215,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete
@@ -1256,7 +1225,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1279,7 +1248,7 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
@@ -1310,9 +1279,8 @@ commands:
         value: '{alt_dir}'
         validated: stage
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
@@ -1353,7 +1321,6 @@ commands:
         docs:
         - README.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1363,9 +1330,8 @@ commands:
         value: snptype
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
@@ -1374,9 +1340,8 @@ commands:
         value: sibeliaz
         validated: registry
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
@@ -1421,7 +1386,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
         live: tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants
@@ -1431,7 +1396,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1508,7 +1473,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1564,7 +1529,7 @@ commands:
         value: Francisella
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1587,7 +1552,7 @@ commands:
         value: '232.0'
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1630,7 +1595,7 @@ commands:
         - --viral
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1652,7 +1617,7 @@ commands:
         - --viral
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1663,13 +1628,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
@@ -1688,7 +1650,7 @@ commands:
         validated: unit_interval
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1707,10 +1669,9 @@ commands:
         value: tool
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
-        - docs/swot-derep.md
         - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_bacterial_chain_end_to_end
@@ -1721,7 +1682,6 @@ commands:
         docs:
         - README.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1731,9 +1691,8 @@ commands:
         value: snptype
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo)'
@@ -1742,9 +1701,8 @@ commands:
         value: sibeliaz
         validated: registry
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
-        - docs/containers.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets
@@ -1774,9 +1732,8 @@ commands:
         param: Tree2taxParams.include_dereplicated
         validated: none
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
@@ -2005,7 +1962,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2017,13 +1974,10 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
-        - docs/containers.md
-        - docs/swot-derep.md
-        - docs/swot-phylo.md
-        - docs/swot-viral.md
         - docs/usage.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_parsnp_typer
@@ -2034,7 +1988,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_species_set.py::test_simple_typer_all_genomes_with_explicit_reference
@@ -2053,7 +2007,7 @@ commands:
         validated: registry
         docs:
         - README.md
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
@@ -2079,7 +2033,7 @@ commands:
         validated: callback
         invalid: noequals
         docs:
-        - docs/adding-tools.md
+        - docs/developing.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -2106,7 +2060,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2126,7 +2080,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2165,9 +2119,8 @@ commands:
         param: Tree2taxParams.include_dereplicated
         validated: none
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
@@ -2179,7 +2132,7 @@ commands:
         invalid: '2'
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2191,7 +2144,7 @@ commands:
         invalid: '-1'
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2283,9 +2236,8 @@ commands:
         param: Tree2taxStepParams.include_dereplicated
         validated: none
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
@@ -2308,7 +2260,7 @@ commands:
         invalid: '2'
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
@@ -2320,7 +2272,7 @@ commands:
         invalid: '-1'
         docs:
         - docs/cli-reference.md
-        - docs/swot-phylo.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
@@ -2338,7 +2290,7 @@ commands:
         validated: none
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
@@ -2367,7 +2319,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
@@ -2380,7 +2332,7 @@ commands:
         value: Mastadenovirus
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
@@ -2443,8 +2395,7 @@ commands:
         validated: choice
         docs:
         - docs/cli-reference.md
-        - docs/scaling-audit.md
-        - docs/swot-viral.md
+        - docs/audit/scaling-audit.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
@@ -2480,7 +2431,7 @@ commands:
         param: VgenomeParams.group_segments
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
@@ -2550,7 +2501,7 @@ commands:
         validated: stage
         docs:
         - docs/cli-reference.md
-        - docs/containers.md
+        - docs/usage.md
         - docs/output.md
         - docs/audit/cli-matrix.md
         nextflow: 'module: fixed by the process script'
@@ -2561,7 +2512,7 @@ commands:
         value: adenoviridae
         validated: none
         docs:
-        - README.md
+        - docs/usage.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
@@ -2571,9 +2522,8 @@ commands:
         value: bvbrc
         validated: choice
         docs:
-        - README.md
-        - docs/cli-reference.md
         - docs/usage.md
+        - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_bvbrc_source_and_filter

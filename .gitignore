@@ -185,3 +185,4 @@ tests/live/live.local.toml
 # Benchmark measurements are committed evidence (scaling audit)
 !benchmarks/results/
 !benchmarks/results/**
+.DS_Store

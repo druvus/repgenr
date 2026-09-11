@@ -1,4 +1,4 @@
-"""Scale-diagnostics guards found by the scaling audit (docs/scaling-audit.md)."""
+"""Scale-diagnostics guards found by the scaling audit (docs/audit/scaling-audit.md)."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_sourmash_treebuilder_limit_is_measured():
     from repgenr.treebuilders.sourmash import SourmashBuilder
 
     # 10000 was an unbenchmarked assertion; the measured n^3 fit extrapolates
-    # to ~12 h of pure-Python NJ there (docs/scaling-audit.md).
+    # to ~12 h of pure-Python NJ there (docs/audit/scaling-audit.md).
     assert SourmashBuilder.capabilities.recommended_max_genomes == 2000
 
 
