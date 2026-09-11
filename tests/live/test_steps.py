@@ -319,3 +319,52 @@ def test_phylo_build_aligner_and_snp_source_variants(
     tree = (snp / "tree" / TREE_NWK).read_text(encoding="utf-8")
     assert len(newick_leaves(tree)) == 4
     assert re.search(r"\)\d+(\.\d+)?:", tree), "bootstrap support labels present"
+
+
+@pytest.mark.requires_binary("minimap2", "samtools", "bcftools", "FastTree")
+def test_phylo_build_split_into_msa_and_tree(run_repgenr, synthetic_set, tmp_path: Path) -> None:
+    """The two halves the Nextflow layer runs as separate tasks: build the
+    alignment once, then build trees from it without re-aligning."""
+    genomes = synthetic_set("balanced", n=4, length=20_000)
+    align = tmp_path / "align"
+    run_repgenr(
+        "phylo-build",
+        "--genomes-dir",
+        genomes,
+        "-o",
+        align,
+        "--no-outgroup",
+        "--msa-source",
+        "snptype",
+        "--snptyper",
+        "simple",
+        "--treebuilder",
+        "fasttree",
+        "--msa-only",
+        "-t",
+        "2",
+    )
+    msa = align / "msa.fasta"
+    assert msa.is_file(), "the alignment is published for the tree step"
+    assert not (align / "tree" / TREE_NWK).exists(), "no tree is built"
+
+    for builder in ("fasttree", "iqtree"):
+        out = tmp_path / builder
+        run_repgenr(
+            "phylo-build",
+            "--genomes-dir",
+            genomes,
+            "-o",
+            out,
+            "--no-outgroup",
+            "--msa",
+            msa,
+            "--treebuilder",
+            builder,
+            *(("-B", "1000") if builder == "iqtree" else ()),
+            "-t",
+            "2",
+        )
+        tree = (out / "tree" / TREE_NWK).read_text(encoding="utf-8")
+        assert len(newick_leaves(tree)) == 4
+        assert not (out / "snp").exists(), "the SNP typer does not run again"

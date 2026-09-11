@@ -57,6 +57,13 @@
                     "description": "Arguments for the phylogeny stage (aligner or tree builder). Reaches the process as task.ext.args; a site config can override it with withName.",
                     "fa_icon": "fas fa-tree"
                 },
+                "phylo_split_msa": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run the alignment and the tree as separate tasks.",
+                    "help_text": "The alignment then survives a change of tree builder or bootstrap, and the two halves request their own resources. Only for tree builders that consume an alignment; leave it off for mashtree or sourmash.",
+                    "fa_icon": "fas fa-code-branch"
+                },
                 "tree2tax_args": {
                     "type": "string",
                     "default": "",

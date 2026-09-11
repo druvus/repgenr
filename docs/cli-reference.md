@@ -225,6 +225,8 @@ Build a phylogeny from a genomes directory (stateless data-channel step).
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
+| `--msa` |  | Build the tree from this alignment instead of constructing one. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ## run

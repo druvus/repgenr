@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-22 commands, 215 flags (215 with a live test or an n/a reason, 0 pending).
+22 commands, 217 flags (217 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -220,6 +220,8 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/adding-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--threads` | -t | PhyloBuildParams.phylo.threads | range | task.cpus | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | PhyloBuildParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--msa-only` |  | PhyloBuildParams.msa_only | stage | module: PHYLO_MSA | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--msa` |  | PhyloBuildParams.msa | stage | module: PHYLO_TREE | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--mask` |  | PhyloBuildParams.phylo.extra | registry | params.phylo_args | n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the builder | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## run
