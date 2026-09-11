@@ -16,11 +16,39 @@ processes as staged channel files and publishes the key deliverables (the tree,
 | `genomes/` | genome | Downloaded genome FASTAs, one per selected accession. |
 | `outgroup/` | genome | Outgroup genome for rooting. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
+| `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
+| `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |
+| `derep/cluster_summary.tsv` | dereplicate, cluster-summary | One row per representative: member count, species spanned and keeper quality against the members (below). |
 | `snp/core_snp.fasta` | snptype | Core-SNP (variable-site) alignment; masked in place when `--mask` is set. |
 | `snp/full_alignment.fasta` | snptype | Whole-genome alignment in reference coordinates, when the SNP typer produces one (snippy, parsnp, simple); required input for `--mask`. |
 | `tree/` | phylo | Phylogeny (`tree.nwk`) and aligner/tree-builder intermediates. |
 | `genomes_map.tsv` | tree2tax | Map from each representative to its dereplicated members. |
 | `tree2tax.tsv` | tree2tax | FlexTaxD-compatible taxonomy derived from the tree. |
+
+## Cluster summary
+
+`derep/cluster_summary.tsv` condenses `clusters.tsv` into one row per
+representative, largest cluster first. `dereplicate` writes it after every run
+and `repgenr cluster-summary -wd <workdir>` regenerates it for an existing
+working directory from `clusters.tsv` and the manifest, without rerunning the
+dereplicator.
+
+| Column | Meaning |
+|--------|---------|
+| `representative` | Keeper filename, as in `clusters.tsv`. |
+| `n_members` | Genomes contained under the keeper (the keeper itself is not counted). |
+| `n_species` | Distinct species across keeper and members, parsed from the canonical filenames. |
+| `species` | Those species, comma-separated, the keeper's first. |
+| `rep_completeness`, `rep_contamination` | CheckM values of the keeper from the manifest; blank when unknown. |
+| `member_max_completeness`, `member_min_contamination` | Best values among the scored members; blank when no member is scored. |
+| `best_member` | Highest-scoring genome in the cluster by completeness minus five times contamination, keeper included. Equals `representative` when the keeper is already the best; blank when nothing in the cluster is scored. |
+
+A row whose `best_member` differs from its `representative` marks a cluster
+where a member outscores the keeper. This is expected under `--keeper tool`,
+and can also follow `--reduce`, which merges representatives by taxon. The
+quality columns come from the manifest in the workdir CLI and from
+`--selection-tsv` in the Nextflow steps; without either they stay blank and
+the size and species columns still apply.
 
 ## Pipeline information
 

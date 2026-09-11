@@ -129,6 +129,7 @@ STAGE_INPUTS: dict[str, Any] = {
     # Auxiliary stages: recorded so status shows them and a repeat skips.
     "glance": lambda ctx, p: [ctx.genomes_dir],
     "derep_unpack": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.genomes_dir],
+    "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV],
     "derep_stock": _derep_stock_inputs,
 }
 
@@ -137,7 +138,7 @@ STAGE_INPUTS: dict[str, Any] = {
 # "dereplicate" reads the manifest for the quality-aware keeper and --reduce
 # taxonomy grouping, so a manifest-only edit (no genome file touched) must
 # still invalidate a prior resume.
-_MANIFEST_INPUT_STAGES = frozenset({"tree2tax", "dereplicate"})
+_MANIFEST_INPUT_STAGES = frozenset({"tree2tax", "dereplicate", "cluster_summary"})
 
 # Param flags that turn a stage invocation into a pure query (list/preview
 # modes that write no pipeline outputs). Such invocations bypass the resume

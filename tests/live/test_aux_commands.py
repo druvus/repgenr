@@ -1,5 +1,5 @@
 """Auxiliary commands and global behaviour on an ingested, dereplicated workdir:
-derep-unpack, derep-stock, status, versions, doctor, --force, logging flags
+derep-unpack, cluster-summary, derep-stock, status, versions, doctor, --force, logging flags
 and the REPGENR_* environment variables, all as real processes."""
 
 from __future__ import annotations
@@ -33,6 +33,17 @@ def test_derep_unpack_with_and_without_representant(run_repgenr, derep_wd: Path)
     run_repgenr("--force", "derep-unpack", "-wd", derep_wd, "--no-representant")
     without = {p.name for d in unpacked.iterdir() for p in d.iterdir()}
     assert not (reps & without), "representatives are left out of their cluster directories"
+
+
+def test_cluster_summary_regenerates(run_repgenr, derep_wd: Path) -> None:
+    from repgenr.core.contracts import read_cluster_summary
+
+    summary = derep_wd / "derep" / "cluster_summary.tsv"
+    written = read_cluster_summary(summary)
+    summary.unlink()
+    run_repgenr("cluster-summary", "-wd", derep_wd)
+    assert read_cluster_summary(summary) == written
+    assert {r.representative for r in written} == representatives(derep_wd)
 
 
 def test_derep_stock_round_trip(run_repgenr, derep_wd: Path) -> None:

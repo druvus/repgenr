@@ -88,3 +88,14 @@ def test_genomes_map(tmp_path: Path) -> None:
     path = tmp_path / "genomes_map.tsv"
     write_genomes_map(path, [("GCA_000001", "Fam_gen_sp_GCA_000001")])
     assert path.read_text().strip() == "GCA_000001\tFam_gen_sp_GCA_000001"
+
+
+def test_contract_tsvs_use_unix_line_endings(tmp_path: Path) -> None:
+    """csv.writer defaults to \\r\\n, which leaves a stray \\r on the last
+    column for awk/cut consumers; every contract writer must emit \\n."""
+    write_clusters(tmp_path / "c.tsv", {"a.fasta": ["b.fasta"]})
+    write_genome_status(tmp_path / "s.tsv", {"a.fasta": "representative"})
+    write_tree2tax(tmp_path / "t.tsv", [("child", "parent")])
+    write_genomes_map(tmp_path / "m.tsv", [("acc", "leaf")])
+    for name in ("c.tsv", "s.tsv", "t.tsv", "m.tsv"):
+        assert b"\r" not in (tmp_path / name).read_bytes(), name

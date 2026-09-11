@@ -7,6 +7,7 @@ obligation), so the names and layout are chosen fresh:
     derep/representatives/      representative genome FASTAs
     derep/clusters.tsv          representative<TAB>member (member==representative for self)
     derep/genome_status.tsv     genome<TAB>status(representative|contained|fail_qc)
+    derep/cluster_summary.tsv   one row per representative: size, species, quality
     align/msa.fasta             multiple sequence alignment (aligner output)
     snp/core_snp.fasta          variant-site alignment (snp typer output)
     tree/tree.nwk               Newick tree
@@ -26,10 +27,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 CLUSTERS_TSV = "clusters.tsv"
 GENOME_STATUS_TSV = "genome_status.tsv"
+CLUSTER_SUMMARY_TSV = "cluster_summary.tsv"
 SELECTION_TSV = "selection.tsv"
 MSA_FASTA = "msa.fasta"
 CORE_SNP_FASTA = "core_snp.fasta"
@@ -118,6 +120,13 @@ class SelectionRow:
     contamination: float | None = None
 
 
+def _tsv_writer(fo: IO) -> Any:
+    """A TSV writer with Unix line endings. ``csv.writer`` defaults to
+    ``\\r\\n``, which leaves a stray ``\\r`` on the last column of every row
+    for awk/cut consumers of the contract files."""
+    return csv.writer(fo, delimiter="\t", lineterminator="\n")
+
+
 @contextmanager
 def atomic_replace(
     path: Path, *, mode: str = "w", encoding: str | None = "utf-8", newline: str | None = None
@@ -161,7 +170,7 @@ def atomic_path(path: Path) -> Iterator[Path]:
 def write_selection(path: Path, rows: list[SelectionRow]) -> None:
     """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
     with atomic_replace(path, newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t")
+        writer = _tsv_writer(fo)
         writer.writerow(
             [
                 "accession",
@@ -219,7 +228,7 @@ def read_selection(path: Path) -> list[SelectionRow]:
 def write_clusters(path: Path, clusters: dict[str, list[str]]) -> None:
     """Write representative -> members. Each representative also lists itself."""
     with atomic_replace(path, newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t")
+        writer = _tsv_writer(fo)
         writer.writerow(["representative", "member"])
         for rep, members in clusters.items():
             writer.writerow([rep, rep])
@@ -246,7 +255,7 @@ def read_clusters(path: Path) -> dict[str, list[str]]:
 
 def write_genome_status(path: Path, status: dict[str, str]) -> None:
     with atomic_replace(path, newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t")
+        writer = _tsv_writer(fo)
         writer.writerow(["genome", "status"])
         for genome, value in sorted(status.items()):
             writer.writerow([genome, value])
@@ -273,11 +282,93 @@ def read_genome_status(path: Path) -> dict[str, str]:
     return status
 
 
+@dataclass
+class ClusterSummaryRow:
+    """One dereplication cluster seen from its representative.
+
+    ``n_members`` excludes the representative. ``species`` lists the distinct
+    species across representative and members, the representative's first.
+    Quality columns are ``None`` when the manifest carried no CheckM values;
+    the ``member_*`` extremes span scored members only. ``best_member`` is the
+    highest-scoring genome in the cluster (representative included) and equals
+    ``representative`` when the keeper is already the best; it is empty when no
+    genome in the cluster is scored.
+    """
+
+    representative: str
+    n_members: int
+    n_species: int
+    species: str
+    rep_completeness: float | None = None
+    rep_contamination: float | None = None
+    member_max_completeness: float | None = None
+    member_min_contamination: float | None = None
+    best_member: str = ""
+
+
+_CLUSTER_SUMMARY_COLUMNS = (
+    "representative",
+    "n_members",
+    "n_species",
+    "species",
+    "rep_completeness",
+    "rep_contamination",
+    "member_max_completeness",
+    "member_min_contamination",
+    "best_member",
+)
+
+
+def write_cluster_summary(path: Path, rows: list[ClusterSummaryRow]) -> None:
+    with atomic_replace(path, newline="") as fo:
+        writer = _tsv_writer(fo)
+        writer.writerow(_CLUSTER_SUMMARY_COLUMNS)
+        for r in rows:
+            writer.writerow(
+                [
+                    r.representative,
+                    r.n_members,
+                    r.n_species,
+                    r.species,
+                    _fmt_opt(r.rep_completeness),
+                    _fmt_opt(r.rep_contamination),
+                    _fmt_opt(r.member_max_completeness),
+                    _fmt_opt(r.member_min_contamination),
+                    r.best_member,
+                ]
+            )
+
+
+def _fmt_opt(value: float | None) -> str:
+    return "" if value is None else repr(value)
+
+
+def read_cluster_summary(path: Path) -> list[ClusterSummaryRow]:
+    rows: list[ClusterSummaryRow] = []
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.DictReader(fo, delimiter="\t")
+        for rec in reader:
+            rows.append(
+                ClusterSummaryRow(
+                    representative=rec["representative"],
+                    n_members=int(rec["n_members"]),
+                    n_species=int(rec["n_species"]),
+                    species=rec["species"],
+                    rep_completeness=_opt_float(rec.get("rep_completeness")),
+                    rep_contamination=_opt_float(rec.get("rep_contamination")),
+                    member_max_completeness=_opt_float(rec.get("member_max_completeness")),
+                    member_min_contamination=_opt_float(rec.get("member_min_contamination")),
+                    best_member=rec.get("best_member", ""),
+                )
+            )
+    return rows
+
+
 def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
     """Write child -> parent edges (FlexTaxD), de-duplicated, order preserved."""
     seen: set[tuple[str, str]] = set()
     with atomic_replace(path, newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t")
+        writer = _tsv_writer(fo)
         writer.writerow(["child", "parent"])
         for child, parent in edges:
             if (child, parent) in seen:
@@ -289,6 +380,6 @@ def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
 def write_genomes_map(path: Path, mapping: list[tuple[str, str]]) -> None:
     """Write accession -> leaf rows."""
     with atomic_replace(path, newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t")
+        writer = _tsv_writer(fo)
         for accession, leaf in mapping:
             writer.writerow([accession, leaf])

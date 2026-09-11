@@ -8,6 +8,7 @@ import pytest
 
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import (
+    CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
     SelectionRow,
@@ -107,6 +108,7 @@ def test_chunk_writes_a_valid_contract(tmp_path: Path, reg) -> None:
     # contract files + representative FASTAs are present on disk
     assert (out / CLUSTERS_TSV).exists()
     assert (out / GENOME_STATUS_TSV).exists()
+    assert (out / CLUSTER_SUMMARY_TSV).exists()
     rep_files = {p.name for p in (out / "representatives").iterdir()}
     assert rep_files == {genomes[0].name, genomes[2].name}
     clusters = read_clusters(out / CLUSTERS_TSV)

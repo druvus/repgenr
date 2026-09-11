@@ -18,6 +18,14 @@ matrix test keeps it in sync. Global options go before the command name
 | `--verbose`, `-v` | off | Verbose (DEBUG) logging. |
 | `--quiet`, `-q` | off | Only warnings and errors. |
 
+## cluster-summary
+
+Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+
 ## derep-stock
 
 Store, load, list or delete named dereplication runs.
