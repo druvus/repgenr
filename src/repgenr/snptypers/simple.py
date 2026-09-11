@@ -5,6 +5,13 @@ tool. For each genome: align to the reference (minimap2), call SNP-only variants
 (bcftools), and build a SNP-only consensus that preserves reference length. The
 per-genome consensuses (plus the reference) are stacked into a whole-genome
 alignment, then reduced to variable columns to form the core-SNP alignment.
+
+Genomes are independent, so they run concurrently: the thread budget becomes
+``workers x threads-per-worker``, each worker driving its own chain of tools.
+The per-genome intermediates (SAM, BAM, pileup, calls) are scratch. They are
+written compressed and deleted as soon as that genome's consensus has been
+read, which keeps peak scratch at a few hundred megabytes instead of growing
+with the genome count.
 """
 
 from __future__ import annotations
@@ -16,6 +23,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
+from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
 from .base import SnpParams, SnpResult, SnpTyper
 
@@ -64,10 +72,22 @@ class SimpleSnpTyper(SnpTyper):
         per_genome_dir = out_dir / "per_genome"
         per_genome_dir.mkdir(exist_ok=True)
 
-        for genome in genomes:
-            if genome.resolve() == reference.resolve():
-                continue
-            consensuses[genome.stem] = _call_one(genome, ref, per_genome_dir, params, logger)
+        others = [g for g in genomes if g.resolve() != reference.resolve()]
+        workers, per_worker = _split_threads(params.threads, len(others))
+        if workers > 1:
+            logger.info(
+                "Calling %d genomes on %d worker(s), %d thread(s) each",
+                len(others),
+                workers,
+                per_worker,
+            )
+        called = parallel_map(
+            lambda genome: _call_one(genome, ref, per_genome_dir, per_worker, params, logger),
+            others,
+            workers,
+            logger=logger,
+        )
+        consensuses.update(zip((g.stem for g in others), called, strict=True))
 
         full_fasta = out_dir / "full_alignment.fasta"
         with open(full_fasta, "w", encoding="utf-8") as fo:
@@ -91,33 +111,70 @@ class SimpleSnpTyper(SnpTyper):
         )
 
 
-def _call_one(genome: Path, ref: Path, work: Path, params: SnpParams, logger) -> str:
+def _split_threads(threads: int, genomes: int) -> tuple[int, int]:
+    """Workers and threads each, for ``genomes`` independent per-genome chains.
+
+    One genome's chain is dominated by single-threaded steps (mpileup above
+    all), so the budget buys far more as concurrent genomes than as threads
+    inside one chain. Threads go to the tools only once there are more than
+    enough workers for the genomes at hand.
+    """
+    if threads < 1 or genomes < 1:
+        return 1, 1
+    workers = max(1, min(threads, genomes))
+    return workers, max(1, threads // workers)
+
+
+def _call_one(genome: Path, ref: Path, work: Path, threads: int, params: SnpParams, logger) -> str:
     stem = genome.stem
     sam = work / f"{stem}.sam"
     bam = work / f"{stem}.bam"
-    calls = work / f"{stem}.calls.vcf"
+    # Compressed BCF, not plain VCF: the pileup of a bacterial genome is a
+    # record per reference base, and it is read once by `bcftools call`.
+    pileup = work / f"{stem}.pileup.bcf"
+    calls = work / f"{stem}.calls.bcf"
     snps = work / f"{stem}.snps.vcf.gz"
     cons = work / f"{stem}.consensus.fasta"
 
-    pileup = work / f"{stem}.pileup.vcf"
+    nt = str(threads)
     log = "bcftools"
     caps = _CAPABILITIES
 
     def tool(cmd, **kw):
         run_tool(caps, cmd, logger=logger, **kw)
 
-    tool(["minimap2", "-a", ref, genome.resolve()], log_prefix="minimap2", stdout_path=sam)
-    tool(["samtools", "sort", "-o", bam, sam], log_prefix="samtools")
-    tool(["samtools", "index", bam], log_prefix="samtools")
-    tool(["bcftools", "mpileup", "-f", ref, "-o", pileup, bam], log_prefix=log)
+    tool(
+        ["minimap2", "-a", "-t", nt, ref, genome.resolve()],
+        log_prefix="minimap2",
+        stdout_path=sam,
+    )
+    tool(["samtools", "sort", "-@", nt, "-o", bam, sam], log_prefix="samtools")
+    sam.unlink(missing_ok=True)
+    tool(["samtools", "index", "-@", nt, bam], log_prefix="samtools")
+    tool(
+        ["bcftools", "mpileup", "--threads", nt, "-Ob", "-f", ref, "-o", pileup, bam],
+        log_prefix=log,
+    )
     # Haploid calling: the diploid default emits heterozygous genotypes on
     # bacterial genomes, which `bcftools consensus` renders as IUPAC codes
     # that Gubbins (and most alignment tools) reject.
-    tool(["bcftools", "call", "-mv", "--ploidy", "1", "-Ov", "-o", calls, pileup], log_prefix=log)
-    tool(["bcftools", "view", "-v", "snps", "-Oz", "-o", snps, calls], log_prefix=log)
+    tool(
+        ["bcftools", "call", "--threads", nt, "-mv", "--ploidy", "1", "-Ob", "-o", calls, pileup],
+        log_prefix=log,
+    )
+    pileup.unlink(missing_ok=True)
+    tool(
+        ["bcftools", "view", "--threads", nt, "-v", "snps", "-Oz", "-o", snps, calls],
+        log_prefix=log,
+    )
     tool(["bcftools", "index", snps], log_prefix=log)
     tool(["bcftools", "consensus", "-f", ref, "-o", cons, snps], log_prefix=log)
-    return _concat_fasta(cons)
+    consensus = _concat_fasta(cons)
+    # The consensus is in memory now; nothing downstream reads this genome's
+    # intermediates. Keep them on failure, where they are the evidence.
+    for leftover in (bam, Path(f"{bam}.bai"), calls, snps, Path(f"{snps}.csi"), cons):
+        leftover.unlink(missing_ok=True)
+    return consensus
 
 
 def _concat_fasta(path: Path) -> str:

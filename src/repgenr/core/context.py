@@ -33,6 +33,8 @@ class WorkdirContext:
             self.workdir.mkdir(parents=True, exist_ok=True)
         self.logger = logger or configure_logging(self.workdir)
         self.config = Config.load(self.workdir)
+        # Set by the CLI harness from --force: recompute, ignoring caches.
+        self.force = False
 
     # -- canonical path layout (see plan "Canonical data contracts") ----------
     @property

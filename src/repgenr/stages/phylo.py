@@ -14,6 +14,8 @@ outgroup is done once, for every builder, in the tree2tax stage.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import shutil
 from collections.abc import Mapping, Sequence
@@ -23,9 +25,12 @@ from pathlib import Path
 
 from ..aligners.base import AlignParams
 from ..aligners.base import registry as aligner_registry
+from ..core.containers import result_env_fragment
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     CLUSTERS_TSV,
+    CORE_SNP_FASTA,
+    MSA_FASTA,
     TREE_NWK,
     accession_from_filename,
     atomic_path,
@@ -33,6 +38,7 @@ from ..core.contracts import (
     parse_genome_filename,
 )
 from ..core.errors import UserInputError, WorkdirError
+from ..core.inputs import file_digest, paths_stat_digest
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import ToolCapabilities, auto_select, scale_warning
 from ..treebuilders.base import InputKind, TreeParams
@@ -117,6 +123,104 @@ class PhyloOutcome:
     outgroup_leaf: str | None
 
 
+# Stamp written beside a built MSA, so a later run that only changes the tree
+# builder (or the bootstrap) can reuse it instead of aligning or SNP-calling
+# again. The stage fingerprint cannot do this: it covers the whole stage.
+MSA_STAMP = "msa_source.json"
+_MSA_STAMP_VERSION = 1
+
+
+def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
+    """Path the MSA source writes, by source."""
+    if params.msa_source == "aligner":
+        return dirs.align_dir / MSA_FASTA
+    return dirs.snp_dir / CORE_SNP_FASTA
+
+
+def _msa_key(genomes: Sequence[Path], outgroup_file: Path | None, params: PhyloParams) -> str:
+    """Hash of everything that determines the MSA, and nothing else.
+
+    Deliberately excludes the tree builder, the bootstrap and the thread count:
+    those change the tree, not the alignment the tree is built from.
+    """
+    inputs = list(genomes) + ([outgroup_file] if outgroup_file is not None else [])
+    payload = {
+        "v": _MSA_STAMP_VERSION,
+        "msa_source": params.msa_source,
+        "aligner": params.aligner if params.msa_source == "aligner" else None,
+        "snptyper": params.snptyper if params.msa_source == "snptype" else None,
+        "reference": params.reference,
+        "all_genomes": params.all_genomes,
+        "no_outgroup": params.no_outgroup,
+        "mask": str(params.extra.get("mask", "none")),
+        "extra": {k: str(v) for k, v in sorted(_adapter_extra(params.extra).items())},
+        "inputs": paths_stat_digest(inputs),
+        "env": result_env_fragment(),
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _read_msa_stamp(artifact: Path, key: str) -> dict | None:
+    """The stamp beside ``artifact`` when it still describes that exact file.
+
+    The content digest is checked as well as the key: another stage (or a hand
+    edit) may have rewritten the artifact since, and a stale reuse would build
+    a tree from an alignment nobody asked for.
+    """
+    stamp_path = artifact.parent / MSA_STAMP
+    if not stamp_path.is_file() or not artifact.is_file():
+        return None
+    try:
+        stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if stamp.get("key") != key:
+        return None
+    if stamp.get("artifact_digest") != file_digest(artifact):
+        return None
+    return stamp
+
+
+def _write_msa_stamp(artifact: Path, key: str, versions: dict[str, str]) -> None:
+    stamp = {
+        "v": _MSA_STAMP_VERSION,
+        "key": key,
+        "artifact": artifact.name,
+        "artifact_digest": file_digest(artifact),
+        "versions": versions,
+    }
+    with atomic_path(artifact.parent / MSA_STAMP) as tmp:
+        tmp.write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _msa_with_reuse(
+    genomes: list[Path],
+    outgroup_file: Path | None,
+    dirs: PhyloDirs,
+    params: PhyloParams,
+    logger: logging.Logger,
+    *,
+    reuse: bool,
+) -> tuple[Path, dict[str, str]]:
+    """Build the MSA, or reuse the one a previous run left with the same inputs."""
+    key = _msa_key(genomes, outgroup_file, params)
+    artifact = _msa_artifact(dirs, params)
+    if reuse:
+        stamp = _read_msa_stamp(artifact, key)
+        if stamp is not None:
+            logger.info(
+                "Reusing the alignment at %s: same source, inputs and settings "
+                "as the run that built it (--force rebuilds it).",
+                artifact,
+            )
+            return artifact, dict(stamp.get("versions") or {})
+    msa, versions = _build_msa(genomes, outgroup_file, dirs, params, logger)
+    if msa.resolve() == artifact.resolve():
+        _write_msa_stamp(artifact, key, versions)
+    return msa, versions
+
+
 def build_tree(
     genomes: list[Path],
     outgroup_file: Path | None,
@@ -124,6 +228,8 @@ def build_tree(
     dirs: PhyloDirs,
     params: PhyloParams,
     logger: logging.Logger,
+    *,
+    reuse_msa: bool = True,
 ) -> PhyloOutcome:
     """Build a phylogeny from explicit inputs into ``dirs`` (stateless; no config).
 
@@ -187,7 +293,9 @@ def build_tree(
         )
         tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
     else:
-        msa, source_versions = _build_msa(genomes, outgroup_file, dirs, params, logger)
+        msa, source_versions = _msa_with_reuse(
+            genomes, outgroup_file, dirs, params, logger, reuse=reuse_msa
+        )
         versions = {**versions, **source_versions}
         _warn_low_diversity(msa, logger)
         logger.info("Building tree with %s from MSA %s", treebuilder, msa)
@@ -276,7 +384,16 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         snp_dir=ctx.snp_dir,
         scratch_dir=ctx.scratch_dir,
     )
-    outcome = build_tree(genomes, outgroup_file, outgroup_leaf, dirs, params, logger)
+    outcome = build_tree(
+        genomes,
+        outgroup_file,
+        outgroup_leaf,
+        dirs,
+        params,
+        logger,
+        # --force means recompute this stage, cached alignment included.
+        reuse_msa=not ctx.force,
+    )
 
     is_msa = treebuilder_registry.create(outcome.treebuilder).input_kind == InputKind.MSA_FASTA
     ctx.config.record_stage(

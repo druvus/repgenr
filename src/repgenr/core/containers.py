@@ -117,6 +117,17 @@ def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None)
     return None
 
 
+def result_env_fragment() -> dict[str, list]:
+    """Execution environment that can change a tool's result, for fingerprints.
+
+    The backend, platform and Wave selection decide which tool builds run; the
+    engine binary, cache directory and extra mounts are plumbing and stay out,
+    so re-running elsewhere on the same machine still resumes.
+    """
+    config = get_config()
+    return {"container": [config.backend, config.platform, config.wave_enabled]}
+
+
 def runs_on_host(caps: ToolCapabilities) -> bool:
     """True when :func:`run_tool` would execute this adapter's commands natively.
 

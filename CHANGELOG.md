@@ -6,6 +6,23 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The `simple` SNP typer runs genomes concurrently and passes a thread count to
+  minimap2, samtools and bcftools; it previously mapped one genome at a time on
+  one core whatever `--threads` said. On 69 Francisella genomes with 8 threads
+  the typing stage went from 10.8 minutes to 2.8.
+- The same typer writes its per-genome pileup and calls as compressed BCF and
+  deletes each genome's intermediates once its consensus has been read. The
+  Francisella run left 10 GB of scratch behind, 8.3 GB of it uncompressed
+  pileup VCF; the same run now leaves 190 MB, nearly all of it the whole-genome
+  alignment the stage publishes.
+- `phylo` stamps the alignment it builds and reuses it when a later run changes
+  only the tree builder, the bootstrap or the thread count. Trying a second
+  tree builder repeated the whole alignment or SNP-calling step before, which
+  on that same set was 11 minutes per attempt. The stamp records the genome
+  set, the source settings and the alignment's digest, so any change to those,
+  or `--force`, rebuilds it.
+
 ### Added
 - The Gubbins masker reports how much of the alignment is variable, warns above
   10%, and repeats the figure when Gubbins fails, instead of leaving a bare

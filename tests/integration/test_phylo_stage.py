@@ -333,3 +333,73 @@ def test_snptype_source_types_the_outgroup_too(
     )
     core = (workdir / "snp" / "core_snp.fasta").read_text()
     assert core.count(">") == 4 and ">Fam_gen_og_GCA_000009" in core
+
+
+def _align_calls(monkeypatch) -> list[int]:
+    """Count aligner invocations across phylo runs."""
+    calls: list[int] = []
+    original = _FakeAligner.align
+
+    def counting(self, genomes, reference, out_dir, params, logger):
+        calls.append(1)
+        return original(self, genomes, reference, out_dir, params, logger)
+
+    monkeypatch.setattr(_FakeAligner, "align", counting)
+    return calls
+
+
+def test_msa_is_reused_when_only_the_tree_builder_changes(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """Trying another tree builder must not repeat the alignment."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+    stamp = workdir / "align" / "msa_source.json"
+    assert stamp.is_file(), "the alignment is stamped with what produced it"
+
+    run(ctx, PhyloParams(no_outgroup=True, bootstrap=100, **base))
+    assert len(calls) == 1, "same inputs and settings: the alignment is reused"
+    assert ctx.config.stages["phylo"].tool_versions.get("fakealigner") == "1.0"
+
+
+def test_msa_is_rebuilt_when_its_own_settings_or_inputs_change(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+
+    # An aligner setting the alignment depends on.
+    run(ctx, PhyloParams(no_outgroup=True, extra={"kmer": 31}, **base))
+    assert len(calls) == 2
+
+    # A genome added to the set.
+    reps = workdir / "derep" / "representatives"
+    (reps / "Fam_gen_sp_GCA_0000099.fasta").write_text(">s9\nACGTACGT\n")
+    run(ctx, PhyloParams(no_outgroup=True, extra={"kmer": 31}, **base))
+    assert len(calls) == 3
+
+    # The alignment file itself replaced behind our back.
+    (workdir / "align" / "msa.fasta").write_text(">s1\nAAAA\n")
+    run(ctx, PhyloParams(no_outgroup=True, extra={"kmer": 31}, **base))
+    assert len(calls) == 4, "a stamp that no longer describes the file is not trusted"
+
+
+def test_force_rebuilds_the_msa(workdir: Path, fake_phylo_tools, monkeypatch) -> None:
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    params = PhyloParams(
+        treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner", no_outgroup=True
+    )
+    run(ctx, params)
+    ctx.force = True
+    run(ctx, params)
+    assert len(calls) == 2

@@ -231,6 +231,17 @@ API refuses sustained bursts now and then; refused cards are retried once
 more, slowly, and only a genome refused twice is left unscored. The outgroup is chosen
 afterwards from the parent taxon and never counts against the limit.
 
+### Reusing an alignment across tree builders
+
+`phylo` stamps the alignment it builds (`align/msa_source.json` or
+`snp/msa_source.json`) with what produced it: the source and its settings, the
+genome set, and the alignment's own digest. A later `phylo` run that changes
+only the tree builder, the bootstrap or the thread count reuses that alignment
+instead of aligning or SNP-calling again, and says so in the log. Anything the
+alignment depends on, such as the aligner, the SNP typer, `--reference`,
+`--mask` or the genome set, rebuilds it, as does `--force` or a change to the
+alignment file itself.
+
 ### SNP typing and masking
 
 The `repgenr snptype` command (and `phylo-build --msa-source snptype`) call a
@@ -253,6 +264,13 @@ too) and says so in the log. `--tool-arg gubbins_tree_builder=raxmlng`,
 `--tool-arg gubbins_first_tree_builder=rapidnj` and
 `--tool-arg gubbins_args="--min-snps 5"` pass the choice, the first-iteration
 builder and any further `run_gubbins.py` arguments through.
+
+The `simple` typer maps each genome independently, so `--threads` buys
+concurrent genomes first and threads inside one genome's chain only when there
+are more threads than genomes. Its per-genome intermediates are written
+compressed and removed as soon as that genome's consensus has been read, so
+scratch stays at a few hundred megabytes whatever the genome count. A genome
+whose chain fails keeps its intermediates for inspection.
 
 `--tool ska2` (split k-mer analysis) is reference-free: every genome is an
 ordinary sample, so no assembly's private errors bias the SNP distances, and
