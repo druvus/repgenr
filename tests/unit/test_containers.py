@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -312,7 +313,9 @@ def test_run_chain_runs_one_container_for_the_whole_sequence(tmp_path, monkeypat
     assert runs[0][-2] == "-c" and runs[0][-3] == "sh"
     assert script.startswith("set -e\n"), "the chain stops at the first failure"
     assert "minimap2" in script and "samtools sort" in script
-    assert str(tmp_path) in " ".join(runs[0][:-1]), "the paths in the script are mounted"
+    mounts = [runs[0][i + 1].split(":")[0] for i, tok in enumerate(runs[0]) if tok == "-v"]
+    covered = any(tmp_path == Path(m) or Path(m) in tmp_path.parents for m in mounts)
+    assert covered, f"the paths in the script are mounted: {mounts}"
     assert "[minimap2] $" in caplog.text and "[samtools] $" in caplog.text
 
 
