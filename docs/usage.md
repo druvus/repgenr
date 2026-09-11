@@ -45,7 +45,15 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
+| `--phylo_split_msa` | `false` | Run the alignment and the tree as separate tasks. |
 | `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). |
+
+`--phylo_split_msa` splits the phylogeny into `PHYLO_MSA` and `PHYLO_TREE`.
+The alignment then keeps its own cache entry, so trying another tree builder or
+another bootstrap re-runs only the tree, and the two halves take their own
+resource labels: the alignment is `process_high`, the tree `process_medium`.
+It applies to tree builders that consume an alignment; leave it off for
+mashtree or sourmash, which build from genomes.
 
 Parameters are validated against `nextflow/nextflow_schema.json` at launch.
 
@@ -241,6 +249,11 @@ instead of aligning or SNP-calling again, and says so in the log. Anything the
 alignment depends on, such as the aligner, the SNP typer, `--reference`,
 `--mask` or the genome set, rebuilds it, as does `--force` or a change to the
 alignment file itself.
+
+The same split is available to the stateless step: `phylo-build --msa-only`
+builds the alignment and writes `msa.fasta` without a tree, and `phylo-build
+--msa <file>` builds a tree from an alignment an earlier call produced. The
+Nextflow layer uses these to run the alignment and the tree as separate tasks.
 
 ### SNP typing and masking
 

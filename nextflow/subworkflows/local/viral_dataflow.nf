@@ -7,6 +7,8 @@
 include { VACQUIRE            } from '../../modules/local/dataflow/vacquire'
 include { DEREPLICATE_SCATTER } from './dereplicate_scatter'
 include { PHYLO               } from '../../modules/local/dataflow/phylo'
+include { PHYLO_MSA           } from '../../modules/local/dataflow/phylo_msa'
+include { PHYLO_TREE          } from '../../modules/local/dataflow/phylo_tree'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow VIRAL_DATAFLOW {
@@ -41,17 +43,30 @@ workflow VIRAL_DATAFLOW {
         .join(ch_outgroup, by: 0)
         .join(VACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_phylo_in)
-    ch_versions = ch_versions.mix(PHYLO.out.versions)
+    // See bacterial_dataflow: params.phylo_split_msa runs the alignment and
+    // the tree as separate tasks.
+    def ch_tree = null
+    if (params.phylo_split_msa) {
+        PHYLO_MSA(ch_phylo_in)
+        ch_versions = ch_versions.mix(PHYLO_MSA.out.versions)
+        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0))
+        ch_versions = ch_versions.mix(PHYLO_TREE.out.versions)
+        ch_tree = PHYLO_TREE.out.tree
+    }
+    else {
+        PHYLO(ch_phylo_in)
+        ch_versions = ch_versions.mix(PHYLO.out.versions)
+        ch_tree = PHYLO.out.tree
+    }
 
     // [meta, tree] joined with [meta, reps, outgroup, accession]
-    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+    def ch_tree2tax_in = ch_tree.join(ch_phylo_in, by: 0)
 
     TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:
-    tree        = PHYLO.out.tree
+    tree        = ch_tree
     tree2tax    = TREE2TAX.out.tree2tax
     genomes_map = TREE2TAX.out.genomes_map
     versions    = ch_versions

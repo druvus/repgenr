@@ -221,6 +221,50 @@ def _msa_with_reuse(
     return msa, versions
 
 
+def build_msa(
+    genomes: list[Path],
+    outgroup_file: Path | None,
+    dirs: PhyloDirs,
+    params: PhyloParams,
+    logger: logging.Logger,
+    *,
+    reuse: bool = True,
+) -> tuple[Path, dict[str, str]]:
+    """Build only the alignment a tree builder would consume.
+
+    The alignment half of :func:`build_tree`, for callers that build the tree
+    separately: the Nextflow layer runs the two as their own tasks so that
+    changing the tree builder does not repeat the alignment.
+    """
+    builder = treebuilder_registry.create(_resolve_treebuilder(params, len(genomes), logger))
+    if builder.input_kind == InputKind.GENOMES:
+        raise UserInputError(
+            f"Tree builder '{builder.capabilities.name}' builds from genomes, not from an "
+            "alignment, so there is no alignment to build separately."
+        )
+    return _msa_with_reuse(genomes, outgroup_file, dirs, params, logger, reuse=reuse)
+
+
+def _resolve_treebuilder(params: PhyloParams, n_genomes: int, logger: logging.Logger) -> str:
+    """The tree builder to use, resolving 'auto' and warning past its scale."""
+    treebuilder = params.treebuilder
+    if treebuilder == "auto":
+        treebuilder = auto_select(treebuilder_registry, n_genomes) or "iqtree"
+        logger.info("Auto-selected tree builder '%s' for %d genomes", treebuilder, n_genomes)
+        return treebuilder
+    warn = scale_warning(treebuilder_registry, treebuilder, n_genomes)
+    if warn:
+        limit, alts = warn
+        logger.warning(
+            "Tree builder '%s' is tuned for <=%d genomes but you have %d; consider: %s",
+            treebuilder,
+            limit,
+            n_genomes,
+            ", ".join(alts) or "none",
+        )
+    return treebuilder
+
+
 def build_tree(
     genomes: list[Path],
     outgroup_file: Path | None,
@@ -230,6 +274,7 @@ def build_tree(
     logger: logging.Logger,
     *,
     reuse_msa: bool = True,
+    msa: Path | None = None,
 ) -> PhyloOutcome:
     """Build a phylogeny from explicit inputs into ``dirs`` (stateless; no config).
 
@@ -241,22 +286,7 @@ def build_tree(
     if not genomes:
         raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
 
-    treebuilder = params.treebuilder
-    if treebuilder == "auto":
-        treebuilder = auto_select(treebuilder_registry, len(genomes)) or "iqtree"
-        logger.info("Auto-selected tree builder '%s' for %d genomes", treebuilder, len(genomes))
-    else:
-        warn = scale_warning(treebuilder_registry, treebuilder, len(genomes))
-        if warn:
-            limit, alts = warn
-            logger.warning(
-                "Tree builder '%s' is tuned for <=%d genomes but you have %d; consider: %s",
-                treebuilder,
-                limit,
-                len(genomes),
-                ", ".join(alts) or "none",
-            )
-
+    treebuilder = _resolve_treebuilder(params, len(genomes), logger)
     builder = treebuilder_registry.create(treebuilder)
     versions = builder.preflight()
 
@@ -293,9 +323,13 @@ def build_tree(
         )
         tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
     else:
-        msa, source_versions = _msa_with_reuse(
-            genomes, outgroup_file, dirs, params, logger, reuse=reuse_msa
-        )
+        if msa is not None:
+            logger.info("Building tree from the alignment given on the command line: %s", msa)
+            source_versions: dict[str, str] = {}
+        else:
+            msa, source_versions = _msa_with_reuse(
+                genomes, outgroup_file, dirs, params, logger, reuse=reuse_msa
+            )
         versions = {**versions, **source_versions}
         _warn_low_diversity(msa, logger)
         logger.info("Building tree with %s from MSA %s", treebuilder, msa)
@@ -323,10 +357,21 @@ class PhyloBuildParams:
     outgroup_accession: Path | None = None
     phylo: PhyloParams = field(default_factory=PhyloParams)
     versions_out: Path | None = None
+    # Split the step in two: build the alignment and stop (``msa_only``), or
+    # build the tree from an alignment a previous call produced (``msa``).
+    # The Nextflow layer uses this to keep the alignment when only the tree
+    # builder changes; nothing else changes between the two halves.
+    msa_only: bool = False
+    msa: Path | None = None
 
 
 def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
-    """Build a phylogeny from an explicit genomes directory (data-channel step)."""
+    """Build a phylogeny from an explicit genomes directory (data-channel step).
+
+    With ``msa_only`` it stops once the alignment is built and returns it,
+    copied to ``<out_dir>/msa.fasta``. With ``msa`` it skips alignment and
+    builds the tree from that file.
+    """
     genomes = list_fasta(params.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genome FASTA files found in {params.genomes_dir}.")
@@ -348,12 +393,28 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
         snp_dir=params.out_dir / "snp",
         scratch_dir=params.out_dir / "scratch",
     )
-    outcome = build_tree(genomes, outgroup_file, outgroup_leaf, dirs, params.phylo, logger)
-    if params.versions_out is not None:
-        from ..core.versions import write_versions_fragment
+    if params.msa_only:
+        msa, versions = build_msa(genomes, outgroup_file, dirs, params.phylo, logger)
+        published = params.out_dir / MSA_FASTA
+        if msa.resolve() != published.resolve():
+            with atomic_path(published) as tmp:
+                shutil.copy2(msa, tmp)
+        _write_versions(params.versions_out, versions)
+        return published
 
-        write_versions_fragment(params.versions_out, outcome.versions)
+    outcome = build_tree(
+        genomes, outgroup_file, outgroup_leaf, dirs, params.phylo, logger, msa=params.msa
+    )
+    _write_versions(params.versions_out, outcome.versions)
     return outcome.tree
+
+
+def _write_versions(versions_out: Path | None, versions: dict[str, str]) -> None:
+    if versions_out is None:
+        return
+    from ..core.versions import write_versions_fragment
+
+    write_versions_fragment(versions_out, versions)
 
 
 def run(ctx: WorkdirContext, params: PhyloParams) -> Path:

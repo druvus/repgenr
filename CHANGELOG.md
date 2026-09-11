@@ -34,6 +34,14 @@ All notable changes to RepGenR are documented here. The format follows
   or `--force`, rebuilds it.
 
 ### Added
+- The Nextflow layer can run the alignment and the tree as separate tasks
+  (`--phylo_split_msa`, off by default). The phylogeny was one task, so
+  changing the tree builder or the bootstrap repeated the alignment or the SNP
+  calling, and both halves shared one resource label. The split gives the
+  alignment its own cache entry and `process_high`, the tree `process_medium`.
+- `phylo-build --msa-only` builds the alignment and stops, writing
+  `msa.fasta`; `phylo-build --msa <file>` builds the tree from an alignment an
+  earlier call produced. These are the two halves the Nextflow processes run.
 - The Gubbins masker reports how much of the alignment is variable, warns above
   10%, and repeats the figure when Gubbins fails, instead of leaving a bare
   non-zero exit. Measured on Francisella subsets, a set of one species (1-8%

@@ -27,6 +27,30 @@ nextflow_pipeline {
             def names = workflow.trace.succeeded().collect { t -> t.name }
             assert names.any { n -> n.contains('TREE2TAX (francisella)') }
             assert names.any { n -> n.contains('DEREP_MERGE (francisella.merged)') }
+            assert names.any { n -> n.contains('PHYLO (francisella)') }
+            assert !names.any { n -> n.contains('PHYLO_MSA') }
+        }
+    }
+
+    test("phylo_split_msa runs the alignment and the tree as separate tasks") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+                phylo_split_msa = true
+                phylo_args = '--msa-source snptype --snptyper simple --treebuilder fasttree'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+            assert path("$outputDir/phylo/msa.fasta").exists()
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains('PHYLO_MSA (francisella)') }
+            assert names.any { n -> n.contains('PHYLO_TREE (francisella)') }
+            assert !names.any { n -> n.contains('PHYLO (francisella)') }
+            assert path("$outputDir/tree2tax.tsv").exists()
         }
     }
 }

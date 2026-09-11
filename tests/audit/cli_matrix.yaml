@@ -1439,6 +1439,27 @@ commands:
         nextflow: 'module: fixed by the process script'
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
         observable: a versions YAML fragment is written
+      --msa-only:
+        param: PhyloBuildParams.msa_only
+        validated: stage
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: PHYLO_MSA'
+        live: tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree
+        observable: msa.fasta written, no tree
+      --msa:
+        param: PhyloBuildParams.msa
+        value: '{alt_file}'
+        validated: stage
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: PHYLO_TREE'
+        live: tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree
+        observable: the tree is built without re-aligning
       --mask:
         param: PhyloBuildParams.phylo.extra
         value: gubbins

@@ -155,6 +155,14 @@ def phylo_build_cmd(
     mask: str = typer.Option(
         "none", "--mask", help="Recombination masking for --msa-source snptype."
     ),
+    msa_only: bool = typer.Option(
+        False,
+        "--msa-only",
+        help="Build the alignment and stop, writing msa.fasta (for a separate tree step).",
+    ),
+    msa: Path | None = typer.Option(
+        None, "--msa", help="Build the tree from this alignment instead of constructing one."
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -177,6 +185,10 @@ def phylo_build_cmd(
         require_mask(mask)
         if mask != "none" and msa_source != "snptype":
             raise UserInputError("--mask applies only with --msa-source snptype.")
+        if msa_only and msa is not None:
+            raise UserInputError("--msa-only builds an alignment; --msa consumes one. Pick one.")
+        if msa is not None and not msa.is_file():
+            raise UserInputError(f"Alignment not found: {msa}")
 
         phylo_params = PhyloParams(
             treebuilder=treebuilder,
@@ -200,6 +212,8 @@ def phylo_build_cmd(
                 outgroup_accession=outgroup_accession,
                 phylo=phylo_params,
                 versions_out=versions_out,
+                msa_only=msa_only,
+                msa=msa,
             ),
             logger,
         )

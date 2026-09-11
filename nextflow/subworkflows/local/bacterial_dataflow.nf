@@ -1,5 +1,6 @@
 // Bacterial pipeline, data-channel form:
 //   ACQUIRE (metadata -> genome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+//   (PHYLO is PHYLO_MSA + PHYLO_TREE when params.phylo_split_msa is set)
 //
 // Genomes, representatives, the tree and the taxonomy flow between processes as
 // staged channel files; there is no shared working directory. This is the
@@ -8,6 +9,8 @@
 include { ACQUIRE             } from './acquire'
 include { DEREPLICATE_SCATTER } from './dereplicate_scatter'
 include { PHYLO               } from '../../modules/local/dataflow/phylo'
+include { PHYLO_MSA           } from '../../modules/local/dataflow/phylo_msa'
+include { PHYLO_TREE          } from '../../modules/local/dataflow/phylo_tree'
 include { TREE2TAX            } from '../../modules/local/dataflow/tree2tax'
 
 workflow BACTERIAL_DATAFLOW {
@@ -27,17 +30,30 @@ workflow BACTERIAL_DATAFLOW {
         .join(ACQUIRE.out.outgroup, by: 0)
         .join(ACQUIRE.out.outgroup_accession, by: 0)
 
-    PHYLO(ch_phylo_in)
-    ch_versions = ch_versions.mix(PHYLO.out.versions)
+    // With params.phylo_split_msa the alignment and the tree are separate
+    // tasks, so changing the tree builder re-runs only the tree.
+    def ch_tree = null
+    if (params.phylo_split_msa) {
+        PHYLO_MSA(ch_phylo_in)
+        ch_versions = ch_versions.mix(PHYLO_MSA.out.versions)
+        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0))
+        ch_versions = ch_versions.mix(PHYLO_TREE.out.versions)
+        ch_tree = PHYLO_TREE.out.tree
+    }
+    else {
+        PHYLO(ch_phylo_in)
+        ch_versions = ch_versions.mix(PHYLO.out.versions)
+        ch_tree = PHYLO.out.tree
+    }
 
     // [meta, tree] joined with [meta, reps, outgroup, accession]
-    def ch_tree2tax_in = PHYLO.out.tree.join(ch_phylo_in, by: 0)
+    def ch_tree2tax_in = ch_tree.join(ch_phylo_in, by: 0)
 
     TREE2TAX(ch_tree2tax_in)
     ch_versions = ch_versions.mix(TREE2TAX.out.versions)
 
     emit:
-    tree        = PHYLO.out.tree
+    tree        = ch_tree
     tree2tax    = TREE2TAX.out.tree2tax
     genomes_map = TREE2TAX.out.genomes_map
     versions    = ch_versions
