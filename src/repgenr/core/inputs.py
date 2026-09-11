@@ -57,6 +57,22 @@ def dir_stat_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def paths_stat_digest(paths: Iterable[Path]) -> str:
+    """sha256 over sorted (name, size, mtime_ns) of an explicit file list.
+
+    The list form of :func:`dir_stat_digest`, for callers that hold the paths
+    rather than the directory (the phylo core takes its genome set as a list).
+    """
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda q: q.name):
+        if not path.is_file():
+            digest.update(f"{path.name}\0{ABSENT}\n".encode())
+            continue
+        st = path.stat()
+        digest.update(f"{path.name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return digest.hexdigest()
+
+
 def path_digest(path: Path) -> str:
     """Digest a path: directories by metadata, files by content."""
     if path.is_dir():

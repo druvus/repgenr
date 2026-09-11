@@ -182,10 +182,9 @@ def _env_fragment() -> dict[str, Any]:
     (and so can change results); the engine binary, cache directory, and extra
     mounts are plumbing and deliberately excluded, like _NON_RESULT_PARAMS.
     """
-    from ..core.containers import get_config
+    from ..core.containers import result_env_fragment
 
-    config = get_config()
-    return {"container": [config.backend, config.platform, config.wave_enabled]}
+    return result_env_fragment()
 
 
 def _derep_help(*, auto: bool = True) -> str:
@@ -427,6 +426,9 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
 
 def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> None:
     params = build_params()
+    # Stages that cache an intermediate of their own (phylo's MSA) must not
+    # reuse it under --force, which means "recompute this stage".
+    ctx.force = bool(_RUN_STATE["force"])
     if _is_query_only(stage_name, params):
         # Pure query (list/preview): run the body, leave the resume record
         # of the last real run untouched.

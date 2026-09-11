@@ -190,6 +190,22 @@ masker falls back to IQ-TREE, which cost 76 of the 87 minutes above on this
 alignment. `--tool-arg gubbins_tree_builder=fasttree` with
 `gubbins_first_tree_builder=rapidnj` did the same work in 6 minutes.
 
+## SNP typing throughput (2026-09-11)
+
+The `simple` typer on the 68 Francisella representatives, 8 threads, workdir on
+the external volume. The stage maps each genome against the reference, then
+reduces the stacked consensuses to variable columns.
+
+| | Serial, plain VCF | Concurrent, compressed BCF |
+|---|---|---|
+| Mapping, calling and core-SNP reduction | 10.8 min | 2.8 min |
+| Scratch left behind | 10 GB | 190 MB |
+| Peak resident memory | not recorded | 0.4 GB |
+
+The old scratch was 8.3 GB of uncompressed pileup VCF, which twice filled a
+disk during this audit. What remains is the whole-genome alignment the stage
+publishes for maskers.
+
 ## Platform notes (macOS / Apple Silicon)
 
 - Several tools lack osx-arm64 builds; some run via an osx-64 (Rosetta) conda env
