@@ -20,6 +20,16 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- Documentation repairs from the gap analysis: the README counts five tool
+  families and shows the chain `run` executes; `docs/output.md` lists
+  `selection.tsv`, `outgroup_accession.txt`, `missing_accessions.txt`, the
+  viral tables, the SNP distance matrix, the scratch directory, the aligner
+  output under `align/` and the alignment stamp; `docs/verification.md`
+  gains a per-adapter status table; `docs/developing.md` describes the layout
+  as it is and the adapter checklist in full; the links broken by the
+  consolidation are repaired; CITATIONS.md adds CheckM, Prodigal, Mash,
+  FastANI and the HAL toolkit; `docs/usage.md` covers the inspection commands
+  and names every SNP typer.
 - `--mask` is refused before any SNP calling when the typer cannot feed a
   masker (SNP typers declare `produces_full_alignment`; ska2 does not), and
   the masker's binaries are checked before the typer runs. `repgenr run`

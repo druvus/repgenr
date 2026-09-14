@@ -2,26 +2,36 @@
 
 The CLI writes all stage outputs into the shared working directory
 (`--workdir`). The Nextflow data-channel pipeline instead flows results between
-processes as staged channel files and publishes the key deliverables (the tree,
-`tree2tax.tsv`, `genomes_map.tsv`) plus execution reports under `--outdir`
-(default `results/`).
+processes as staged channel files and publishes under `--outdir` (default
+`results/`): `metadata/selection.tsv`, the dereplication contract under
+`dereplicate/`, the tree under `phylo/tree/`, `tree2tax.tsv` and
+`genomes_map.tsv` at the top level, and the execution reports under
+`pipeline_info/`.
 
 ## Working directory layout
 
 | Path | Produced by | Description |
 |------|-------------|-------------|
-| `manifest.sqlite` | metadata | Genome manifest (accessions, taxonomy, dereplication status). |
+| `manifest.sqlite` | metadata, ingest, vgenome | Genome manifest (accessions, taxonomy, CheckM quality when known, dereplication status). |
+| `selection.tsv` | metadata, ingest, vgenome | The selected genomes: accession, taxonomy, outgroup flag, canonical filename and quality when known. The hand-off every later stage reads, and a resume input. |
+| `outgroup_accession.txt` | metadata, ingest, vgenome | Accession of the outgroup genome, read by phylo and tree2tax for rooting. Absent when there is no outgroup. |
 | `repgenr.yaml` | all stages | Provenance: tool name, parameters, resolved tool versions, completion timestamps. |
 | `repgenr.log` | all stages | Run log. |
-| `genomes/` | genome | Downloaded genome FASTAs, one per selected accession. |
-| `outgroup/` | genome | Outgroup genome for rooting. |
+| `genomes/` | genome, ingest, vgenome | Genome FASTAs, one per selected accession. |
+| `outgroup/` | genome, ingest, vgenome | Outgroup genome for rooting. |
+| `missing_accessions.txt` | genome | Accessions the download did not return; the completeness guard of later stages reads it. |
+| `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
 | `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
 | `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |
 | `derep/cluster_summary.tsv` | dereplicate, cluster-summary | One row per representative: member count, species spanned and keeper quality against the members (below). |
 | `snp/core_snp.fasta` | snptype | Core-SNP (variable-site) alignment; masked in place when `--mask` is set. |
 | `snp/full_alignment.fasta` | snptype | Whole-genome alignment in reference coordinates, when the SNP typer produces one (snippy, parsnp, simple); required input for `--mask`. |
-| `tree/` | phylo | Phylogeny (`tree.nwk`) and aligner/tree-builder intermediates. |
+| `snp/snp_distance_matrix.tsv` | snptype | Pairwise SNP distances between genomes; the `simple` typer writes it, the others do not. |
+| `scratch/` | snptype | The typer's per-genome intermediates. Each genome's are removed once its consensus has been read; a genome whose chain failed keeps its own. |
+| `align/msa.fasta` | phylo | Whole-genome alignment from the aligner (`--msa-source aligner`). |
+| `align/msa_source.json`, `snp/msa_source.json` | phylo | Stamp beside the alignment phylo built: the genome set, the source settings and the alignment's digest, so a later `phylo` that changes only the tree builder reuses it. |
+| `tree/` | phylo | Phylogeny (`tree.nwk`) and the tree builder's own files (logs, bootstrap trees). |
 | `genomes_map.tsv` | tree2tax | Map from each representative to its dereplicated members. |
 | `tree2tax.tsv` | tree2tax | FlexTaxD-compatible taxonomy derived from the tree. |
 

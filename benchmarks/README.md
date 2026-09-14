@@ -1,6 +1,6 @@
 # Scaling and bias benchmarks
 
-Audit tooling for the scaling/bias study (`docs/scaling-audit.md`). Lives outside
+Audit tooling for the scaling/bias study (`docs/audit/scaling-audit.md`). Lives outside
 `src/repgenr` on purpose: it measures the pipeline, it is not part of it.
 
 ## Layout
