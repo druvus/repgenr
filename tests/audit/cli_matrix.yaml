@@ -709,6 +709,29 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
+      --reduce:
+        param: MergeParams.reduce
+        value: species
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.derep_reduce
+        live: tests/live/test_steps.py::test_merge_reduce_and_target_reps
+        observable: representatives collapse to one per species in the merged contract
+      --target-reps:
+        param: MergeParams.target_reps
+        value: 2
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.derep_target_reps
+        live: tests/live/test_steps.py::test_merge_reduce_and_target_reps
+        observable: the merge searches the secondary ANI and lands near the count
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'

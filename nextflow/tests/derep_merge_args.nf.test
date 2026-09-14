@@ -1,0 +1,56 @@
+nextflow_process {
+
+    name "DEREP_MERGE ext.args2 carries the merge-only selection params"
+    script "../modules/local/derep_merge.nf"
+    tag "stub"
+    process "DEREP_MERGE"
+    options "-stub"
+    config "./derep_debug.config"
+
+    test("params.derep_reduce and params.derep_target_reps reach the merge command only") {
+        when {
+            params {
+                derep_reduce = "species"
+                derep_target_reps = 40
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.merged', mode: 'bacterial', run: [id: 'test', mode: 'bacterial']],
+                    [ file("${projectDir}/nextflow/tests/data/chunk_0") ]
+                )
+                input[1] = []
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args2:') }
+            assert line != null
+            assert line.contains('--reduce species')
+            assert line.contains('--target-reps 40')
+            def shared = process.stdout.find { it.contains('ext.args:') }
+            assert !shared.contains('--reduce')
+        }
+    }
+
+    test("the defaults add nothing to the merge command") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.merged', mode: 'bacterial', run: [id: 'test', mode: 'bacterial']],
+                    [ file("${projectDir}/nextflow/tests/data/chunk_0") ]
+                )
+                input[1] = []
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args2:') }
+            assert line != null
+            assert line.trim() == 'ext.args2:'
+        }
+    }
+}

@@ -156,6 +156,15 @@ genome's card (one request per selected genome). When the manifest has no
 quality at all the stage warns, and `repgenr.yaml` records
 `keeper_effective: tool` next to the requested `keeper` and the swap count.
 
+`--reduce species|genus` collapses the ANI representatives to one per taxon
+after dereplication, choosing the keeper by quality when scores are known and
+by cluster size otherwise; `--target-reps N` searches the secondary ANI to
+land near N representatives. Both exist on `dereplicate` and, since the
+merge step is where the final set is decided, on `dereplicate-merge`, which
+the Nextflow layer drives through `--derep_reduce` and `--derep_target_reps`.
+The merge step takes the taxonomy from `selection.tsv` when one reaches it
+and from the canonical genome filenames otherwise.
+
 ### Inspecting a dereplication
 
 Four commands read a dereplicated working directory without rerunning the
@@ -292,6 +301,9 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
+| `--derep_keeper` | `quality` | Representative choice at the merge step: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
+| `--derep_reduce` | `none` | Collapse the merged representatives to one per `species` or `genus` (`dereplicate-merge --reduce`). |
+| `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
 | `--phylo_split_msa` | `false` | Run the alignment and the tree as separate tasks. |
 | `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). |

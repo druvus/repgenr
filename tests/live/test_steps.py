@@ -368,3 +368,52 @@ def test_phylo_build_split_into_msa_and_tree(run_repgenr, synthetic_set, tmp_pat
         tree = (out / "tree" / TREE_NWK).read_text(encoding="utf-8")
         assert len(newick_leaves(tree)) == 4
         assert not (out / "snp").exists(), "the SNP typer does not run again"
+
+
+def test_merge_reduce_and_target_reps(run_repgenr, synthetic_set, tmp_path: Path) -> None:
+    """The merge step's --reduce collapses by the taxonomy in the filenames and
+    --target-reps searches the merge pass's secondary ANI."""
+    genomes = synthetic_set("balanced", n=8, length=50_000)
+    fofn = tmp_path / "all.fofn"
+    fofn.write_text("".join(f"{f}\n" for f in sorted(genomes.glob("*.fasta"))), encoding="utf-8")
+    chunk = tmp_path / "c0"
+    run_repgenr("dereplicate-chunk", "--genomes-fofn", fofn, "-o", chunk, "--tool", "sourmash")
+    plain = tmp_path / "plain"
+    run_repgenr("dereplicate-merge", "--chunk-dir", chunk, "-o", plain, "--tool", "sourmash")
+    from repgenr.core.contracts import read_clusters
+
+    def _reps(out: Path) -> set[str]:
+        return set(read_clusters(out / CLUSTERS_TSV))
+
+    n_plain = len(_reps(plain))
+    assert n_plain > 1
+
+    # Every synthetic genome shares the genus token, so a genus reduction is one keeper.
+    reduced = tmp_path / "genus"
+    run_repgenr(
+        "dereplicate-merge",
+        "--chunk-dir",
+        chunk,
+        "-o",
+        reduced,
+        "--tool",
+        "sourmash",
+        "--reduce",
+        "genus",
+    )
+    assert len(_reps(reduced)) == 1
+
+    target = tmp_path / "target"
+    log = run_repgenr(
+        "dereplicate-merge",
+        "--chunk-dir",
+        chunk,
+        "-o",
+        target,
+        "--tool",
+        "sourmash",
+        "--target-reps",
+        "2",
+    )
+    assert "target-reps" in (log.stdout + log.stderr)
+    assert 1 <= len(_reps(target)) <= n_plain

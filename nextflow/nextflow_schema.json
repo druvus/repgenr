@@ -118,6 +118,20 @@
                     "enum": ["quality", "tool"],
                     "description": "Merge-step representative choice: 'quality' picks by manifest CheckM completeness/contamination (only when a selection.tsv reaches the merge step); 'tool' keeps the adapter's own pick.",
                     "fa_icon": "fas fa-star"
+                },
+                "derep_reduce": {
+                    "type": "string",
+                    "default": "none",
+                    "enum": ["none", "species", "genus"],
+                    "description": "Taxonomy-aware reduction after the merge: one representative per species or genus. The taxonomy comes from selection.tsv when it reaches the merge step, else from the canonical genome filenames.",
+                    "fa_icon": "fas fa-sitemap"
+                },
+                "derep_target_reps": {
+                    "type": "integer",
+                    "default": 0,
+                    "minimum": 0,
+                    "description": "Target representative count for the merge step: the secondary ANI of the merge pass is searched to land near it (0 = off; the merge pass re-runs per search step).",
+                    "fa_icon": "fas fa-bullseye"
                 }
             }
         },

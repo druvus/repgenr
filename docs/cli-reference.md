@@ -105,6 +105,8 @@ Dereplicate the union of chunk representatives (gather step).
 | `--tool-arg` |  | Tool tuning as key=value (repeatable). |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
+| `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
+| `--target-reps` | `0` | Target representative count: search --secondary-ani of the merge pass to land near it (0 = off; re-runs the merge per search step). |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ## doctor

@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-23 commands, 219 flags (219 with a live test or an n/a reason, 0 pending).
+23 commands, 221 flags (221 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -106,6 +106,8 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_merge`
 | `--tool-arg` |  | MergeParams.extra | callback | n/a: not exposed; add it to ext.args in modules.config | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/developing.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--selection-tsv` |  | MergeParams.selection_tsv | none | module: fixed by the process script | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keeper` |  | MergeParams.keeper | choice | params.derep_keeper | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | docs/usage.md, docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
+| `--reduce` |  | MergeParams.reduce | choice | params.derep_reduce | tests/live/test_steps.py::test_merge_reduce_and_target_reps | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-reps` |  | MergeParams.target_reps | range | params.derep_target_reps | tests/live/test_steps.py::test_merge_reduce_and_target_reps | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | MergeParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_merge_by_chunk_fofn | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## doctor

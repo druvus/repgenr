@@ -22,6 +22,7 @@ process DEREP_MERGE {
 
     script:
     def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
     def opts = task.ext.repgenr_opts ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
@@ -43,7 +44,7 @@ process DEREP_MERGE {
     repgenr ${opts} dereplicate-merge \\
         \$chunk_args \\
         --out ${prefix} \\
-        ${args} \\
+        ${args} ${args2} \\
         \$sel \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
@@ -53,9 +54,11 @@ process DEREP_MERGE {
 
     stub:
     def args = task.ext.args ?: ''
+    def args2 = task.ext.args2 ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     echo "ext.args: ${args}"
+    echo "ext.args2: ${args2}"
     mkdir -p ${prefix}/representatives
     printf 'representative\\tmember\\n' > ${prefix}/clusters.tsv
     printf 'genome\\tstatus\\n' > ${prefix}/genome_status.tsv
