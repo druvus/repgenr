@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-24 commands, 245 flags (245 with a live test or an n/a reason, 0 pending).
+25 commands, 260 flags (260 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -236,6 +236,23 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--msa` |  | PhyloBuildParams.msa | stage | module: PHYLO_TREE | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--mask` |  | PhyloBuildParams.phylo.extra | registry | params.phylo_args | n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the builder | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
+## assemble
+
+dispatch: `stage`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--assembler` |  | AssembleParams.assembler | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--threads` | -t | AssembleParams.threads | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--jobs` |  | AssembleParams.jobs | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--memory-gb` |  | AssembleParams.memory_gb | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--min-contig-length` |  | AssembleParams.min_contig_length | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--outgroup` |  | AssembleParams.outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-reads` |  | AssembleParams.keep_reads | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-files` |  | AssembleParams.keep_files | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--tool-arg` |  | AssembleParams.extra | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+
 ## reads
 
 dispatch: `stage`
@@ -262,6 +279,11 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--viral` |  | VmetadataParams | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--genomes-dir` |  | n/a: selects the local chain (ingest replaces metadata and genome); wiring test | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_run_local_chain | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--reads` |  | n/a: selects the reads chain (reads and assemble replace metadata and genome); wiring test | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--accession-file` |  | ReadsParams.accession_file | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--platform` |  | ReadsParams.platform | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--max-runs` |  | ReadsParams.max_runs | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--assembler` |  | AssembleParams.assembler | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--selection` |  | IngestParams.selection | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup` |  | IngestParams.outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--copy` |  | IngestParams.copy | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |

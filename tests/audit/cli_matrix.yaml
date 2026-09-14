@@ -1491,6 +1491,118 @@ commands:
         nextflow: params.phylo_args
         live: 'n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the
           builder'
+  assemble:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+      --assembler:
+        param: AssembleParams.assembler
+        value: skesa
+        validated: registry
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+      --threads:
+        aliases:
+        - -t
+        param: AssembleParams.threads
+        value: '2'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+        invalid: '0'
+      --jobs:
+        param: AssembleParams.jobs
+        value: '1'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+        invalid: '0'
+      --memory-gb:
+        param: AssembleParams.memory_gb
+        value: '4'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+        invalid: '0'
+      --min-contig-length:
+        param: AssembleParams.min_contig_length
+        value: '1000'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+        invalid: '-1'
+      --outgroup:
+        param: AssembleParams.outgroup
+        value: '{file}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+      --keep-reads:
+        param: AssembleParams.keep_reads
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+      --keep-files:
+        param: AssembleParams.keep_files
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
+      --tool-arg:
+        param: AssembleParams.extra
+        value: mode=nano-raw
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
   reads:
     dispatch: stage
     base_args:
@@ -1654,6 +1766,69 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_run_local_chain
         observable: ingest, dereplicate, phylo and tree2tax recorded; no metadata stage
+      --reads:
+        param: 'n/a: selects the reads chain (reads and assemble replace metadata and genome); wiring test'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --accession-file:
+        param: ReadsParams.accession_file
+        value: '{file}'
+        with_args:
+        - --reads
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --platform:
+        param: ReadsParams.platform
+        value: ont
+        with_args:
+        - --reads
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --max-runs:
+        param: ReadsParams.max_runs
+        value: '3'
+        with_args:
+        - --reads
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+        invalid: '0'
+      --assembler:
+        param: AssembleParams.assembler
+        value: flye
+        with_args:
+        - --reads
+        validated: registry
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
       --selection:
         param: IngestParams.selection
         value: '{alt_file}'

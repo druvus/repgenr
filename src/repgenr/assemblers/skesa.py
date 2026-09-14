@@ -8,7 +8,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from .base import AssembleParams, Assembler, AssemblyResult, ReadSet
+from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs
 
 
 class SkesaAssembler(Assembler):
@@ -36,5 +36,14 @@ class SkesaAssembler(Assembler):
             "--contigs_out",
             contigs,
         ]
-        run_tool(self.capabilities, cmd, logger=logger, log_prefix="skesa", cwd=out_dir)
+        # The reads are named inside a comma-joined argument, which the
+        # container backend cannot recognise as paths; declare their directories.
+        run_tool(
+            self.capabilities,
+            cmd,
+            logger=logger,
+            log_prefix="skesa",
+            cwd=out_dir,
+            extra_mounts=_read_dirs(reads),
+        )
         return AssemblyResult(contigs=contigs)

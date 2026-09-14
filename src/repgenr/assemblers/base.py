@@ -77,6 +77,11 @@ class Assembler(ABC):
         raise NotImplementedError
 
 
+def _read_dirs(reads: ReadSet) -> list[str]:
+    """The directories holding a run's reads, for the container backend's mounts."""
+    return sorted({str(Path(f).resolve().parent) for f in reads.files})
+
+
 def select_assembler(reg: Registry[Assembler], reads: ReadSet) -> str | None:
     """The preferred available adapter for a run, or None when nothing accepts it."""
     ranked = sorted(

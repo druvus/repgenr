@@ -23,12 +23,16 @@ def _flag(cmd: list[str], flag: str) -> str:
     return cmd[cmd.index(flag) + 1]
 
 
+mounts: list[list[str]] = []
+
+
 def _fake_run_tool(recorded: list[list[str]]):
     """Write each assembler's contigs where the real tool would."""
 
     def run_tool(caps, command, *, logger, cwd=None, **kwargs):
         cmd = [str(c) for c in command]
         recorded.append(cmd)
+        mounts.append([str(m) for m in kwargs.get("extra_mounts", ())])
         if cmd[0] == "skesa":
             Path(_flag(cmd, "--contigs_out")).write_text(_CONTIGS, encoding="utf-8")
         elif cmd[0] == "shovill":
@@ -67,7 +71,7 @@ def _reads(tmp_path: Path, platform="ILLUMINA", layout="PAIRED", model="Illumina
 
 _TOKENS = {
     "skesa": ["--cores", "5", "--memory", "7"],
-    "shovill": ["--cpus", "5", "--ram", "7", "--assembler", "spades"],
+    "shovill": ["--cpus", "5", "--ram", "8", "--assembler", "spades"],  # 7 GB raised to 8
     "flye": ["--threads", "5", "--nano-hq"],
 }
 
@@ -85,6 +89,8 @@ def test_assembler_contract(tool, recorded, tmp_path) -> None:
     flat = [tok for cmd in recorded for tok in cmd]
     for token in _TOKENS[tool]:
         assert token in flat, f"{token!r} missing from argv for {tool}"
+    # the reads' directory is declared for the container backend's mounts
+    assert str(tmp_path.resolve()) in mounts[-1]
 
 
 def test_every_builtin_assembler_has_contract_coverage() -> None:
@@ -148,3 +154,14 @@ def test_adapters_declare_read_types_and_layouts() -> None:
     assert registry.get("skesa").read_types == frozenset({"ILLUMINA"})
     assert registry.get("shovill").layouts == frozenset({"PAIRED"})
     assert registry.get("flye").read_types == frozenset({"OXFORD_NANOPORE", "PACBIO_SMRT"})
+
+
+def test_shovill_raises_the_ram_cap_to_its_minimum(recorded, tmp_path, caplog) -> None:
+    import logging as _logging
+
+    with caplog.at_level(_logging.WARNING):
+        registry.create("shovill").assemble(
+            _reads(tmp_path), tmp_path / "out", AssembleParams(memory_gb=6), _LOG
+        )
+    assert _flag(recorded[0], "--ram") == "8"
+    assert any("refuses a RAM cap below 8" in r.message for r in caplog.records)

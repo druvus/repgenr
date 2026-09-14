@@ -29,8 +29,10 @@ from .base import (
     HELP_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
+    PIPELINE_READS,
     PIPELINE_VIRAL,
     _aligner_help,
+    _assembler_help,
     _derep_help,
     _parse_key_values,
     _require_choice,
@@ -65,6 +67,7 @@ def _preflight_tools(
     snptyper: str,
     mask: str = "none",
     with_snptype: bool = False,
+    assembler: str | None = None,
 ) -> None:
     """Check every external tool the chain will need before the first stage runs.
 
@@ -77,6 +80,10 @@ def _preflight_tools(
     from ..treebuilders.base import InputKind
     from ..treebuilders.base import registry as tb_registry
 
+    if assembler is not None and assembler != "auto":
+        from ..assemblers.base import registry as asm_registry
+
+        asm_registry.create(assembler).preflight()
     if derep_tool != "auto":
         derep_registry.create(derep_tool).preflight()
     if with_snptype:
@@ -146,6 +153,23 @@ def run(
     copy: bool = typer.Option(
         False, "--copy", help="With --genomes-dir: copy the files into genomes/ instead of linking."
     ),
+    # --- selection: sequencing reads (ENA/SRA) ---
+    reads: bool = typer.Option(
+        False,
+        "--reads",
+        help="Run the reads chain (reads -> assemble) from ENA/SRA sequencing runs "
+        "selected by -tf/-tg/-ts or --accession-file, instead of downloading assemblies.",
+    ),
+    accession_file: Path | None = typer.Option(
+        None, "--accession-file", help="With --reads: file of run/sample/study accessions."
+    ),
+    platform: str = typer.Option(
+        "any", "--platform", help="With --reads: any, illumina, ont or pacbio."
+    ),
+    max_runs: int | None = typer.Option(
+        None, "--max-runs", min=1, help="With --reads: keep at most N runs, the largest by bases."
+    ),
+    assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
     # --- selection: bacterial (GTDB) ---
     dataset: str = typer.Option("rep", "-d", "--dataset", help="all or rep (bacterial)."),
     level: str | None = typer.Option(None, "-l", "--level", help="family/genus/species."),
@@ -301,11 +325,13 @@ def run(
         METADATA_LEVELS,
         METADATA_SOURCES,
         VIRAL_SOURCES,
+        assemble_params,
         dereplicate_params,
         genome_params,
         ingest_params,
         metadata_params,
         phylo_params,
+        reads_params,
         require_mask,
         tree2tax_params,
         vgenome_params,
@@ -354,24 +380,42 @@ def run(
             raise UserInputError(
                 "--genomes-dir starts the local chain (ingest); it cannot be combined with --viral."
             )
+        if reads and (viral or local):
+            raise UserInputError(
+                "--reads starts the reads chain; it cannot be combined with --viral "
+                "or --genomes-dir."
+            )
+        if reads:
+            reads_params(platform=platform)
+            assemble_params(assembler=assembler)
         if with_snptype:
             require_mask(mask)
-        if not viral and not local and not level:
+        if not viral and not local and not reads and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
 
     if dry_run:
         chain: tuple[str, ...] = (
-            PIPELINE_LOCAL if local else PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
+            PIPELINE_READS
+            if reads
+            else PIPELINE_LOCAL
+            if local
+            else PIPELINE_VIRAL
+            if viral
+            else PIPELINE_BACTERIAL
         )
         if with_snptype:
             i = chain.index("phylo")
             chain = (*chain[:i], "snptype", *chain[i:])
-        lineage = "local" if local else "viral" if viral else "bacterial"
+        lineage = "reads" if reads else "local" if local else "viral" if viral else "bacterial"
         typer.echo(f"[dry-run] {lineage} pipeline in {workdir}:")
         for stage in chain:
             typer.echo(f"  - {stage}")
         selection_summary = (
-            f"genomes_dir={genomes_dir}, selection={selection}, outgroup={outgroup}"
+            f"family={target_family}, genus={target_genus}, species={target_species}, "
+            f"accession_file={accession_file}, platform={platform}, max_runs={max_runs}, "
+            f"assembler={assembler}"
+            if reads
+            else f"genomes_dir={genomes_dir}, selection={selection}, outgroup={outgroup}"
             if local
             else f"target={target}, genus={target_genus}, species={target_species}"
             if viral
@@ -389,9 +433,37 @@ def run(
         return
 
     with stage_errors(logger):
-        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper, mask, with_snptype)
+        _preflight_tools(
+            derep_tool,
+            treebuilder,
+            msa_source,
+            aligner,
+            snptyper,
+            mask,
+            with_snptype,
+            assembler if reads else None,
+        )
 
-    if local:
+    if reads:
+        _run(
+            "reads",
+            workdir,
+            lambda: reads_params(
+                target_family=target_family,
+                target_genus=target_genus,
+                target_species=target_species,
+                accession_file=None if accession_file is None else str(accession_file),
+                platform=platform,
+                max_runs=max_runs,
+            ),
+            create=True,
+        )
+        _run(
+            "assemble",
+            workdir,
+            lambda: assemble_params(assembler=assembler, threads=threads, outgroup=outgroup),
+        )
+    elif local:
         _run(
             "ingest",
             workdir,

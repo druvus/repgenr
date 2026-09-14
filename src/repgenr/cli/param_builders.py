@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from .base import _require_choice, _require_unit_interval
 
 if TYPE_CHECKING:
+    from ..stages.assemble import AssembleParams
     from ..stages.dereplicate import DereplicateParams
     from ..stages.genome import GenomeParams
     from ..stages.ingest import IngestParams
@@ -137,6 +138,37 @@ def reads_params(
         max_runs=max_runs,
         min_bases=min_bases,
         one_per_sample=one_per_sample,
+    )
+
+
+def assemble_params(
+    *,
+    assembler: Any = _UNSET,
+    threads: Any = _UNSET,
+    jobs: Any = _UNSET,
+    memory_gb: Any = _UNSET,
+    min_contig_length: Any = _UNSET,
+    outgroup: Any = _UNSET,
+    keep_reads: Any = _UNSET,
+    keep_files: Any = _UNSET,
+    extra: Any = _UNSET,
+) -> AssembleParams:
+    from ..assemblers.base import registry as _asm_registry
+    from ..stages.assemble import AssembleParams
+
+    if assembler is not _UNSET:
+        _require_choice(assembler, {"auto", *_asm_registry.names()}, "--assembler")
+    return _build(
+        AssembleParams,
+        assembler=assembler,
+        threads=threads,
+        jobs=jobs,
+        memory_gb=memory_gb,
+        min_contig_length=min_contig_length,
+        outgroup=outgroup,
+        keep_reads=keep_reads,
+        keep_files=keep_files,
+        extra=extra,
     )
 
 
