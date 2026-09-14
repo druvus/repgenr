@@ -29,7 +29,9 @@ class CactusAligner(Aligner):
         name="cactus",
         container="quay.io/comparative-genomics-toolkit/cactus:v2.9.3",
         required_binaries=(
-            BinarySpec("cactus-pangenome", version_args=("--version",)),
+            # The pinned image is 2.9; 2.5 is the oldest Minigraph-Cactus the
+            # cactus-pangenome entry point and --maxCores were verified on.
+            BinarySpec("cactus-pangenome", version_args=("--version",), min_version="2.5"),
             BinarySpec("hal2maf", version_args=()),
         ),
         recommended_max_genomes=2000,  # Toil manages its own parallelism

@@ -18,11 +18,11 @@ dependencies:
   - pyyaml
   - numpy>=1.26
   # Dereplication tools
-  - drep
+  - drep>=3.0
   - checkm-genome
   - skder>=1.0
   - skani>=0.2
-  - galah
+  - galah>=0.4
   - sourmash>=4.0
   # Optional: enables the sparse (edge-list) sourmash dereplication back-end at
   # scale. Absent, the dereplicator falls back to dense `sourmash compare`.
@@ -37,14 +37,14 @@ dependencies:
   - minimap2>=2.17
   - samtools>=1.10
   - bcftools>=1.10
-  - snippy
-  - parsnp
-  - harvesttools
+  - snippy>=4.6
+  - parsnp>=2.0
+  - harvesttools>=1.3
   - ska2>=0.3
-  - gubbins
+  - gubbins>=3.0
   # Tree builders
-  - iqtree
-  - fasttree
+  - iqtree>=2.0
+  - fasttree>=2.1
   - mashtree>=1.2
   - raxml-ng>=1.0
   - pip:

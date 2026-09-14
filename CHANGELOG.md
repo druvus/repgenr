@@ -34,6 +34,14 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- Every version-checkable binary now carries a minimum-version floor at
+  preflight, and `environment.yml` pins the same floors: dRep 3.0, galah
+  0.4, cactus 2.5, parsnp 2.0, harvesttools 1.3, snippy 4.6, Gubbins 3.0,
+  FastTree 2.1 and IQ-TREE 2.0 join the floors already declared. dRep's
+  version is read from its help banner, as it answers no `--version` flag
+  (the preflight reported it as unknown). progressiveMauve, SibeliaZ and
+  hal2maf print no parseable version and stay lenient; a test guards the
+  set.
 - The single-package adapters pin a BioContainers image (galah 0.4.2,
   sourmash 4.9.4, dRep 3.7.1, snippy 4.6.0, ska2 0.5.1, Gubbins 3.4.3,
   IQ-TREE 3.1.3, FastTree 2.2.0, RAxML-NG 2.0.3, mashtree 1.4.6), each

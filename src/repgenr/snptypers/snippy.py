@@ -21,8 +21,8 @@ class SnippyTyper(SnpTyper):
         container="quay.io/biocontainers/snippy:4.6.0--hdfd78af_6",
         conda=("bioconda::snippy",),
         required_binaries=(
-            BinarySpec("snippy", version_args=("--version",)),
-            BinarySpec("snippy-core", version_args=("--version",)),
+            BinarySpec("snippy", version_args=("--version",), min_version="4.6"),
+            BinarySpec("snippy-core", version_args=("--version",), min_version="4.6"),
         ),
         recommended_max_genomes=1000,
     )

@@ -192,7 +192,10 @@ def variable_fraction(records: dict[str, str], sample: int = 200_000) -> tuple[f
 class GubbinsMasker(Masker):
     capabilities = ToolCapabilities(
         name="gubbins",
-        required_binaries=(BinarySpec("run_gubbins.py", version_args=("--version",)),),
+        # 3.0: --tree-builder / --first-tree-builder, which the tool-args map onto.
+        required_binaries=(
+            BinarySpec("run_gubbins.py", version_args=("--version",), min_version="3.0"),
+        ),
         container="quay.io/biocontainers/gubbins:3.4.3--py310hfc0ef84_1",
         conda=("bioconda::gubbins",),
         # gubbins_tree_builder / gubbins_first_tree_builder name Gubbins'

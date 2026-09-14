@@ -20,7 +20,9 @@ class FasttreeBuilder(TreeBuilder):
         name="fasttree",
         container="quay.io/biocontainers/fasttree:2.2.0--h7b50bb2_1",
         conda=("bioconda::fasttree",),
-        required_binaries=(BinarySpec("FastTree", version_args=()),),
+        # -help prints the usage with the version line; no arguments would
+        # make FastTree read an alignment from stdin.
+        required_binaries=(BinarySpec("FastTree", version_args=("-help",), min_version="2.1"),),
         recommended_max_genomes=5000,
     )
     input_kind = InputKind.MSA_FASTA
