@@ -1523,6 +1523,142 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_run_viral_chain_end_to_end
         observable: viral chain stages recorded
+      --genomes-dir:
+        param: 'n/a: selects the local chain (ingest replaces metadata and genome); wiring test'
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --selection:
+        param: IngestParams.selection
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+        with_args:
+        - --genomes-dir
+        - '{alt_dir}'
+      --outgroup:
+        param: IngestParams.outgroup
+        value: GCF_000001.1
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+        with_args:
+        - --genomes-dir
+        - '{alt_dir}'
+      --copy:
+        param: IngestParams.copy
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+        with_args:
+        - --genomes-dir
+        - '{alt_dir}'
+      --with-snptype:
+        param: SnptypeParams
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --metadata-path:
+        param: MetadataParams.metadata_path
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --nodownload:
+        param: MetadataParams.nodownload
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --keep-files:
+        param: GenomeParams.keep_files
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --pre-primary-ani:
+        param: DereplicateParams.pre_primary_ani
+        value: '0.85'
+        validated: unit_interval
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --pre-secondary-ani:
+        param: DereplicateParams.pre_secondary_ani
+        value: '0.95'
+        validated: unit_interval
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --node-basename:
+        param: Tree2taxParams.node_basename
+        value: n
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --root-name:
+        param: Tree2taxParams.root_name
+        value: TOP
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
+      --remove-outgroup:
+        param: Tree2taxParams.remove_outgroup
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          live'
       --dataset:
         aliases:
         - -d

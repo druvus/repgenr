@@ -226,3 +226,46 @@ def test_run_preflights_the_masker(monkeypatch, tmp_path, register_tool) -> None
     assert result.exit_code != 0
     assert calls == []
     assert "absentmask" in result.output
+
+
+def test_run_local_chain_from_genomes_dir(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    genomes = tmp_path / "genomes"
+    genomes.mkdir()
+    result = _runner.invoke(
+        app, ["run", "-wd", str(tmp_path / "wd"), "--genomes-dir", str(genomes)]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert calls == ["ingest", "dereplicate", "phylo", "tree2tax"]
+
+
+def test_run_rejects_genomes_dir_with_viral(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    genomes = tmp_path / "genomes"
+    genomes.mkdir()
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path / "wd"),
+            "--genomes-dir",
+            str(genomes),
+            "--viral",
+            "--target",
+            "x",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--genomes-dir" in result.output
+    assert calls == []
+
+
+def test_run_with_snptype_inserts_the_stage(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(
+        app,
+        ["run", "-wd", str(tmp_path), "-l", "genus", "-tg", "francisella", "--with-snptype"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert calls == ["metadata", "genome", "dereplicate", "snptype", "phylo", "tree2tax"]

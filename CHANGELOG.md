@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr run` starts from local genomes with `--genomes-dir` (the `ingest`
+  chain, with `--selection`, `--outgroup` and `--copy` passed through), runs
+  the standalone SNP typing stage with `--with-snptype`, and forwards the
+  stage options it did not before: `--metadata-path`, `--nodownload`,
+  `--keep-files`, `--pre-primary-ani`, `--pre-secondary-ani`,
+  `--node-basename`, `--root-name` and `--remove-outgroup`.
+
 - `dereplicate-merge --reduce species|genus` and `--target-reps N`, the two
   representative-selection features that only the workdir `dereplicate`
   command had, so the Nextflow layer can use them through `--derep_reduce`

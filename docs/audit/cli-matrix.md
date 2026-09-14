@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-23 commands, 221 flags (221 with a live test or an n/a reason, 0 pending).
+23 commands, 234 flags (234 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -244,6 +244,19 @@ dispatch: `stage`
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--viral` |  | VmetadataParams | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | README.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--genomes-dir` |  | n/a: selects the local chain (ingest replaces metadata and genome); wiring test | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--selection` |  | IngestParams.selection | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--outgroup` |  | IngestParams.outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--copy` |  | IngestParams.copy | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--with-snptype` |  | SnptypeParams | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--metadata-path` |  | MetadataParams.metadata_path | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--nodownload` |  | MetadataParams.nodownload | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-files` |  | GenomeParams.keep_files | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--pre-primary-ani` |  | DereplicateParams.pre_primary_ani | unit_interval | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--pre-secondary-ani` |  | DereplicateParams.pre_secondary_ani | unit_interval | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--node-basename` |  | Tree2taxParams.node_basename | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root-name` |  | Tree2taxParams.root_name | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--remove-outgroup` |  | Tree2taxParams.remove_outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered live | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--dataset` | -d | MetadataParams.dataset | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--level` | -l | MetadataParams.level | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--target-family` | -tf | MetadataParams.target_family | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets | docs/cli-reference.md, docs/audit/cli-matrix.md |
