@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -23,6 +24,8 @@ from pathlib import Path
 from ..assemblers.base import AssembleParams as AdapterParams
 from ..assemblers.base import ReadSet, registry, select_assembler
 from ..assemblers.contigs import ContigStats, filter_contigs
+from ..classifiers.base import Classification, ClassifyParams
+from ..classifiers.base import registry as classifier_registry
 from ..core import http
 from ..core.context import WorkdirContext
 from ..core.contracts import (
@@ -37,6 +40,7 @@ from ..core.contracts import (
     accession_from_filename,
     genome_filename,
     read_reads,
+    sanitise_taxon_tokens,
     write_assembly_stats,
     write_excused_runs,
     write_selection,
@@ -45,8 +49,11 @@ from ..core.errors import RepGenRError, UserInputError, WorkdirError
 from ..core.executors import parallel_map
 from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
+from .assemble_qc import checkm2_db_from_env, preflight_checkm2, run_checkm2
 from .ingest import OUTGROUP_ACCESSION_TXT
 
+GTDB_SKETCH_ENV = "REPGENR_GTDB_SKETCH"
+GTDB_LINEAGES_ENV = "REPGENR_GTDB_LINEAGES"
 _DONE_MARKER = "assembly.ok"
 _CONTIGS_NAME = "contigs.fasta"
 # Rough peak disk per run: the FASTQ files, their uncompressed form and the
@@ -67,6 +74,17 @@ class AssembleParams:
     outgroup: str | None = None
     keep_reads: bool = False
     keep_files: bool = False
+    # Quality: CheckM2 runs when a database is configured (flag or CHECKM2DB);
+    # assemblies outside the gate are excused rather than selected.
+    checkm2_db: str | None = None
+    min_completeness: float = 50.0
+    max_contamination: float = 10.0
+    # Classification: verifies the submitted organism against a GTDB sketch
+    # (flag or REPGENR_GTDB_SKETCH / REPGENR_GTDB_LINEAGES). "auto" runs the
+    # sourmash classifier when a sketch is configured, "none" never.
+    classifier: str = "auto"
+    gtdb_sketch: str | None = None
+    gtdb_lineages: str | None = None
     # Tool tuning from ``--tool-arg``; each adapter declares the keys it reads.
     extra: dict = field(default_factory=dict)
 
@@ -78,6 +96,12 @@ class _Outcome:
     stats: ContigStats | None = None
     tool_stats: dict = field(default_factory=dict)
     excused: ExcusedRun | None = None
+    quality: tuple[float, float] | None = None
+    gtdb: Classification | None = None
+    # Resolved filename tokens and where they came from.
+    label: tuple[str, str, str] | None = None
+    label_source: str = "metadata"
+    taxonomy_flag: str = ""
 
 
 def run(ctx: WorkdirContext, params: AssembleParams) -> int:
@@ -125,6 +149,85 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     outcomes = [by_run[r.run_accession] for r in rows]
 
     assembled = [o for o in outcomes if o.stats is not None and o.stats.n_contigs > 0]
+    for o in assembled:
+        o.label = _taxa(o.row)
+
+    # Every run's contigs file is named alike; QC and classification see them
+    # through links carrying the final genome names, which are unique.
+    named = _named_links(assembled, assemblies, scratch / "named")
+
+    # Quality: excuse assemblies outside the gate before anything is published.
+    checkm2_db = params.checkm2_db or checkm2_db_from_env()
+    if checkm2_db and assembled:
+        versions.update(preflight_checkm2())
+        quality = run_checkm2(
+            [named[o.row.run_accession] for o in assembled],
+            scratch / "checkm2",
+            db=Path(checkm2_db),
+            threads=params.threads,
+            logger=logger,
+        )
+        for o in assembled:
+            o.quality = quality.get(_name(o))
+            if o.quality is None:
+                logger.warning("%s: CheckM2 reported no quality", o.row.run_accession)
+                continue
+            completeness, contamination = o.quality
+            if completeness < params.min_completeness or contamination > params.max_contamination:
+                o.excused = ExcusedRun(
+                    o.row.run_accession,
+                    "qc",
+                    f"qc_failed: completeness {completeness:.1f} "
+                    f"(min {params.min_completeness:g}), contamination {contamination:.1f} "
+                    f"(max {params.max_contamination:g})",
+                )
+        assembled = [o for o in assembled if o.excused is None]
+    elif not checkm2_db:
+        logger.info(
+            "No CheckM2 database configured (--checkm2-db or %s); assemblies are not "
+            "quality-scored and --keeper quality will fall back to the tool's pick.",
+            "CHECKM2DB",
+        )
+
+    # Classification: verify the submitted organism, and name by GTDB when it agrees.
+    n_disagree = 0
+    classifier_name = _classifier_name(params)
+    if classifier_name and assembled:
+        classifier = classifier_registry.create(classifier_name)
+        versions.update(classifier.preflight())
+        sketch = Path(params.gtdb_sketch or os.environ[GTDB_SKETCH_ENV])
+        lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
+        classified = classifier.classify(
+            [named[o.row.run_accession] for o in assembled],
+            scratch / "classify",
+            ClassifyParams(
+                db=sketch,
+                lineages=None if lineages is None else Path(lineages),
+                threads=params.threads,
+                extra=dict(params.extra),
+            ),
+            logger,
+        )
+        for o in assembled:
+            o.gtdb = classified.get(_name(o))
+            if o.gtdb is None:
+                continue
+            versions["gtdb_sketch"] = o.gtdb.db_version or versions.get("gtdb_sketch", "")
+            gtdb_tokens = _gtdb_tokens(o.gtdb.taxonomy)
+            assert o.label is not None
+            if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
+                o.label = gtdb_tokens
+                o.label_source = "classifier"
+            else:
+                o.taxonomy_flag = "classifier_disagrees"
+                n_disagree += 1
+                logger.warning(
+                    "%s: submitted as %s but classified as %s; keeping the submitted name",
+                    o.row.run_accession,
+                    o.row.organism,
+                    o.gtdb.taxonomy.split(";")[-1],
+                )
+
     excused = [o.excused for o in outcomes if o.excused is not None]
     excused_path = ctx.workdir / EXCUSED_RUNS_TSV
     if excused:
@@ -133,20 +236,17 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         excused_path.unlink(missing_ok=True)
     if not assembled:
         raise WorkdirError(
-            f"None of the {len(rows)} runs produced an assembly; see {EXCUSED_RUNS_TSV}."
+            f"None of the {len(rows)} runs produced an accepted assembly; see {EXCUSED_RUNS_TSV}."
         )
 
-    selection_rows = [_selection_row(o.row) for o in assembled]
+    selection_rows = [_selection_row(o) for o in assembled]
     outgroup_row = _stage_outgroup(ctx, params.outgroup, logger)
     if outgroup_row is not None:
         selection_rows.append(outgroup_row)
 
     with staged_dir(ctx.genomes_dir) as genomes_dir:
         for o in assembled:
-            link_or_copy(
-                assemblies / o.row.run_accession / _CONTIGS_NAME,
-                genomes_dir / genome_filename(*_taxa(o.row), o.row.run_accession),
-            )
+            link_or_copy(assemblies / o.row.run_accession / _CONTIGS_NAME, genomes_dir / _name(o))
     write_selection(ctx.workdir / SELECTION_TSV, selection_rows)
     write_assembly_stats(ctx.workdir / ASSEMBLY_STATS_TSV, [_stats_row(o) for o in assembled])
     ctx.manifest.replace_genomes([record_from_selection(r, "sra") for r in selection_rows])
@@ -156,9 +256,12 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         tool=params.assembler,
         params={
             **asdict(params),
+            "checkm2_db": checkm2_db,
+            "classifier_effective": classifier_name,
             "assemblers_used": sorted({o.assembler for o in assembled if o.assembler}),
             "n_assembled": len(assembled),
             "n_excused": len(excused),
+            "n_disagree": n_disagree,
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
         },
         tool_versions=versions,
@@ -166,10 +269,11 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     )
     ctx.save_config()
     logger.info(
-        "Assembled %d of %d runs (%d excused); wrote %s",
+        "Assembled %d of %d runs (%d excused, %d classifier disagreements); wrote %s",
         len(assembled),
         len(rows),
         len(excused),
+        n_disagree,
         SELECTION_TSV,
     )
     return len(assembled)
@@ -333,33 +437,84 @@ def _taxa(row: ReadRow) -> tuple[str, str, str]:
     return row.family or "unknown", row.genus or "unknown", row.species or "unknown"
 
 
-def _selection_row(row: ReadRow) -> SelectionRow:
-    family, genus, species = _taxa(row)
+def _named_links(assembled: list[_Outcome], assemblies: Path, link_dir: Path) -> dict[str, Path]:
+    """Run accession -> a link to its contigs named as the genome will be."""
+    if link_dir.exists():
+        remove_tree(link_dir)
+    link_dir.mkdir(parents=True)
+    links = {}
+    for o in assembled:
+        link = link_dir / _name(o)
+        os.symlink((assemblies / o.row.run_accession / _CONTIGS_NAME).resolve(), link)
+        links[o.row.run_accession] = link
+    return links
+
+
+def _classifier_name(params: AssembleParams) -> str | None:
+    """The classifier to run: explicit, or sourmash when a sketch is configured."""
+    if params.classifier == "none":
+        return None
+    sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    if params.classifier == "auto":
+        return "sourmash" if sketch else None
+    if not sketch:
+        raise UserInputError(
+            f"--classifier {params.classifier} needs a reference sketch (--gtdb-sketch or "
+            f"{GTDB_SKETCH_ENV})."
+        )
+    return params.classifier
+
+
+def _gtdb_tokens(lineage: str) -> tuple[str, str, str]:
+    """Family, genus and species tokens from a GTDB lineage string."""
+    ranks = {}
+    for chunk in lineage.split(";"):
+        chunk = chunk.strip()
+        if len(chunk) > 3 and chunk[1:3] == "__":
+            ranks[chunk[0]] = chunk[3:]
+    return sanitise_taxon_tokens(ranks.get("f", ""), ranks.get("g", ""), ranks.get("s", ""))
+
+
+def _name(o: _Outcome) -> str:
+    assert o.label is not None
+    return genome_filename(*o.label, o.row.run_accession)
+
+
+def _selection_row(o: _Outcome) -> SelectionRow:
+    assert o.label is not None
+    family, genus, species = o.label
+    completeness, contamination = o.quality if o.quality else (None, None)
     return SelectionRow(
-        row.run_accession,
+        o.row.run_accession,
         family,
         genus,
         species,
         False,
-        genome_filename(family, genus, species, row.run_accession),
+        _name(o),
+        completeness,
+        contamination,
     )
 
 
 def _stats_row(o: _Outcome) -> AssemblyStatsRow:
-    assert o.stats is not None
-    family, genus, species = _taxa(o.row)
+    assert o.stats is not None and o.label is not None
     coverage = o.row.bases / o.stats.total_length if o.stats.total_length else None
+    completeness, contamination = o.quality if o.quality else (None, None)
     return AssemblyStatsRow(
         run_accession=o.row.run_accession,
-        filename=genome_filename(family, genus, species, o.row.run_accession),
+        filename=_name(o),
         assembler=o.assembler or "",
         n_contigs=o.stats.n_contigs,
         total_length=o.stats.total_length,
         n50=o.stats.n50,
         largest_contig=o.stats.largest_contig,
         est_coverage=None if coverage is None else round(coverage, 2),
-        ncbi_taxonomy=";".join((family, genus, species)),
-        label_source="metadata",
+        completeness=completeness,
+        contamination=contamination,
+        ncbi_taxonomy=";".join(_taxa(o.row)),
+        gtdb_taxonomy=o.gtdb.taxonomy if o.gtdb else "",
+        label_source=o.label_source,
+        taxonomy_flag=o.taxonomy_flag,
     )
 
 

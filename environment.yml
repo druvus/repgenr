@@ -46,6 +46,8 @@ dependencies:
   - skesa>=2.4
   - shovill>=1.1
   - flye>=2.9
+  # Optional assembly quality (needs its database: checkm2 database --download)
+  - checkm2>=1.0.1
   # Tree builders
   - iqtree>=2.0
   - fasttree>=2.1

@@ -58,6 +58,8 @@ contract test, which checks the argument vector against canned output.
 | assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
 | assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
+| classifier | sourmash | no | no | offline chain test with canned gather and tax outputs; live use needs the GTDB sketch (not on the audit machine) |
+| quality | checkm2 | no | no | offline test on a canned quality report; live use needs the CheckM2 database (not on the audit machine) |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their

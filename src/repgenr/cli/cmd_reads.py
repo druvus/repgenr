@@ -13,6 +13,7 @@ from .base import (
     HELP_TARGET_SPECIES,
     HELP_THREADS,
     _assembler_help,
+    _classifier_help,
     _parse_key_values,
     _run,
     app,
@@ -100,6 +101,29 @@ def assemble(
     keep_files: bool = typer.Option(
         False, "--keep-files", help="Keep each run's assembler scratch directory."
     ),
+    checkm2_db: Path | None = typer.Option(
+        None,
+        "--checkm2-db",
+        help="CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB).",
+    ),
+    min_completeness: float = typer.Option(
+        50.0, "--min-completeness", min=0.0, max=100.0, help="CheckM2 completeness floor."
+    ),
+    max_contamination: float = typer.Option(
+        10.0, "--max-contamination", min=0.0, max=100.0, help="CheckM2 contamination ceiling."
+    ),
+    classifier: str = typer.Option("auto", "--classifier", help=_classifier_help()),
+    gtdb_sketch: Path | None = typer.Option(
+        None,
+        "--gtdb-sketch",
+        help="GTDB sourmash sketch database (.sig.zip); enables classification "
+        "(or set REPGENR_GTDB_SKETCH).",
+    ),
+    gtdb_lineages: Path | None = typer.Option(
+        None,
+        "--gtdb-lineages",
+        help="The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES).",
+    ),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
     ),
@@ -117,6 +141,12 @@ def assemble(
             outgroup=None if outgroup is None else str(outgroup),
             keep_reads=keep_reads,
             keep_files=keep_files,
+            checkm2_db=None if checkm2_db is None else str(checkm2_db),
+            min_completeness=min_completeness,
+            max_contamination=max_contamination,
+            classifier=classifier,
+            gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),
+            gtdb_lineages=None if gtdb_lineages is None else str(gtdb_lineages),
             extra=_parse_key_values(tool_arg, "--tool-arg"),
         )
 

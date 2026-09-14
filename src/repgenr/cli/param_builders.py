@@ -151,13 +151,22 @@ def assemble_params(
     outgroup: Any = _UNSET,
     keep_reads: Any = _UNSET,
     keep_files: Any = _UNSET,
+    checkm2_db: Any = _UNSET,
+    min_completeness: Any = _UNSET,
+    max_contamination: Any = _UNSET,
+    classifier: Any = _UNSET,
+    gtdb_sketch: Any = _UNSET,
+    gtdb_lineages: Any = _UNSET,
     extra: Any = _UNSET,
 ) -> AssembleParams:
     from ..assemblers.base import registry as _asm_registry
+    from ..classifiers.base import registry as _cls_registry
     from ..stages.assemble import AssembleParams
 
     if assembler is not _UNSET:
         _require_choice(assembler, {"auto", *_asm_registry.names()}, "--assembler")
+    if classifier is not _UNSET:
+        _require_choice(classifier, {"auto", "none", *_cls_registry.names()}, "--classifier")
     return _build(
         AssembleParams,
         assembler=assembler,
@@ -168,6 +177,12 @@ def assemble_params(
         outgroup=outgroup,
         keep_reads=keep_reads,
         keep_files=keep_files,
+        checkm2_db=checkm2_db,
+        min_completeness=min_completeness,
+        max_contamination=max_contamination,
+        classifier=classifier,
+        gtdb_sketch=gtdb_sketch,
+        gtdb_lineages=gtdb_lineages,
         extra=extra,
     )
 

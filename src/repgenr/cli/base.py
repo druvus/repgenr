@@ -231,6 +231,13 @@ def _assembler_help() -> str:
     return tool_choices_help(registry, auto=True, prefix="Assembler: ")
 
 
+def _classifier_help() -> str:
+    from ..classifiers.base import registry
+    from ..core.plugins import tool_choices_help
+
+    return tool_choices_help(registry, auto=True, prefix="Classifier: none, ")
+
+
 def _mask_help() -> str:
     from ..core.plugins import tool_choices_help
     from ..maskers.base import registry

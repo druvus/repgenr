@@ -7,6 +7,18 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Assembly quality and organism verification for the reads chain. With a
+  CheckM2 database (`--checkm2-db` or `CHECKM2DB`) every assembly is scored,
+  the values reach `selection.tsv` and the manifest for the quality keeper,
+  and assemblies outside `--min-completeness`/`--max-contamination` are
+  excused. A seventh tool family, classifiers (`repgenr.classifiers`), with
+  `sourmash` gather against a GTDB sketch (`--gtdb-sketch`,
+  `--gtdb-lineages` or the matching environment variables): when the GTDB
+  genus agrees with the submitted organism the GTDB tokens name the genome,
+  otherwise the submitted name stays and the genome is flagged
+  `classifier_disagrees` in `assembly_stats.tsv`. The sketch release is
+  recorded in provenance.
+
 - `repgenr assemble`, the second stage of the reads chain: fetches each
   selected run's FASTQ files from ENA over HTTPS with checksum verification,
   assembles them with the adapter that accepts the platform (`--assembler
