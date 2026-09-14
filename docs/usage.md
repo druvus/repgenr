@@ -594,3 +594,15 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   optionally `NCBI_EMAIL`) to raise the request-rate limit.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
+- **Exit codes.** A script can tell the failure classes apart without
+  reading the log:
+
+  | Code | Meaning |
+  |------|---------|
+  | 0 | Success. |
+  | 1 | An unexpected error (traceback in the run log), or `doctor` found failures. |
+  | 2 | Invalid or missing user input (also Typer's own usage errors). |
+  | 3 | The working directory is missing files or is in a bad state. |
+  | 4 | A required external tool is absent or below its version floor. |
+  | 5 | A requested tool adapter could not be found or loaded. |
+  | 6 | An external tool failed. Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |

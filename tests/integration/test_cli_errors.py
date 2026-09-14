@@ -11,16 +11,44 @@ import pytest
 import typer
 
 from repgenr.cli import base as cli
-from repgenr.core.errors import WorkdirError
+from repgenr.core.errors import (
+    MissingBinaryError,
+    PluginError,
+    ToolExecutionError,
+    UserInputError,
+    WorkdirError,
+)
 from repgenr.core.logging import configure_logging
 
 
-def test_stage_errors_repgenr_error_exits(caplog) -> None:
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (UserInputError("bad flag"), 2),
+        (WorkdirError("missing genomes"), 3),
+        (MissingBinaryError("skder: not found"), 4),
+        (PluginError("no such tool"), 5),
+        (ToolExecutionError(["skder"], 137), 6),
+    ],
+    ids=["input", "workdir", "binary", "plugin", "tool"],
+)
+def test_stage_errors_exit_code_names_the_error_class(exc, code, monkeypatch) -> None:
+    """A caller can tell a usage error from a missing tool or a failed run."""
+    monkeypatch.delenv("REPGENR_PROPAGATE_TOOL_EXIT", raising=False)
     logger = logging.getLogger("repgenr")
     with pytest.raises(typer.Exit) as ei:  # noqa: PT012
         with cli.stage_errors(logger):
-            raise WorkdirError("missing genomes")
-    assert ei.value.exit_code == 1
+            raise exc
+    assert ei.value.exit_code == code
+
+
+def test_tool_exit_is_forwarded_when_propagation_is_requested(monkeypatch) -> None:
+    monkeypatch.setenv("REPGENR_PROPAGATE_TOOL_EXIT", "1")
+    logger = logging.getLogger("repgenr")
+    with pytest.raises(typer.Exit) as ei:  # noqa: PT012
+        with cli.stage_errors(logger):
+            raise ToolExecutionError(["skder"], -9)  # killed by SIGKILL
+    assert ei.value.exit_code == 137
 
 
 def test_stage_errors_unexpected_exits_and_logs_traceback(workdir: Path) -> None:

@@ -273,12 +273,17 @@ class GubbinsMasker(Masker):
                 log_prefix="gubbins",
             )
         except ToolExecutionError as exc:
-            raise WorkdirError(
+            # Keep the tool error, and with it the return code the Nextflow
+            # retry rule keys on; add the diagnosis to its output tail.
+            diagnosis = (
                 f"Gubbins failed on an alignment of {len(scan_records)} genome(s) "
                 f"whose columns are about {100 * fraction:.0f}% variable. Its "
                 "recombination scan allocates per-SNP arrays on the thread stack "
                 "and dies on very diverse input; a within-species set is what it "
                 "expects. Run the stage with --mask none, or narrow the target."
+            )
+            raise ToolExecutionError(
+                exc.command, exc.returncode, f"{exc.output or ''}\n{diagnosis}".strip()
             ) from exc
         if not excluded:
             filtered = Path(str(prefix) + ".filtered_polymorphic_sites.fasta")

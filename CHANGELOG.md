@@ -41,6 +41,13 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The CLI exits with a distinct status per failure class instead of 1 for
+  everything: 2 for invalid input, 3 for a bad working directory, 4 for a
+  missing or outdated tool, 5 for an unknown adapter, 6 for a failed tool
+  (the tool's own status under `REPGENR_PROPAGATE_TOOL_EXIT=1`, as before);
+  1 stays for unexpected errors and for `doctor` finding failures. A
+  Gubbins failure keeps its tool error and return code, with the divergence
+  diagnosis appended, instead of being re-raised as a workdir error.
 - Every version-checkable binary now carries a minimum-version floor at
   preflight, and `environment.yml` pins the same floors: dRep 3.0, galah
   0.4, cactus 2.5, parsnp 2.0, harvesttools 1.3, snippy 4.6, Gubbins 3.0,

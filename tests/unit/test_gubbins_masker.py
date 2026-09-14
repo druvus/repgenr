@@ -187,7 +187,7 @@ def test_divergent_alignment_warns_before_gubbins_runs(tmp_path: Path, monkeypat
 
 def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> None:
     """A crash in the scan is reported with the figure that explains it."""
-    from repgenr.core.errors import ToolExecutionError, WorkdirError
+    from repgenr.core.errors import ToolExecutionError
 
     def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
         raise ToolExecutionError(["run_gubbins.py"], 1, "Bus error")
@@ -196,5 +196,6 @@ def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
-    with pytest.raises(WorkdirError, match="within-species"):
+    with pytest.raises(ToolExecutionError, match="within-species") as ei:
         mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
+    assert ei.value.returncode == 1  # the tool's status survives for the retry rule

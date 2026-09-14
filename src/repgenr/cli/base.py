@@ -359,18 +359,18 @@ def main(
 def _tool_exit_code(returncode: int) -> int:
     """Exit code for a failed external tool.
 
-    Interactive use keeps the historical exit 1. Under
+    Interactive use exits with :attr:`ToolExecutionError.exit_code`. Under
     ``REPGENR_PROPAGATE_TOOL_EXIT=1`` (set by the Nextflow modules) the tool's
     code is forwarded, with a signal kill mapped to 128+signum (SIGKILL -> 137),
     so Nextflow's retry-on-exitStatus rule can react to e.g. an OOM kill.
     """
     if os.environ.get("REPGENR_PROPAGATE_TOOL_EXIT", "") in ("", "0"):
-        return 1
+        return ToolExecutionError.exit_code
     if returncode < 0:
         code = 128 - returncode
     else:
         code = returncode
-    return code if 0 < code <= 255 else 1
+    return code if 0 < code <= 255 else ToolExecutionError.exit_code
 
 
 @contextmanager
@@ -392,7 +392,7 @@ def stage_errors(logger: logging.Logger) -> Iterator[None]:
         raise typer.Exit(code=_tool_exit_code(exc.returncode)) from exc
     except RepGenRError as exc:
         logger.error("%s", exc)
-        raise typer.Exit(code=1) from exc
+        raise typer.Exit(code=exc.exit_code) from exc
     except Exception as exc:
         logger.error("Unexpected error: %s", exc)
         if any(isinstance(h, logging.FileHandler) for h in logger.handlers):
