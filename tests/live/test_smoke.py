@@ -77,3 +77,22 @@ def test_offline_chain_sourmash_mashtree(
 
     second = run_repgenr("dereplicate", "-wd", wd, "--tool", "sourmash", "-t", "2")
     assert "skipping" in second.stderr + second.stdout
+
+
+def test_run_local_chain(run_repgenr, synthetic_set, tmp_path: Path) -> None:
+    """`run --genomes-dir` is the ingest chain in one command, and a second run skips."""
+    genomes = synthetic_set("clonal", n=8, length=50_000)
+    wd = tmp_path / "wd"
+    args = (
+        *("run", "-wd", wd, "--genomes-dir", genomes, "--tool", "sourmash"),
+        *("--treebuilder", "mashtree", "--no-outgroup", "-t", "2"),
+    )
+    run_repgenr(*args)
+    assert (wd / "tree" / TREE_NWK).exists()
+    assert (wd / TREE2TAX_TSV).exists()
+    status = run_repgenr("status", "-wd", wd).stdout
+    assert "Pipeline: local" in status
+    for stage in ("ingest", "dereplicate", "phylo", "tree2tax"):
+        assert f"[done]    {stage}" in status
+    second = run_repgenr(*args)
+    assert (second.stdout + second.stderr).count("skipping") == 4

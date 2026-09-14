@@ -1532,8 +1532,8 @@ commands:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
-        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
-          live'
+        live: tests/live/test_smoke.py::test_run_local_chain
+        observable: ingest, dereplicate, phylo and tree2tax recorded; no metadata stage
       --selection:
         param: IngestParams.selection
         value: '{alt_file}'
