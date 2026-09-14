@@ -103,13 +103,10 @@ def _emit_relations(
     )
 
     leaves_nodes = _name_nodes(tree, node_basename)
-    _build_paths(tree, leaves_nodes)
+    _build_paths(tree, leaves_nodes, root_name)
 
     if remove_outgroup and outgroup_leaf in leaves_nodes:
         del leaves_nodes[outgroup_leaf]
-        for nodes in leaves_nodes.values():
-            if nodes:
-                nodes[-1] = root_name
 
     write_tree2tax(out_tree2tax, _edges(leaves_nodes))
     write_genomes_map(out_map, _genome_map(leaves_nodes, redundant))
@@ -356,15 +353,17 @@ def _name_nodes(tree: dendropy.Tree, node_basename: str | None) -> dict[str, lis
     return leaves_nodes
 
 
-def _build_paths(tree: dendropy.Tree, leaves_nodes: dict[str, list[str]]) -> None:
+def _build_paths(
+    tree: dendropy.Tree, leaves_nodes: dict[str, list[str]], root_name: str = "root"
+) -> None:
     for node in tree.leaf_node_iter():
         name = _leaf_label(node)
         if name not in leaves_nodes:
             continue
         for ancestor in node.ancestor_iter(inclusive=False):
             if ancestor is tree.seed_node:
-                ancestor.label = "root"
-                leaves_nodes[name].append("root")
+                ancestor.label = root_name
+                leaves_nodes[name].append(root_name)
             else:
                 leaves_nodes[name].append(ancestor.label or "")
 
