@@ -41,7 +41,7 @@ from ..core.contracts import (
     write_genome_status,
 )
 from ..core.errors import WorkdirError
-from ..core.plugins import warn_unconsumed_extras
+from ..core.plugins import warn_ignored_params, warn_unconsumed_extras
 from ..core.process import link_or_copy, remove_tree
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
@@ -124,6 +124,7 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         threads=params.threads,
         extra={**caps.default_params, **(params.extra or {})},
     )
+    warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
 
@@ -175,6 +176,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         threads=params.threads,
         extra={**caps.default_params, **(params.extra or {})},
     )
+    warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
     stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)

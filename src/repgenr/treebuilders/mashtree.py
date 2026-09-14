@@ -21,6 +21,8 @@ class MashtreeBuilder(TreeBuilder):
         required_binaries=(BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),),
         recommended_max_genomes=10000,
         accepted_extras=frozenset({"genomesize"}),
+        # A distance-based NJ tree has no bootstrap step.
+        ignored_params=frozenset({"bootstrap"}),
     )
     input_kind = InputKind.GENOMES
 

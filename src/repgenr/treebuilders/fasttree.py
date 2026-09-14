@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -47,11 +48,14 @@ class FasttreeBuilder(TreeBuilder):
             # resamples (default 1000); --bootstrap N sets N instead of being
             # dropped on the floor.
             cmd += ["-boot", str(params.bootstrap)]
+        # FastTreeMP takes its thread count from OpenMP, not from a flag.
+        env = {**os.environ, "OMP_NUM_THREADS": str(params.threads)}
         run_tool(
             self.capabilities,
             [*cmd, msa],
             logger=logger,
             log_prefix="fasttree",
             stdout_path=tree,
+            env=env,
         )
         return tree

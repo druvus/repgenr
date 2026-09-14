@@ -50,6 +50,10 @@ class GalahDereplicator(Dereplicator):
         clusters_file = out_dir / "galah_clusters.tsv"
         sani = params.secondary_ani
         ani_pct = sani * 100 if sani <= 1.0 else sani
+        pani = params.primary_ani
+        precluster_pct = pani * 100 if pani <= 1.0 else pani
+        af = params.aligned_fraction
+        af_pct = af * 100 if af <= 1.0 else af
 
         # Pass the genome list via a file (--genome-fasta-list), never on argv:
         # 1000s-10000s of paths would exceed ARG_MAX.
@@ -62,6 +66,12 @@ class GalahDereplicator(Dereplicator):
             fofn,
             "--ani",
             f"{ani_pct:g}",
+            # galah pre-clusters at a looser ANI before the exact pass and
+            # drops pairs below a minimum aligned fraction; both are percentages.
+            "--precluster-ani",
+            f"{precluster_pct:g}",
+            "--min-aligned-fraction",
+            f"{af_pct:g}",
             "--threads",
             str(params.threads),
             "--output-cluster-definition",

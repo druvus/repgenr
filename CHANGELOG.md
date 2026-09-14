@@ -15,6 +15,18 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- Adapters declare the standard parameters they do not pass to their tool
+  (`ToolCapabilities.ignored_params`), and every stage warns by name when a
+  user sets one of them to a non-default value. Before, `--primary-ani` was
+  dropped without a message by skder and sourmash, `--aligned-fraction` by
+  dRep and sourmash, and `--bootstrap` by mashtree and the sourmash tree
+  builder.
+- galah now receives `--primary-ani` as its pre-clustering ANI and
+  `--aligned-fraction` as its minimum aligned fraction; both were ignored.
+- The thread budget now reaches `sourmash compare` (dereplicator dense path
+  and tree builder, `--processes`), FastTreeMP (`OMP_NUM_THREADS`) and
+  cactus-pangenome (`--maxCores`); each previously ran on whatever the tool
+  chose by itself.
 - The documentation is consolidated from fifteen pages to six plus two audit
   records. `docs/usage.md` is the one how-to (command line, Nextflow,
   containers, troubleshooting; it absorbs `containers.md` and the README's

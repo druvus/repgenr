@@ -254,7 +254,7 @@ def test_gubbins_masking_returns_filtered_fasta(genomes, recorded, tmp_path) -> 
 _ALIGN_PARAM_TOKENS = {
     "progressivemauve": [],
     "sibeliaz": ["-t", "7"],
-    "cactus": ["--reference", "g1"],
+    "cactus": ["--reference", "g1", "--maxCores", "7"],
 }
 
 

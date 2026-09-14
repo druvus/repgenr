@@ -39,6 +39,9 @@ class DrepDereplicator(Dereplicator):
         name="drep",
         conda=("bioconda::drep",),
         accepted_extras=frozenset({"virus", "S_algorithm", "length"}),
+        # dRep's overlap gate is --cov_thresh with its own default; the shared
+        # aligned-fraction setting is not translated onto it.
+        ignored_params=frozenset({"aligned_fraction"}),
         required_binaries=(BinarySpec("dRep", version_args=("--version",)),),
         default_params={"S_algorithm": "fastANI"},
         recommended_max_genomes=2000,

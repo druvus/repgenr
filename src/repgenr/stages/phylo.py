@@ -40,7 +40,7 @@ from ..core.contracts import (
 from ..core.errors import UserInputError, WorkdirError
 from ..core.inputs import file_digest, paths_stat_digest
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import ToolCapabilities, auto_select, scale_warning
+from ..core.plugins import ToolCapabilities, auto_select, scale_warning, warn_ignored_params
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
@@ -310,6 +310,7 @@ def build_tree(
         bootstrap=params.bootstrap,
         extra={**builder.capabilities.default_params, **_adapter_extra(params.extra)},
     )
+    warn_ignored_params(builder.capabilities, tree_params, logger, family="Tree builder")
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 
     if builder.input_kind == InputKind.GENOMES:
@@ -552,6 +553,7 @@ def _build_msa(
             reference=reference,
             extra=_adapter_extra(params.extra),
         )
+        warn_ignored_params(aligner.capabilities, align_params, logger, family="Aligner")
         result = aligner.align(inputs, reference, dirs.align_dir, align_params, logger)
         return result.msa_fasta, versions
 

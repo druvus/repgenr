@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import shutil
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from importlib.metadata import entry_points
 
 from .binaries import BinarySpec, check_binaries
@@ -56,6 +56,10 @@ class ToolCapabilities:
     # Extra-dict keys this adapter actually reads; used to warn on (and avoid
     # injecting) tuning that a tool would silently ignore.
     accepted_extras: frozenset[str] = frozenset()
+    # Names of the family's standard parameters (``primary_ani``, ``threads``,
+    # ``bootstrap``...) the adapter never passes to its tool. The stage warns
+    # when a user sets one of them to a non-default value.
+    ignored_params: frozenset[str] = frozenset()
 
 
 def warn_unconsumed_extras(
@@ -74,6 +78,29 @@ def warn_unconsumed_extras(
     if unread:
         logger.warning(
             "%s '%s' ignores extra parameter(s): %s", family, caps.name, ", ".join(unread)
+        )
+
+
+def warn_ignored_params(
+    caps: ToolCapabilities, params: object, logger: logging.Logger, *, family: str
+) -> None:
+    """Warn, by name, about standard parameters the adapter declares it ignores.
+
+    ``params`` is the family's parameter dataclass. Only values that differ
+    from the field default are reported: a default the tool happens not to
+    read is not a user request that went missing.
+    """
+    if not caps.ignored_params or not is_dataclass(params):
+        return
+    defaults = {f.name: f.default for f in fields(params)}
+    for name in sorted(caps.ignored_params):
+        if name not in defaults:
+            continue
+        value = getattr(params, name)
+        if value == defaults[name]:
+            continue
+        logger.warning(
+            "%s '%s' does not use %s; the value %r is ignored.", family, caps.name, name, value
         )
 
 

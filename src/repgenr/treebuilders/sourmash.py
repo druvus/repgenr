@@ -27,6 +27,8 @@ class SourmashBuilder(TreeBuilder):
         name="sourmash",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled"}),
+        # A distance-based NJ tree has no bootstrap step.
+        ignored_params=frozenset({"bootstrap"}),
         required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=2000,
@@ -98,6 +100,8 @@ class SourmashBuilder(TreeBuilder):
                 matrix_csv,
                 "--from-file",
                 compare_fofn,
+                "--processes",
+                str(params.threads),
             ],
             logger=logger,
             log_prefix="sourmash",
