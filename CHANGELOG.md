@@ -41,6 +41,9 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- CI lints and format-checks `scripts/` and `benchmarks/` as well as the
+  package and the tests; `scripts/fasta_simulate_sequences.py`, which failed
+  both, is rewritten with the same command line.
 - The CLI exits with a distinct status per failure class instead of 1 for
   everything: 2 for invalid input, 3 for a bad working directory, 4 for a
   missing or outdated tool, 5 for an unknown adapter, 6 for a failed tool

@@ -1,98 +1,72 @@
-#!/data/users/jaclew/software/anaconda3/bin/python
+#!/usr/bin/env python
+"""Print random substrings of a reference FASTA as FASTA records on stdout.
+
+Each output record is a run of ``--out-length`` bases taken from a random
+position of a randomly chosen reference sequence; ``--num-seqs`` records are
+produced. Gzipped input is accepted. A test-data helper, not part of the
+pipeline.
+"""
+
+from __future__ import annotations
 
 import argparse
 import gzip
 import sys
 from random import randint
 
-###### This script will import a reference-fasta file and then output randomized strings from that reference. #######
 
-### Parse input arguments
-# setup
-parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
-                                 description='Produces random strings (fasta) from an input sequence (fasta) to stdout\nSee --help for options')
-parser.add_argument('input',help='Path to working directory, created by metadata-command')
-parser.add_argument('-l','--out_length',type=int,default=1000,help='Sets the attempted length of output sequences (default: 1000)')
-parser.add_argument('-n','--num_seqs',type=int,default=1000,help='Sets the number of output sequences (default: 1000)')
-parser.add_argument('-b','--basename',help='Sets the basename for read names (e.g. --basename read outputs: read1, ..., readN)')
-#/
-# parse input
-args = parser.parse_args()
+def read_fasta(path: str) -> dict[str, str]:
+    """Return record name -> sequence for a plain or gzipped FASTA file."""
+    opener = gzip.open if path.endswith(".gz") else open
+    sequences: dict[str, str] = {}
+    name: str | None = None
+    parts: list[str] = []
+    with opener(path, "rt", encoding="utf-8") as fo:
+        for line in fo:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                if name is not None:
+                    sequences[name] = "".join(parts)
+                name, parts = line[1:], []
+            elif name is None:
+                sys.exit("not a FASTA file: the first line does not start with '>'")
+            else:
+                parts.append(line)
+    if name is not None:
+        sequences[name] = "".join(parts)
+    return sequences
 
-input_fasta = args.input
-out_length = args.out_length
-num_seqs = args.num_seqs
-read_basename = args.basename
-#/
-###/
 
-## Parse sequences
-file_is_gzipped = False
-if input_fasta.endswith('.gz'):
-    f = gzip.open(input_fasta,'rb')
-    file_is_gzipped = True
-else:
-    f = open(input_fasta,'r')
-    
-#import sequences
-rn = f.readline()
-if file_is_gzipped: rn = rn.decode() #handle if zipped
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Produce random substrings (FASTA) of an input FASTA on stdout."
+    )
+    parser.add_argument("input", help="Reference FASTA (optionally gzipped).")
+    parser.add_argument(
+        "-l", "--out-length", type=int, default=1000, help="Length of each output sequence."
+    )
+    parser.add_argument(
+        "-n", "--num-seqs", type=int, default=1000, help="Number of output sequences."
+    )
+    parser.add_argument(
+        "-b", "--basename", help="Record name prefix (read -> read_0, read_1, ...)."
+    )
+    args = parser.parse_args()
 
-if rn[0] == '>':
-    fastx = 'fasta'
-elif rn[0] == '@':
-    fastx = 'fastq'
-else:
-    sys.exit('this is not a fasta? [first entry does not have > at line start]')
-rn = rn.strip('\n')[1:]
+    references = read_fasta(args.input)
+    names = list(references)
+    written = 0
+    while written < args.num_seqs:
+        ref_name = names[randint(0, len(names) - 1)]
+        ref_seq = references[ref_name]
+        start = randint(0, len(ref_seq))
+        seq = ref_seq[start : start + args.out_length]
+        if not seq:
+            continue
+        header = args.basename or ref_name.split()[0]
+        print(f">{header}_{written}\n{seq}")
+        written += 1
 
-ref_seqs = {}
-seq = ''
-for line in f:
-    if file_is_gzipped: line = line.decode() #handle if zipped
-    
-    line = line.strip('\n')
-    
-    #keep storing seq to current RN
-    if not line[0] == '>':
-        seq += line
-    #if we find new rn, store old and write it down along with folded seq
-    else:
-        line = line[1:]
-        rn_old = rn
-        rn = line
-        
-        #handle sequence
-        ref_seqs[rn_old] = seq
-        seq = '' #reset
-        
 
-#/import  sequences
-#import last
-if seq:
-    rn_old = rn
-    ref_seqs[rn_old] = seq
-    seq = '' #reset
-#/import last
-##/
-
-## Print random seq
-refs = list(ref_seqs.keys())
-output_seqs = 0
-while output_seqs < num_seqs:
-    
-    rand_ref = refs[randint(0,len(refs)-1)]
-    ref_seq = ref_seqs[rand_ref]
-    
-    rand_pos = randint(0,len(ref_seq))
-    rand_seq = ref_seq[rand_pos:rand_pos+out_length]
-    
-    if not rand_seq: continue # skip if no seq was parsed (should not happen)
-    
-    out_header = rand_ref.split()[0]
-    if read_basename:       out_header = read_basename
-    out_header = out_header+'_'+str(output_seqs)
-    
-    print('>'+out_header+'\n'+rand_seq)
-    output_seqs += 1
-##/
+if __name__ == "__main__":
+    main()
