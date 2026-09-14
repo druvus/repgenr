@@ -62,6 +62,10 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `assemble --jobs` defaults to 2, or to 1 as soon as a long-read run is
+  pending, since memory rather than CPU bounds concurrent assemblies. The
+  Flye path is verified through its pinned image on simulated Nanopore-like
+  reads.
 - CI lints and format-checks `scripts/` and `benchmarks/` as well as the
   package and the tests; `scripts/fasta_simulate_sequences.py`, which failed
   both, is rewritten with the same command line.

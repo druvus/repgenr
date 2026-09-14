@@ -57,7 +57,7 @@ contract test, which checks the argument vector against canned output.
 | tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
 | assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
-| assembler | flye | no | no | offline contract test only (long-read live test follows) |
+| assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their

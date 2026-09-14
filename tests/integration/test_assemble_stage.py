@@ -201,3 +201,31 @@ def test_excused_runs_are_written_even_when_nothing_assembles(workdir, tmp_path,
     with pytest.raises(WorkdirError, match="None of the 1 runs"):
         run(ctx, AssembleParams(assembler="fakeasm"))
     assert read_excused_runs(workdir / EXCUSED_RUNS_TSV)[0].step == "assemble"
+
+
+def test_jobs_default_is_one_when_long_reads_are_pending(workdir, tmp_path, fake_assembler, caplog):
+    """Memory bounds concurrent assemblies; a long-read run gets the machine alone."""
+    rows = [
+        _row(tmp_path, "SRR1"),
+        _row(
+            tmp_path,
+            "ONT1",
+            platform="OXFORD_NANOPORE",
+            layout="SINGLE",
+            instrument_model="GridION",
+        ),
+    ]
+    ctx = _prepare(workdir, rows)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, AssembleParams(assembler="fakeasm", threads=8))
+    assert any("with 1 concurrent job" in r.message for r in caplog.records)
+    assert ctx.config.stages["assemble"].params["jobs"] is None  # the request, not the resolution
+
+
+def test_jobs_default_is_two_for_short_reads(workdir, tmp_path, fake_assembler, caplog):
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, AssembleParams(assembler="fakeasm", threads=8))
+    assert any("with 2 concurrent jobs" in r.message for r in caplog.records)

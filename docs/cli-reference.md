@@ -27,7 +27,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `-wd`, `--workdir` | required | Working directory. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--jobs` | `2` | Runs assembled concurrently (threads are split across them). |
+| `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
 | `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
 | `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |

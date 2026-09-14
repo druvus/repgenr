@@ -125,9 +125,10 @@ the tokens the reads stage resolved. `--assembler auto` (the default) picks
 by platform and layout: `skesa` for Illumina, `shovill` (SPAdes) as the
 alternative for paired Illumina, `flye` for Oxford Nanopore and PacBio;
 `--tool-arg` passes tuning such as `mode=nano-raw` to Flye. `--jobs` runs
-that many assemblies at once with `--threads` split across them (memory,
-not CPU, is the limit; long reads want `--jobs 1`), and `--memory-gb` is the
-RAM cap passed to SKESA and shovill. Each finished run leaves a marker under
+that many assemblies at once with `--threads` split across them; memory,
+not CPU, is the limit, so the default is 2, or 1 as soon as a long-read run
+is pending. `--memory-gb` is the RAM cap passed to SKESA and shovill (shovill
+accepts no less than 8). Each finished run leaves a marker under
 `assemblies/<run>/`, so an interrupted stage resumes without refetching;
 reads are deleted after a successful assembly unless `--keep-reads`, and the
 assembler's scratch unless `--keep-files`. A run without an ENA FASTQ
