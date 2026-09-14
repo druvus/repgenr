@@ -18,6 +18,7 @@ class FasttreeBuilder(TreeBuilder):
     # FastTree / VeryFastTree are both accepted; prefer FastTree on PATH.
     capabilities = ToolCapabilities(
         name="fasttree",
+        container="quay.io/biocontainers/fasttree:2.2.0--h7b50bb2_1",
         conda=("bioconda::fasttree",),
         required_binaries=(BinarySpec("FastTree", version_args=()),),
         recommended_max_genomes=5000,

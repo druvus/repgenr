@@ -58,6 +58,7 @@ _DENSE_MAX_GENOMES = 5000
 class SourmashDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="sourmash",
+        container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled", "sketch_cache", "dense_fallback"}),
         # k-mer containment has no primary/secondary split and no alignment.

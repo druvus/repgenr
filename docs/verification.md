@@ -39,25 +39,27 @@ contract test, which checks the argument vector against canned output.
 | Family | Adapter | Native | Container | Live module |
 |---|---|---|---|---|
 | dereplicator | skder | yes | yes | test_dereplicators, test_container_runs |
-| dereplicator | galah | yes | no | test_dereplicators |
-| dereplicator | sourmash | yes | no | test_dereplicators, test_aux_commands |
-| dereplicator | drep | no | yes | test_container_runs (Wave image; also `glance`) |
+| dereplicator | galah | yes | yes | test_dereplicators, test_container_runs (pinned image) |
+| dereplicator | sourmash | yes | yes | test_dereplicators, test_aux_commands, test_container_runs (pinned image) |
+| dereplicator | drep | no | yes | test_container_runs (pinned and Wave images; also `glance`) |
 | aligner | sibeliaz | yes | yes | test_steps, test_container_runs |
 | aligner | progressivemauve | no | yes | test_container_runs, test_nextflow (unpackaged on macOS) |
 | aligner | cactus | no | yes | test_container_runs (pinned image) |
 | SNP typer | simple | yes | yes | test_species_set, test_container_runs |
 | SNP typer | parsnp | yes | no | test_species_set (osx-64 env) |
-| SNP typer | ska2 | yes | no | test_species_set |
-| SNP typer | snippy | no | no | offline contract test only |
-| masker | gubbins | yes | no | test_species_set |
-| tree builder | iqtree | yes | no | test_species_set |
-| tree builder | fasttree | yes | no | test_species_set |
-| tree builder | raxmlng | yes | no | test_species_set |
-| tree builder | mashtree | yes | no | test_treebuilders_offline, test_species_set |
-| tree builder | sourmash | yes | no | test_treebuilders_offline |
+| SNP typer | ska2 | yes | yes | test_species_set, test_container_runs (pinned image) |
+| SNP typer | snippy | no | yes | test_container_runs (pinned image) |
+| masker | gubbins | yes | yes | test_species_set, test_container_runs (pinned image) |
+| tree builder | iqtree | yes | yes | test_species_set, test_container_runs (pinned image) |
+| tree builder | fasttree | yes | yes | test_species_set, test_container_runs (pinned image) |
+| tree builder | raxmlng | yes | yes | test_species_set, test_container_runs (pinned image) |
+| tree builder | mashtree | yes | yes | test_treebuilders_offline, test_species_set, test_container_runs (pinned image) |
+| tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
 
-snippy is the one adapter with no live verification; drep, progressivemauve
-and cactus have been verified only inside containers.
+drep, progressivemauve, cactus and snippy have been verified only inside
+containers. skder and SibeliaZ run in Wave-minted images only: their
+BioContainer images are BusyBox-based and the GNU-only calls in their shell
+wrappers fail there, which is why they carry no pinned image.
 
 ## Results
 

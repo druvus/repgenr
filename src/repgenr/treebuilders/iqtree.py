@@ -18,6 +18,7 @@ from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 class IqtreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="iqtree",
+        container="quay.io/biocontainers/iqtree:3.1.3--h8471819_0",
         conda=("bioconda::iqtree",),
         required_binaries=(BinarySpec("iqtree", version_args=("--version",)),),
         recommended_max_genomes=500,

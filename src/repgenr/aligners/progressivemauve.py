@@ -33,8 +33,8 @@ class ProgressiveMauveAligner(Aligner):
         # fixed and verified:
         #   * container (default): a pre-built BioContainer with boost-cpp 1.74.
         #   * conda/Wave (--wave): boost-cpp is pinned to 1.74 below so the minted
-        #     image matches. resolve_image() prefers `container`, so the
-        #     BioContainer wins unless that pin is removed.
+        #     image matches. resolve_image() mints from the conda spec whenever
+        #     --wave is given and uses the BioContainer otherwise.
         container="quay.io/biocontainers/mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4",
         conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),

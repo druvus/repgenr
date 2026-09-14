@@ -47,6 +47,10 @@ _BSD_PATCHES: tuple[tuple[str, str], ...] = (
 class SibeliazAligner(Aligner):
     capabilities = ToolCapabilities(
         name="sibeliaz",
+        # No pinned BioContainer: the sibeliaz images are BusyBox-based, and
+        # the wrapper's `mktemp --suffix` (GNU only) fails there, so the
+        # alignment step writes an empty MAF. A Wave image minted from the
+        # conda spec carries GNU coreutils and works.
         conda=("bioconda::sibeliaz",),
         required_binaries=(BinarySpec("sibeliaz", version_args=("-v",)),),
         recommended_max_genomes=2000,

@@ -30,6 +30,30 @@ def test_resolve_prefers_explicit_image() -> None:
     assert resolve_image(caps, ContainerConfig(backend="docker")) == "quay.io/x/cactus:1"
 
 
+def test_resolve_wave_wins_over_the_pin_when_enabled(monkeypatch) -> None:
+    # --wave asks for an image minted from the conda spec (native architecture);
+    # the pinned BioContainer is the default when Wave is off.
+    caps = ToolCapabilities(name="skder", container="quay.io/x/skder:1", conda=("bioconda::skder",))
+    monkeypatch.setattr(containers, "_wave_image", lambda spec, cfg: "wave.seqera.io/x/skder")
+    assert (
+        resolve_image(caps, ContainerConfig(backend="docker", wave_enabled=True))
+        == "wave.seqera.io/x/skder"
+    )
+    assert (
+        resolve_image(caps, ContainerConfig(backend="docker", wave_enabled=False))
+        == "quay.io/x/skder:1"
+    )
+
+
+def test_resolve_pin_when_wave_has_no_conda_spec(monkeypatch) -> None:
+    caps = ToolCapabilities(name="cactus", container="quay.io/x/cactus:1")
+    monkeypatch.setattr(containers, "_wave_image", lambda spec, cfg: "must-not-be-called")
+    assert (
+        resolve_image(caps, ContainerConfig(backend="docker", wave_enabled=True))
+        == "quay.io/x/cactus:1"
+    )
+
+
 def test_resolve_none_without_wave() -> None:
     caps = ToolCapabilities(name="skder", conda=("bioconda::skder",))
     # docker backend but no explicit image and Wave disabled -> run native

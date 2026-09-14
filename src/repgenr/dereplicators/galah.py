@@ -33,6 +33,7 @@ from .base import (
 class GalahDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="galah",
+        container="quay.io/biocontainers/galah:0.4.2--hc1c3326_2",
         conda=("bioconda::galah",),
         required_binaries=(BinarySpec("galah", version_args=("--version",)),),
         recommended_max_genomes=None,
