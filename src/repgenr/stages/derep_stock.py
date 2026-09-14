@@ -14,11 +14,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, GENOME_STATUS_TSV
+from ..core.contracts import (
+    CLUSTER_SUMMARY_TSV,
+    CLUSTERS_TSV,
+    GENOME_STATUS_TSV,
+    list_fasta,
+    read_clusters,
+    read_genome_status,
+)
 from ..core.errors import UserInputError
 from ..core.process import remove_tree
+from ..dereplicators.base import DerepResult
+from .dereplicate import _update_manifest
 
-_FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV)
+_FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV, CLUSTER_SUMMARY_TSV)
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
@@ -76,7 +85,7 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
             shutil.copy2(src, run_path / name)
     reps = run_path / "representatives"
     reps.mkdir()
-    for rep in ctx.representatives_dir.iterdir():
+    for rep in list_fasta(ctx.representatives_dir):
         (reps / rep.name).symlink_to((ctx.genomes_dir / rep.name).resolve())
     ctx.logger.info("Packed run to %s", run_path)
 
@@ -93,6 +102,24 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     ctx.representatives_dir.mkdir(parents=True)
     for rep in (run_path / "representatives").iterdir():
         shutil.copy2(ctx.genomes_dir / rep.name, ctx.representatives_dir / rep.name)
+    # The derep contract now describes the stored run: bring the manifest's
+    # per-genome status in line with it and re-stamp the dereplicate record
+    # without a fingerprint, so `status` reports the run on disk and the next
+    # `dereplicate` recomputes instead of skipping on a stale fingerprint.
+    clusters = read_clusters(ctx.derep_dir / CLUSTERS_TSV)
+    status_path = ctx.derep_dir / GENOME_STATUS_TSV
+    genome_status = read_genome_status(status_path) if status_path.exists() else {}
+    _update_manifest(
+        ctx, DerepResult(representatives=[], clusters=clusters, genome_status=genome_status)
+    )
+    prior = ctx.config.stages.get("dereplicate")
+    ctx.config.record_stage(
+        "dereplicate",
+        tool=prior.tool if prior else None,
+        params={**(prior.params if prior else {}), "stock": run_path.name},
+        tool_versions=prior.tool_versions if prior else None,
+        completed=datetime.now(UTC).isoformat(),
+    )
     ctx.logger.info("Unpacked run from %s", run_path)
 
 
