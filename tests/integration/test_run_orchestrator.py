@@ -144,3 +144,85 @@ def test_run_preflights_every_tool_before_the_first_stage(
     assert result.exit_code != 0
     assert calls == []  # nothing downloaded, nothing dereplicated
     assert "absenttree" in result.output
+
+
+def test_run_preflights_the_masker(monkeypatch, tmp_path, register_tool) -> None:
+    from repgenr.core.errors import MissingBinaryError
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.dereplicators.base import Dereplicator
+    from repgenr.dereplicators.base import registry as derep_registry
+    from repgenr.maskers.base import Masker
+    from repgenr.maskers.base import registry as masker_registry
+    from repgenr.snptypers.base import SnpTyper
+    from repgenr.snptypers.base import registry as snp_registry
+    from repgenr.treebuilders.base import InputKind, TreeBuilder
+    from repgenr.treebuilders.base import registry as tb_registry
+
+    class OkDerep(Dereplicator):
+        capabilities = ToolCapabilities(name="okderep")
+
+        def preflight(self):
+            return {"okderep": "1.0"}
+
+        def dereplicate(self, genomes, out_dir, params, logger):  # noqa: ANN001
+            raise AssertionError("must not run")
+
+    class OkTree(TreeBuilder):
+        capabilities = ToolCapabilities(name="oktree")
+        input_kind = InputKind.MSA_FASTA
+
+        def preflight(self):
+            return {"oktree": "1.0"}
+
+        def build(self, msa_or_genomes, out_dir, params, logger):  # noqa: ANN001
+            raise AssertionError("must not run")
+
+    class OkTyper(SnpTyper):
+        capabilities = ToolCapabilities(name="oktyper")
+
+        def preflight(self):
+            return {"oktyper": "1.0"}
+
+        def call(self, genomes, reference, out_dir, params, logger):  # noqa: ANN001
+            raise AssertionError("must not run")
+
+    class AbsentMasker(Masker):
+        capabilities = ToolCapabilities(name="absentmask")
+
+        def preflight(self):
+            raise MissingBinaryError("absentmask: not found on PATH")
+
+        def mask(self, full_alignment, out_dir, params, logger):  # noqa: ANN001
+            raise AssertionError("must not run")
+
+    register_tool(derep_registry, "okderep", OkDerep)
+    register_tool(tb_registry, "oktree", OkTree)
+    register_tool(snp_registry, "oktyper", OkTyper)
+    register_tool(masker_registry, "absentmask", AbsentMasker)
+    calls: list[str] = []
+    monkeypatch.setattr(cmd_run, "_run", lambda stage, *a, **k: calls.append(stage))
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            str(tmp_path),
+            "-l",
+            "genus",
+            "-tg",
+            "francisella",
+            "--tool",
+            "okderep",
+            "--treebuilder",
+            "oktree",
+            "--msa-source",
+            "snptype",
+            "--snptyper",
+            "oktyper",
+            "--mask",
+            "absentmask",
+        ],
+    )
+    assert result.exit_code != 0
+    assert calls == []
+    assert "absentmask" in result.output

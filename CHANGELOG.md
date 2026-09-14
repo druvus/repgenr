@@ -7,6 +7,11 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr list-tools --check` runs every adapter's preflight and prints one
+  line per tool: `ok` with the resolved versions, or `missing` with the
+  binaries that are absent or below their version floor. An environment can
+  be verified before a run, without a working directory.
+
 - `derep/cluster_summary.tsv`: one row per representative with the member
   count, the species the cluster spans and the keeper's CheckM quality against
   its members, including which genome scores best. `dereplicate` writes it
@@ -15,6 +20,11 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `--mask` is refused before any SNP calling when the typer cannot feed a
+  masker (SNP typers declare `produces_full_alignment`; ska2 does not), and
+  the masker's binaries are checked before the typer runs. `repgenr run`
+  preflights the masker with the other tools, so a missing Gubbins fails in
+  the first second instead of after SNP typing.
 - Adapters declare the standard parameters they do not pass to their tool
   (`ToolCapabilities.ignored_params`), and every stage warns by name when a
   user sets one of them to a non-default value. Before, `--primary-ani` was

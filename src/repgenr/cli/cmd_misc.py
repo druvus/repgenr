@@ -203,8 +203,19 @@ def derep_stock(
 
 
 @app.command(name="list-tools")
-def list_tools() -> None:
-    """List the available pluggable tools in each family."""
+def list_tools(
+    check: bool = typer.Option(
+        False,
+        "--check",
+        help="Run each adapter's preflight and report whether its binaries are present.",
+    ),
+) -> None:
+    """List the available pluggable tools in each family.
+
+    With --check, every adapter's required binaries are looked up (version
+    floors included) and reported per tool, so an environment can be
+    verified before a run without a working directory.
+    """
     from ..aligners.base import registry as aligners
     from ..dereplicators.base import registry as dereplicators
     from ..maskers.base import registry as maskers
@@ -220,3 +231,29 @@ def list_tools() -> None:
     ):
         entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]
         typer.echo(f"{label}: {', '.join(entries) or '(none)'}")
+        if not check:
+            continue
+        for name in reg.names():
+            typer.echo(f"  {name}: {_preflight_summary(reg, name)}")
+
+
+def _one_line(exc: Exception) -> str:
+    """Flatten a multi-line preflight message to one line, dropping its preamble."""
+    text = str(exc).replace("Required external tools are missing or outdated:", "")
+    return "; ".join(part.strip() for part in text.splitlines() if part.strip())
+
+
+def _preflight_summary(reg, name: str) -> str:
+    """One line per adapter for `list-tools --check`: ok with versions, or why not."""
+    from ..core.errors import MissingBinaryError, RepGenRError
+
+    if reg.is_broken(name):
+        return "broken (see list-tools)"
+    try:
+        versions = reg.create(name).preflight()
+    except MissingBinaryError as exc:
+        return f"missing ({_one_line(exc)})"
+    except RepGenRError as exc:
+        return f"error ({_one_line(exc)})"
+    shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
+    return f"ok ({shown})"

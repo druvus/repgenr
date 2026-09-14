@@ -171,7 +171,13 @@ Populate a working directory from local genomes (no download).
 
 List the available pluggable tools in each family.
 
-(no options)
+With --check, every adapter's required binaries are looked up (version
+floors included) and reported per tool, so an environment can be
+verified before a run without a working directory.
+
+| option | default | description |
+|---|---|---|
+| `--check` | off | Run each adapter's preflight and report whether its binaries are present. |
 
 ## metadata
 

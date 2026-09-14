@@ -38,6 +38,8 @@ class Ska2Typer(SnpTyper):
         accepted_extras=frozenset({"ksize", "min_freq"}),
     )
     requires_reference = False
+    # Split k-mers have no reference coordinates: only a variable-site alignment.
+    produces_full_alignment = False
 
     def call(
         self,

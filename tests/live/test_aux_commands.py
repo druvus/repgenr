@@ -76,6 +76,14 @@ def test_status_and_versions(run_repgenr, derep_wd: Path, tmp_path: Path) -> Non
     assert "    sourmash:" in out.read_text(encoding="utf-8")
 
 
+def test_list_tools_check_reports_every_adapter(run_repgenr) -> None:
+    # No workdir needed: one line per adapter, sourmash present in this env.
+    out = run_repgenr("list-tools", "--check").stdout
+    assert "  sourmash: ok (" in out
+    per_tool = [ln for ln in out.splitlines() if ln.startswith("  ")]
+    assert per_tool and all(("ok (" in ln or "missing (" in ln) for ln in per_tool)
+
+
 def test_doctor_passes_then_fails_on_a_corrupt_genome(run_repgenr, derep_wd: Path) -> None:
     ok = run_repgenr("doctor", "-wd", derep_wd)
     assert "0 failure(s)" in ok.stdout

@@ -98,11 +98,17 @@ def snptype_core(
         from ..maskers.base import registry as masker_registry
 
         masker = masker_registry.create(params.mask)
+        if not getattr(typer, "produces_full_alignment", True):
+            raise UserInputError(_mask_needs_full_alignment(params.mask, params.tool))
     if warn_extras:
         # The typer and the masker read one extras dict; a key is unread
         # only when neither declares it.
         _warn_unread_extras(typer.capabilities, masker, params.extra, logger)
     versions = typer.preflight()
+    if masker is not None:
+        # Before the typer runs: a missing masker binary must not surface
+        # after minutes of SNP calling.
+        versions.update(masker.preflight())
 
     ref = None
     if typer.requires_reference:
@@ -132,11 +138,7 @@ def snptype_core(
         from ..maskers.base import MaskParams
 
         if result.full_alignment is None:
-            raise UserInputError(
-                f"--mask {params.mask} needs a whole-genome alignment, which SNP typer "
-                f"'{params.tool}' does not produce. Use snippy, parsnp or simple, or drop --mask."
-            )
-        versions.update(masker.preflight())
+            raise UserInputError(_mask_needs_full_alignment(params.mask, params.tool))
         filtered = masker.mask(
             result.full_alignment,
             scratch / params.mask,
@@ -177,6 +179,19 @@ def snptype_core(
             full_alignment=full_alignment_out,
         ),
         versions,
+    )
+
+
+def _mask_needs_full_alignment(mask: str, tool: str) -> str:
+    """The refusal text for a typer that cannot feed a masker, naming the ones that can."""
+    able = sorted(
+        name
+        for name in snp_registry.names()
+        if not snp_registry.is_broken(name) and snp_registry.get(name).produces_full_alignment
+    )
+    return (
+        f"--mask {mask} needs a whole-genome alignment, which SNP typer '{tool}' does not "
+        f"produce. Use {', '.join(able) or 'a typer that writes one'}, or drop --mask."
     )
 
 

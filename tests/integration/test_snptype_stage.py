@@ -91,3 +91,41 @@ def test_mask_refused_without_full_alignment(workdir, genome_files, fake_typer, 
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="whole-genome alignment"):
         run(ctx, SnptypeParams(tool="faketyper", all_genomes=True, mask="fakemask"))
+
+
+class _SplitKmerTyper(_FullTyper):
+    """Declares up front that it never produces a whole-genome alignment."""
+
+    produces_full_alignment = False
+
+    def call(self, genomes, reference, out_dir, params, logger):  # noqa: ANN001
+        raise AssertionError("the typer must not run when --mask cannot be honoured")
+
+
+def test_mask_refused_before_the_typer_runs(workdir, genome_files, register_tool, fake_masker):
+    register_tool(registry, "splitkmer", _SplitKmerTyper)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="whole-genome alignment"):
+        run(ctx, SnptypeParams(tool="splitkmer", all_genomes=True, mask="fakemask"))
+
+
+class _AbsentMasker(_RecordingMasker):
+    def preflight(self) -> dict[str, str]:
+        from repgenr.core.errors import MissingBinaryError
+
+        raise MissingBinaryError("absentmask: not found on PATH")
+
+
+class _MustNotRunTyper(_FullTyper):
+    def call(self, genomes, reference, out_dir, params, logger):  # noqa: ANN001
+        raise AssertionError("the typer must not run when the masker is missing")
+
+
+def test_masker_preflight_runs_before_the_typer(workdir, genome_files, register_tool):
+    from repgenr.core.errors import MissingBinaryError
+
+    register_tool(masker_registry, "absentmask", _AbsentMasker)
+    register_tool(registry, "eagertyper", _MustNotRunTyper)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(MissingBinaryError, match="absentmask"):
+        run(ctx, SnptypeParams(tool="eagertyper", all_genomes=True, mask="absentmask"))
