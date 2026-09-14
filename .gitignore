@@ -186,3 +186,6 @@ tests/live/live.local.toml
 !benchmarks/results/
 !benchmarks/results/**
 .DS_Store
+
+# Written by CheckM2/keras when run from the repo directory
+.keras/
