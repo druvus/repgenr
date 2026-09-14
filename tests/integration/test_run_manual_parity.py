@@ -290,3 +290,84 @@ def test_run_bad_msa_source_fails(dispatched, tmp_path) -> None:
     )
     assert result.exit_code != 0
     assert dispatched == []
+
+
+def test_run_forwards_the_flags_it_has_builders_for(dispatched, tmp_path) -> None:
+    wd = str(tmp_path)
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "-l",
+            "genus",
+            "-tg",
+            "x",
+            "-r",
+            "232.0",
+            "--gtdb-version",
+            "bac120",
+            "--nodownload",
+            "--keep-files",
+            "--pre-primary-ani",
+            "0.8",
+            "--pre-secondary-ani",
+            "0.95",
+            "--node-basename",
+            "n",
+            "--root-name",
+            "TOP",
+            "--remove-outgroup",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    params = dict(dispatched)
+    assert params["metadata"].nodownload is True
+    assert params["genome"].keep_files is True
+    assert (params["dereplicate"].pre_primary_ani, params["dereplicate"].pre_secondary_ani) == (
+        0.8,
+        0.95,
+    )
+    t2t = params["tree2tax"]
+    assert (t2t.node_basename, t2t.root_name, t2t.remove_outgroup) == ("n", "TOP", True)
+
+
+def test_local_run_matches_manual_ingest(dispatched, tmp_path) -> None:
+    from repgenr.cli import cmd_ingest
+
+    genomes = tmp_path / "genomes"
+    genomes.mkdir()
+    wd = str(tmp_path / "wd")
+    result = _runner.invoke(
+        app,
+        [
+            "run",
+            "-wd",
+            wd,
+            "--genomes-dir",
+            str(genomes),
+            "--outgroup",
+            "GCF_1",
+            "--copy",
+            "--tool",
+            "skder",
+            "--treebuilder",
+            "mashtree",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    run_fps = _fingerprints(dispatched)
+    assert set(run_fps) == {"ingest", "dereplicate", "phylo", "tree2tax"}
+    dispatched.clear()
+
+    def fake_run(stage, workdir, build, *, create=False):
+        dispatched.append((stage, build()))
+
+    cmd_ingest._run = fake_run  # the fixture patches the other command modules
+    result = _runner.invoke(
+        app,
+        ["ingest", "-wd", wd, "--genomes-dir", str(genomes), "--outgroup", "GCF_1", "--copy"],
+    )
+    assert result.exit_code == 0, result.output
+    assert _fingerprints(dispatched)["ingest"] == run_fps["ingest"]

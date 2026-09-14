@@ -253,6 +253,10 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
 | `--viral` | off | Run the viral chain (vmetadata -> vgenome) instead of bacterial. |
+| `--genomes-dir` |  | Start from local genome FASTAs (the ingest chain) instead of downloading. |
+| `--selection` |  | With --genomes-dir: selection.tsv naming the genomes to take (accession, taxonomy, filename, outgroup flag, quality). |
+| `--outgroup` |  | With --genomes-dir: the outgroup genome, a name under the directory or a path to a FASTA file. |
+| `--copy` | off | With --genomes-dir: copy the files into genomes/ instead of linking. |
 | `-d`, `--dataset` | `rep` | all or rep (bacterial). |
 | `-l`, `--level` |  | family/genus/species. |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
@@ -261,6 +265,8 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `-r`, `--release` |  | GTDB release (tsv source). |
 | `--gtdb-version` |  | bac120/ar53. |
 | `--metadata-source` | `tsv` | tsv or api. |
+| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
+| `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
 | `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality (bacterial). |
 | `--target` |  | Virus taxon (viral). |
@@ -269,6 +275,7 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--host` |  | ncbi_virus: restrict to a host species (viral). |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY (viral). |
 | `--group-segments` | off | Group viral segments. |
+| `--keep-files` | off | Keep the download scratch after the genome stage. |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
@@ -276,9 +283,12 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
 | `-s`, `--process-size` |  | Chunk size for two-stage dereplication. |
 | `-p`, `--num-processes` | `0` | Parallel chunk workers (0 = auto). |
+| `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
+| `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
 | `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species or genus. |
 | `--target-reps` | `0` | Target representative count (0 = off). |
 | `--tool-arg` |  | Dereplicator tuning as key=value (repeatable). |
+| `--with-snptype` | off | Run the standalone snptype stage (with --snptyper, --mask, --reference) after dereplication, so the SNP tables are produced whatever builds the tree. |
 | `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
 | `--msa-source` | `aligner` | aligner or snptype. |
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
@@ -289,6 +299,9 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
 | `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--root-name` | `root` | Label of the top node. |
+| `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |

@@ -52,6 +52,14 @@ repgenr run -wd $WD -d rep -l genus -tg francisella --tool skder --treebuilder i
 repgenr status -wd $WD     # which stages are done, and what to run next
 ```
 
+`run` forwards the stage options it shares a name with; for the rest, run
+the stage command by hand (`repgenr status` says which comes next). Two
+worth knowing: `--with-snptype` adds the standalone `snptype` stage after
+dereplication, so the SNP tables under `snp/` are produced even when the tree
+is built another way (with `--msa-source snptype`, `phylo` still runs its own
+typing pass into the same directory, and reuses it afterwards), and
+`--genomes-dir` starts the chain from local genomes.
+
 ### Starting from local genomes
 
 `repgenr ingest -wd WD --genomes-dir DIR` populates a working directory from
@@ -74,6 +82,10 @@ repgenr dereplicate -wd $WD --tool skder
 repgenr phylo -wd $WD --treebuilder mashtree
 repgenr tree2tax -wd $WD --include-dereplicated
 ```
+
+`repgenr run --genomes-dir ./my_genomes ...` runs the same local chain in
+one command; `--selection`, `--outgroup` and `--copy` pass through to
+`ingest`, and the GTDB selection flags are not needed.
 
 `--outgroup` names a genome under `--genomes-dir` (filename, stem or
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept

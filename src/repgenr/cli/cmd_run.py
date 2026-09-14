@@ -28,6 +28,7 @@ from .base import (
     HELP_TARGET_SPECIES,
     HELP_THREADS,
     PIPELINE_BACTERIAL,
+    PIPELINE_LOCAL,
     PIPELINE_VIRAL,
     _aligner_help,
     _derep_help,
@@ -63,6 +64,7 @@ def _preflight_tools(
     aligner: str,
     snptyper: str,
     mask: str = "none",
+    with_snptype: bool = False,
 ) -> None:
     """Check every external tool the chain will need before the first stage runs.
 
@@ -77,6 +79,14 @@ def _preflight_tools(
 
     if derep_tool != "auto":
         derep_registry.create(derep_tool).preflight()
+    if with_snptype:
+        from ..snptypers.base import registry as snp_registry
+
+        snp_registry.create(snptyper).preflight()
+        if mask not in ("none", ""):
+            from ..maskers.base import registry as masker_registry
+
+            masker_registry.create(mask).preflight()
     if treebuilder == "auto":
         return
     builder = tb_registry.create(treebuilder)
@@ -115,6 +125,27 @@ def run(
     viral: bool = typer.Option(
         False, "--viral", help="Run the viral chain (vmetadata -> vgenome) instead of bacterial."
     ),
+    # --- selection: local genomes (ingest) ---
+    genomes_dir: Path | None = typer.Option(
+        None,
+        "--genomes-dir",
+        help="Start from local genome FASTAs (the ingest chain) instead of downloading.",
+    ),
+    selection: Path | None = typer.Option(
+        None,
+        "--selection",
+        help="With --genomes-dir: selection.tsv naming the genomes to take "
+        "(accession, taxonomy, filename, outgroup flag, quality).",
+    ),
+    outgroup: str | None = typer.Option(
+        None,
+        "--outgroup",
+        help="With --genomes-dir: the outgroup genome, a name under the directory "
+        "or a path to a FASTA file.",
+    ),
+    copy: bool = typer.Option(
+        False, "--copy", help="With --genomes-dir: copy the files into genomes/ instead of linking."
+    ),
     # --- selection: bacterial (GTDB) ---
     dataset: str = typer.Option("rep", "-d", "--dataset", help="all or rep (bacterial)."),
     level: str | None = typer.Option(None, "-l", "--level", help="family/genus/species."),
@@ -128,6 +159,12 @@ def run(
     release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
     gtdb_version: str | None = typer.Option(None, "--gtdb-version", help="bac120/ar53."),
     metadata_source: str = typer.Option("tsv", "--metadata-source", help="tsv or api."),
+    metadata_path: str | None = typer.Option(
+        None, "--metadata-path", help="Use this GTDB metadata table instead of downloading."
+    ),
+    nodownload: bool = typer.Option(
+        False, "--nodownload", help="Reuse a GTDB table already present in the workdir."
+    ),
     outgroup_accession: str | None = typer.Option(
         None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
     ),
@@ -153,6 +190,10 @@ def run(
         help="ncbi_virus: MM/DD/YYYY (viral).",
     ),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
+    # --- genome download ---
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep the download scratch after the genome stage."
+    ),
     # --- dereplication ---
     derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
     primary_ani: float = typer.Option(0.90, "--primary-ani", help=HELP_PRIMARY_ANI),
@@ -170,6 +211,16 @@ def run(
     num_processes: int = typer.Option(
         0, "-p", "--num-processes", help="Parallel chunk workers (0 = auto)."
     ),
+    pre_primary_ani: float | None = typer.Option(
+        None,
+        "--pre-primary-ani",
+        help="Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani.",
+    ),
+    pre_secondary_ani: float | None = typer.Option(
+        None,
+        "--pre-secondary-ani",
+        help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
+    ),
     reduce: str = typer.Option(
         "none", "--reduce", help="Taxonomy-aware reduction after ANI: none, species or genus."
     ),
@@ -178,6 +229,13 @@ def run(
     ),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Dereplicator tuning as key=value (repeatable)."
+    ),
+    # --- SNP typing ---
+    with_snptype: bool = typer.Option(
+        False,
+        "--with-snptype",
+        help="Run the standalone snptype stage (with --snptyper, --mask, --reference) after "
+        "dereplication, so the SNP tables are produced whatever builds the tree.",
     ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
@@ -199,6 +257,15 @@ def run(
         "none", "--mask", help="Recombination masking for --msa-source snptype."
     ),
     # --- taxonomy output ---
+    node_basename: str | None = typer.Option(
+        None,
+        "--node-basename",
+        help="Name internal nodes <basename><n> instead of by content hash.",
+    ),
+    root_name: str = typer.Option("root", "--root-name", help="Label of the top node."),
+    remove_outgroup: bool = typer.Option(
+        False, "--remove-outgroup", help="Leave the outgroup out of the taxonomy after rooting."
+    ),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
@@ -236,8 +303,10 @@ def run(
         VIRAL_SOURCES,
         dereplicate_params,
         genome_params,
+        ingest_params,
         metadata_params,
         phylo_params,
+        require_mask,
         tree2tax_params,
         vgenome_params,
         vmetadata_params,
@@ -266,6 +335,8 @@ def run(
             primary_ani=primary_ani,
             secondary_ani=secondary_ani,
             aligned_fraction=aligned_fraction,
+            pre_primary_ani=pre_primary_ani,
+            pre_secondary_ani=pre_secondary_ani,
             keeper=keeper,
             reduce=reduce,
             target_reps=target_reps,
@@ -278,21 +349,36 @@ def run(
             snptyper=snptyper,
             extra=phylo_extra,
         )
-        if not viral and not level:
+        local = genomes_dir is not None
+        if local and viral:
+            raise UserInputError(
+                "--genomes-dir starts the local chain (ingest); it cannot be combined with --viral."
+            )
+        if with_snptype:
+            require_mask(mask)
+        if not viral and not local and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
 
     if dry_run:
-        chain = PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
-        typer.echo(f"[dry-run] {'viral' if viral else 'bacterial'} pipeline in {workdir}:")
+        chain: tuple[str, ...] = (
+            PIPELINE_LOCAL if local else PIPELINE_VIRAL if viral else PIPELINE_BACTERIAL
+        )
+        if with_snptype:
+            i = chain.index("phylo")
+            chain = (*chain[:i], "snptype", *chain[i:])
+        lineage = "local" if local else "viral" if viral else "bacterial"
+        typer.echo(f"[dry-run] {lineage} pipeline in {workdir}:")
         for stage in chain:
             typer.echo(f"  - {stage}")
-        selection = (
-            f"target={target}, genus={target_genus}, species={target_species}"
+        selection_summary = (
+            f"genomes_dir={genomes_dir}, selection={selection}, outgroup={outgroup}"
+            if local
+            else f"target={target}, genus={target_genus}, species={target_species}"
             if viral
             else f"dataset={dataset}, level={level}, "
             f"family={target_family}, genus={target_genus}, species={target_species}"
         )
-        typer.echo(f"selection: {selection}")
+        typer.echo(f"selection: {selection_summary}")
         typer.echo(
             f"dereplicate: tool={derep_tool}, primary_ani={primary_ani}, "
             f"secondary_ani={secondary_ani}; phylo: treebuilder={treebuilder}"
@@ -303,9 +389,21 @@ def run(
         return
 
     with stage_errors(logger):
-        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper, mask)
+        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper, mask, with_snptype)
 
-    if viral:
+    if local:
+        _run(
+            "ingest",
+            workdir,
+            lambda: ingest_params(
+                genomes_dir=str(genomes_dir),
+                selection=None if selection is None else str(selection),
+                outgroup=outgroup,
+                copy=copy,
+            ),
+            create=True,
+        )
+    elif viral:
         _run(
             "vmetadata",
             workdir,
@@ -342,11 +440,13 @@ def run(
                 target_genus=target_genus,
                 target_species=target_species,
                 outgroup_accession=outgroup_accession,
+                metadata_path=metadata_path,
+                nodownload=nodownload,
                 limit=limit,
             ),
             create=True,
         )
-        _run("genome", workdir, lambda: genome_params())
+        _run("genome", workdir, lambda: genome_params(keep_files=keep_files))
 
     _run(
         "dereplicate",
@@ -359,6 +459,8 @@ def run(
             threads=threads,
             process_size=process_size,
             num_processes=num_processes,
+            pre_primary_ani=pre_primary_ani,
+            pre_secondary_ani=pre_secondary_ani,
             reduce=reduce,
             target_reps=target_reps,
             extra=derep_extra,
@@ -366,6 +468,22 @@ def run(
             allow_incomplete=allow_incomplete,
         ),
     )
+    if with_snptype:
+        from ..stages.snptype import SnptypeParams
+
+        _run(
+            "snptype",
+            workdir,
+            lambda: SnptypeParams(
+                tool=snptyper,
+                threads=threads,
+                reference=reference,
+                all_genomes=all_genomes,
+                mask=mask,
+                allow_incomplete=allow_incomplete,
+                extra=_parse_key_values(aligner_arg, "--aligner-arg"),
+            ),
+        )
     _run(
         "phylo",
         workdir,
@@ -387,6 +505,9 @@ def run(
         "tree2tax",
         workdir,
         lambda: tree2tax_params(
+            node_basename=node_basename,
+            root_name=root_name,
+            remove_outgroup=remove_outgroup,
             include_dereplicated=include_dereplicated,
             collapse_support=collapse_support,
             collapse_length=collapse_length,
