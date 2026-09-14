@@ -14,6 +14,7 @@ process PHYLO_TREE {
 
     output:
     tuple val(meta), path("tree/tree.nwk"), emit: tree
+    path "tree/*"                         , emit: tree_files  // the builder's logs and bootstrap trees
     path "versions.yml"                   , emit: versions
 
     when:

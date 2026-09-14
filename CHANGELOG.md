@@ -27,6 +27,14 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The Nextflow phylogeny processes publish the alignment they built
+  (`phylo/align/` or `phylo/snp/`, with the reuse stamp) and the tree
+  builder's own files under `phylo/tree/`; before, only `tree.nwk` left the
+  task directory, so the SNP tables and the tree builder's logs were lost.
+- The `cloud` Nextflow profile is removed and the `slurm` profile no longer
+  names a queue: an executor's queue, account or region is site-specific and
+  belongs in a site config (`-c`). The deprecated `nextflow.enable.dsl = 2`
+  line is gone from the pipeline and its test harnesses.
 - Documentation repairs from the gap analysis: the README counts five tool
   families and shows the chain `run` executes; `docs/output.md` lists
   `selection.tsv`, `outgroup_accession.txt`, `missing_accessions.txt`, the

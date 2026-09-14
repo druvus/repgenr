@@ -1,0 +1,45 @@
+nextflow_pipeline {
+
+    name "main.nf (stub)"
+    script "../main.nf"
+    tag "stub"
+    options "-stub"
+
+    test("the entry point validates its parameters and runs the bacterial chain") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/genomes_map.tsv").exists()
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+            assert path("$outputDir/pipeline_info/software_versions.yml").exists()
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains(':METADATA (') }
+            assert names.any { n -> n.contains(':TREE2TAX (') }
+        }
+    }
+
+    test("the entry point runs the viral chain when mode is viral") {
+        when {
+            params {
+                outdir = "$outputDir"
+                mode = 'viral'
+                derep_process_size = 1
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains(':VACQUIRE (') }
+            assert !names.any { n -> n.contains(':METADATA (') }
+        }
+    }
+}

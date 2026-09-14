@@ -10,8 +10,6 @@
 //   nextflow run nextflow/tests/dereplicate_scatter.nf \
 //       --genomes_dir <DIR> --derep_tool sourmash -profile test
 
-nextflow.enable.dsl = 2
-
 include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 
 params.genomes_dir = null

@@ -337,17 +337,31 @@ they arrive as strings, which the schema also accepts for the numeric options.
 The `standard` profile (the default, local executor) caps every process's
 CPU and memory request to what the machine has; `base.config` asks for up to
 32 CPUs and 128 GB for the heavy processes, which the local executor would
-otherwise refuse. `slurm` and `cloud` leave the requests as they are.
+otherwise refuse. `slurm` leaves the requests as they are and sets only the
+executor: the queue or account is site-specific, so pass it in a site config
+(`-c site.config` with `process.queue = '...'`). The same holds for a cloud
+executor such as AWS Batch: the pipeline ships no cloud profile, because the
+region, the job queue and an image that provides `repgenr` and the tools are
+values only the site knows; a site config that sets them is all that is
+needed.
 
 Combine an executor profile with an optional container profile, e.g.
 `-profile slurm,singularity`.
 
-- **Executors**: `standard` (local), `slurm`, `cloud` (AWS Batch).
+- **Executors**: `standard` (local), `slurm`.
 - **Containers**: `docker`, `singularity`, `wave`. These set RepGenR's own
-  adapter-level container backend (`--container ...`), which runs each external
-  tool in a pinned image. RepGenR itself must be available to the Nextflow
-  process.
+  adapter-level container backend (`--container ...`). Only the adapters that
+  declare an image (progressiveMauve and cactus) run in a pinned image under
+  `docker` or `singularity`; the others declare a conda specification and
+  run in an image only under `wave`, which mints one from it. Without Wave
+  those tools run on the host, and the log says so for each. RepGenR itself
+  must be available to the Nextflow process.
 - **`test`**: minimal resources and a small target for a quick smoke run.
+
+`PHYLO` (and the split `PHYLO_MSA`/`PHYLO_TREE`) publish the alignment they
+built (`phylo/align/` for an aligner, `phylo/snp/` for a SNP typer, with the
+reuse stamp) and the tree builder's own files under `phylo/tree/`, beside the
+tree.
 
 ### Scaling
 
@@ -356,7 +370,7 @@ dereplication scatters across tasks (one per chunk):
 
 ```bash
 nextflow run nextflow/main.nf --outdir results \
-    --derep_tool sourmash --derep_process_size 2000 -profile slurm
+    --derep_tool sourmash --derep_process_size 2000 -profile slurm -c site.config
 ```
 
 Resource labels (`process_low/medium/high`) scale memory and time with the retry

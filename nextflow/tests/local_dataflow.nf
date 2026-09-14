@@ -7,8 +7,6 @@
 // (sourmash + mashtree), so it skips the GTDB/NCBI ACQUIRE front and runs with
 // no outgroup. Publishes tree2tax.tsv, genomes_map.tsv and the tree to --outdir.
 
-nextflow.enable.dsl = 2
-
 include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 include { PHYLO               } from '../modules/local/dataflow/phylo'
 include { TREE2TAX            } from '../modules/local/dataflow/tree2tax'

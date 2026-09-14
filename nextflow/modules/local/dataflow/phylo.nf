@@ -14,8 +14,14 @@ process PHYLO {
     tuple val(meta), path(reps_dir), path(outgroup, stageAs: 'outgroup/*'), path(outgroup_accession)
 
     output:
-    tuple val(meta), path("tree/tree.nwk"), emit: tree
-    path "versions.yml"                   , emit: versions
+    tuple val(meta), path("tree/tree.nwk")            , emit: tree
+    // The alignment the tree was built from and the tree builder's own files
+    // (logs, bootstrap trees), published beside the tree. Which of align/ and
+    // snp/ exists depends on --msa-source; an alignment-free builder writes neither.
+    tuple val(meta), path("align/*"), optional: true , emit: align
+    tuple val(meta), path("snp/*")  , optional: true , emit: snp
+    path "tree/*"                                     , emit: tree_files
+    path "versions.yml"                               , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

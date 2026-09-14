@@ -5,8 +5,6 @@
 // ACQUIRE drops straight into DEREPLICATE_SCATTER. Run with `-stub` for a quick
 // wiring check, or for real with a GTDB target and a dereplicator.
 
-nextflow.enable.dsl = 2
-
 include { ACQUIRE             } from '../subworkflows/local/acquire'
 include { DEREPLICATE_SCATTER } from '../subworkflows/local/dereplicate_scatter'
 include { run_meta            } from '../subworkflows/local/run_meta'

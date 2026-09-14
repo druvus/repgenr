@@ -1,5 +1,5 @@
 {
-    "emits a Newick tree naming every representative": {
+    "emits an alignment with one record per representative": {
         "content": [
             {
                 "0": [
@@ -8,7 +8,7 @@
                             "id": "test",
                             "mode": "bacterial"
                         },
-                        "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                        "msa.fasta:md5,c00d06fefbe5112077928e8044d832fc"
                     ]
                 ],
                 "1": [
@@ -18,35 +18,29 @@
                     
                 ],
                 "3": [
-                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
-                ],
-                "4": [
                     "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
                 ],
                 "align": [
                     
                 ],
-                "snp": [
-                    
-                ],
-                "tree": [
+                "msa": [
                     [
                         {
                             "id": "test",
                             "mode": "bacterial"
                         },
-                        "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                        "msa.fasta:md5,c00d06fefbe5112077928e8044d832fc"
                     ]
                 ],
-                "tree_files": [
-                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                "snp": [
+                    
                 ],
                 "versions": [
                     "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
                 ]
             }
         ],
-        "timestamp": "2026-09-14T08:02:38.460141",
+        "timestamp": "2026-09-14T08:02:35.815013",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.6"
