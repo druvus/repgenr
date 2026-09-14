@@ -183,3 +183,17 @@ def test_ingest_rerun_prunes_stale_genomes_and_outgroup(tmp_path: Path, workdir:
     assert not any(ctx.outgroup_dir.iterdir()) if ctx.outgroup_dir.exists() else True
     accessions = {g.accession for g in ctx.manifest.all_genomes(include_outgroup=True)}
     assert accessions == {"a", "c"}
+
+
+def test_ingest_refuses_to_drop_appended_assemblies(tmp_path: Path, workdir: Path) -> None:
+    """A workdir holding reads-derived genomes must not lose them to a re-ingest."""
+    from repgenr.core.manifest import GenomeRecord
+
+    src = _source(tmp_path, ["Fam_Gen_sp1_GCA_000001.1.fasta"])
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, IngestParams(genomes_dir=str(src)))
+    ctx.manifest.upsert_many([GenomeRecord("SRR1", "Fam_Gen_sp_SRR1.fasta", "sra")])
+    with pytest.raises(UserInputError, match="--drop-foreign"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+    run(ctx, IngestParams(genomes_dir=str(src), drop_foreign=True))
+    assert {g.accession for g in ctx.manifest.all_genomes()} == {"GCA_000001.1"}

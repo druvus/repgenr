@@ -34,6 +34,7 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError
+from ..core.integrity import refuse_foreign_rows
 from ..core.manifest import GenomeRecord, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
@@ -45,10 +46,14 @@ class IngestParams:
     selection: str | None = None
     outgroup: str | None = None
     copy: bool = False
+    # Discard genomes another entry path appended (assemble --append) instead
+    # of refusing to overwrite the selection that holds them.
+    drop_foreign: bool = False
 
 
 def run(ctx: WorkdirContext, params: IngestParams) -> int:
     logger = ctx.logger
+    refuse_foreign_rows(ctx, "ingest", drop_foreign=params.drop_foreign, logger=logger)
     source = Path(params.genomes_dir).expanduser()
     if not source.is_dir():
         raise UserInputError(f"--genomes-dir {source} is not a directory.")

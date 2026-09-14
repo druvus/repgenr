@@ -37,6 +37,7 @@ from ..core.contracts import (
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.executors import parallel_map
+from ..core.integrity import refuse_foreign_rows
 from ..core.manifest import GenomeRecord
 
 TAXONOMY = ("domain", "phylum", "class", "family", "genus", "species")
@@ -59,10 +60,14 @@ class MetadataParams:
     metadata_path: str | None = None
     nodownload: bool = False
     limit: int | None = None
+    # Discard genomes another entry path appended (assemble --append) instead
+    # of refusing to overwrite the selection that holds them.
+    drop_foreign: bool = False
 
 
 def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     logger = ctx.logger
+    refuse_foreign_rows(ctx, "metadata", drop_foreign=params.drop_foreign, logger=logger)
     _validate(params)
 
     if params.source == "api":

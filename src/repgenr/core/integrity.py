@@ -22,7 +22,7 @@ from .contracts import (
     read_excused_runs,
     read_selection,
 )
-from .errors import WorkdirError
+from .errors import UserInputError, WorkdirError
 
 
 def looks_like_fasta(path: Path) -> bool:
@@ -131,3 +131,39 @@ def check_representatives_consistency(
         logger.warning("%s", message)
         return shortfall
     raise WorkdirError(message)
+
+
+# Manifest sources written by stages that add to a working directory rather
+# than select it; a re-selection would drop their rows and prune their files.
+FOREIGN_SOURCES = frozenset({"sra"})
+
+
+def refuse_foreign_rows(ctx, stage: str, *, drop_foreign: bool, logger: logging.Logger) -> None:
+    """Stop ``stage`` from silently discarding genomes another entry path appended.
+
+    ``metadata`` and ``ingest`` replace the manifest and the genome stage prunes
+    what the manifest no longer lists, so reads-derived genomes added with
+    ``assemble --append`` would vanish. Refuse unless the user passed
+    ``--drop-foreign``, in which case say what is being dropped.
+    """
+    try:
+        foreign = [
+            g.accession
+            for g in ctx.manifest.all_genomes(include_outgroup=True)
+            if g.source in FOREIGN_SOURCES
+        ]
+    except Exception:  # no manifest yet, or an unreadable one: nothing to protect
+        return
+    if not foreign:
+        return
+    listing = ", ".join(foreign[:5]) + (" ..." if len(foreign) > 5 else "")
+    if not drop_foreign:
+        raise UserInputError(
+            f"The working directory holds {len(foreign)} genome(s) appended from sequencing "
+            f"runs ({listing}); re-running {stage} would drop them and the genome stage "
+            "would prune their files. Pass --drop-foreign to discard them, or run "
+            "`assemble --append` again afterwards to restore them."
+        )
+    logger.warning(
+        "Dropping %d appended genome(s) (%s) as --drop-foreign asked", len(foreign), listing
+    )

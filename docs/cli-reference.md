@@ -31,6 +31,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
 | `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
+| `--append` | off | Add the assemblies to a working directory that already holds a selection (metadata and genome, or ingest) instead of replacing it. |
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
 | `--keep-files` | off | Keep each run's assembler scratch directory. |
 | `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
@@ -191,6 +192,7 @@ Populate a working directory from local genomes (no download).
 | `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
 | `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir, or a path to a FASTA file elsewhere. |
 | `--copy` | off | Copy the files into genomes/ instead of symlinking them. |
+| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
 
 ## list-tools
 
@@ -223,6 +225,7 @@ Select a taxon's genomes from GTDB (full table or the GTDB API).
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
 | `--nodownload` | off | Reuse a table already present in the workdir. |
 | `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
+| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
 
 ## phylo
 

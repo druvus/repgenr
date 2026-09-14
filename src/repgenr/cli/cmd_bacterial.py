@@ -59,6 +59,12 @@ def metadata(
         min=1,
         help="Keep at most N genomes, round-robin over species by CheckM quality.",
     ),
+    drop_foreign: bool = typer.Option(
+        False,
+        "--drop-foreign",
+        help="Discard genomes appended from sequencing runs (assemble --append) instead of "
+        "refusing to overwrite the selection that holds them.",
+    ),
 ) -> None:
     """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
     from .param_builders import metadata_params
@@ -77,6 +83,7 @@ def metadata(
             metadata_path=metadata_path,
             nodownload=nodownload,
             limit=limit,
+            drop_foreign=drop_foreign,
         )
 
     _run("metadata", workdir, build, create=True)

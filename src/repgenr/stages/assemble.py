@@ -72,6 +72,10 @@ class AssembleParams:
     min_contig_length: int = 500
     # A FASTA file to set aside as the outgroup (ingest semantics).
     outgroup: str | None = None
+    # Add the assemblies to a working directory that already holds a selection
+    # (metadata + genome, or ingest) instead of replacing it: existing rows,
+    # files and outgroup stay, rows of the same accession are replaced.
+    append: bool = False
     keep_reads: bool = False
     keep_files: bool = False
     # Quality: CheckM2 runs when a database is configured (flag or CHECKM2DB);
@@ -239,17 +243,30 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             f"None of the {len(rows)} runs produced an accepted assembly; see {EXCUSED_RUNS_TSV}."
         )
 
-    selection_rows = [_selection_row(o) for o in assembled]
-    outgroup_row = _stage_outgroup(ctx, params.outgroup, logger)
-    if outgroup_row is not None:
-        selection_rows.append(outgroup_row)
-
-    with staged_dir(ctx.genomes_dir) as genomes_dir:
+    new_rows = [_selection_row(o) for o in assembled]
+    if params.append:
+        selection_rows = _append_rows(ctx, new_rows, params, logger)
+        ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
         for o in assembled:
-            link_or_copy(assemblies / o.row.run_accession / _CONTIGS_NAME, genomes_dir / _name(o))
+            _unlink_previous(ctx.genomes_dir, o.row.run_accession)
+            link_or_copy(
+                assemblies / o.row.run_accession / _CONTIGS_NAME, ctx.genomes_dir / _name(o)
+            )
+        ctx.manifest.upsert_many([record_from_selection(r, "sra") for r in new_rows])
+    else:
+        selection_rows = list(new_rows)
+        outgroup_row = _stage_outgroup(ctx, params.outgroup, logger)
+        if outgroup_row is not None:
+            selection_rows.append(outgroup_row)
+        with staged_dir(ctx.genomes_dir) as genomes_dir:
+            for o in assembled:
+                link_or_copy(
+                    assemblies / o.row.run_accession / _CONTIGS_NAME, genomes_dir / _name(o)
+                )
+        ctx.manifest.replace_genomes([record_from_selection(r, "sra") for r in selection_rows])
     write_selection(ctx.workdir / SELECTION_TSV, selection_rows)
     write_assembly_stats(ctx.workdir / ASSEMBLY_STATS_TSV, [_stats_row(o) for o in assembled])
-    ctx.manifest.replace_genomes([record_from_selection(r, "sra") for r in selection_rows])
+    outgroup_row = next((r for r in selection_rows if r.is_outgroup), None)
 
     ctx.config.record_stage(
         "assemble",
@@ -516,6 +533,36 @@ def _stats_row(o: _Outcome) -> AssemblyStatsRow:
         label_source=o.label_source,
         taxonomy_flag=o.taxonomy_flag,
     )
+
+
+def _append_rows(
+    ctx: WorkdirContext, new_rows: list[SelectionRow], params: AssembleParams, logger
+) -> list[SelectionRow]:
+    """The existing selection with the new rows added (same accession replaced)."""
+    from ..core.contracts import read_selection
+
+    selection = ctx.workdir / SELECTION_TSV
+    if not selection.exists():
+        raise UserInputError(
+            f"--append needs a working directory that already holds {SELECTION_TSV} "
+            "(from metadata and genome, or ingest); run without --append to start one."
+        )
+    replaced = {r.accession for r in new_rows}
+    kept = [r for r in read_selection(selection) if r.accession not in replaced]
+    if params.outgroup is not None:
+        kept = [r for r in kept if not r.is_outgroup]
+        outgroup_row = _stage_outgroup(ctx, params.outgroup, logger)
+        if outgroup_row is not None:
+            kept.append(outgroup_row)
+    logger.info("Appending %d assemblies to a selection of %d genomes", len(new_rows), len(kept))
+    return [*kept, *new_rows]
+
+
+def _unlink_previous(genomes_dir: Path, accession: str) -> None:
+    """Remove an earlier genome file of the same run (its label may have changed)."""
+    for f in genomes_dir.iterdir():
+        if f.is_file() and accession_from_filename(f.name) == accession:
+            f.unlink()
 
 
 def _stage_outgroup(

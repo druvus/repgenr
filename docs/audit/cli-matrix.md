@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-25 commands, 266 flags (266 with a live test or an n/a reason, 0 pending).
+25 commands, 269 flags (269 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -163,6 +163,7 @@ dispatch: `stage`
 | `--selection` |  | IngestParams.selection | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup` |  | IngestParams.outgroup | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--copy` |  | IngestParams.copy | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--drop-foreign` |  | IngestParams.drop_foreign | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline guard tests in tests/integration/test_ingest_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## list-tools
 
@@ -191,6 +192,7 @@ dispatch: `stage`
 | `--metadata-path` |  | MetadataParams.metadata_path | none | params.metadata_args | tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--nodownload` |  | MetadataParams.nodownload | none | params.metadata_args | tests/live/test_network.py::test_tsv_nodownload_and_metadata_path_reuse_the_table | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--limit` |  | MetadataParams.limit | range | params.metadata_args | tests/live/test_network.py::test_api_species_limit_and_explicit_outgroup | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--drop-foreign` |  | MetadataParams.drop_foreign | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline guard tests in tests/unit/test_foreign_rows.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## phylo
 
@@ -258,6 +260,7 @@ dispatch: `stage`
 | `--classifier` |  | AssembleParams.classifier | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--gtdb-sketch` |  | AssembleParams.gtdb_sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--gtdb-lineages` |  | AssembleParams.gtdb_lineages | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--append` |  | AssembleParams.append | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## reads
 

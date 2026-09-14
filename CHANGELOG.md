@@ -7,6 +7,12 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `assemble --append` adds reads-derived genomes to a working directory that
+  already holds a GTDB or local selection, keeping its rows, files and
+  outgroup; `metadata --drop-foreign` and `ingest --drop-foreign` are the
+  explicit way to discard them, since both stages otherwise refuse to
+  overwrite a selection holding appended genomes.
+
 - Assembly quality and organism verification for the reads chain. With a
   CheckM2 database (`--checkm2-db` or `CHECKM2DB`) every assembly is scored,
   the values reach `selection.tsv` and the manifest for the quality keeper,
