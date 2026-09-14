@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import read_selection
 from repgenr.viral import ncbi_virus
@@ -415,3 +417,36 @@ def test_vgenome_group_segments_still_selects_an_outgroup(workdir: Path, monkeyp
     assert seen["length_range"] == (1700, 2300)
     rows = read_selection(workdir / "selection.tsv")
     assert {r.accession for r in rows if r.is_outgroup} == {"OUTSEG.1"}
+
+
+def test_vgenome_crash_mid_write_leaves_the_previous_genomes_intact(workdir: Path, monkeypatch):
+    """The genome set is swapped in only once every file is written, and the
+    selection table last, so a crash never pairs a partial genomes/ with an
+    absent or stale selection.tsv."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+    from repgenr.viral import selection as sel
+
+    ctx = _stage_records(workdir, _fake_records())
+    params = VgenomeParams(target_genus="lentivirus", length_all=True, no_outgroup=True)
+    vgenome_run(ctx, params)
+    before = {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()}
+    selection_before = (workdir / "selection.tsv").read_text()
+    assert len(before) == 2
+
+    real = sel.genome_filename
+    calls = {"n": 0}
+
+    def flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("disk full")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(sel, "genome_filename", flaky)
+    with pytest.raises(RuntimeError):
+        vgenome_run(ctx, params)
+
+    assert {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()} == before
+    assert (workdir / "selection.tsv").read_text() == selection_before
+    assert not [p for p in workdir.iterdir() if "staging" in p.name]

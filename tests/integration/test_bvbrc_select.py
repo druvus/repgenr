@@ -170,3 +170,33 @@ def test_run_select_pinned_outgroup(workdir: Path) -> None:
     assert [p.name for p in ctx.outgroup_dir.iterdir()] == ["acc3.fasta"]
     rows = read_selection(ctx.workdir / SELECTION_TSV)
     assert {r.accession for r in rows if r.is_outgroup} == {"acc3"}
+
+
+def test_run_select_crash_mid_write_leaves_the_previous_genomes_intact(workdir: Path, monkeypatch):
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
+    bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    before = {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()}
+    assert len(before) == 2
+
+    real = bvbrc._write_record
+    calls = {"n": 0}
+
+    def flaky(record, path):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("disk full")
+        return real(record, path)
+
+    monkeypatch.setattr(bvbrc, "_write_record", flaky)
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    assert {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()} == before
+    assert not [p for p in workdir.iterdir() if "staging" in p.name]

@@ -26,7 +26,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import SELECTION_TSV, SelectionRow, write_selection
 from ..core.errors import UserInputError, WorkdirError
 from ..core.manifest import record_from_selection
-from ..core.process import remove_tree
+from ..core.process import staged_dir
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -291,24 +291,21 @@ def _selection_row(name: str, taxid: str, ncbi: dict, *, is_outgroup: bool) -> S
 def _write_genomes(
     ctx, records, sequences, kept, ncbi, params: VgenomeParams, logger
 ) -> tuple[int, list[SelectionRow]]:
-    genomes_dir = ctx.genomes_dir
-    if genomes_dir.exists():
-        remove_tree(genomes_dir)
-    genomes_dir.mkdir(parents=True)
-
     rows: dict[str, SelectionRow] = {}
-    for rec in records:
-        if rec.taxid not in kept or rec.bvbrc_id not in kept[rec.taxid]:
-            continue
-        target = genomes_dir / f"{rec.name}.fasta"
-        if target.exists():
-            if not params.ignore_duplicates:
-                raise WorkdirError(
-                    f"Duplicate sequence id {rec.name}. Use --ignore-duplicates to proceed."
-                )
-            logger.warning("Duplicate sequence id %s; overwriting", rec.name)
-        _write_record(sequences[rec.name], target)
-        rows[rec.name] = _selection_row(rec.name, rec.taxid, ncbi, is_outgroup=False)
+    # Built beside genomes/ and swapped in only when complete (see staged_dir).
+    with staged_dir(ctx.genomes_dir) as genomes_dir:
+        for rec in records:
+            if rec.taxid not in kept or rec.bvbrc_id not in kept[rec.taxid]:
+                continue
+            target = genomes_dir / f"{rec.name}.fasta"
+            if target.exists():
+                if not params.ignore_duplicates:
+                    raise WorkdirError(
+                        f"Duplicate sequence id {rec.name}. Use --ignore-duplicates to proceed."
+                    )
+                logger.warning("Duplicate sequence id %s; overwriting", rec.name)
+            _write_record(sequences[rec.name], target)
+            rows[rec.name] = _selection_row(rec.name, rec.taxid, ncbi, is_outgroup=False)
     return len(rows), list(rows.values())
 
 

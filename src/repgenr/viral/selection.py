@@ -24,7 +24,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
 from ..core.manifest import record_from_selection
-from ..core.process import remove_tree
+from ..core.process import staged_dir
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -74,21 +74,21 @@ def run_records(
         logger.info("--glance specified; stopping before writing genomes")
         return 0
 
-    genomes_dir = ctx.genomes_dir
-    if genomes_dir.exists():
-        remove_tree(genomes_dir)
-    genomes_dir.mkdir(parents=True)
-    if params.group_segments:
-        selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger)
-    else:
-        selection_rows = []
-        for r in kept:
-            name = genome_filename(r.family, r.genus, r.species, r.accession)
-            rec = seqs[r.accession]
-            (genomes_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
-            selection_rows.append(
-                SelectionRow(r.accession, r.family, r.genus, r.species, False, name)
-            )
+    # The genomes are built beside genomes/ and swapped in only when every
+    # file is written; selection.tsv follows. A crash mid-write leaves the
+    # previous genome set and its selection table as they were.
+    with staged_dir(ctx.genomes_dir) as genomes_dir:
+        if params.group_segments:
+            selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger)
+        else:
+            selection_rows = []
+            for r in kept:
+                name = genome_filename(r.family, r.genus, r.species, r.accession)
+                rec = seqs[r.accession]
+                (genomes_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
+                selection_rows.append(
+                    SelectionRow(r.accession, r.family, r.genus, r.species, False, name)
+                )
 
     tool_versions: dict[str, str] = {}
     og = None
