@@ -63,17 +63,40 @@ class _RecordingDereplicator(_FakeDereplicator):
         return super().dereplicate(genomes, out_dir, params, logger)
 
 
+class _PrimaryBlindDereplicator(_FakeDereplicator):
+    """Declares that it never reads primary_ani, as sourmash and skder do."""
+
+    capabilities = ToolCapabilities(
+        name="primaryblind", supports_native_scaling=True, ignored_params=frozenset({"primary_ani"})
+    )
+
+
 @pytest.fixture
 def fake_tool() -> None:
     registry._load()
     registry.register("fake", _FakeDereplicator, replace=True)
     registry.register("chunky", _NonScalingDereplicator, replace=True)
     registry.register("recording", _RecordingDereplicator, replace=True)
+    registry.register("primaryblind", _PrimaryBlindDereplicator, replace=True)
     _RecordingDereplicator.calls = []
     yield
     registry._classes.pop("fake", None)
     registry._classes.pop("chunky", None)
     registry._classes.pop("recording", None)
+    registry._classes.pop("primaryblind", None)
+
+
+def test_stage_warns_when_tool_ignores_a_set_parameter(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    import logging
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, DereplicateParams(tool="primaryblind", primary_ani=0.95))
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("does not use primary_ani" in m for m in warnings), warnings
 
 
 def test_dereplicate_writes_contract(workdir: Path, genome_files, fake_tool) -> None:

@@ -60,6 +60,8 @@ class SourmashDereplicator(Dereplicator):
         name="sourmash",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled", "sketch_cache", "dense_fallback"}),
+        # k-mer containment has no primary/secondary split and no alignment.
+        ignored_params=frozenset({"primary_ani", "aligned_fraction"}),
         required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=None,
@@ -104,11 +106,11 @@ class SourmashDereplicator(Dereplicator):
                     exc,
                 )
                 clusters, status = self._dense_dereplicate(
-                    genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache
+                    genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache, params.threads
                 )
         else:
             clusters, status = self._dense_dereplicate(
-                genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache
+                genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache, params.threads
             )
 
         rep_paths = [p for p in genomes if p.name in clusters]
@@ -127,6 +129,7 @@ class SourmashDereplicator(Dereplicator):
         threshold: float,
         logger: logging.Logger,
         sketch_cache: Path | None = None,
+        threads: int = 1,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Stock sourmash sketch + N x N compare (no plugin needed)."""
         if len(genomes) > _DENSE_MAX_GENOMES:
@@ -200,6 +203,8 @@ class SourmashDereplicator(Dereplicator):
                 matrix_csv,
                 "--from-file",
                 compare_fofn,
+                "--processes",
+                str(threads),
             ],
             logger=logger,
             log_prefix="sourmash",

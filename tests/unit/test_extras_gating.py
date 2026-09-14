@@ -5,8 +5,13 @@ from __future__ import annotations
 import logging
 
 from repgenr.cli.base import gated_extra
-from repgenr.core.plugins import Registry, ToolCapabilities, warn_unconsumed_extras
-from repgenr.dereplicators.base import Dereplicator
+from repgenr.core.plugins import (
+    Registry,
+    ToolCapabilities,
+    warn_ignored_params,
+    warn_unconsumed_extras,
+)
+from repgenr.dereplicators.base import Dereplicator, DerepParams
 
 
 class _Reads(Dereplicator):
@@ -59,4 +64,32 @@ def test_warn_silent_when_all_read(caplog) -> None:
     caps = ToolCapabilities(name="t", accepted_extras=frozenset({"a"}))
     with caplog.at_level(logging.WARNING):
         warn_unconsumed_extras(caps, {"a": 1}, logging.getLogger("x"), family="Aligner")
+    assert not caplog.records
+
+
+def test_warn_ignored_params_names_non_default_values(caplog) -> None:
+    caps = ToolCapabilities(name="t", ignored_params=frozenset({"primary_ani", "threads"}))
+    params = DerepParams(primary_ani=0.95, threads=16)  # threads at its default
+    with caplog.at_level(logging.WARNING):
+        warn_ignored_params(caps, params, logging.getLogger("x"), family="Dereplicator")
+    msgs = [r.message for r in caplog.records]
+    assert len(msgs) == 1
+    assert "Dereplicator 't' does not use primary_ani" in msgs[0]
+    assert "0.95" in msgs[0]
+    assert "threads" not in msgs[0]
+
+
+def test_warn_ignored_params_silent_at_defaults(caplog) -> None:
+    caps = ToolCapabilities(name="t", ignored_params=frozenset({"primary_ani"}))
+    with caplog.at_level(logging.WARNING):
+        warn_ignored_params(caps, DerepParams(), logging.getLogger("x"), family="Dereplicator")
+    assert not caplog.records
+
+
+def test_warn_ignored_params_silent_when_nothing_declared(caplog) -> None:
+    caps = ToolCapabilities(name="t")
+    with caplog.at_level(logging.WARNING):
+        warn_ignored_params(
+            caps, DerepParams(primary_ani=0.5), logging.getLogger("x"), family="Dereplicator"
+        )
     assert not caplog.records

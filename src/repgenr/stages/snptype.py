@@ -26,7 +26,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
-from ..core.plugins import scale_warning, warn_unconsumed_extras
+from ..core.plugins import scale_warning, warn_ignored_params, warn_unconsumed_extras
 from ..core.process import remove_tree
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
@@ -122,6 +122,7 @@ def snptype_core(
         reference=ref,
         extra=dict(params.extra),
     )
+    warn_ignored_params(typer.capabilities, snp_params, logger, family="SNP typer")
     logger.info("SNP typing %d genomes with %s", len(genomes), params.tool)
     result = typer.call(genomes, ref, scratch, snp_params, logger)
 

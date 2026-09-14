@@ -188,8 +188,17 @@ def _assert_partition(result: DerepResult) -> None:
 _DEREP_PARAM_TOKENS = {
     "skder": ["-i", "99", "-c", "7"],
     "drep": ["-sa", "0.99", "--processors", "7"],
-    "galah": ["--ani", "99", "--threads", "7"],
-    "sourmash": ["k=31,scaled=1000"],
+    "galah": [
+        "--ani",
+        "99",
+        "--precluster-ani",
+        "90",
+        "--min-aligned-fraction",
+        "50",
+        "--threads",
+        "7",
+    ],
+    "sourmash": ["k=31,scaled=1000", "--processes", "7"],
 }
 
 
@@ -254,7 +263,7 @@ _TREE_PARAM_TOKENS = {
     "fasttree": ["-nt", "-gtr"],
     "iqtree": ["--threads-max", "5"],
     "raxmlng": ["--threads", "auto{5}"],
-    "sourmash": ["k=31,scaled=1000"],
+    "sourmash": ["k=31,scaled=1000", "--processes", "5"],
 }
 
 

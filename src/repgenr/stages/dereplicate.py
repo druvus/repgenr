@@ -30,7 +30,12 @@ from ..core.contracts import (
 from ..core.errors import WorkdirError
 from ..core.executors import parallel_map
 from ..core.integrity import check_genome_completeness
-from ..core.plugins import auto_select, scale_warning, warn_unconsumed_extras
+from ..core.plugins import (
+    auto_select,
+    scale_warning,
+    warn_ignored_params,
+    warn_unconsumed_extras,
+)
 from ..core.process import link_or_copy, remove_tree
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 from .cluster_summary import summarise_clusters
@@ -111,6 +116,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         threads=params.threads,
         extra=extra,
     )
+    warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
 
     scratch = ctx.scratch_dir / "dereplicate"
     if scratch.exists():

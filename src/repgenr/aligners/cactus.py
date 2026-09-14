@@ -75,6 +75,9 @@ class CactusAligner(Aligner):
                 "pangenome",
                 "--reference",
                 ref_name,
+                # Toil otherwise schedules on every host core.
+                "--maxCores",
+                str(params.threads),
             ],
             logger=logger,
             log_prefix="cactus",

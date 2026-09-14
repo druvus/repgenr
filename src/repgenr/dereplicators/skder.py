@@ -58,6 +58,8 @@ class SkderDereplicator(Dereplicator):
         supports_native_scaling=True,
         conda=("bioconda::skder",),
         accepted_extras=frozenset({"mode"}),
+        # skDER clusters at one ANI cutoff; there is no primary pre-clustering.
+        ignored_params=frozenset({"primary_ani"}),
     )
 
     # skDER takes genome paths on argv (no fofn-style input); warn when the

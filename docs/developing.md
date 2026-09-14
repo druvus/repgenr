@@ -153,6 +153,7 @@ capabilities = ToolCapabilities(
     container="quay.io/biocontainers/mytool:1.2.3--0",  # or:
     conda=("bioconda::mytool",),              # Wave-resolved image when no explicit one
     accepted_extras=frozenset({"mode"}),      # extra keys the adapter actually reads
+    ignored_params=frozenset({"primary_ani"}),  # standard params the tool has no use for
 )
 ```
 
@@ -173,6 +174,14 @@ capabilities = ToolCapabilities(
   does not read them.
   Parse integer extras with `repgenr.core.plugins.parse_extra_int` so a bad
   value raises a clean `UserInputError`.
+* `ignored_params` names the fields of the family's parameter dataclass
+  (`DerepParams`, `AlignParams`, `SnpParams`, `TreeParams`) that the adapter
+  never passes to its tool, for instance `primary_ani` on a tool with no
+  pre-clustering step or `bootstrap` on a distance-based tree. The stage
+  warns, by name, when a user sets one of them to a non-default value, so a
+  request the tool cannot honour does not vanish silently. Declare every
+  standard parameter the adapter drops; leave the set empty when the adapter
+  passes them all.
 
 #### Running the external tool
 
