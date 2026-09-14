@@ -48,6 +48,13 @@ def reads(
     min_bases: int = typer.Option(
         0, "--min-bases", min=0, help="Drop runs with fewer sequenced bases than this."
     ),
+    max_bases: int | None = typer.Option(
+        None,
+        "--max-bases",
+        min=1,
+        help="Drop runs with more sequenced bases than this (a guard against whole-host "
+        "libraries, which would assemble into a host-dominated genome).",
+    ),
     one_per_sample: bool = typer.Option(
         True,
         "--one-per-sample/--all-runs",
@@ -68,6 +75,7 @@ def reads(
             platform=platform,
             max_runs=max_runs,
             min_bases=min_bases,
+            max_bases=max_bases,
             one_per_sample=one_per_sample,
         )
 

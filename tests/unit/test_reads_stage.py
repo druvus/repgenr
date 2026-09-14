@@ -161,3 +161,18 @@ def test_per_sample_rule_prefers_long_reads_only_when_they_carry_enough_bases() 
         "S4": "ONT_ALONE",
         "S5": "ILL_BIG",
     }
+
+
+def test_max_bases_drops_whole_host_libraries(workdir: Path, ena_fake, caplog) -> None:
+    """An unenriched host library (tens of Gb for a 1 Mb endosymbiont) would
+    assemble into a host-dominated genome; a ceiling drops it up front."""
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, ReadsParams(target_species="x", one_per_sample=False))
+    sizes = sorted(r.bases for r in read_reads(workdir / READS_TSV))
+    ceiling = sizes[-1] - 1
+    ctx.logger.addHandler(caplog.handler)
+    run(ctx, ReadsParams(target_species="x", one_per_sample=False, max_bases=ceiling))
+    kept = read_reads(workdir / READS_TSV)
+    assert all(r.bases <= ceiling for r in kept) and len(kept) == len(sizes) - 1
+    assert ctx.config.stages["reads"].params["max_bases"] == ceiling
+    assert any("--max-bases" in r.getMessage() for r in caplog.records)

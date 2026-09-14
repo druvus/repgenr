@@ -1802,6 +1802,17 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
         invalid: '-1'
+      --max-bases:
+        param: ReadsParams.max_bases
+        value: '5000000000'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.reads_args
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+        invalid: '0'
       --one-per-sample:
         param: ReadsParams.one_per_sample
         validated: none

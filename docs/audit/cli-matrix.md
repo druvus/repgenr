@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 295 flags (295 with a live test or an n/a reason, 0 pending).
+28 commands, 296 flags (296 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -277,6 +277,7 @@ dispatch: `stage`
 | `--platform` |  | ReadsParams.platform | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--max-runs` |  | ReadsParams.max_runs | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--min-bases` |  | ReadsParams.min_bases | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--max-bases` |  | ReadsParams.max_bases | range | params.reads_args | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--one-per-sample` |  | ReadsParams.one_per_sample | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## run

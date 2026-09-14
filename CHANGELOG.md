@@ -7,6 +7,9 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `reads --max-bases N` drops runs above a size, a guard against unenriched
+  whole-host libraries (36 of the 551 Wolbachia runs exceed 5 Gb) that would
+  assemble into a host-dominated genome.
 - Nextflow `--mode reads`: the reads chain as data-channel tasks. `READS_SELECT`
   runs the reads stage, `READS_ASSEMBLE` assembles one run per task (new
   `process_assembly` label: 8 CPUs, 16 GB for short reads and 32 GB for long
