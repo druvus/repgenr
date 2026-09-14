@@ -7,8 +7,6 @@
 // sharing one working directory. Nextflow owns the fan-out (scatter-gather
 // dereplication), and results are published under --outdir.
 
-nextflow.enable.dsl = 2
-
 include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
 
 include { BACTERIAL_DATAFLOW } from './subworkflows/local/bacterial_dataflow'
@@ -23,7 +21,7 @@ workflow {
         RepGenR -- ${workflow.manifest.description} (v${workflow.manifest.version})
 
         Usage:
-          nextflow run main.nf --outdir <DIR> [-profile standard|slurm|cloud|docker|singularity|wave|test]
+          nextflow run main.nf --outdir <DIR> [-profile standard|slurm|docker|singularity|wave|test]
 
         Key parameters (see nextflow_schema.json and docs/usage.md for all):
           --outdir <DIR>         Published results (default: results)

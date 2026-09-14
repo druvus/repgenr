@@ -1,0 +1,35 @@
+nextflow_process {
+
+    name "PHYLO_MSA (stub)"
+    script "../modules/local/dataflow/phylo_msa.nf"
+    tag "stub"
+    process "PHYLO_MSA"
+    options "-stub"
+
+    test("emits an alignment with one record per representative") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            with(process.out.msa.get(0)) {
+                assert get(0).id == 'test'
+                def headers = path(get(1)).readLines().findAll { it.startsWith('>') }
+                assert headers.sort() == ['>Fam_Gen_sp1_GCF_000001.1', '>Fam_Gen_sp2_GCF_000002.1']
+            }
+            // the stub builds no source directory, so the optional outputs stay empty
+            assert process.out.align.size() == 0
+            assert process.out.snp.size() == 0
+        }
+    }
+}

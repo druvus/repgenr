@@ -1,0 +1,37 @@
+nextflow_process {
+
+    name "PHYLO_TREE (stub)"
+    script "../modules/local/dataflow/phylo_tree.nf"
+    tag "stub"
+    process "PHYLO_TREE"
+    options "-stub"
+
+    test("builds a tree whose leaves are the alignment's records") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt"),
+                    file("${projectDir}/nextflow/tests/data/msa.fasta")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert snapshot(process.out).match()
+            with(process.out.tree.get(0)) {
+                assert get(0).id == 'test'
+                def newick = path(get(1)).text.trim()
+                assert newick.endsWith(';')
+                assert newick.contains('Fam_Gen_sp1_GCF_000001.1')
+                assert newick.contains('Fam_Out_grp_GCF_000009.1')
+            }
+            // the tree builder's own files are emitted beside the tree
+            assert process.out.tree_files.size() >= 1
+        }
+    }
+}

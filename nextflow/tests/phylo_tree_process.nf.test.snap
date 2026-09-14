@@ -1,5 +1,5 @@
 {
-    "emits a Newick tree naming every representative": {
+    "builds a tree whose leaves are the alignment's records": {
         "content": [
             {
                 "0": [
@@ -8,26 +8,14 @@
                             "id": "test",
                             "mode": "bacterial"
                         },
-                        "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                        "tree.nwk:md5,5712b242ba5b85f8d7a1da59f55ea6f9"
                     ]
                 ],
                 "1": [
-                    
+                    "tree.nwk:md5,5712b242ba5b85f8d7a1da59f55ea6f9"
                 ],
                 "2": [
-                    
-                ],
-                "3": [
-                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
-                ],
-                "4": [
                     "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
-                ],
-                "align": [
-                    
-                ],
-                "snp": [
-                    
                 ],
                 "tree": [
                     [
@@ -35,18 +23,18 @@
                             "id": "test",
                             "mode": "bacterial"
                         },
-                        "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                        "tree.nwk:md5,5712b242ba5b85f8d7a1da59f55ea6f9"
                     ]
                 ],
                 "tree_files": [
-                    "tree.nwk:md5,af4888823cf048b2f566a06001a28d59"
+                    "tree.nwk:md5,5712b242ba5b85f8d7a1da59f55ea6f9"
                 ],
                 "versions": [
                     "versions.yml:md5,d41d8cd98f00b204e9800998ecf8427e"
                 ]
             }
         ],
-        "timestamp": "2026-09-14T08:02:38.460141",
+        "timestamp": "2026-09-14T08:02:41.100331",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.6"
