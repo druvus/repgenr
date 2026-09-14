@@ -120,6 +120,9 @@ All notable changes to RepGenR are documented here. The format follows
   accessions were lost from the deliverable. `vgenome` now writes
   `segments.tsv` (token to member accessions) and `tree2tax` lists the
   members under the isolate's leaf.
+- The `phylo` record in `repgenr.yaml` omitted the reference, the masker and
+  the adapter tuning, so it could not tell a masked tree from an unmasked
+  one; the three are recorded now (`reference`, `mask`, `extra`).
 - `vgenome` (both back-ends) deleted `genomes/` before writing the new set
   and wrote `selection.tsv` last, so a crash mid-write left a partial set
   with no selection table and the next stage ran on it without a guard. The

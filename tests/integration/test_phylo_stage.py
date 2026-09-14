@@ -403,3 +403,25 @@ def test_force_rebuilds_the_msa(workdir: Path, fake_phylo_tools, monkeypatch) ->
     ctx.force = True
     run(ctx, params)
     assert len(calls) == 2
+
+
+def test_provenance_records_reference_mask_and_extras(workdir: Path, fake_phylo_tools) -> None:
+    """repgenr.yaml must tell a masked tree from an unmasked one, and which
+    reference and adapter tuning produced the alignment."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    run(
+        ctx,
+        PhyloParams(
+            treebuilder="faketree_msa",
+            msa_source="aligner",
+            aligner="fakealigner",
+            no_outgroup=True,
+            reference="Fam_gen_sp_GCA_000002.fasta",
+            extra={"kmer": "15"},
+        ),
+    )
+    params = ctx.config.stages["phylo"].params
+    assert params["reference"] == "Fam_gen_sp_GCA_000002.fasta"
+    assert params["mask"] is None
+    assert params["extra"] == {"kmer": "15"}
