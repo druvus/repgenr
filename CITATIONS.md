@@ -27,12 +27,20 @@ The stages below shell out to external tools; cite the ones your run uses.
   - [Galah](https://doi.org/10.1186/s40168-021-01213-8)
   - [sourmash](https://doi.org/10.21105/joss.00027) and the
     [branchwater plugin](https://doi.org/10.21105/joss.06830)
-  - [dRep](https://doi.org/10.1038/ismej.2017.126)
+  - [dRep](https://doi.org/10.1038/ismej.2017.126), which runs
+    [CheckM](https://doi.org/10.1101/gr.186072.114) for genome quality,
+    [Prodigal](https://doi.org/10.1186/1471-2105-11-119) for gene calling,
+    [Mash](https://doi.org/10.1186/s13059-016-0997-x) for its primary clustering
+    and [FastANI](https://doi.org/10.1038/s41467-018-07641-9) or skani for the
+    secondary comparisons
+  - [Mash](https://doi.org/10.1186/s13059-016-0997-x) also underlies Mashtree
+    and the `glance` comparison
 
 - **Alignment and phylogeny**
   - [progressiveMauve](https://doi.org/10.1371/journal.pone.0011147)
   - [SibeliaZ](https://doi.org/10.1038/s41467-020-19777-8)
-  - [Cactus / Minigraph-Cactus](https://doi.org/10.1038/s41587-023-01793-w)
+  - [Cactus / Minigraph-Cactus](https://doi.org/10.1038/s41587-023-01793-w) and
+    the [HAL toolkit](https://doi.org/10.1093/bioinformatics/btt128) (`hal2maf`)
   - [Mashtree](https://doi.org/10.21105/joss.01762)
   - [RAxML-NG](https://doi.org/10.1093/bioinformatics/btz305)
   - [IQ-TREE 2](https://doi.org/10.1093/molbev/msaa015)

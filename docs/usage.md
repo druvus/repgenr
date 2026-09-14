@@ -156,6 +156,21 @@ genome's card (one request per selected genome). When the manifest has no
 quality at all the stage warns, and `repgenr.yaml` records
 `keeper_effective: tool` next to the requested `keeper` and the swap count.
 
+### Inspecting a dereplication
+
+Four commands read a dereplicated working directory without rerunning the
+dereplicator. `repgenr cluster-summary` regenerates
+`derep/cluster_summary.tsv`, one row per representative (see `output.md`).
+`repgenr derep-unpack` lays the clusters out as one directory per
+representative with its members inside (`--no-representant` leaves the
+representative out). `repgenr glance` runs dRep's comparison over the
+representatives and writes its plots (dRep only). `repgenr derep-stock
+--action pack --name <run>` stores the current clusters, statuses and
+representatives under `derep/stock/<run>`; `--action unpack` restores a
+stored run, refreshes the manifest and re-stamps the `dereplicate` record so
+the next `dereplicate` recomputes; `--action list` and `--action delete`
+manage the store.
+
 ### Limiting the selection
 
 `repgenr metadata --limit N` caps the bacterial selection at N genomes. The
@@ -193,7 +208,10 @@ Nextflow layer uses these to run the alignment and the tree as separate tasks.
 ### SNP typing and masking
 
 The `repgenr snptype` command (and `phylo-build --msa-source snptype`) call a
-SNP typer to produce a core-SNP alignment. Recombination masking (`--mask
+SNP typer to produce a core-SNP alignment. Four typers are built in: `simple`
+(minimap2, samtools and bcftools, the default), `snippy`, `parsnp` and `ska2`;
+the first three map every genome to one reference and also write the
+whole-genome alignment a masker needs. Recombination masking (`--mask
 gubbins`) runs on the typer's whole-genome alignment and replaces the
 core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
 emit variable sites cannot be masked.

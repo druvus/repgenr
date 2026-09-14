@@ -28,6 +28,37 @@ Docker; `-m "live and not network and not container"` is the offline subset.
 Tests whose tool is not on PATH are skipped, not failed. See
 `tests/live/README.md`.
 
+## Adapter status
+
+Where each built-in adapter has been run against its real tool, from the
+live suite as it stands. "Native" means the tool on the host PATH of the
+audit machine; "container" means through `--container docker` (a pinned
+image or one minted by Wave). An adapter with neither has only the offline
+contract test, which checks the argument vector against canned output.
+
+| Family | Adapter | Native | Container | Live module |
+|---|---|---|---|---|
+| dereplicator | skder | yes | yes | test_dereplicators, test_container_runs |
+| dereplicator | galah | yes | no | test_dereplicators |
+| dereplicator | sourmash | yes | no | test_dereplicators, test_aux_commands |
+| dereplicator | drep | no | yes | test_container_runs (Wave image; also `glance`) |
+| aligner | sibeliaz | yes | yes | test_steps, test_container_runs |
+| aligner | progressivemauve | no | yes | test_container_runs, test_nextflow (unpackaged on macOS) |
+| aligner | cactus | no | yes | test_container_runs (pinned image) |
+| SNP typer | simple | yes | yes | test_species_set, test_container_runs |
+| SNP typer | parsnp | yes | no | test_species_set (osx-64 env) |
+| SNP typer | ska2 | yes | no | test_species_set |
+| SNP typer | snippy | no | no | offline contract test only |
+| masker | gubbins | yes | no | test_species_set |
+| tree builder | iqtree | yes | no | test_species_set |
+| tree builder | fasttree | yes | no | test_species_set |
+| tree builder | raxmlng | yes | no | test_species_set |
+| tree builder | mashtree | yes | no | test_treebuilders_offline, test_species_set |
+| tree builder | sourmash | yes | no | test_treebuilders_offline |
+
+snippy is the one adapter with no live verification; drep, progressivemauve
+and cactus have been verified only inside containers.
+
 ## Results
 
 The table below is rendered from the junit output of the last complete run

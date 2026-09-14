@@ -244,18 +244,20 @@ citations in the three SWOT documents):
 ## SWOT and gap analysis
 
 Per-stage SWOTs, severity-ranked gap lists, and the full alternatives
-matrices, each claim cited to file:line:
+matrices, each claim cited to file:line. They were separate pages until the
+documentation was consolidated (#170) and are now the sections that follow
+this list; git history keeps the original files.
 
-- [swot-derep.md](swot-derep.md) — acquisition + dereplication (10 gaps;
+- Acquisition and dereplication (formerly `swot-derep.md`; 10 gaps;
   highlights: `--limit` takes the first N in GTDB file order; flat 3600 s
   `datasets` timeout regardless of batch size; no content checksums on
   downloads).
-- [swot-phylo.md](swot-phylo.md) — alignment/SNP + trees + tree2tax (17 gaps;
+- Alignment, SNP typing, trees and tree2tax (formerly `swot-phylo.md`; 17 gaps;
   highlights: five `genomes[0]` reference-default sites; `simple` typer
   silently truncates consensuses to the shortest; Gubbins fed a SNP-only
   alignment; FastTree silently ignores bootstrap/outgroup; tree2tax O(n^2)
   on ladder trees with no zero-length-branch collapse).
-- [swot-viral.md](swot-viral.md) — viral chain + plugin surface (17 gaps;
+- Viral chain and plugin surface (formerly `swot-viral.md`; 17 gaps;
   highlights: the `median_of_medians` over-representation defense is
   deliberate but undocumented and `--length-method mean` silently disables
   it with different semantics per backend; the `S_` outgroup panel is
@@ -414,7 +416,7 @@ directly; ska2 (shipped 2026-09-04 as `snptypers/ska2.py`) removes reference
 bias for clonal sets. Parallelizing
 simple's per-genome loop via the parallel_map already used by progressivemauve
 is a small change. FOFN via write_fofn is the sanctioned pattern for long input
-lists (adding-tools.md:73-76).
+lists (see "Running the external tool" in `docs/developing.md`).
 
 **Threats.** At 1000-5000 taxa the serial typers become multi-day runs before
 any tree is built; argv overflows abort late; a wrong (alphabetical) reference

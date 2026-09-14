@@ -52,4 +52,4 @@ uname -m` prints `x86_64` (Docker Desktop on Apple Silicon: Virtualization
 framework with Rosetta) and the Seqera `wave` CLI is on PATH. The pinned
 progressiveMauve (475 MB) and Cactus (1 GB) images are pulled on first use;
 Wave mints and caches images for the conda-spec adapters (skder, sourmash,
-dRep, snippy, sibeliaz, the simple SNP typer).
+dRep, sibeliaz, the simple SNP typer).

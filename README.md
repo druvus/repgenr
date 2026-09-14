@@ -6,17 +6,20 @@ genomes, clusters them by average nucleotide identity (ANI), computes
 phylogenetic trees, and emits taxonomy files for downstream tools such as
 FlexTaxD.
 
-Version 2 is a modular, importable Python package (Python 3.12+) with four
+Version 2 is a modular, importable Python package (Python 3.12+) with five
 pluggable tool families and an optional Nextflow pipeline for scaling to
 thousands of genomes.
 
 ## Pipeline
 
 ```
-metadata -> genome -> dereplicate -> (align | snptype) -> phylo -> tree2tax
+metadata -> genome -> dereplicate -> phylo -> tree2tax
 ```
 
-Each stage is a `repgenr` subcommand and an importable function. Stages
+`phylo` builds its tree from an alignment it produces with an aligner or a
+SNP typer, or directly from the genomes with an alignment-free builder;
+`repgenr snptype` runs the SNP typer on its own when the SNP tables are the
+deliverable. Each stage is a `repgenr` subcommand and an importable function. Stages
 communicate through a single working directory whose state is recorded in
 `repgenr.yaml` (provenance) and a SQLite genome manifest.
 
