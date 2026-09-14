@@ -338,3 +338,14 @@ def test_list_tools_check_reports_each_tool(register_tool) -> None:
     assert "presenttool: ok (presenttool 9.9)" in result.output
     assert "absenttool: missing" in result.output
     assert "repgenr-no-such-binary-xyz" in result.output
+
+
+def test_list_tools_shows_the_assembler_family() -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    result = CliRunner().invoke(app, ["list-tools"])
+    assert result.exit_code == 0
+    line = next(ln for ln in result.output.splitlines() if ln.startswith("assemblers:"))
+    assert "skesa" in line and "shovill" in line and "flye" in line

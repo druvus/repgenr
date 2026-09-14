@@ -54,6 +54,13 @@ The stages below shell out to external tools; cite the ones your run uses.
   - [SKA2](https://doi.org/10.1101/gr.279449.124) (split k-mer analysis; Derelle et al. 2024, Genome Research)
   - [Gubbins](https://doi.org/10.1093/nar/gku1196) (recombination masking)
 
+- **Read assembly (reads chain)**
+  - [ENA](https://doi.org/10.1093/nar/gkae975) (sequencing-run discovery and FASTQ files)
+  - [SKESA](https://doi.org/10.1186/s13059-018-1540-z)
+  - [Shovill](https://github.com/tseemann/shovill), which runs
+    [SPAdes](https://doi.org/10.1089/cmb.2012.0021)
+  - [Flye](https://doi.org/10.1038/s41587-019-0072-8)
+
 - **Taxonomy**
   - [FlexTaxD](https://doi.org/10.1093/bioinformatics/btab372)
 

@@ -6,7 +6,7 @@ genomes, clusters them by average nucleotide identity (ANI), computes
 phylogenetic trees, and emits taxonomy files for downstream tools such as
 FlexTaxD.
 
-Version 2 is a modular, importable Python package (Python 3.12+) with five
+Version 2 is a modular, importable Python package (Python 3.12+) with six
 pluggable tool families and an optional Nextflow pipeline for scaling to
 thousands of genomes.
 
@@ -35,6 +35,7 @@ the core (see [docs/developing.md](docs/developing.md)).
 | SNP typers | `simple` (samtools/bcftools), `snippy`, `parsnp`, `ska2` (reference-free) |
 | Maskers | `gubbins` (recombination masking via `--mask`) |
 | Tree builders | `iqtree`, `fasttree`, `raxmlng` (MSA), `mashtree`, `sourmash` (alignment-free) |
+| Assemblers | `skesa`, `shovill` (Illumina), `flye` (ONT, PacBio); used by the reads chain |
 
 `repgenr list-tools` prints what is available in your environment.
 

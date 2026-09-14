@@ -13,6 +13,11 @@ All notable changes to RepGenR are documented here. The format follows
   filters by platform and size, keeps the best run per sample, labels each
   run with its NCBI family, genus and species, and writes `reads.tsv`.
   `status` recognises the chain. The assemble stage follows.
+- A sixth tool family, assemblers (`repgenr.assemblers` entry points), with
+  `skesa` and `shovill` for Illumina and `flye` for Oxford Nanopore and
+  PacBio reads, each pinning a BioContainers image, plus the shared contig
+  filter and summary (contig count, total length, N50, largest contig) the
+  assemble stage will use. `list-tools` lists the family.
 
 - `vgenome --outgroup-accession` (and `run --viral --outgroup-accession`)
   pins the viral outgroup to a downloaded record on either back-end; the

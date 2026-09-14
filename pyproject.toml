@@ -70,6 +70,11 @@ ska2 = "repgenr.snptypers.ska2:Ska2Typer"
 [project.entry-points."repgenr.maskers"]
 gubbins = "repgenr.maskers.gubbins:GubbinsMasker"
 
+[project.entry-points."repgenr.assemblers"]
+skesa = "repgenr.assemblers.skesa:SkesaAssembler"
+shovill = "repgenr.assemblers.shovill:ShovillAssembler"
+flye = "repgenr.assemblers.flye:FlyeAssembler"
+
 [project.entry-points."repgenr.treebuilders"]
 iqtree = "repgenr.treebuilders.iqtree:IqtreeBuilder"
 fasttree = "repgenr.treebuilders.fasttree:FasttreeBuilder"
