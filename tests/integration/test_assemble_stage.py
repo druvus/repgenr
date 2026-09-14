@@ -342,3 +342,57 @@ def test_append_needs_an_existing_selection(workdir, tmp_path, fake_assembler) -
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
     with pytest.raises(UserInputError, match="--append"):
         run(ctx, AssembleParams(assembler="fakeasm", append=True))
+
+
+def test_databases_from_the_environment_are_recorded(
+    workdir, tmp_path, fake_assembler, fake_classifier, monkeypatch
+) -> None:
+    sketch = tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"
+    lineages = tmp_path / "lineages.csv"
+    monkeypatch.setenv("REPGENR_GTDB_SKETCH", str(sketch))
+    monkeypatch.setenv("REPGENR_GTDB_LINEAGES", str(lineages))
+    _FakeClassifier.lineages = {
+        "SRR1.fasta": "d__Bacteria;f__Francisellaceae;g__Francisella;s__Francisella tularensis"
+    }
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", classifier="fakecls"))
+    params = ctx.config.stages["assemble"].params
+    assert params["gtdb_sketch"] == str(sketch) and params["gtdb_lineages"] == str(lineages)
+
+
+def test_finished_runs_do_not_need_the_assembler_again(workdir, tmp_path, fake_assembler) -> None:
+    """Re-running for QC or classification must not demand the assembler binary."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    calls: list[str] = []
+    original = _FakeAssembler.preflight
+
+    def spy(self):
+        calls.append("preflight")
+        return original(self)
+
+    _FakeAssembler.preflight = spy  # type: ignore[method-assign]
+    try:
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=400))
+    finally:
+        _FakeAssembler.preflight = original  # type: ignore[method-assign]
+    assert calls == []
+
+
+def test_disagreement_warning_names_the_compared_genera(
+    workdir, tmp_path, fake_assembler, fake_classifier, caplog
+) -> None:
+    _FakeClassifier.lineages = {
+        "SRR1.fasta": "d__Bacteria;f__Bacillaceae;g__Bacillus;s__Bacillus subtilis"
+    }
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    ctx.logger.addHandler(caplog.handler)
+    run(
+        ctx,
+        AssembleParams(
+            assembler="fakeasm", classifier="fakecls", gtdb_sketch=str(tmp_path / "db.sig.zip")
+        ),
+    )
+    messages = [r.getMessage() for r in caplog.records if "classifier_disagrees" in r.getMessage()]
+    assert messages, [r.getMessage() for r in caplog.records]
+    assert "genus Francisella" in messages[0] and "g__Bacillus" in messages[0]

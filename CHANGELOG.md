@@ -93,6 +93,14 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The sourmash classifier runs its per-genome gathers side by side within the
+  thread budget and resolves all of them with one `tax genome` call (a gather
+  against a GTDB-sized sketch is single-threaded and takes tens of seconds).
+  The `assemble` record now stores the CheckM2 database, GTDB sketch and
+  lineages as resolved from the flags or the environment; a re-run of
+  `assemble` for quality or classification alone no longer requires the
+  assembler binaries; the classifier disagreement warning names the
+  compared genera.
 - `assemble --jobs` defaults to 2, or to 1 as soon as a long-read run is
   pending, since memory rather than CPU bounds concurrent assemblies. The
   Flye path is verified through its pinned image on simulated Nanopore-like

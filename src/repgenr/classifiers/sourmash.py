@@ -8,8 +8,9 @@ import logging
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
-from ..core.containers import run_chain
+from ..core.containers import run_chain, run_tool
 from ..core.errors import UserInputError
+from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
@@ -42,13 +43,21 @@ class SourmashClassifier(Classifier):
         threshold = int(params.extra.get("threshold_bp", defaults["threshold_bp"]))
         out_dir.mkdir(parents=True, exist_ok=True)
         version = db_version(params.db)
-        results: dict[str, Classification] = {}
-        for genome in genomes:
+        mounts = [
+            str(Path(params.db).resolve().parent),
+            str(Path(params.lineages).resolve().parent),
+            *sorted({str(g.resolve().parent) for g in genomes}),
+        ]
+
+        # One sketch-and-gather chain per genome. A gather is single-threaded
+        # and takes tens of seconds against a GTDB-sized sketch, so the chains
+        # run side by side within the thread budget; the lineages are then
+        # resolved for every gather in one tax call.
+        def gather(genome: Path) -> Path:
             work = out_dir / genome.stem
             work.mkdir(parents=True, exist_ok=True)
             sig = work / "query.sig"
-            gather = work / "gather.csv"
-            base = work / "tax"
+            gather_csv = work / "gather.csv"
             steps: list[tuple[str, list[str | Path]]] = [
                 (
                     "sourmash",
@@ -77,36 +86,39 @@ class SourmashClassifier(Classifier):
                         "--threshold-bp",
                         str(threshold),
                         "-o",
-                        gather,
-                    ],
-                ),
-                (
-                    "sourmash",
-                    [
-                        "sourmash",
-                        "tax",
-                        "genome",
-                        "--gather-csv",
-                        gather,
-                        "--taxonomy-csv",
-                        params.lineages,
-                        "--output-base",
-                        base,
-                        "--force",
+                        gather_csv,
                     ],
                 ),
             ]
-            run_chain(
-                self.capabilities,
-                steps,
-                logger=logger,
-                extra_mounts=[
-                    str(Path(params.db).resolve().parent),
-                    str(Path(params.lineages).resolve().parent),
-                    str(genome.resolve().parent),
-                ],
-            )
-            hit = _parse_classification(Path(str(base) + ".classifications.csv"))
+            run_chain(self.capabilities, steps, logger=logger, extra_mounts=mounts)
+            return gather_csv
+
+        workers = max(1, min(params.threads, len(genomes)))
+        gathers = parallel_map(gather, genomes, workers, logger=logger)
+        # A gather with no match writes only a header; tax genome still lists it.
+        base = out_dir / "tax"
+        run_tool(
+            self.capabilities,
+            [
+                "sourmash",
+                "tax",
+                "genome",
+                "--gather-csv",
+                *gathers,
+                "--taxonomy-csv",
+                params.lineages,
+                "--output-base",
+                base,
+                "--force",
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            extra_mounts=mounts,
+        )
+        by_query = _parse_classifications(Path(str(base) + ".classifications.csv"))
+        results: dict[str, Classification] = {}
+        for genome in genomes:
+            hit = by_query.get(genome.stem)
             if hit is not None:
                 taxonomy, rank, score = hit
                 results[genome.name] = Classification(taxonomy, rank, score, version)
@@ -115,12 +127,18 @@ class SourmashClassifier(Classifier):
         return results
 
 
-def _parse_classification(path: Path) -> tuple[str, str, float | None] | None:
+def _parse_classifications(path: Path) -> dict[str, tuple[str, str, float | None]]:
+    """Query name -> (lineage, rank, fraction) from a ``tax genome`` table."""
+    out: dict[str, tuple[str, str, float | None]] = {}
     if not path.exists():
-        return None
+        return out
     with open(path, encoding="utf-8", newline="") as fo:
         for rec in csv.DictReader(fo):
             if rec.get("status") in ("match", "nomatch", "below_threshold") and rec.get("lineage"):
                 score = rec.get("fraction")
-                return rec["lineage"], rec.get("rank", ""), float(score) if score else None
-    return None
+                out[rec["query_name"]] = (
+                    rec["lineage"],
+                    rec.get("rank", ""),
+                    float(score) if score else None,
+                )
+    return out
