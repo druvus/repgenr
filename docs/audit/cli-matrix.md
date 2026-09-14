@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-25 commands, 260 flags (260 with a live test or an n/a reason, 0 pending).
+25 commands, 266 flags (266 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -252,6 +252,12 @@ dispatch: `stage`
 | `--keep-reads` |  | AssembleParams.keep_reads | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | AssembleParams.keep_files | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--tool-arg` |  | AssembleParams.extra | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--checkm2-db` |  | AssembleParams.checkm2_db | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--min-completeness` |  | AssembleParams.min_completeness | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--max-contamination` |  | AssembleParams.max_contamination | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--classifier` |  | AssembleParams.classifier | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-sketch` |  | AssembleParams.gtdb_sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-lineages` |  | AssembleParams.gtdb_lineages | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## reads
 

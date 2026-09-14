@@ -229,3 +229,126 @@ def test_jobs_default_is_two_for_short_reads(workdir, tmp_path, fake_assembler, 
     with caplog.at_level(logging.INFO):
         run(ctx, AssembleParams(assembler="fakeasm", threads=8))
     assert any("with 2 concurrent jobs" in r.message for r in caplog.records)
+
+
+# --- quality and classification -----------------------------------------------------
+
+
+class _FakeClassifier:
+    """Registered classifier returning a canned GTDB lineage per genome."""
+
+    from repgenr.core.plugins import ToolCapabilities as _TC
+
+    capabilities = _TC(name="fakecls")
+    lineages: dict[str, str] = {}
+
+    def preflight(self) -> dict[str, str]:
+        return {"fakecls": "1.0"}
+
+    def classify(self, genomes, out_dir, params, logger):  # noqa: ANN001
+        from repgenr.classifiers.base import Classification, db_version
+
+        return {
+            g.name: Classification(
+                taxonomy=type(self).lineages[g.name],
+                rank="species",
+                score=0.9,
+                db_version=db_version(params.db),
+            )
+            for g in genomes
+            if g.name in type(self).lineages
+        }
+
+
+@pytest.fixture
+def fake_classifier():
+    from repgenr.classifiers.base import Classifier
+    from repgenr.classifiers.base import registry as cls_registry
+
+    class Fake(_FakeClassifier, Classifier):
+        pass
+
+    cls_registry._load()
+    cls_registry.register("fakecls", Fake, replace=True)
+    _FakeClassifier.lineages = {}
+    yield
+    cls_registry._classes.pop("fakecls", None)
+
+
+def _fake_checkm2(quality: dict[str, tuple[float, float]]):
+    def run_checkm2(genomes, out_dir, *, db, threads, logger):
+        return {g.name: quality[g.name] for g in genomes if g.name in quality}
+
+    return run_checkm2
+
+
+def test_checkm2_quality_gates_and_feeds_the_selection(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    from repgenr.stages import assemble as stage
+
+    monkeypatch.setattr(stage, "preflight_checkm2", lambda: {"checkm2": "1.1.0"})
+    monkeypatch.setattr(
+        stage,
+        "run_checkm2",
+        _fake_checkm2(
+            {
+                "Francisellaceae_Francisella_tularensis_SRR1.fasta": (98.5, 0.4),
+                "Francisellaceae_Francisella_tularensis_SRR2.fasta": (40.0, 15.0),
+            }
+        ),
+    )
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    n = run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "db")))
+    assert n == 1
+    rows = read_selection(workdir / SELECTION_TSV)
+    assert [(r.accession, r.completeness, r.contamination) for r in rows] == [("SRR1", 98.5, 0.4)]
+    assert ctx.manifest.quality()["Francisellaceae_Francisella_tularensis_SRR1.fasta"] == (
+        98.5,
+        0.4,
+    )
+    excused = {e.run_accession: e for e in read_excused_runs(workdir / EXCUSED_RUNS_TSV)}
+    assert excused["SRR2"].step == "qc" and "qc_failed" in excused["SRR2"].reason
+    stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
+    assert stats["SRR1"].completeness == 98.5 and "SRR2" not in stats
+    assert ctx.config.stages["assemble"].params["checkm2_db"] == str(tmp_path / "db")
+
+
+def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
+    workdir, tmp_path, fake_assembler, fake_classifier
+) -> None:
+    _FakeClassifier.lineages = {
+        "Francisellaceae_Francisella_tularensis_SRR1.fasta": (
+            "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Francisellales;"
+            "f__Francisellaceae;g__Francisella;s__Francisella tularensis_A"
+        ),
+        "Francisellaceae_Francisella_tularensis_SRR2.fasta": (
+            "d__Bacteria;p__Bacillota;c__Bacilli;o__Bacillales;f__Bacillaceae;"
+            "g__Bacillus;s__Bacillus subtilis"
+        ),
+    }
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    run(
+        ctx,
+        AssembleParams(
+            assembler="fakeasm",
+            classifier="fakecls",
+            gtdb_sketch=str(tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"),
+            gtdb_lineages=str(tmp_path / "lineages.csv"),
+        ),
+    )
+    rows = {r.accession: r for r in read_selection(workdir / SELECTION_TSV)}
+    # agreement at genus: the GTDB tokens name the file
+    assert rows["SRR1"].filename == "Francisellaceae_Francisella_tularensis-A_SRR1.fasta"
+    assert rows["SRR1"].species == "tularensis-A"
+    assert (ctx.genomes_dir / rows["SRR1"].filename).exists()
+    # disagreement: NCBI tokens stay and the genome is flagged
+    assert rows["SRR2"].filename == "Francisellaceae_Francisella_tularensis_SRR2.fasta"
+    stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
+    assert stats["SRR1"].label_source == "classifier" and stats["SRR1"].taxonomy_flag == ""
+    assert stats["SRR2"].label_source == "metadata"
+    assert stats["SRR2"].taxonomy_flag == "classifier_disagrees"
+    assert stats["SRR2"].gtdb_taxonomy.endswith("s__Bacillus subtilis")
+    record = ctx.config.stages["assemble"]
+    assert record.params["n_disagree"] == 1
+    assert record.tool_versions["gtdb_sketch"] == "gtdb-rs226-reps.k31-sc10k"

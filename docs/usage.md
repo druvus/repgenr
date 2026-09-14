@@ -137,7 +137,26 @@ one whose assembly fails is written to `excused_runs.tsv` with the reason and
 the rest proceed; the completeness guard of later stages excuses those runs.
 `--outgroup FASTA` sets a genome aside for rooting, as `ingest --outgroup`
 does. Per-assembly metrics (contigs, total length, N50, coverage from the
-sequenced bases) are in `assembly_stats.tsv`. `run --reads` forwards
+sequenced bases) are in `assembly_stats.tsv`.
+
+Two optional checks run on the assemblies. With a CheckM2 database
+(`--checkm2-db`, or the `CHECKM2DB` variable CheckM2 itself reads; obtain it
+with `checkm2 database --download`), every assembly is scored, the
+completeness and contamination reach `selection.tsv` and the manifest (so
+`--keeper quality` works as it does for GTDB genomes), and an assembly below
+`--min-completeness` (50) or above `--max-contamination` (10) is excused with
+`qc_failed`. With a GTDB sourmash sketch (`--gtdb-sketch` and
+`--gtdb-lineages`, or `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`; the
+`gtdb-rs226-reps.k31-sc10k.sig.zip` sketch and its `lineages.csv` from
+`https://farm.cse.ucdavis.edu/~ctbrown/sourmash-db/gtdb-rs226/` serve), each
+assembly is classified by `sourmash gather` (`--classifier auto` runs it when
+a sketch is configured; `none` never). When the GTDB genus agrees with the
+submitted organism, the GTDB family, genus and species name the genome file,
+so a reads-derived genome groups with GTDB-downloaded ones; otherwise the
+submitted name stays and `assembly_stats.tsv` flags the genome
+`classifier_disagrees`. Both lineages are kept in that table, and the sketch
+release is recorded in provenance next to the metadata release. Without a
+database the checks are skipped and the log says so. `run --reads` forwards
 `--accession-file`, `--platform`, `--max-runs`, `--assembler`, `--threads`
 and `--outgroup`; the rest is available on the stage commands.
 

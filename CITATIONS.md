@@ -60,6 +60,9 @@ The stages below shell out to external tools; cite the ones your run uses.
   - [Shovill](https://github.com/tseemann/shovill), which runs
     [SPAdes](https://doi.org/10.1089/cmb.2012.0021)
   - [Flye](https://doi.org/10.1038/s41587-019-0072-8)
+  - [CheckM2](https://doi.org/10.1038/s41592-023-01940-w) (assembly quality)
+  - [sourmash gather](https://doi.org/10.1101/2022.01.11.475838) against the
+    [GTDB](https://doi.org/10.1093/nar/gkab776) sketch database (classification)
 
 - **Taxonomy**
   - [FlexTaxD](https://doi.org/10.1093/bioinformatics/btab372)

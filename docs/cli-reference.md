@@ -33,6 +33,12 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
 | `--keep-files` | off | Keep each run's assembler scratch directory. |
+| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
+| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
+| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |
+| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
+| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
+| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
 
 ## cluster-summary

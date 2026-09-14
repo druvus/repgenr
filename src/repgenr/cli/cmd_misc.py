@@ -221,6 +221,7 @@ def list_tools(
     """
     from ..aligners.base import registry as aligners
     from ..assemblers.base import registry as assemblers
+    from ..classifiers.base import registry as classifiers
     from ..dereplicators.base import registry as dereplicators
     from ..maskers.base import registry as maskers
     from ..snptypers.base import registry as snptypers
@@ -233,6 +234,7 @@ def list_tools(
         ("maskers", maskers),
         ("treebuilders", treebuilders),
         ("assemblers", assemblers),
+        ("classifiers", classifiers),
     ):
         entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]
         typer.echo(f"{label}: {', '.join(entries) or '(none)'}")

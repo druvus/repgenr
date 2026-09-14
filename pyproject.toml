@@ -75,6 +75,9 @@ skesa = "repgenr.assemblers.skesa:SkesaAssembler"
 shovill = "repgenr.assemblers.shovill:ShovillAssembler"
 flye = "repgenr.assemblers.flye:FlyeAssembler"
 
+[project.entry-points."repgenr.classifiers"]
+sourmash = "repgenr.classifiers.sourmash:SourmashClassifier"
+
 [project.entry-points."repgenr.treebuilders"]
 iqtree = "repgenr.treebuilders.iqtree:IqtreeBuilder"
 fasttree = "repgenr.treebuilders.fasttree:FasttreeBuilder"
