@@ -107,14 +107,16 @@ def get_config() -> ContainerConfig:
 def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None) -> str | None:
     """Return the image URI for an adapter, or None to run natively.
 
-    Prefers an explicit ``caps.container``; otherwise, when Wave is enabled and a
-    ``caps.conda`` spec exists, mints (and caches) an image via the Wave CLI.
+    With ``--wave`` and a ``caps.conda`` spec, an image is minted (and cached)
+    from the spec via the Wave CLI: that is what the flag asks for, and it is
+    the way to a native-architecture build. Otherwise the pinned
+    ``caps.container`` is used. An adapter with neither runs on the host.
     """
     config = config or _CONFIG
-    if caps.container:
-        return caps.container
     if config.wave_enabled and caps.conda:
         return _wave_image(caps.conda, config)
+    if caps.container:
+        return caps.container
     return None
 
 

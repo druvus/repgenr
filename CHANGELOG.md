@@ -34,6 +34,20 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The single-package adapters pin a BioContainers image (galah 0.4.2,
+  sourmash 4.9.4, dRep 3.7.1, snippy 4.6.0, ska2 0.5.1, Gubbins 3.4.3,
+  IQ-TREE 3.1.3, FastTree 2.2.0, RAxML-NG 2.0.3, mashtree 1.4.6), each
+  verified by running its stage through the image, so `--container
+  docker|singularity` and the Nextflow container profiles run them in an
+  image without Wave. Before, only progressiveMauve and cactus had an image
+  and the other adapters fell back to the host with a warning. The
+  multi-package `simple` SNP typer and parsnp still need `--wave`, and so
+  do skder and SibeliaZ: their BioContainer images are BusyBox-based and
+  the GNU-only calls in their shell wrappers (`sort --parallel`, `mktemp
+  --suffix`) fail there silently.
+- `--wave` now takes precedence over a pinned image when the adapter has a
+  conda specification: the flag asks for an image minted from the spec (a
+  native-architecture build), and the pin is the default without it.
 - The Nextflow phylogeny processes publish the alignment they built
   (`phylo/align/` or `phylo/snp/`, with the reuse stamp) and the tree
   builder's own files under `phylo/tree/`; before, only `tree.nwk` left the

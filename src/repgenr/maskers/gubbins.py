@@ -193,6 +193,7 @@ class GubbinsMasker(Masker):
     capabilities = ToolCapabilities(
         name="gubbins",
         required_binaries=(BinarySpec("run_gubbins.py", version_args=("--version",)),),
+        container="quay.io/biocontainers/gubbins:3.4.3--py310hfc0ef84_1",
         conda=("bioconda::gubbins",),
         # gubbins_tree_builder / gubbins_first_tree_builder name Gubbins'
         # --tree-builder / --first-tree-builder; gubbins_args is a quoted

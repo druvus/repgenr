@@ -25,6 +25,7 @@ _NJ_MAX_GENOMES = 5000
 class SourmashBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="sourmash",
+        container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled"}),
         # A distance-based NJ tree has no bootstrap step.

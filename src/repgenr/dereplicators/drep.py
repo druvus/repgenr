@@ -37,6 +37,7 @@ from .base import (
 class DrepDereplicator(Dereplicator):
     capabilities = ToolCapabilities(
         name="drep",
+        container="quay.io/biocontainers/drep:3.7.1--pyhdfd78af_0",
         conda=("bioconda::drep",),
         accepted_extras=frozenset({"virus", "S_algorithm", "length"}),
         # dRep's overlap gate is --cov_thresh with its own default; the shared

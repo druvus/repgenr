@@ -18,6 +18,7 @@ from .base import InputKind, TreeBuilder, TreeParams, as_msa_path
 class RaxmlNgBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="raxmlng",
+        container="quay.io/biocontainers/raxml-ng:2.0.3--h870a6a7_0",
         conda=("bioconda::raxml-ng",),
         accepted_extras=frozenset({"model"}),
         required_binaries=(BinarySpec("raxml-ng", version_args=("--version",), min_version="1.0"),),

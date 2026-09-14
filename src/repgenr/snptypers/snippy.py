@@ -18,6 +18,7 @@ from .base import SnpParams, SnpResult, SnpTyper
 class SnippyTyper(SnpTyper):
     capabilities = ToolCapabilities(
         name="snippy",
+        container="quay.io/biocontainers/snippy:4.6.0--hdfd78af_6",
         conda=("bioconda::snippy",),
         required_binaries=(
             BinarySpec("snippy", version_args=("--version",)),

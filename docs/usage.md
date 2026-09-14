@@ -362,12 +362,12 @@ Combine an executor profile with an optional container profile, e.g.
 
 - **Executors**: `standard` (local), `slurm`.
 - **Containers**: `docker`, `singularity`, `wave`. These set RepGenR's own
-  adapter-level container backend (`--container ...`). Only the adapters that
-  declare an image (progressiveMauve and cactus) run in a pinned image under
-  `docker` or `singularity`; the others declare a conda specification and
-  run in an image only under `wave`, which mints one from it. Without Wave
-  those tools run on the host, and the log says so for each. RepGenR itself
-  must be available to the Nextflow process.
+  adapter-level container backend (`--container ...`). Under `docker` or
+  `singularity` every adapter with a pinned image runs in it (all but the
+  `simple` SNP typer, parsnp, skder and SibeliaZ, which run on the host and
+  say so in the log); `wave` mints an image from each adapter's conda
+  specification instead, which also covers those four. RepGenR itself must
+  be available to the Nextflow process.
 - **`test`**: minimal resources and a small target for a quick smoke run.
 
 `PHYLO` (and the split `PHYLO_MSA`/`PHYLO_TREE`) publish the alignment they
@@ -510,11 +510,26 @@ repgenr --container singularity --container-cache /Volumes/LaCie/repgenr_sif \
 ### Image sources
 
 Each adapter declares its container metadata in `ToolCapabilities`:
-- `container` — a pinned image URI (e.g. the Cactus image), used as-is.
-- `conda` — a conda spec (e.g. `bioconda::skder`). With `--wave`, RepGenR mints an
-  image for it via the Wave CLI (arm64-native, and handles multi-tool adapters
-  such as the `simple` SNP typer = minimap2+samtools+bcftools); without Wave, set
-  an explicit `container` to use a specific BioContainer.
+- `container` — a pinned image URI, used as-is when Wave is off. The
+  single-package adapters pin a BioContainer (galah, sourmash, dRep, snippy,
+  ska2, Gubbins, IQ-TREE, FastTree, RAxML-NG, mashtree), progressiveMauve
+  pins a BioContainer with a compatible boost, and cactus pins its project
+  image. Four adapters have no pin and run in an image only under `--wave`
+  (on the host otherwise, which the log states for each): the `simple` SNP
+  typer (minimap2, samtools, bcftools) and parsnp (parsnp, harvesttools)
+  span several packages, and the skder and SibeliaZ BioContainers are
+  BusyBox-based, where the GNU-only calls in their shell wrappers (`sort
+  --parallel` in skder's greedy mode, `mktemp --suffix` in SibeliaZ) fail
+  and the run silently yields nothing.
+- `conda` — a conda spec (e.g. `bioconda::skder`). With `--wave`, RepGenR mints
+  an image for it via the Wave CLI (arm64-native, and the only route for the
+  multi-package adapters) and uses it instead of the pin; the pin stays the
+  default without Wave.
+
+The pinned tags are listed in each adapter's `capabilities`
+(`repgenr list-tools` names the adapters). BioContainers are `linux/amd64`;
+on Apple Silicon pass `--platform linux/amd64` (Docker Desktop with Rosetta)
+or use `--wave`.
 
 ### Storage location
 

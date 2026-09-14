@@ -56,6 +56,11 @@ class SkderDereplicator(Dereplicator):
         default_params={"mode": "greedy"},
         recommended_max_genomes=None,  # scales natively
         supports_native_scaling=True,
+        # No pinned BioContainer: the skder images (1.3.2 through 1.3.8) are
+        # BusyBox-based and their `sort` rejects the `--parallel` flag skder's
+        # greedy mode runs, so that mode silently returns no representatives
+        # there (dynamic mode, which uses skDERcore, is unaffected). A Wave
+        # image minted from the conda spec carries GNU coreutils and works.
         conda=("bioconda::skder",),
         accepted_extras=frozenset({"mode"}),
         # skDER clusters at one ANI cutoff; there is no primary pre-clustering.

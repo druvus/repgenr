@@ -17,6 +17,7 @@ from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 class MashtreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="mashtree",
+        container="quay.io/biocontainers/mashtree:1.4.6--pl5321h87e0c26_4",
         conda=("bioconda::mashtree",),
         required_binaries=(BinarySpec("mashtree", version_args=("--version",), min_version="1.2"),),
         recommended_max_genomes=10000,
