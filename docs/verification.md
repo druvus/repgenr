@@ -87,8 +87,14 @@ nor a GTDB sketch. The Nextflow layer itself is covered by the nf-test stub
 suite (`reads_select_process`, `reads_assemble_process`,
 `genome_qc_process`, `reads_gather_process`, `acquire_reads`,
 `reads_dataflow` and the `main.nf` reads-mode test) and, with real tools, by
-`test_nextflow.py::test_main_reads_mode`, which runs `--mode reads` on the
-two public runs below through the pinned assembler images.
+`test_nextflow.py::test_main_reads_mode`, which runs `--mode reads` on
+SRR25474756 (Illumina, skesa) and SRR28800588 (ONT, flye) through the pinned
+images with the docker backend, then sourmash dereplication, a mashtree tree
+and tree2tax (2026-09-14: two assembly tasks of 1m39s and 2m47s, the whole
+run under seven minutes; two leaves in the tree). That run surfaced two
+fixes: the steps resolve their paths before a containerised tool sees them,
+and the container backend binds the real directory behind a symlinked
+staging path.
 
 ## Results
 
