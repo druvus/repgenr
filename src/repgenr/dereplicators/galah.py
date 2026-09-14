@@ -35,7 +35,8 @@ class GalahDereplicator(Dereplicator):
         name="galah",
         container="quay.io/biocontainers/galah:0.4.2--hc1c3326_2",
         conda=("bioconda::galah",),
-        required_binaries=(BinarySpec("galah", version_args=("--version",)),),
+        # 0.4: --precluster-ani and --min-aligned-fraction as passed above.
+        required_binaries=(BinarySpec("galah", version_args=("--version",), min_version="0.4"),),
         recommended_max_genomes=None,
         supports_native_scaling=True,
     )

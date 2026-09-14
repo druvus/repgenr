@@ -19,8 +19,8 @@ class ParsnpTyper(SnpTyper):
         name="parsnp",
         conda=("bioconda::parsnp", "bioconda::harvesttools"),
         required_binaries=(
-            BinarySpec("parsnp", version_args=("--version",)),
-            BinarySpec("harvesttools", version_args=("--version",)),
+            BinarySpec("parsnp", version_args=("--version",), min_version="2.0"),
+            BinarySpec("harvesttools", version_args=("--version",), min_version="1.3"),
         ),
         recommended_max_genomes=2000,
     )

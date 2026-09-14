@@ -20,7 +20,8 @@ class IqtreeBuilder(TreeBuilder):
         name="iqtree",
         container="quay.io/biocontainers/iqtree:3.1.3--h8471819_0",
         conda=("bioconda::iqtree",),
-        required_binaries=(BinarySpec("iqtree", version_args=("--version",)),),
+        # 2.0: -B (ultrafast bootstrap) and --threads-max as passed below.
+        required_binaries=(BinarySpec("iqtree", version_args=("--version",), min_version="2.0"),),
         recommended_max_genomes=500,
     )
     input_kind = InputKind.MSA_FASTA

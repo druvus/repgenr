@@ -43,7 +43,7 @@ class DrepDereplicator(Dereplicator):
         # dRep's overlap gate is --cov_thresh with its own default; the shared
         # aligned-fraction setting is not translated onto it.
         ignored_params=frozenset({"aligned_fraction"}),
-        required_binaries=(BinarySpec("dRep", version_args=("--version",)),),
+        required_binaries=(BinarySpec("dRep", version_args=("-h",), min_version="3.0"),),
         default_params={"S_algorithm": "fastANI"},
         recommended_max_genomes=2000,
         supports_native_scaling=False,

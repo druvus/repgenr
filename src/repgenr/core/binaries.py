@@ -52,6 +52,9 @@ def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
             capture_output=True,
             text=True,
             timeout=30,
+            # A tool queried without arguments (FastTree) may otherwise wait
+            # on an inherited terminal for input until the timeout.
+            stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.SubprocessError):
         return None
