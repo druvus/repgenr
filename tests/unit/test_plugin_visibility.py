@@ -302,3 +302,39 @@ def test_snptype_core_hands_the_mask_exclusion_to_the_masker(tmp_path, register_
         logging.getLogger("t"),
     )
     assert seen["exclude"] == frozenset({"og"})
+
+
+def test_list_tools_check_reports_each_tool(register_tool) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.binaries import BinarySpec
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.dereplicators.base import Dereplicator
+    from repgenr.dereplicators.base import registry as derep_registry
+
+    class Present(Dereplicator):
+        capabilities = ToolCapabilities(name="presenttool")
+
+        def preflight(self):
+            return {"presenttool": "9.9"}
+
+        def dereplicate(self, genomes, out_dir, params, logger):  # noqa: ANN001
+            raise NotImplementedError
+
+    class Absent(Dereplicator):
+        capabilities = ToolCapabilities(
+            name="absenttool",
+            required_binaries=(BinarySpec("repgenr-no-such-binary-xyz"),),
+        )
+
+        def dereplicate(self, genomes, out_dir, params, logger):  # noqa: ANN001
+            raise NotImplementedError
+
+    register_tool(derep_registry, "presenttool", Present)
+    register_tool(derep_registry, "absenttool", Absent)
+    result = CliRunner().invoke(app, ["list-tools", "--check"])
+    assert result.exit_code == 0, result.output
+    assert "presenttool: ok (presenttool 9.9)" in result.output
+    assert "absenttool: missing" in result.output
+    assert "repgenr-no-such-binary-xyz" in result.output

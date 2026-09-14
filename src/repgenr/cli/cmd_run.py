@@ -62,6 +62,7 @@ def _preflight_tools(
     msa_source: str,
     aligner: str,
     snptyper: str,
+    mask: str = "none",
 ) -> None:
     """Check every external tool the chain will need before the first stage runs.
 
@@ -90,6 +91,10 @@ def _preflight_tools(
         from ..snptypers.base import registry as snp_registry
 
         snp_registry.create(snptyper).preflight()
+        if mask not in ("none", ""):
+            from ..maskers.base import registry as masker_registry
+
+            masker_registry.create(mask).preflight()
 
 
 def _msa_source_summary(treebuilder: str, msa_source: str, aligner: str, snptyper: str) -> str:
@@ -298,7 +303,7 @@ def run(
         return
 
     with stage_errors(logger):
-        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper)
+        _preflight_tools(derep_tool, treebuilder, msa_source, aligner, snptyper, mask)
 
     if viral:
         _run(

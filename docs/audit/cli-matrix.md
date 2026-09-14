@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-23 commands, 218 flags (218 with a live test or an n/a reason, 0 pending).
+23 commands, 219 flags (219 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -166,7 +166,9 @@ dispatch: `stage`
 
 dispatch: `query`
 
-(no flags)
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--check` |  | n/a: query command, no stage parameters | none | n/a: environment query; the Nextflow layer preflights inside each step | tests/live/test_aux_commands.py::test_list_tools_check_reports_every_adapter | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## metadata
 

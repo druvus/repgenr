@@ -41,6 +41,10 @@ class SnpResult:
 class SnpTyper(ABC):
     capabilities: ToolCapabilities
     requires_reference: bool = True
+    # Whether ``call`` returns a whole-genome alignment (``SnpResult.full_alignment``),
+    # which is what a masker needs. Declared up front so ``--mask`` with a
+    # typer that cannot feed it is refused before any SNP calling runs.
+    produces_full_alignment: bool = True
 
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)
