@@ -18,10 +18,12 @@ from repgenr.core.contracts import (
     READS_TSV,
     SELECTION_TSV,
     ReadRow,
+    SelectionRow,
     read_assembly_stats,
     read_excused_runs,
     read_selection,
     write_reads,
+    write_selection,
 )
 from repgenr.core.errors import ToolExecutionError, WorkdirError
 from repgenr.core.integrity import check_genome_completeness
@@ -352,3 +354,82 @@ def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
     record = ctx.config.stages["assemble"]
     assert record.params["n_disagree"] == 1
     assert record.tool_versions["gtdb_sketch"] == "gtdb-rs226-reps.k31-sc10k"
+
+
+# --- appending into an existing working directory -----------------------------------
+
+
+def _gtdb_workdir(workdir: Path) -> WorkdirContext:
+    """A workdir as metadata + genome leave it: two GTDB genomes and an outgroup."""
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.genomes_dir.mkdir(parents=True)
+    rows = [
+        SelectionRow("GCF_1", "Fam", "Gen", "sp", False, "Fam_Gen_sp_GCF_1.fasta", 99.0, 0.1),
+        SelectionRow("GCF_2", "Fam", "Gen", "sp", False, "Fam_Gen_sp_GCF_2.fasta", 98.0, 0.2),
+        SelectionRow("GCF_9", "Fam", "Out", "og", True, "Fam_Out_og_GCF_9.fasta"),
+    ]
+    for r in rows[:2]:
+        (ctx.genomes_dir / r.filename).write_text(">g\nACGT\n", encoding="utf-8")
+    ctx.outgroup_dir.mkdir(parents=True)
+    (ctx.outgroup_dir / rows[2].filename).write_text(">o\nACGT\n", encoding="utf-8")
+    (workdir / "outgroup_accession.txt").write_text("GCF_9\n", encoding="utf-8")
+    write_selection(workdir / SELECTION_TSV, rows)
+    ctx.manifest.replace_genomes(
+        [
+            GenomeRecord(
+                r.accession,
+                r.filename,
+                "gtdb",
+                r.family,
+                r.genus,
+                r.species,
+                r.is_outgroup,
+                completeness=r.completeness,
+                contamination=r.contamination,
+            )
+            for r in rows
+        ]
+    )
+    return ctx
+
+
+def test_append_adds_assemblies_to_a_gtdb_workdir(workdir, tmp_path, fake_assembler) -> None:
+    ctx = _gtdb_workdir(workdir)
+    write_reads(workdir / READS_TSV, [_row(tmp_path, "SRR1")])
+    n = run(ctx, AssembleParams(assembler="fakeasm", append=True))
+    assert n == 1
+    rows = {r.accession: r for r in read_selection(workdir / SELECTION_TSV)}
+    assert set(rows) == {"GCF_1", "GCF_2", "GCF_9", "SRR1"}
+    assert rows["GCF_1"].completeness == 99.0  # existing rows untouched
+    assert rows["GCF_9"].is_outgroup and rows["SRR1"].filename.endswith("_SRR1.fasta")
+    names = {p.name for p in ctx.genomes_dir.iterdir()}
+    assert names == {"Fam_Gen_sp_GCF_1.fasta", "Fam_Gen_sp_GCF_2.fasta", rows["SRR1"].filename}
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "GCF_9"
+    sources = {g.accession: g.source for g in ctx.manifest.all_genomes(include_outgroup=True)}
+    assert sources == {"GCF_1": "gtdb", "GCF_2": "gtdb", "GCF_9": "gtdb", "SRR1": "sra"}
+    assert check_genome_completeness(ctx.genomes_dir, workdir, logger=_LOG) == []
+    assert ctx.config.stages["assemble"].params["append"] is True
+
+
+def test_append_replaces_its_own_earlier_rows(workdir, tmp_path, fake_assembler) -> None:
+    ctx = _gtdb_workdir(workdir)
+    write_reads(workdir / READS_TSV, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", append=True))
+    write_reads(workdir / READS_TSV, [_row(tmp_path, "SRR1", species="holarctica")])
+    for marker in (workdir / "assemblies").rglob("assembly.ok"):
+        marker.unlink()  # force a re-assembly under the new label
+    run(ctx, AssembleParams(assembler="fakeasm", append=True))
+    rows = read_selection(workdir / SELECTION_TSV)
+    assert [r.accession for r in rows].count("SRR1") == 1
+    assert next(r for r in rows if r.accession == "SRR1").species == "holarctica"
+    assert not (ctx.genomes_dir / "Francisellaceae_Francisella_tularensis_SRR1.fasta").exists()
+
+
+def test_append_needs_an_existing_selection(workdir, tmp_path, fake_assembler) -> None:
+    from repgenr.core.errors import UserInputError
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(UserInputError, match="--append"):
+        run(ctx, AssembleParams(assembler="fakeasm", append=True))

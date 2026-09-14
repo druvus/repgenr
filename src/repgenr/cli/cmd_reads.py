@@ -95,6 +95,12 @@ def assemble(
     outgroup: Path | None = typer.Option(
         None, "--outgroup", help="A FASTA file to set aside as the outgroup for rooting."
     ),
+    append: bool = typer.Option(
+        False,
+        "--append",
+        help="Add the assemblies to a working directory that already holds a selection "
+        "(metadata and genome, or ingest) instead of replacing it.",
+    ),
     keep_reads: bool = typer.Option(
         False, "--keep-reads", help="Keep the downloaded FASTQ files after assembling."
     ),
@@ -139,6 +145,7 @@ def assemble(
             memory_gb=memory_gb,
             min_contig_length=min_contig_length,
             outgroup=None if outgroup is None else str(outgroup),
+            append=append,
             keep_reads=keep_reads,
             keep_files=keep_files,
             checkm2_db=None if checkm2_db is None else str(checkm2_db),

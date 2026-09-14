@@ -67,6 +67,7 @@ def metadata_params(
     metadata_path: Any = _UNSET,
     nodownload: Any = _UNSET,
     limit: Any = _UNSET,
+    drop_foreign: Any = _UNSET,
 ) -> MetadataParams:
     from ..stages.metadata import MetadataParams
 
@@ -88,6 +89,7 @@ def metadata_params(
         metadata_path=metadata_path,
         nodownload=nodownload,
         limit=limit,
+        drop_foreign=drop_foreign,
     )
 
 
@@ -103,11 +105,17 @@ def ingest_params(
     selection: Any = _UNSET,
     outgroup: Any = _UNSET,
     copy: Any = _UNSET,
+    drop_foreign: Any = _UNSET,
 ) -> IngestParams:
     from ..stages.ingest import IngestParams
 
     return _build(
-        IngestParams, genomes_dir=genomes_dir, selection=selection, outgroup=outgroup, copy=copy
+        IngestParams,
+        genomes_dir=genomes_dir,
+        selection=selection,
+        outgroup=outgroup,
+        copy=copy,
+        drop_foreign=drop_foreign,
     )
 
 
@@ -149,6 +157,7 @@ def assemble_params(
     memory_gb: Any = _UNSET,
     min_contig_length: Any = _UNSET,
     outgroup: Any = _UNSET,
+    append: Any = _UNSET,
     keep_reads: Any = _UNSET,
     keep_files: Any = _UNSET,
     checkm2_db: Any = _UNSET,
@@ -175,6 +184,7 @@ def assemble_params(
         memory_gb=memory_gb,
         min_contig_length=min_contig_length,
         outgroup=outgroup,
+        append=append,
         keep_reads=keep_reads,
         keep_files=keep_files,
         checkm2_db=checkm2_db,

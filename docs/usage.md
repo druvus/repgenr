@@ -139,6 +139,16 @@ the rest proceed; the completeness guard of later stages excuses those runs.
 does. Per-assembly metrics (contigs, total length, N50, coverage from the
 sequenced bases) are in `assembly_stats.tsv`.
 
+`assemble --append` adds the assemblies to a working directory that already
+holds a selection from `metadata` and `genome` (or `ingest`): the existing
+rows, genome files and outgroup stay, a run assembled earlier is replaced,
+and the manifest gains the new genomes with source `sra`, so a mixed GTDB
+and reads-derived set dereplicates together. Because `metadata` and `ingest`
+replace the selection and the genome stage prunes what the manifest no
+longer lists, both refuse to re-run while appended genomes are present;
+`--drop-foreign` discards them deliberately, and `assemble --append` can put
+them back afterwards.
+
 Two optional checks run on the assemblies. With a CheckM2 database
 (`--checkm2-db`, or the `CHECKM2DB` variable CheckM2 itself reads; obtain it
 with `checkm2 database --download`), every assembly is scored, the

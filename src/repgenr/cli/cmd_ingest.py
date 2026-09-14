@@ -31,6 +31,12 @@ def ingest(
     copy: bool = typer.Option(
         False, "--copy", help="Copy the files into genomes/ instead of symlinking them."
     ),
+    drop_foreign: bool = typer.Option(
+        False,
+        "--drop-foreign",
+        help="Discard genomes appended from sequencing runs (assemble --append) instead of "
+        "refusing to overwrite the selection that holds them.",
+    ),
 ) -> None:
     """Populate a working directory from local genomes (no download)."""
     from .param_builders import ingest_params
@@ -41,6 +47,7 @@ def ingest(
             selection=None if selection is None else str(selection),
             outgroup=outgroup,
             copy=copy,
+            drop_foreign=drop_foreign,
         )
 
     _run("ingest", workdir, build, create=True)
