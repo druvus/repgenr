@@ -384,3 +384,49 @@ def test_pinned_assembler_image_recovers_a_synthetic_genome(run_repgenr, tmp_pat
     stats = read_assembly_stats(wd / "assembly_stats.tsv")[0]
     assert stats.assembler == tool and stats.total_length > 70_000 and stats.n_contigs < 20
     assert (wd / "genomes" / "Synfam_Syngen_syn_SRRSYN.fasta").exists()
+
+
+def test_pinned_flye_image_recovers_a_synthetic_genome_from_long_reads(run_repgenr, tmp_path):
+    import random
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from readsim import simulate_long_reads
+
+    from repgenr.core.contracts import READS_TSV, ReadRow, read_assembly_stats, write_reads
+
+    rng = random.Random(5)
+    genome = tmp_path / "syn.fasta"
+    genome.write_text(
+        ">syn\n" + "".join(rng.choice("ACGT") for _ in range(120_000)) + "\n", encoding="utf-8"
+    )
+    reads = simulate_long_reads(genome, tmp_path / "reads", coverage=40, error_rate=0.02)
+    wd = tmp_path / "wd"
+    wd.mkdir()
+    write_reads(
+        wd / READS_TSV,
+        [
+            ReadRow(
+                "ONTSYN",
+                "SAM1",
+                "PRJ1",
+                "Synthetic organism",
+                "1",
+                "OXFORD_NANOPORE",
+                "GridION",
+                "SINGLE",
+                120_000 * 40,
+                400,
+                "Synfam",
+                "Syngen",
+                "syn",
+                (str(reads),),
+                (),
+                (reads.stat().st_size,),
+            )
+        ],
+    )
+    run_repgenr(*DOCKER, "assemble", "-wd", wd, "--assembler", "flye", "-t", "4")
+    assert "quay.io/biocontainers/flye:" in log_text(wd)
+    stats = read_assembly_stats(wd / "assembly_stats.tsv")[0]
+    assert stats.assembler == "flye" and stats.total_length > 100_000 and stats.n_contigs < 10

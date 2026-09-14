@@ -57,12 +57,25 @@ contract test, which checks the argument vector against canned output.
 | tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
 | assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
-| assembler | flye | no | no | offline contract test only (long-read live test follows) |
+| assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their
 BioContainer images are BusyBox-based and the GNU-only calls in their shell
 wrappers fail there, which is why they carry no pinned image.
+
+## Reads chain on a public run (2026-09-14)
+
+`tests/live/test_reads.py` selects SRR25474756 (Mycoplasmopsis arginini,
+Illumina MiSeq paired, 134 MB) from ENA, downloads and verifies both files,
+and assembles them with SKESA in its pinned image under amd64 emulation on
+the audit machine:
+
+| Step | Result | Wall time |
+|---|---|---|
+| reads (ENA, Entrez lineage) | 1 run, labelled Metamycoplasmataceae / Mycoplasmopsis / arginini | 2 s |
+| fetch (HTTPS, md5) | 134 MB | 80 s |
+| skesa (4 threads, emulated) | 24 contigs, 670879 bp, N50 86129, 308x | 70 s |
 
 ## Results
 

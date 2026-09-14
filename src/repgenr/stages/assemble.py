@@ -58,8 +58,9 @@ _DISK_FACTOR = 4
 class AssembleParams:
     assembler: str = "auto"
     threads: int = 16
-    # Concurrent runs; memory, not CPU, bounds this, so it stays small.
-    jobs: int = 2
+    # Concurrent runs; memory, not CPU, bounds this, so it stays small. None
+    # resolves to 2, or to 1 when a long-read run is pending.
+    jobs: int | None = None
     memory_gb: int = 16
     min_contig_length: int = 500
     # A FASTA file to set aside as the outgroup (ingest semantics).
@@ -102,7 +103,8 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         logger,
         what=f"assemble {len(pending)} sequencing runs",
     )
-    jobs = max(1, min(params.jobs, len(pending) or 1))
+    requested = params.jobs if params.jobs is not None else _default_jobs(pending)
+    jobs = max(1, min(requested, len(pending) or 1))
     threads_each = max(1, params.threads // jobs)
     logger.info(
         "Assembling %d runs (%d already done, %d excused) with %d concurrent jobs, %d threads each",
@@ -171,6 +173,14 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         SELECTION_TSV,
     )
     return len(assembled)
+
+
+_LONG_READ_PLATFORMS = frozenset({"OXFORD_NANOPORE", "PACBIO_SMRT"})
+
+
+def _default_jobs(pending: list[_Outcome]) -> int:
+    """Two short-read assemblies fit side by side; a long-read one wants the machine."""
+    return 1 if any(o.row.platform in _LONG_READ_PLATFORMS for o in pending) else 2
 
 
 # --- planning -------------------------------------------------------------------

@@ -78,8 +78,12 @@ def assemble(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
-    jobs: int = typer.Option(
-        2, "--jobs", min=1, help="Runs assembled concurrently (threads are split across them)."
+    jobs: int | None = typer.Option(
+        None,
+        "--jobs",
+        min=1,
+        help="Runs assembled concurrently, threads split across them (default 2, or 1 when a "
+        "long-read run is pending).",
     ),
     memory_gb: int = typer.Option(
         16, "--memory-gb", min=1, help="Memory hint per assembly, in GB, for tools that cap RAM."
