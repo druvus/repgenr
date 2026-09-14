@@ -314,6 +314,18 @@ def dereplicate_merge_cmd(
         help="Representative choice when --selection-tsv is given: "
         "quality (manifest completeness/contamination) or tool (adapter's own pick).",
     ),
+    reduce: str = typer.Option(
+        "none",
+        "--reduce",
+        help="Taxonomy-aware reduction after the merge: none, species, or genus "
+        "(one representative per taxon; taxonomy from --selection-tsv or the filenames).",
+    ),
+    target_reps: int = typer.Option(
+        0,
+        "--target-reps",
+        help="Target representative count: search --secondary-ani of the merge pass "
+        "to land near it (0 = off; re-runs the merge per search step).",
+    ),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
     ),
@@ -329,6 +341,9 @@ def dereplicate_merge_cmd(
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
         _require_choice(keeper, {"quality", "tool"}, "--keeper")
+        _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
+        if target_reps < 0:
+            raise UserInputError("--target-reps must be 0 (off) or a positive count.")
         chunk_dirs = list(chunk_dir)
         if chunk_fofn is not None:
             chunk_dirs += _read_path_fofn(chunk_fofn)
@@ -349,6 +364,8 @@ def dereplicate_merge_cmd(
                 },
                 selection_tsv=selection_tsv,
                 keeper=keeper,
+                reduce=reduce,
+                target_reps=target_reps,
                 versions_out=versions_out,
             ),
             logger,

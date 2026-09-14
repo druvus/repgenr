@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from types import SimpleNamespace
 
 from repgenr.dereplicators.base import (
     STATUS_CONTAINED,
@@ -98,17 +97,6 @@ def test_target_reps_exact_target_short_circuits(tmp_path):
     assert len(result.representatives) == 40
 
 
-class _FakeManifest:
-    def __init__(self, species_of: dict[str, str]) -> None:
-        self._records = [
-            SimpleNamespace(filename=name, species=sp, genus=sp.split(" ")[0])
-            for name, sp in species_of.items()
-        ]
-
-    def all_genomes(self, include_outgroup: bool = True):  # noqa: ANN001
-        return self._records
-
-
 def test_taxonomy_reduce_keeper_is_the_overrepresented_genotype(tmp_path):
     # Two same-species ANI representatives: a clone-block rep containing 30
     # genomes and a diverse rep containing 2. The keeper rule (largest existing
@@ -133,9 +121,8 @@ def test_taxonomy_reduce_keeper_is_the_overrepresented_genotype(tmp_path):
         name: "Benchgen benchsp"
         for name in ["clone_rep.fasta", "diverse_rep.fasta", *clone_members, *diverse_members]
     }
-    ctx = SimpleNamespace(manifest=_FakeManifest(species))
 
-    reduced = _reduce_by_taxonomy(ctx, result, "species", {}, _LOGGER)
+    reduced = _reduce_by_taxonomy(result, "species", {}, _LOGGER, taxon_of=species)
 
     assert [r.name for r in reduced.representatives] == ["clone_rep.fasta"]
     assert "diverse_rep.fasta" in reduced.clusters["clone_rep.fasta"]
@@ -151,6 +138,5 @@ def test_taxonomy_reduce_keeps_unannotated_genomes(tmp_path):
         clusters={"unknown_rep.fasta": []},
         genome_status={"unknown_rep.fasta": STATUS_REPRESENTATIVE},
     )
-    ctx = SimpleNamespace(manifest=_FakeManifest({}))
-    reduced = _reduce_by_taxonomy(ctx, result, "species", {}, _LOGGER)
+    reduced = _reduce_by_taxonomy(result, "species", {}, _LOGGER, taxon_of={})
     assert [r.name for r in reduced.representatives] == ["unknown_rep.fasta"]

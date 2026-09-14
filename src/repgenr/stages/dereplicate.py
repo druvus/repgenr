@@ -149,7 +149,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     if params.reduce != "none":
         before = len(result.representatives)
         # Reuse the quality lookup above instead of re-querying the manifest.
-        result = _reduce_by_taxonomy(ctx, result, params.reduce, quality, logger)
+        result = _reduce_by_taxonomy(
+            result, params.reduce, quality, logger, taxon_of=_taxon_lookup(ctx, params.reduce)
+        )
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
             params.reduce,
@@ -484,15 +486,18 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
 
 
 def _reduce_by_taxonomy(
-    ctx: WorkdirContext,
     result: DerepResult,
     level: str,
-    quality: dict[str, tuple[float, float]],
+    quality: Mapping[str, tuple[float, float]],
     logger,
+    *,
+    taxon_of: Mapping[str, str],
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
-    Representatives sharing a manifest taxon are merged into a single keeper.
+    ``taxon_of`` maps a genome filename to its taxon at ``level`` (the workdir
+    stage reads it from the manifest, the merge step from selection.tsv or the
+    filenames). Representatives sharing a taxon are merged into a single keeper.
     When ``quality`` is non-empty, the keeper is chosen by manifest assembly
     quality first (:func:`~.derep_keeper.quality_score`) -- the caller's own
     manifest lookup, reused here instead of querying the manifest a second
@@ -505,8 +510,6 @@ def _reduce_by_taxonomy(
     """
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
     from .derep_keeper import quality_score
-
-    taxon_of = _taxon_lookup(ctx, level)
 
     def _score_or_min(name: str) -> float:
         q = quality.get(name)

@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `dereplicate-merge --reduce species|genus` and `--target-reps N`, the two
+  representative-selection features that only the workdir `dereplicate`
+  command had, so the Nextflow layer can use them through `--derep_reduce`
+  and `--derep_target_reps`. The merge step takes the taxonomy from
+  `selection.tsv` when one reaches it and from the genome filenames
+  otherwise.
+
 - `repgenr list-tools --check` runs every adapter's preflight and prints one
   line per tool: `ok` with the resolved versions, or `missing` with the
   binaries that are absent or below their version floor. An environment can

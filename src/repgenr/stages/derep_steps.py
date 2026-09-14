@@ -33,6 +33,7 @@ from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    parse_genome_filename,
     read_clusters,
     read_genome_status,
     read_selection,
@@ -47,7 +48,12 @@ from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
 from .cluster_summary import summarise_clusters
 from .derep_keeper import rescore_representatives
-from .dereplicate import _compose_two_stage
+from .dereplicate import (
+    DereplicateParams,
+    _compose_two_stage,
+    _reduce_by_taxonomy,
+    _search_target_reps,
+)
 
 _REPRESENTATIVES_DIR = "representatives"
 
@@ -100,6 +106,13 @@ class MergeParams:
     # merge-level pick stands, as before.
     selection_tsv: Path | None = None
     keeper: str = "quality"  # quality | tool
+    # Taxonomy-aware reduction after the merge (none | species | genus). The
+    # taxonomy comes from selection.tsv when given, else from the canonical
+    # genome filenames.
+    reduce: str = "none"
+    # Search the secondary ANI of the merge pass to land near this many
+    # representatives (0 = off).
+    target_reps: int = 0
 
 
 def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResult:
@@ -178,7 +191,20 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
-    stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
+    if params.target_reps > 0:
+        # The search re-runs the merge pass per step; the stateless step has
+        # no chunking of its own, so the single-pass settings apply.
+        stage2 = _search_target_reps(
+            adapter,
+            union,
+            scratch,
+            derep_params,
+            DereplicateParams(tool=params.tool),
+            params.target_reps,
+            logger,
+        )
+    else:
+        stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
 
     if params.keeper == "quality" and params.selection_tsv is not None:
@@ -206,6 +232,34 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
             "keeping the adapter's own representatives."
         )
 
+    if params.reduce != "none":
+        resolvable = {rep.name for r in stage1 for rep in r.representatives}
+        quality = (
+            {}
+            if params.selection_tsv is None
+            else {
+                name: qual
+                for name, qual in _quality_from_selection(params.selection_tsv).items()
+                if name in resolvable
+            }
+        )
+        before = len(final.representatives)
+        final = _reduce_by_taxonomy(
+            final,
+            params.reduce,
+            quality,
+            logger,
+            taxon_of=_taxon_from_selection_or_names(
+                params.selection_tsv, resolvable, params.reduce
+            ),
+        )
+        logger.info(
+            "dereplicate-merge: --reduce %s collapsed %d representatives to %d",
+            params.reduce,
+            before,
+            len(final.representatives),
+        )
+
     # Every genome the chunks saw: cluster members plus the genomes that carry a
     # status without a cluster (QC rejects), so the completeness check covers the
     # whole input set rather than only the clustered part of it.
@@ -228,6 +282,23 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         params.tool,
     )
     return final
+
+
+def _taxon_from_selection_or_names(
+    selection_tsv: Path | None, names: set[str], level: str
+) -> dict[str, str]:
+    """Genome filename -> taxon at ``level``: from selection.tsv rows when given,
+    else parsed from the canonical filename (Family_Genus_species_Accession)."""
+    taxon_of: dict[str, str] = {}
+    if selection_tsv is not None:
+        for row in read_selection(selection_tsv):
+            taxon_of[row.filename] = row.species if level == "species" else row.genus
+    for name in names:
+        if name in taxon_of:
+            continue
+        _family, genus, species, _acc = parse_genome_filename(name)
+        taxon_of[name] = species if level == "species" else genus
+    return taxon_of
 
 
 def _load_chunk(chunk_dir: Path) -> DerepResult:

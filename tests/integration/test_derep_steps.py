@@ -475,3 +475,109 @@ def test_merge_rejects_chunk_missing_genome_status(tmp_path: Path, reg) -> None:
             MergeParams(tool="halver", chunk_dirs=[tmp_path / "c0"], out_dir=tmp_path / "merged"),
             _LOG,
         )
+
+
+# --- merge-level --reduce and --target-reps ---------------------------------
+
+
+class _KeepAll(Dereplicator):
+    """Every genome is its own representative, so a reduction is observable."""
+
+    capabilities = ToolCapabilities(name="keepall", supports_native_scaling=True)
+
+    def preflight(self) -> dict[str, str]:
+        return {"keepall": "1.0"}
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        genomes = list(genomes)
+        return DerepResult(
+            representatives=genomes,
+            clusters={g.name: [] for g in genomes},
+            genome_status={g.name: STATUS_REPRESENTATIVE for g in genomes},
+        )
+
+
+class _AniDep(Dereplicator):
+    """Representative count scales with the secondary ANI: keep = round(ani * N)."""
+
+    capabilities = ToolCapabilities(name="anidep", supports_native_scaling=True)
+
+    def preflight(self) -> dict[str, str]:
+        return {"anidep": "1.0"}
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        genomes = list(genomes)
+        keep = max(1, min(len(genomes), round(params.secondary_ani * len(genomes))))
+        reps = genomes[:keep]
+        leftover = [g.name for g in genomes[keep:]]
+        clusters: dict[str, list[str]] = {r.name: [] for r in reps}
+        clusters[reps[0].name] = leftover
+        status = {r.name: STATUS_REPRESENTATIVE for r in reps}
+        status.update({m: STATUS_CONTAINED for m in leftover})
+        return DerepResult(representatives=reps, clusters=clusters, genome_status=status)
+
+
+_TAXA = [
+    ("GCF_000001.1", "Fam_aaa_sp1_GCF_000001.1.fasta", "aaa", "aaa-sp1"),
+    ("GCF_000002.1", "Fam_aaa_sp1_GCF_000002.1.fasta", "aaa", "aaa-sp1"),
+    ("GCF_000003.1", "Fam_aaa_sp2_GCF_000003.1.fasta", "aaa", "aaa-sp2"),
+    ("GCF_000004.1", "Fam_bbb_sp3_GCF_000004.1.fasta", "bbb", "bbb-sp3"),
+]
+
+
+def _taxa_chunk(tmp_path: Path, register_tool) -> Path:
+    register_tool(registry, "keepall", _KeepAll)
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for _acc, fn, _g, _s in _TAXA:
+        (gdir / fn).write_text(">x\nACGT\n")
+        genomes.append(gdir / fn)
+    dereplicate_chunk(ChunkParams(tool="keepall", genomes=genomes, out_dir=tmp_path / "c0"), _LOG)
+    return tmp_path / "c0"
+
+
+def test_merge_reduce_species_uses_selection_taxonomy(tmp_path: Path, register_tool) -> None:
+    chunk = _taxa_chunk(tmp_path, register_tool)
+    selection = tmp_path / "selection.tsv"
+    write_selection(
+        selection,
+        [SelectionRow(acc, "Fam", g, s, False, fn) for acc, fn, g, s in _TAXA],
+    )
+    final = dereplicate_merge(
+        MergeParams(
+            tool="keepall",
+            chunk_dirs=[chunk],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+            reduce="species",
+        ),
+        _LOG,
+    )
+    assert len(final.representatives) == 3  # sp1 collapsed to one keeper
+    status = read_genome_status(tmp_path / "merged" / GENOME_STATUS_TSV)
+    assert sorted(status.values()).count(STATUS_CONTAINED) == 1
+
+
+def test_merge_reduce_genus_falls_back_to_filename_taxonomy(tmp_path: Path, register_tool) -> None:
+    chunk = _taxa_chunk(tmp_path, register_tool)
+    final = dereplicate_merge(
+        MergeParams(tool="keepall", chunk_dirs=[chunk], out_dir=tmp_path / "m", reduce="genus"),
+        _LOG,
+    )
+    assert len(final.representatives) == 2  # aaa and bbb
+
+
+def test_merge_target_reps_searches_secondary_ani(tmp_path: Path, register_tool) -> None:
+    register_tool(registry, "anidep", _AniDep)
+    register_tool(registry, "keepall", _KeepAll)
+    genomes = _make_genomes(tmp_path / "genomes", 10)
+    dereplicate_chunk(ChunkParams(tool="keepall", genomes=genomes, out_dir=tmp_path / "c0"), _LOG)
+    final = dereplicate_merge(
+        MergeParams(
+            tool="anidep", chunk_dirs=[tmp_path / "c0"], out_dir=tmp_path / "m", target_reps=9
+        ),
+        _LOG,
+    )
+    # anidep keeps round(ani * 10); the search must settle on an ANI that yields 9.
+    assert len(final.representatives) == 9
