@@ -64,6 +64,19 @@ containers. skder and SibeliaZ run in Wave-minted images only: their
 BioContainer images are BusyBox-based and the GNU-only calls in their shell
 wrappers fail there, which is why they carry no pinned image.
 
+## Reads chain on a public run (2026-09-14)
+
+`tests/live/test_reads.py` selects SRR25474756 (Mycoplasmopsis arginini,
+Illumina MiSeq paired, 134 MB) from ENA, downloads and verifies both files,
+and assembles them with SKESA in its pinned image under amd64 emulation on
+the audit machine:
+
+| Step | Result | Wall time |
+|---|---|---|
+| reads (ENA, Entrez lineage) | 1 run, labelled Metamycoplasmataceae / Mycoplasmopsis / arginini | 2 s |
+| fetch (HTTPS, md5) | 134 MB | 80 s |
+| skesa (4 threads, emulated) | 24 contigs, 670879 bp, N50 86129, 308x | 70 s |
+
 ## Results
 
 The table below is rendered from the junit output of the last complete run

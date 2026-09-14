@@ -24,34 +24,22 @@ def docker_preflight() -> None:
         pytest.skip("docker daemon not running")
 
 
-def test_run_reads_assembles_a_public_illumina_run(run_repgenr, tmp_path: Path) -> None:
-    """SRR25474756: Mycoplasmopsis arginini, MiSeq paired, 134 MB, about 300x."""
+def test_reads_and_assemble_a_public_illumina_run(run_repgenr, tmp_path: Path) -> None:
+    """SRR25474756: Mycoplasmopsis arginini, MiSeq paired, 134 MB, about 300x.
+
+    Ends after assembly: one genome is not a tree, and the tail of the chain
+    is covered by the other live suites.
+    """
     wd = tmp_path / "wd"
     listing = tmp_path / "runs.txt"
     listing.write_text("SRR25474756\n", encoding="utf-8")
-    run_repgenr(
-        *DOCKER,
-        "run",
-        "-wd",
-        wd,
-        "--reads",
-        "--accession-file",
-        listing,
-        "--assembler",
-        "skesa",
-        "-t",
-        "4",
-        "--treebuilder",
-        "mashtree",
-        "--no-outgroup",
-        "--tool",
-        "sourmash",
-        timeout=3600,
-    )
+    run_repgenr("reads", "-wd", wd, "--accession-file", listing)
+    run_repgenr(*DOCKER, "assemble", "-wd", wd, "--assembler", "skesa", "-t", "4", timeout=3600)
     rows = read_selection(wd / "selection.tsv")
     assert [r.accession for r in rows] == ["SRR25474756"]
     assert rows[0].genus == "Mycoplasmopsis" and rows[0].species == "arginini"
     stats = read_assembly_stats(wd / "assembly_stats.tsv")[0]
     assert 500_000 < stats.total_length < 1_000_000  # M. arginini is about 0.7 Mb
     assert stats.n50 > 20_000 and stats.est_coverage > 100
-    assert (wd / "tree" / "tree.nwk").exists() and (wd / "tree2tax.tsv").exists()
+    assert (wd / "genomes" / rows[0].filename).exists()
+    assert not (wd / "scratch" / "assemble" / "SRR25474756").exists()  # reads removed
