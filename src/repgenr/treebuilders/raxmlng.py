@@ -66,7 +66,12 @@ class RaxmlNgBuilder(TreeBuilder):
         best = Path(str(prefix) + ".raxml.bestTree")
         if not best.exists():
             raise WorkdirError("RAxML-NG did not produce a bestTree")
+        # `--all` also writes the best tree annotated with bootstrap support;
+        # publish that one so downstream support-based collapsing has values.
+        # The bare best tree is the fallback when the support step did not run.
+        support = Path(str(prefix) + ".raxml.support")
+        source = support if support.exists() else best
         tree = out_dir / "tree.nwk"
         with atomic_path(tree) as tmp:
-            shutil.copy2(best, tmp)
+            shutil.copy2(source, tmp)
         return tree

@@ -23,6 +23,7 @@ from Bio.SeqRecord import SeqRecord
 from ..core.context import WorkdirContext
 from ..core.contracts import SelectionRow, genome_filename, write_selection
 from ..core.errors import UserInputError
+from ..core.manifest import record_from_selection
 from ..core.process import remove_tree
 from . import _outgroup
 from ._common import (
@@ -106,6 +107,7 @@ def run_records(
             )
 
     write_selection(ctx.workdir / "selection.tsv", selection_rows)
+    ctx.manifest.replace_genomes([record_from_selection(r, "ncbi_virus") for r in selection_rows])
     n_written = sum(1 for r in selection_rows if not r.is_outgroup)
     ctx.config.record_stage(
         "vgenome",

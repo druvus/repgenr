@@ -103,6 +103,10 @@ class DrepDereplicator(Dereplicator):
         # dRep accepts a text file of genome paths for -g; a large set on argv
         # would hit the OS ARG_MAX limit.
         fofn = write_fofn(staged, out_dir / "genomes.fofn")
+        virus = bool(params.extra.get("virus"))
+        # Virus mode changes the default secondary algorithm; an explicit
+        # S_algorithm tool-arg wins either way, and the flag is passed once.
+        s_algorithm = params.extra.get("S_algorithm", "ANImf" if virus else "fastANI")
         cmd: list[str | Path] = [
             "dRep",
             "dereplicate",
@@ -116,14 +120,12 @@ class DrepDereplicator(Dereplicator):
             "-pa",
             str(params.primary_ani),
             "--S_algorithm",
-            params.extra.get("S_algorithm", "fastANI"),
+            s_algorithm,
             "--length",
             str(params.extra.get("length", 0)),
         ]
-        if params.extra.get("virus"):
+        if virus:
             cmd += [
-                "--S_algorithm",
-                "ANImf",
                 "--cov_thresh",
                 "0.5",
                 "--N50_weight",

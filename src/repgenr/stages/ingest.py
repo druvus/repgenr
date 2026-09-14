@@ -34,7 +34,7 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError
-from ..core.manifest import GenomeRecord
+from ..core.manifest import GenomeRecord, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
 
@@ -178,14 +178,4 @@ def _prune(directory: Path, keep: set[str], logger) -> None:
 
 
 def _record(row: SelectionRow) -> GenomeRecord:
-    return GenomeRecord(
-        accession=row.accession,
-        filename=row.filename,
-        source="local",
-        family=row.family or None,
-        genus=row.genus or None,
-        species=row.species or None,
-        is_outgroup=row.is_outgroup,
-        completeness=row.completeness,
-        contamination=row.contamination,
-    )
+    return record_from_selection(row, "local")

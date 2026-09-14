@@ -211,6 +211,23 @@ def test_dereplicator_contract(tool, genomes, recorded, tmp_path) -> None:
         assert token in flat, f"{token!r} missing from recorded argv for {tool}"
 
 
+def test_drep_virus_mode_passes_one_secondary_algorithm(genomes, recorded, tmp_path) -> None:
+    """Virus mode selects ANImf once; a user's S_algorithm tool-arg still wins."""
+    adapter = derep_registry.create("drep")
+    adapter.dereplicate(genomes, tmp_path / "v", DerepParams(extra={"virus": "1"}), _LOG)
+    cmd = next(c for c in recorded if c[:2] == ["dRep", "dereplicate"])
+    assert cmd.count("--S_algorithm") == 1
+    assert cmd[cmd.index("--S_algorithm") + 1] == "ANImf"
+
+    recorded.clear()
+    adapter.dereplicate(
+        genomes, tmp_path / "u", DerepParams(extra={"virus": "1", "S_algorithm": "ANIn"}), _LOG
+    )
+    cmd = next(c for c in recorded if c[:2] == ["dRep", "dereplicate"])
+    assert cmd.count("--S_algorithm") == 1
+    assert cmd[cmd.index("--S_algorithm") + 1] == "ANIn"
+
+
 def test_galah_empty_clusters_yields_empty_result(genomes, recorded, tmp_path, monkeypatch) -> None:
     """Pinned as-is: an empty galah clusters.tsv produces an empty DerepResult."""
     import repgenr.dereplicators.galah as galah_mod

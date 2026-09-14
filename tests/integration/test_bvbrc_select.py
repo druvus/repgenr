@@ -135,3 +135,17 @@ def test_run_select_publishes_selection_tsv(workdir: Path) -> None:
     assert len(rows) == n == 2
     assert {r.filename for r in rows} == {p.name for p in (workdir / "genomes").iterdir()}
     assert all(r.genus for r in rows) and not any(r.is_outgroup for r in rows)
+
+
+def test_run_select_populates_manifest(workdir: Path) -> None:
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
+    bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    records = ctx.manifest.all_genomes()
+    assert {g.filename for g in records} == {p.name for p in (workdir / "genomes").iterdir()}
+    assert all(g.genus and g.source == "bvbrc" for g in records)

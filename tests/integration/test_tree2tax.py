@@ -135,3 +135,13 @@ def test_tree2tax_collapse_length_reparents_leaves_to_grandparent(workdir: Path)
     assert params["collapse_length"] == 0.001
     assert params["collapse_support"] is None
     assert params["collapsed_nodes"] == 1
+
+
+def test_tree2tax_root_name_applies_without_remove_outgroup(workdir: Path) -> None:
+    # --root-name labels the top node whether or not the outgroup is removed.
+    _setup(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    t2t, _ = tree2tax_run(ctx, Tree2taxParams(root_name="TOP"))
+    parents = {p for _, p in _edges(t2t)}
+    assert "TOP" in parents
+    assert "root" not in parents

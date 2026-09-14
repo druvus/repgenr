@@ -94,3 +94,36 @@ def test_traversal_names_rejected(workdir: Path, bad_name: str) -> None:
     for action in ("pack", "unpack", "delete"):
         with pytest.raises(UserInputError, match="name"):
             derep_stock_run(ctx, DerepStockParams(action=action, name=bad_name))
+
+
+def test_unpack_restores_summary_record_and_manifest(workdir: Path) -> None:
+    """Unpacking a stored run leaves the workdir describing that run, not the
+    dereplication that produced the record before it."""
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = _setup_contract(workdir)
+    (ctx.derep_dir / "cluster_summary.tsv").write_text("representative\tn_members\n", "utf-8")
+    ctx.manifest.replace_genomes(
+        [
+            GenomeRecord(accession=f"GCA_00000{i}.1", filename=name)
+            for i, name in enumerate(_GENOMES, start=1)
+        ]
+    )
+    ctx.config.record_stage(
+        "dereplicate", tool="skder", params={"tool": "skder"}, completed="t0", fingerprint="fp0"
+    )
+    ctx.save_config()
+
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    (ctx.derep_dir / "cluster_summary.tsv").unlink()
+    ctx.manifest.set_derep_status_many([("GCA_000001.1", "contained", "GCA_000003.1")])
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+
+    assert (ctx.derep_dir / "cluster_summary.tsv").exists()
+    record = ctx.config.stages["dereplicate"]
+    assert record.fingerprint is None  # the next `dereplicate` must not skip
+    assert record.completed not in (None, "t0")
+    assert record.params.get("stock") == "run1"
+    status = {g.accession: g.derep_status for g in ctx.manifest.all_genomes()}
+    assert status["GCA_000001.1"] == "representative"
+    assert status["GCA_000003.1"] == "contained"

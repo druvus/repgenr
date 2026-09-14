@@ -14,6 +14,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .errors import WorkdirError
 
@@ -75,6 +76,26 @@ class GenomeRecord:
     representative: str | None = None
     completeness: float | None = None
     contamination: float | None = None
+
+
+def record_from_selection(row: Any, source: str) -> GenomeRecord:
+    """Build a manifest record from a ``SelectionRow`` (the contract hand-off).
+
+    Shared by the stages that select genomes without the GTDB metadata path
+    (ingest, the viral back-ends), so every entry path leaves the manifest
+    describing the same genomes as ``selection.tsv``.
+    """
+    return GenomeRecord(
+        accession=row.accession,
+        filename=row.filename,
+        source=source,
+        family=row.family or None,
+        genus=row.genus or None,
+        species=row.species or None,
+        is_outgroup=row.is_outgroup,
+        completeness=row.completeness,
+        contamination=row.contamination,
+    )
 
 
 class Manifest:

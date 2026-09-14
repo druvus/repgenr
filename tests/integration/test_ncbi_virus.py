@@ -142,6 +142,32 @@ def test_vgenome_records_path_canonical_names_and_selection(workdir: Path) -> No
     assert all(not r.is_outgroup for r in rows)
 
 
+def test_vgenome_records_path_populates_manifest(workdir: Path) -> None:
+    """The viral path fills the manifest like metadata and ingest do, so the
+    taxonomy-aware stages and doctor see the selected genomes."""
+    from repgenr.core.doctor import _check_manifest_drift
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    dl = workdir / "virus_download_wd"
+    dl.mkdir(parents=True)
+    recs = _fake_records()
+    (dl / "download.fa").write_text("".join(f">{r.accession} desc\nACGTACGT\n" for r in recs))
+    write_records(dl / "virus_records.json", recs)
+
+    ctx = WorkdirContext(workdir, create=True)
+    vgenome_run(ctx, VgenomeParams(target_genus="lentivirus", length_all=True, no_outgroup=True))
+    by_acc = {g.accession: g for g in ctx.manifest.all_genomes()}
+    assert set(by_acc) == {"NC_001802.1", "AF033819.3"}
+    rec = by_acc["NC_001802.1"]
+    assert rec.species == "Human-immunodeficiency-virus-1"
+    assert rec.genus == "Lentivirus"
+    assert rec.filename.endswith("_NC_001802.1.fasta")
+    assert rec.source == "ncbi_virus"
+    ctx.close()
+    assert all(f.level == "ok" for f in _check_manifest_drift(workdir, ctx.config))
+
+
 def test_vgenome_group_segments_per_isolate(workdir: Path) -> None:
     from repgenr.stages.vgenome import VgenomeParams
     from repgenr.stages.vgenome import run as vgenome_run
