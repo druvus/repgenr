@@ -7,6 +7,10 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `reads.tsv` records ENA's `library_selection`, and `reads --drop-selection`
+  (default `MDA`, repeatable, `none` to keep all) drops amplified libraries,
+  which assemble into chimeric and uneven contigs (68 of the 551 Wolbachia
+  WGS runs are MDA).
 - `reads --max-bases N` drops runs above a size, a guard against unenriched
   whole-host libraries (36 of the 551 Wolbachia runs exceed 5 Gb) that would
   assemble into a host-dominated genome.

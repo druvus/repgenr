@@ -431,6 +431,9 @@ class ReadRow:
     fastq_urls: tuple[str, ...] = ()
     fastq_md5: tuple[str, ...] = ()
     fastq_bytes: tuple[int, ...] = ()
+    # ENA's library_selection (RANDOM, MDA, PCR, ...); MDA marks whole-genome
+    # amplification, which assembles poorly.
+    library_selection: str = ""
 
 
 _READS_COLUMNS = [
@@ -450,6 +453,7 @@ _READS_COLUMNS = [
     "fastq_urls",
     "fastq_md5",
     "fastq_bytes",
+    "library_selection",
 ]
 
 
@@ -476,6 +480,7 @@ def write_reads(path: Path, rows: list[ReadRow]) -> None:
                     ";".join(r.fastq_urls),
                     ";".join(r.fastq_md5),
                     ";".join(str(b) for b in r.fastq_bytes),
+                    r.library_selection,
                 ]
             )
 
@@ -503,6 +508,8 @@ def read_reads(path: Path) -> list[ReadRow]:
                     fastq_urls=split(rec["fastq_urls"]),
                     fastq_md5=split(rec["fastq_md5"]),
                     fastq_bytes=tuple(int(b) for b in split(rec["fastq_bytes"])),
+                    # Absent from tables written before the column existed.
+                    library_selection=rec.get("library_selection", "") or "",
                 )
             )
     return rows

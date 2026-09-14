@@ -55,6 +55,12 @@ def reads(
         help="Drop runs with more sequenced bases than this (a guard against whole-host "
         "libraries, which would assemble into a host-dominated genome).",
     ),
+    drop_selection: list[str] = typer.Option(
+        ["MDA"],
+        "--drop-selection",
+        help="Drop runs whose ENA library selection is this value (repeatable; default "
+        "MDA, whole-genome amplification). Pass 'none' to keep every selection.",
+    ),
     one_per_sample: bool = typer.Option(
         True,
         "--one-per-sample/--all-runs",
@@ -76,6 +82,7 @@ def reads(
             max_runs=max_runs,
             min_bases=min_bases,
             max_bases=max_bases,
+            drop_selection=[s for s in drop_selection if s.lower() != "none"],
             one_per_sample=one_per_sample,
         )
 

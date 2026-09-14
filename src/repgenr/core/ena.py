@@ -29,6 +29,7 @@ RUN_FIELDS = (
     "library_layout",
     "library_strategy",
     "library_source",
+    "library_selection",
     "base_count",
     "read_count",
     "fastq_ftp",
@@ -148,6 +149,7 @@ def to_read_rows(records: list[dict]) -> list[ReadRow]:
                 fastq_urls=tuple(_https(u) for u in _split(rec.get("fastq_ftp"))),
                 fastq_md5=_split(rec.get("fastq_md5")),
                 fastq_bytes=tuple(int(b) for b in _split(rec.get("fastq_bytes"))),
+                library_selection=rec.get("library_selection", "") or "",
             )
         )
     return rows
