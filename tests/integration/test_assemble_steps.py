@@ -281,3 +281,38 @@ def test_reads_gather_fails_when_nothing_is_accepted(tmp_path: Path, fakes) -> N
             ReadsGatherParams(reads_tsv=reads, assemblies_dir=assemblies, out_dir=out), _LOG
         )
     assert read_excused_runs(out / EXCUSED_RUNS_TSV)[0].run_accession == "IONT"
+
+
+def test_assemble_run_hands_the_assembler_absolute_paths(tmp_path: Path, fakes, monkeypatch):
+    """A Nextflow task names its inputs relative to the task dir; the assembler
+    runs in a container whose working directory differs, so the paths it sees
+    must be absolute."""
+    seen: list[Path] = []
+    original = FakeAssembler.assemble
+
+    def spy(self, reads, out_dir, params, logger):  # noqa: ANN001
+        seen.extend([*reads.files, out_dir])
+        return original(self, reads, out_dir, params, logger)
+
+    monkeypatch.setattr(FakeAssembler, "assemble", spy)
+    _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1")])
+    monkeypatch.chdir(tmp_path)
+    assert assemble_run(
+        AssembleRunParams(reads_tsv=Path("reads.tsv"), run="SRR1", out_dir=Path("SRR1")), _LOG
+    )
+    assert seen and all(p.is_absolute() for p in seen), seen
+    assert (tmp_path / "SRR1" / "contigs.fasta").exists()
+
+
+def test_reads_gather_links_resolve_from_relative_inputs(tmp_path: Path, fakes, monkeypatch):
+    reads = _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1")])
+    _assembled(tmp_path, ["SRR1"], reads)
+    monkeypatch.chdir(tmp_path)
+    reads_gather(
+        ReadsGatherParams(
+            reads_tsv=Path("reads.tsv"), assemblies_dir=Path("assemblies"), out_dir=Path("out")
+        ),
+        _LOG,
+    )
+    [genome] = list((tmp_path / "out" / "genomes").iterdir())
+    assert genome.read_text(encoding="utf-8").startswith(">SRR1_contig1")  # the link resolves

@@ -75,6 +75,9 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     """
     if not params.reads_tsv.exists():
         raise WorkdirError(f"assemble-run: reads file not found: {params.reads_tsv}")
+    # A Nextflow task names its inputs relative to the task directory, while a
+    # containerised assembler runs with another working directory: every path
+    # that reaches a tool must be absolute.
     rows = [r for r in read_reads(params.reads_tsv) if r.run_accession == params.run]
     if not rows:
         raise UserInputError(f"assemble-run: run {params.run} is not listed in {params.reads_tsv}")
@@ -87,7 +90,7 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         keep_files=params.keep_files,
         extra=dict(params.extra),
     )
-    out_dir = params.out_dir
+    out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     [outcome] = stage._plan(rows, stage_params, out_dir.parent)
     versions = stage._preflight([outcome], logger)
@@ -148,8 +151,8 @@ def genome_qc(params: GenomeQcParams, logger: logging.Logger) -> int:
             "genome-qc needs a CheckM2 database (--checkm2-db or CHECKM2DB) and/or a "
             f"reference sketch (--gtdb-sketch or {stage.GTDB_SKETCH_ENV})."
         )
-    contigs = _assembled_contigs(params.assemblies_dir)
-    out = params.out_dir
+    contigs = _assembled_contigs(params.assemblies_dir.resolve())
+    out = params.out_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     scratch = out / "scratch"
     named = stage.named_links(contigs, scratch / "named")
@@ -245,10 +248,12 @@ def reads_gather(params: ReadsGatherParams, logger: logging.Logger) -> int:
     if not params.assemblies_dir.is_dir():
         raise WorkdirError(f"reads-gather: assemblies directory not found: {params.assemblies_dir}")
 
-    # Rebuild the per-run outcomes from the markers and the excuse files.
-    outcomes = stage._plan(rows, AssembleParams(), params.assemblies_dir)
+    # Rebuild the per-run outcomes from the markers and the excuse files. The
+    # directory is resolved so the genome links point at absolute paths.
+    assemblies_dir = params.assemblies_dir.resolve()
+    outcomes = stage._plan(rows, AssembleParams(), assemblies_dir)
     for o in outcomes:
-        excuse_file = params.assemblies_dir / o.row.run_accession / EXCUSED_RUNS_TSV
+        excuse_file = assemblies_dir / o.row.run_accession / EXCUSED_RUNS_TSV
         if o.stats is None and excuse_file.exists():
             o.excused = read_excused_runs(excuse_file)[0]
         elif o.stats is None and o.excused is None:
@@ -292,9 +297,7 @@ def reads_gather(params: ReadsGatherParams, logger: logging.Logger) -> int:
         remove_tree(genomes)
     genomes.mkdir(parents=True)
     for o in assembled:
-        link_or_copy(
-            params.assemblies_dir / o.row.run_accession / _CONTIGS, genomes / stage._name(o)
-        )
+        link_or_copy(assemblies_dir / o.row.run_accession / _CONTIGS, genomes / stage._name(o))
     write_selection(out / SELECTION_TSV, [stage._selection_row(o) for o in assembled])
     write_assembly_stats(out / ASSEMBLY_STATS_TSV, [stage._stats_row(o) for o in assembled])
     # The standalone reads chain has no outgroup here; downstream steps read an
