@@ -7,6 +7,15 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr assemble`, the second stage of the reads chain: fetches each
+  selected run's FASTQ files from ENA over HTTPS with checksum verification,
+  assembles them with the adapter that accepts the platform (`--assembler
+  auto|skesa|shovill|flye`), filters contigs, names the genome from the
+  reads stage's taxonomy and writes `genomes/`, `selection.tsv`, the
+  manifest, `assembly_stats.tsv` and `excused_runs.tsv`. Finished runs carry
+  a marker and are skipped on a re-run; `--jobs` bounds concurrency. `run
+  --reads` runs the whole chain from a taxon or an accession file.
+
 - `repgenr reads`, the first stage of a reads chain (`reads -> assemble ->
   dereplicate -> phylo -> tree2tax`): selects whole-genome sequencing runs
   from ENA (which mirrors SRA) by taxon or by run, sample or study accession,

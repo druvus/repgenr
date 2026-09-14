@@ -6,7 +6,17 @@ from pathlib import Path
 
 import typer
 
-from .base import HELP_TARGET_FAMILY, HELP_TARGET_GENUS, HELP_TARGET_SPECIES, _run, app
+from .base import (
+    DEFAULT_THREADS,
+    HELP_TARGET_FAMILY,
+    HELP_TARGET_GENUS,
+    HELP_TARGET_SPECIES,
+    HELP_THREADS,
+    _assembler_help,
+    _parse_key_values,
+    _run,
+    app,
+)
 
 
 @app.command()
@@ -61,3 +71,49 @@ def reads(
         )
 
     _run("reads", workdir, build, create=True)
+
+
+@app.command()
+def assemble(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    jobs: int = typer.Option(
+        2, "--jobs", min=1, help="Runs assembled concurrently (threads are split across them)."
+    ),
+    memory_gb: int = typer.Option(
+        16, "--memory-gb", min=1, help="Memory hint per assembly, in GB, for tools that cap RAM."
+    ),
+    min_contig_length: int = typer.Option(
+        500, "--min-contig-length", min=0, help="Drop contigs shorter than this many bases."
+    ),
+    outgroup: Path | None = typer.Option(
+        None, "--outgroup", help="A FASTA file to set aside as the outgroup for rooting."
+    ),
+    keep_reads: bool = typer.Option(
+        False, "--keep-reads", help="Keep the downloaded FASTQ files after assembling."
+    ),
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep each run's assembler scratch directory."
+    ),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
+    ),
+) -> None:
+    """Fetch and assemble the selected runs; write genomes/ and selection.tsv."""
+    from .param_builders import assemble_params
+
+    def build():
+        return assemble_params(
+            assembler=assembler,
+            threads=threads,
+            jobs=jobs,
+            memory_gb=memory_gb,
+            min_contig_length=min_contig_length,
+            outgroup=None if outgroup is None else str(outgroup),
+            keep_reads=keep_reads,
+            keep_files=keep_files,
+            extra=_parse_key_values(tool_arg, "--tool-arg"),
+        )
+
+    _run("assemble", workdir, build)

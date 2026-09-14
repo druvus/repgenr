@@ -94,9 +94,10 @@ out of the ingroup.
 ### Starting from sequencing reads
 
 `repgenr reads` selects whole-genome sequencing runs from ENA (which mirrors
-SRA) and writes `reads.tsv`; `repgenr assemble` then turns them into genomes
-(the assemble stage arrives in a later release; the chain is `reads ->
-assemble -> dereplicate -> phylo -> tree2tax`). Runs are chosen by taxon
+SRA) and writes `reads.tsv`; `repgenr assemble` fetches and assembles them
+into `genomes/` with the same `selection.tsv` and manifest the other entry
+paths write, so the chain is `reads -> assemble -> dereplicate -> phylo ->
+tree2tax`. Runs are chosen by taxon
 (`--target-family`/`-tf`, `--target-genus`/`-tg` or `--target-species`/`-ts`,
 resolved through the ENA taxonomy, synonyms included) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
 (SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
@@ -110,7 +111,34 @@ its NCBI taxid, in the same filename tokens the GTDB path uses.
 ```bash
 repgenr reads -wd $WD -ts "Francisella tularensis" --platform illumina --max-runs 20
 repgenr reads -wd $WD --accession PRJNA954307 --accession SRR28800588
+repgenr assemble -wd $WD --assembler auto -t 16 --jobs 2
+# or the whole chain:
+repgenr run -wd $WD --reads -ts "Francisella tularensis" --platform illumina --max-runs 20 \
+    --assembler skesa --treebuilder mashtree
 ```
+
+`assemble` downloads each run's FASTQ files from the locations ENA lists
+(over HTTPS, verified against ENA's checksums), assembles them, keeps the
+contigs of at least `--min-contig-length` bases (500) renamed
+`<run>_contig<n>`, and names the genome `Family_genus_species_RUN.fasta` from
+the tokens the reads stage resolved. `--assembler auto` (the default) picks
+by platform and layout: `skesa` for Illumina, `shovill` (SPAdes) as the
+alternative for paired Illumina, `flye` for Oxford Nanopore and PacBio;
+`--tool-arg` passes tuning such as `mode=nano-raw` to Flye. `--jobs` runs
+that many assemblies at once with `--threads` split across them (memory,
+not CPU, is the limit; long reads want `--jobs 1`), and `--memory-gb` is the
+RAM cap passed to SKESA and shovill. Each finished run leaves a marker under
+`assemblies/<run>/`, so an interrupted stage resumes without refetching;
+reads are deleted after a successful assembly unless `--keep-reads`, and the
+assembler's scratch unless `--keep-files`. A run without an ENA FASTQ
+mirror, one whose download fails its checksum, one no assembler accepts, or
+one whose assembly fails is written to `excused_runs.tsv` with the reason and
+the rest proceed; the completeness guard of later stages excuses those runs.
+`--outgroup FASTA` sets a genome aside for rooting, as `ingest --outgroup`
+does. Per-assembly metrics (contigs, total length, N50, coverage from the
+sequenced bases) are in `assembly_stats.tsv`. `run --reads` forwards
+`--accession-file`, `--platform`, `--max-runs`, `--assembler`, `--threads`
+and `--outgroup`; the rest is available on the stage commands.
 
 ### Viruses
 

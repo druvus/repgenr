@@ -269,3 +269,25 @@ def test_run_with_snptype_inserts_the_stage(monkeypatch, tmp_path) -> None:
     )
     assert result.exit_code == 0, result.stdout
     assert calls == ["metadata", "genome", "dereplicate", "snptype", "phylo", "tree2tax"]
+
+
+def test_run_reads_chain(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(
+        app,
+        [
+            *("run", "-wd", str(tmp_path / "wd"), "--reads", "-ts", "Francisella tularensis"),
+            *("--platform", "illumina", "--max-runs", "5", "--assembler", "skesa"),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert calls == ["reads", "assemble", "dereplicate", "phylo", "tree2tax"]
+
+
+def test_run_rejects_reads_with_viral(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(
+        app, ["run", "-wd", str(tmp_path / "wd"), "--reads", "--viral", "--target", "x"]
+    )
+    assert result.exit_code != 0 and "--reads" in result.output
+    assert calls == []

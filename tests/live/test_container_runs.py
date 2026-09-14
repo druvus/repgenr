@@ -313,3 +313,74 @@ def test_pinned_snippy_and_gubbins_images(run_repgenr, clonal_wd) -> None:
     assert "quay.io/biocontainers/snippy:" in text
     assert "quay.io/biocontainers/gubbins:" in text
     assert "running on the host despite --container" not in text
+
+
+# --- assemblers: the stage through each pinned image on simulated reads -----------
+
+
+def _simulated_reads_workdir(tmp_path: Path) -> Path:
+    import random
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from readsim import simulate_paired_reads
+
+    from repgenr.core.contracts import READS_TSV, ReadRow, write_reads
+
+    rng = random.Random(3)
+    genome = tmp_path / "syn.fasta"
+    genome.write_text(
+        ">syn\n" + "".join(rng.choice("ACGT") for _ in range(80_000)) + "\n", encoding="utf-8"
+    )
+    r1, r2 = simulate_paired_reads(genome, tmp_path / "reads", coverage=40)
+    wd = tmp_path / "wd"
+    wd.mkdir()
+    write_reads(
+        wd / READS_TSV,
+        [
+            ReadRow(
+                "SRRSYN",
+                "SAM1",
+                "PRJ1",
+                "Synthetic organism",
+                "1",
+                "ILLUMINA",
+                "Illumina MiSeq",
+                "PAIRED",
+                80_000 * 40,
+                21_000,
+                "Synfam",
+                "Syngen",
+                "syn",
+                (str(r1), str(r2)),
+                (),
+                (r1.stat().st_size, r2.stat().st_size),
+            )
+        ],
+    )
+    return wd
+
+
+@pytest.mark.parametrize("tool", ["skesa", "shovill"])
+def test_pinned_assembler_image_recovers_a_synthetic_genome(run_repgenr, tmp_path, tool) -> None:
+    from repgenr.core.contracts import read_assembly_stats
+
+    wd = _simulated_reads_workdir(tmp_path)
+    run_repgenr(
+        *DOCKER,
+        "assemble",
+        "-wd",
+        wd,
+        "--assembler",
+        tool,
+        "-t",
+        "4",
+        "--jobs",
+        "1",
+        "--memory-gb",
+        "6",
+    )
+    assert f"quay.io/biocontainers/{tool}:" in log_text(wd)
+    stats = read_assembly_stats(wd / "assembly_stats.tsv")[0]
+    assert stats.assembler == tool and stats.total_length > 70_000 and stats.n_contigs < 20
+    assert (wd / "genomes" / "Synfam_Syngen_syn_SRRSYN.fasta").exists()

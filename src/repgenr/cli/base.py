@@ -22,7 +22,7 @@ import typer
 
 from .. import __version__
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, SELECTION_TSV, TREE_NWK
+from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
@@ -113,6 +113,10 @@ STAGE_INPUTS: dict[str, Any] = {
     "ingest": _ingest_inputs,
     # reads is network-only; an accession list is its one file input.
     "reads": lambda ctx, p: [Path(p.accession_file)] if p.accession_file else [],
+    "assemble": lambda ctx, p: [
+        ctx.workdir / READS_TSV,
+        *([Path(p.outgroup)] if p.outgroup else []),
+    ],
     "vmetadata": lambda ctx, p: [],
     "genome": lambda ctx, p: [ctx.workdir / SELECTION_TSV],
     # vgenome WRITES selection.tsv, so its inputs are the vmetadata download
@@ -218,6 +222,13 @@ def _snp_help() -> str:
     from ..snptypers.base import registry
 
     return tool_choices_help(registry, auto=False, prefix="SNP typer: ")
+
+
+def _assembler_help() -> str:
+    from ..assemblers.base import registry
+    from ..core.plugins import tool_choices_help
+
+    return tool_choices_help(registry, auto=True, prefix="Assembler: ")
 
 
 def _mask_help() -> str:

@@ -9,7 +9,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import UserInputError
 from ..core.plugins import ToolCapabilities
-from .base import AssembleParams, Assembler, AssemblyResult, ReadSet
+from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs
 
 _MODES = ("nano-raw", "nano-hq", "pacbio-raw", "pacbio-hifi")
 # Instruments whose PacBio output is HiFi (CCS) rather than CLR.
@@ -48,7 +48,14 @@ class FlyeAssembler(Assembler):
         ]
         if "genome_size" in params.extra:
             cmd += ["--genome-size", str(params.extra["genome_size"])]
-        run_tool(self.capabilities, cmd, logger=logger, log_prefix="flye", cwd=out_dir)
+        run_tool(
+            self.capabilities,
+            cmd,
+            logger=logger,
+            log_prefix="flye",
+            cwd=out_dir,
+            extra_mounts=_read_dirs(reads),
+        )
         return AssemblyResult(contigs=result_dir / "assembly.fasta")
 
 

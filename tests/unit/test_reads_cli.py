@@ -56,3 +56,33 @@ def test_status_reports_the_reads_chain(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Pipeline: reads" in result.output
     assert "[next] assemble" in result.output
+
+
+def test_assemble_command_builds_its_params(monkeypatch, tmp_path: Path) -> None:
+    seen = {}
+
+    def fake_run(stage, workdir, build, *, create=False):
+        seen["stage"], seen["params"] = stage, build()
+
+    monkeypatch.setattr(cmd_reads, "_run", fake_run)
+    og = tmp_path / "og.fasta"
+    og.write_text(">o\nACGT\n", encoding="utf-8")
+    result = _runner.invoke(
+        app,
+        [
+            *("assemble", "-wd", str(tmp_path / "wd"), "--assembler", "flye", "-t", "8"),
+            *("--jobs", "1", "--memory-gb", "32", "--min-contig-length", "1000"),
+            *("--outgroup", str(og), "--keep-reads", "--tool-arg", "mode=nano-raw"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    p = seen["params"]
+    assert seen["stage"] == "assemble" and p.assembler == "flye"
+    assert (p.threads, p.jobs, p.memory_gb, p.min_contig_length) == (8, 1, 32, 1000)
+    assert p.outgroup == str(og) and p.keep_reads and p.extra == {"mode": "nano-raw"}
+
+
+def test_assemble_command_rejects_an_unknown_assembler(tmp_path: Path) -> None:
+    result = _runner.invoke(app, ["assemble", "-wd", str(tmp_path / "wd"), "--assembler", "velvet"])
+    assert result.exit_code != 0
+    assert "--assembler" in result.output + str(result.exception or "")

@@ -18,6 +18,23 @@ matrix test keeps it in sync. Global options go before the command name
 | `--verbose`, `-v` | off | Verbose (DEBUG) logging. |
 | `--quiet`, `-q` | off | Only warnings and errors. |
 
+## assemble
+
+Fetch and assemble the selected runs; write genomes/ and selection.tsv.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--jobs` | `2` | Runs assembled concurrently (threads are split across them). |
+| `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
+| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
+| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
+| `--keep-files` | off | Keep each run's assembler scratch directory. |
+| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+
 ## cluster-summary
 
 Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
@@ -274,6 +291,11 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--selection` |  | With --genomes-dir: selection.tsv naming the genomes to take (accession, taxonomy, filename, outgroup flag, quality). |
 | `--outgroup` |  | With --genomes-dir: the outgroup genome, a name under the directory or a path to a FASTA file. |
 | `--copy` | off | With --genomes-dir: copy the files into genomes/ instead of linking. |
+| `--reads` | off | Run the reads chain (reads -> assemble) from ENA/SRA sequencing runs selected by -tf/-tg/-ts or --accession-file, instead of downloading assemblies. |
+| `--accession-file` |  | With --reads: file of run/sample/study accessions. |
+| `--platform` | `any` | With --reads: any, illumina, ont or pacbio. |
+| `--max-runs` |  | With --reads: keep at most N runs, the largest by bases. |
+| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
 | `-d`, `--dataset` | `rep` | all or rep (bacterial). |
 | `-l`, `--level` |  | family/genus/species. |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
