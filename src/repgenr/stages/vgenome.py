@@ -32,6 +32,9 @@ class VgenomeParams:
     length_range: str | None = None
     discard: str | None = None
     no_outgroup: bool = False
+    # Pin the outgroup to a downloaded record (accession on the NCBI Virus
+    # path, record id on BV-BRC) instead of searching for one.
+    outgroup_accession: str | None = None
     group_segments: bool = False  # ncbi_virus: combine an isolate's segments into one genome
     outgroup_candidates_taxid_min_genomes: int = 5
     outgroup_treebuilder: str = "mashtree"  # any builder with distance_matrix support

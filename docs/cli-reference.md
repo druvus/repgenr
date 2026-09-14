@@ -394,6 +394,7 @@ Select and organize viral genomes (virus equivalent of genome).
 | `--length-range` |  | e.g. 25000-35000. |
 | `--discard` |  | Comma-separated header tags. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--outgroup-accession` |  | Use this downloaded record as the outgroup instead of searching for one (an accession on the NCBI Virus path, a record id on BV-BRC). |
 | `--group-segments` | off | ncbi_virus: combine an isolate's segments into one genome (segmented viruses). |
 | `--outgroup-candidates-taxid-min-genomes` | `5` | Genomes a sister taxid needs to qualify as an outgroup candidate. |
 | `--outgroup-treebuilder` | `mashtree` | Tree builder used for the outgroup distance matrix. |

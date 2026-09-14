@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-23 commands, 234 flags (234 with a live test or an n/a reason, 0 pending).
+23 commands, 235 flags (235 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -382,6 +382,7 @@ dispatch: `stage`
 | `--length-range` |  | VgenomeParams.length_range | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_selection_flags | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--discard` |  | VgenomeParams.discard | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | VgenomeParams.no_outgroup | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_selection_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--outgroup-accession` |  | VgenomeParams.outgroup_accession | none | params.vgenome_args | n/a: needs a specific downloaded record; covered offline on synthetic records in tests/integration/test_ncbi_virus.py and test_bvbrc_select.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--group-segments` |  | VgenomeParams.group_segments | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_selection_flags | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup-candidates-taxid-min-genomes` |  | VgenomeParams.outgroup_candidates_taxid_min_genomes | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_selection_flags | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup-treebuilder` |  | VgenomeParams.outgroup_treebuilder | registry | params.vgenome_args | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files | docs/cli-reference.md, docs/audit/cli-matrix.md |

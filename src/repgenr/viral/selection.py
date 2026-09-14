@@ -55,11 +55,12 @@ def run_records(
 
     discard = [x.strip() for x in params.discard.split(",")] if params.discard else None
     seqs = _seq_map(fasta)
-    lo, hi = 0, 0
     if params.group_segments:
         # Segmented viruses: skip the per-segment length filter (segments differ
-        # in length); group whole isolates instead.
+        # in length); group whole isolates instead. The kept records' length
+        # span still serves as the window for outgroup candidates.
         kept = [r for r in selected if r.accession in seqs]
+        lo, hi = min(r.length for r in kept), max(r.length for r in kept)
     else:
         lo, hi = _length_range_records(selected, params, logger)
         kept = [r for r in selected if _passes_length(r, lo, hi, discard, seqs)]
@@ -90,21 +91,24 @@ def run_records(
             )
 
     tool_versions: dict[str, str] = {}
-    if not params.no_outgroup and not params.group_segments:
+    og = None
+    if params.outgroup_accession:
+        og = _pinned_outgroup_record(ctx, records, kept, params.outgroup_accession, seqs, logger)
+    elif not params.no_outgroup:
         og, tool_versions = _determine_outgroup_records(
             ctx, records, kept, (lo, hi), params, seqs, logger
         )
-        if og is not None:
-            selection_rows.append(
-                SelectionRow(
-                    og.accession,
-                    og.family,
-                    og.genus,
-                    og.species,
-                    True,
-                    genome_filename(og.family, og.genus, og.species, og.accession),
-                )
+    if og is not None:
+        selection_rows.append(
+            SelectionRow(
+                og.accession,
+                og.family,
+                og.genus,
+                og.species,
+                True,
+                genome_filename(og.family, og.genus, og.species, og.accession),
             )
+        )
 
     write_selection(ctx.workdir / "selection.tsv", selection_rows)
     ctx.manifest.replace_genomes([record_from_selection(r, "ncbi_virus") for r in selection_rows])
@@ -116,6 +120,7 @@ def run_records(
             "selected": n_written,
             "group_segments": params.group_segments,
             "no_outgroup": params.no_outgroup,
+            "outgroup_accession": params.outgroup_accession,
         },
         tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),
@@ -317,14 +322,37 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     if og is None or acc in kept_acc:
         return None, versions
 
+    _write_outgroup(ctx, og, seqs, logger)
+    _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
+    return og, versions
+
+
+def _pinned_outgroup_record(ctx, records, kept, accession: str, seqs, logger):
+    """The outgroup the user named: a downloaded record outside the selection."""
+    og = next((r for r in records if r.accession == accession), None)
+    if og is None or accession not in seqs:
+        raise UserInputError(
+            f"--outgroup-accession {accession} is not among the downloaded records; "
+            "pick an accession the vmetadata stage fetched, or drop the flag."
+        )
+    if any(r.accession == accession for r in kept):
+        raise UserInputError(
+            f"--outgroup-accession {accession} is part of the selection itself; "
+            "an outgroup must lie outside it."
+        )
+    _write_outgroup(ctx, og, seqs, logger)
+    return og
+
+
+def _write_outgroup(ctx, og, seqs, logger) -> None:
+    """Stage the outgroup record under outgroup/ and record its accession."""
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
     name = genome_filename(og.family, og.genus, og.species, og.accession)
     # Remove outgroups from earlier selections before writing the current one.
     for stale in ctx.outgroup_dir.iterdir():
         if stale.is_file() and stale.name != name and not stale.name.startswith("."):
             stale.unlink()
-    (ctx.outgroup_dir / name).write_text(f">{seqs[acc].description}\n{seqs[acc].seq}\n")
+    rec = seqs[og.accession]
+    (ctx.outgroup_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
     (ctx.workdir / "outgroup_accession.txt").write_text(og.accession + "\n")
     logger.info("Selected outgroup: %s (%s)", og.accession, og.species)
-    _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
-    return og, versions

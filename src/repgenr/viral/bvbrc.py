@@ -80,10 +80,14 @@ def run_select(
     n_written, rows = _write_genomes(ctx, records, sequences, kept, ncbi, params, logger)
 
     tool_versions: dict[str, str] = {}
-    if not params.no_outgroup:
+    outgroup_id: str | None = None
+    if params.outgroup_accession:
+        outgroup_id = _pinned_outgroup(ctx, records, sequences, kept, params.outgroup_accession)
+    elif not params.no_outgroup:
         tool_versions, outgroup_id = _determine_outgroup(
             ctx, records, sequences, base, kept, length_range, params, logger
         )
+    if outgroup_id is not None:
         og_taxid = next((r.taxid for r in records if r.name == outgroup_id), "")
         rows.append(_selection_row(outgroup_id, og_taxid, ncbi, is_outgroup=True))
     # The same hand-off the NCBI Virus path and the bacterial stages publish,
@@ -306,6 +310,25 @@ def _write_genomes(
         _write_record(sequences[rec.name], target)
         rows[rec.name] = _selection_row(rec.name, rec.taxid, ncbi, is_outgroup=False)
     return len(rows), list(rows.values())
+
+
+def _pinned_outgroup(ctx, records, sequences, kept, record_id: str) -> str:
+    """The outgroup the user named, by record id or BV-BRC id, outside the selection."""
+    rec = next((r for r in records if record_id in (r.name, r.bvbrc_id)), None)
+    if rec is None or rec.name not in sequences:
+        raise UserInputError(
+            f"--outgroup-accession {record_id} is not among the downloaded records; "
+            "pick a record id the vmetadata stage fetched, or drop the flag."
+        )
+    if rec.taxid in kept:
+        raise UserInputError(
+            f"--outgroup-accession {record_id} belongs to a selected taxon; "
+            "an outgroup must lie outside the selection."
+        )
+    (ctx.workdir / "outgroup_accession.txt").write_text(rec.name + "\n")
+    ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
+    _write_record(sequences[rec.name], ctx.outgroup_dir / f"{rec.name}.fasta")
+    return rec.name
 
 
 def _determine_outgroup(

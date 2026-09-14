@@ -106,6 +106,15 @@ repgenr tree2tax -wd $WD --include-dereplicated
 # or: repgenr run -wd $WD --viral --target hepatovirus -tg Hepatovirus --treebuilder mashtree
 ```
 
+`vgenome` picks an outgroup by itself: a record of a sister species with
+enough genomes, chosen by distance (mashtree by default). `--outgroup-accession`
+pins it to a downloaded record instead, an accession on the NCBI Virus path
+or a record id on BV-BRC, and `run --viral --outgroup-accession` forwards
+the same choice. With `--group-segments` the search still runs, with the
+kept records' length span as its window, and the outgroup is one record of
+the sister species rather than a grouped isolate. `--no-outgroup` leaves the
+tree unrooted.
+
 ### Viral length filtering and over-represented species
 
 The viral selection step keeps records whose genome length falls inside a

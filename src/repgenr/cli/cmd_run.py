@@ -423,6 +423,7 @@ def run(
                 target_genus=target_genus,
                 target_species=target_species,
                 no_outgroup=no_outgroup,
+                outgroup_accession=outgroup_accession,
                 group_segments=group_segments,
             ),
         )

@@ -2597,6 +2597,18 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_selection_flags
+      --outgroup-accession:
+        param: VgenomeParams.outgroup_accession
+        value: NC_000001.1
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.vgenome_args
+        live: 'n/a: needs a specific downloaded record; covered offline on synthetic records
+          in tests/integration/test_ncbi_virus.py and test_bvbrc_select.py'
+        observable: outgroup/ holds the named record and outgroup_accession.txt names it
       --group-segments:
         param: VgenomeParams.group_segments
         validated: none

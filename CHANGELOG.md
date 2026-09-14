@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `vgenome --outgroup-accession` (and `run --viral --outgroup-accession`)
+  pins the viral outgroup to a downloaded record on either back-end; the
+  BV-BRC path previously asked the user to "specify one manually" with no
+  way to do so. Segment-grouped runs (`--group-segments`) now search for an
+  outgroup too, using the kept records' length span as the window; they were
+  left unrooted before.
+
 - `repgenr run` starts from local genomes with `--genomes-dir` (the `ingest`
   chain, with `--selection`, `--outgroup` and `--copy` passed through), runs
   the standalone SNP typing stage with `--with-snptype`, and forwards the
