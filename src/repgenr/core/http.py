@@ -135,15 +135,20 @@ def verify_md5_manifest(path: Path, manifest_url: str, *, logger: logging.Logger
     if expected is None:
         logger.warning("%s not listed in %s; skipping verification", path.name, manifest_url)
         return False
+    verify_md5(path, expected)
+    logger.info("Checksum verified for %s", path.name)
+    return True
+
+
+def verify_md5(path: Path, expected: str) -> None:
+    """Raise :class:`WorkdirError` unless ``path`` hashes to ``expected`` (hex, any case)."""
     digest = hashlib.md5()
     with open(path, "rb") as fo:
         for chunk in iter(lambda: fo.read(_CHUNK), b""):
             digest.update(chunk)
     actual = digest.hexdigest()
-    if actual != expected:
+    if actual != expected.lower():
         raise WorkdirError(
-            f"Checksum mismatch for {path.name}: expected {expected}, got {actual}. "
+            f"Checksum mismatch for {path.name}: expected {expected.lower()}, got {actual}. "
             "The download is corrupt; delete it and re-run."
         )
-    logger.info("Checksum verified for %s", path.name)
-    return True

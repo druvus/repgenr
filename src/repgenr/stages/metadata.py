@@ -32,6 +32,7 @@ from ..core.contracts import (
     SelectionRow,
     atomic_path,
     genome_filename,
+    sanitise_taxon_tokens,
     write_selection,
 )
 from ..core.errors import UserInputError, WorkdirError
@@ -290,10 +291,9 @@ def _parse_taxonomy(raw: str) -> dict[str, str]:
             key = level[0] + "__"
             if chunk.startswith(key):
                 tax[level] = chunk[len(key) :]
-    # normalize species/genus/family like the legacy code
-    tax["species"] = tax["species"].replace(tax["genus"], "").replace(" ", "").replace("_", "-")
-    for level in ("genus", "family"):
-        tax[level] = tax[level].replace(" ", "").replace("_", "-")
+    tax["family"], tax["genus"], tax["species"] = sanitise_taxon_tokens(
+        tax["family"], tax["genus"], tax["species"]
+    )
     return tax
 
 
@@ -579,12 +579,11 @@ def _normalize_api_tax(row: dict) -> dict:
     def strip(value: str) -> str:
         return value.split("__", 1)[1] if "__" in value else value
 
-    genus = strip(row.get("gtdbGenus", ""))
-    species = strip(row.get("gtdbSpecies", ""))
-    family = strip(row.get("gtdbFamily", ""))
-    species = species.replace(genus, "").replace(" ", "").replace("_", "-")
-    genus = genus.replace(" ", "").replace("_", "-")
-    family = family.replace(" ", "").replace("_", "-")
+    family, genus, species = sanitise_taxon_tokens(
+        strip(row.get("gtdbFamily", "")),
+        strip(row.get("gtdbGenus", "")),
+        strip(row.get("gtdbSpecies", "")),
+    )
     return {
         "family": family,
         "genus": genus,

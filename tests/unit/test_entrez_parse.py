@@ -11,9 +11,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from repgenr.core import ncbi_taxonomy as entrez
 from repgenr.core.errors import WorkdirError
-from repgenr.viral import entrez
-from repgenr.viral.entrez import _parse_taxon_element, get_taxon_data_from_entrez
+from repgenr.core.ncbi_taxonomy import _parse_taxon_element, get_taxon_data_from_entrez
 
 _LOG = logging.getLogger("test")
 

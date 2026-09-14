@@ -22,7 +22,7 @@ from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, genome_file
 from ..core.errors import WorkdirError
 from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
-from ..core.process import remove_tree
+from ..core.process import check_free_disk, remove_tree
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
 DATASETS_CAPS = ToolCapabilities(
@@ -32,7 +32,6 @@ DATASETS_CAPS = ToolCapabilities(
 )
 _DOWNLOAD_BATCH_SIZE = 5000  # accessions per datasets download/rehydrate call
 _EST_BYTES_PER_GENOME = 5_000_000  # rough peak-disk estimate (zip + extract + final)
-_MIN_FREE_BYTES = 1_000_000_000  # hard floor: refuse to start a batch under ~1 GB free
 
 
 _DATASETS_TIMEOUT = 3600.0  # floor; a hung transfer must not block forever
@@ -137,23 +136,15 @@ def _prune(genomes_dir: Path, keep: set[str], logger) -> None:
 def _check_disk(scratch_dir: Path, n_accessions: int, logger) -> None:
     """Refuse to start a download with almost no free disk; warn when tight.
 
-    Genome sizes are unknown ahead of time, so this is a coarse guard against the
-    "filled the volume mid-run" failure, not a precise reservation.
+    Genome sizes are unknown ahead of time, so the estimate is coarse: a guard
+    against the "filled the volume mid-run" failure, not a reservation.
     """
-    free = shutil.disk_usage(scratch_dir).free
-    if free < _MIN_FREE_BYTES:
-        raise WorkdirError(
-            f"Only {free / 1e9:.1f} GB free under {scratch_dir}; refusing to download "
-            f"{n_accessions} genomes. Free disk space or point --outdir at a larger volume."
-        )
-    estimate = n_accessions * _EST_BYTES_PER_GENOME * 2
-    if free < estimate:
-        logger.warning(
-            "Low disk: ~%.1f GB free, up to ~%.1f GB may be needed for %d genomes.",
-            free / 1e9,
-            estimate / 1e9,
-            n_accessions,
-        )
+    check_free_disk(
+        scratch_dir,
+        n_accessions * _EST_BYTES_PER_GENOME * 2,
+        logger,
+        what=f"download {n_accessions} genomes",
+    )
 
 
 def _assert_fasta(path: Path) -> None:

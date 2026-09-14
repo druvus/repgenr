@@ -45,6 +45,13 @@ SEGMENTS_TSV = "segments.tsv"
 # Accessions the genome stage requested but NCBI returned nothing for;
 # the completeness guard excuses them (core.integrity).
 MISSING_ACCESSIONS_TXT = "missing_accessions.txt"
+# The reads-to-assembly entry path: the sequencing runs the reads stage
+# selected, the per-assembly metrics, and the runs the assemble stage could not
+# turn into a genome (excused by the completeness guard, like missing
+# accessions).
+READS_TSV = "reads.tsv"
+ASSEMBLY_STATS_TSV = "assembly_stats.tsv"
+EXCUSED_RUNS_TSV = "excused_runs.tsv"
 
 
 # Recognised genome FASTA extensions, longest-first so suffix stripping is
@@ -84,6 +91,23 @@ def strip_fasta_suffix(name: str) -> str:
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return name
+
+
+def sanitise_taxon_tokens(family: str, genus: str, species: str) -> tuple[str, str, str]:
+    """Turn taxonomy names into the single tokens a canonical filename holds.
+
+    The species drops its genus prefix (``Francisella tularensis`` ->
+    ``tularensis``); every token loses its spaces and turns underscores into
+    hyphens, so :func:`parse_genome_filename` splits the name back on ``_``.
+    One rule for every producer (GTDB TSV and API, the reads path), so genomes
+    of one species carry one token whatever selected them.
+    """
+
+    def clean(value: str) -> str:
+        return value.replace(" ", "").replace("_", "-")
+
+    species = species.replace(genus, "") if genus else species
+    return clean(family), clean(genus), clean(species)
 
 
 def parse_genome_filename(name: str) -> tuple[str, str, str, str]:
@@ -379,6 +403,208 @@ def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
                 continue
             seen.add((child, parent))
             writer.writerow([child, parent])
+
+
+@dataclass(frozen=True)
+class ReadRow:
+    """One sequencing run selected by the reads stage (the reads.tsv contract).
+
+    ``fastq_urls``/``fastq_md5``/``fastq_bytes`` are parallel per-file tuples,
+    empty when the archive holds no FASTQ mirror for the run. A URL may also
+    be a local path, which the assemble stage copies instead of downloading.
+    """
+
+    run_accession: str
+    biosample: str
+    bioproject: str
+    organism: str
+    taxid: str
+    platform: str
+    instrument_model: str
+    layout: str
+    bases: int
+    read_count: int
+    fastq_urls: tuple[str, ...] = ()
+    fastq_md5: tuple[str, ...] = ()
+    fastq_bytes: tuple[int, ...] = ()
+
+
+_READS_COLUMNS = [
+    "run_accession",
+    "biosample",
+    "bioproject",
+    "organism",
+    "taxid",
+    "platform",
+    "instrument_model",
+    "layout",
+    "bases",
+    "read_count",
+    "fastq_urls",
+    "fastq_md5",
+    "fastq_bytes",
+]
+
+
+def write_reads(path: Path, rows: list[ReadRow]) -> None:
+    with atomic_replace(path, newline="") as fo:
+        writer = _tsv_writer(fo)
+        writer.writerow(_READS_COLUMNS)
+        for r in rows:
+            writer.writerow(
+                [
+                    r.run_accession,
+                    r.biosample,
+                    r.bioproject,
+                    r.organism,
+                    r.taxid,
+                    r.platform,
+                    r.instrument_model,
+                    r.layout,
+                    r.bases,
+                    r.read_count,
+                    ";".join(r.fastq_urls),
+                    ";".join(r.fastq_md5),
+                    ";".join(str(b) for b in r.fastq_bytes),
+                ]
+            )
+
+
+def read_reads(path: Path) -> list[ReadRow]:
+    rows: list[ReadRow] = []
+    with open(path, encoding="utf-8", newline="") as fo:
+        for rec in csv.DictReader(fo, delimiter="\t"):
+            split = lambda s: tuple(x for x in s.split(";") if x)  # noqa: E731
+            rows.append(
+                ReadRow(
+                    run_accession=rec["run_accession"],
+                    biosample=rec["biosample"],
+                    bioproject=rec["bioproject"],
+                    organism=rec["organism"],
+                    taxid=rec["taxid"],
+                    platform=rec["platform"],
+                    instrument_model=rec["instrument_model"],
+                    layout=rec["layout"],
+                    bases=int(rec["bases"] or 0),
+                    read_count=int(rec["read_count"] or 0),
+                    fastq_urls=split(rec["fastq_urls"]),
+                    fastq_md5=split(rec["fastq_md5"]),
+                    fastq_bytes=tuple(int(b) for b in split(rec["fastq_bytes"])),
+                )
+            )
+    return rows
+
+
+@dataclass(frozen=True)
+class AssemblyStatsRow:
+    """Per-assembly metrics and labels (assembly_stats.tsv), one row per genome."""
+
+    run_accession: str
+    filename: str
+    assembler: str
+    n_contigs: int
+    total_length: int
+    n50: int
+    largest_contig: int
+    est_coverage: float | None = None
+    completeness: float | None = None
+    contamination: float | None = None
+    ncbi_taxonomy: str = ""
+    gtdb_taxonomy: str = ""
+    label_source: str = "metadata"
+    taxonomy_flag: str = ""
+
+
+_ASSEMBLY_STATS_COLUMNS = [
+    "run_accession",
+    "filename",
+    "assembler",
+    "n_contigs",
+    "total_length",
+    "n50",
+    "largest_contig",
+    "est_coverage",
+    "completeness",
+    "contamination",
+    "ncbi_taxonomy",
+    "gtdb_taxonomy",
+    "label_source",
+    "taxonomy_flag",
+]
+
+
+def write_assembly_stats(path: Path, rows: list[AssemblyStatsRow]) -> None:
+    with atomic_replace(path, newline="") as fo:
+        writer = _tsv_writer(fo)
+        writer.writerow(_ASSEMBLY_STATS_COLUMNS)
+        for r in rows:
+            writer.writerow(
+                [
+                    r.run_accession,
+                    r.filename,
+                    r.assembler,
+                    r.n_contigs,
+                    r.total_length,
+                    r.n50,
+                    r.largest_contig,
+                    "" if r.est_coverage is None else f"{r.est_coverage:.2f}",
+                    "" if r.completeness is None else f"{r.completeness:.2f}",
+                    "" if r.contamination is None else f"{r.contamination:.2f}",
+                    r.ncbi_taxonomy,
+                    r.gtdb_taxonomy,
+                    r.label_source,
+                    r.taxonomy_flag,
+                ]
+            )
+
+
+def read_assembly_stats(path: Path) -> list[AssemblyStatsRow]:
+    rows: list[AssemblyStatsRow] = []
+    with open(path, encoding="utf-8", newline="") as fo:
+        for rec in csv.DictReader(fo, delimiter="\t"):
+            rows.append(
+                AssemblyStatsRow(
+                    run_accession=rec["run_accession"],
+                    filename=rec["filename"],
+                    assembler=rec["assembler"],
+                    n_contigs=int(rec["n_contigs"]),
+                    total_length=int(rec["total_length"]),
+                    n50=int(rec["n50"]),
+                    largest_contig=int(rec["largest_contig"]),
+                    est_coverage=_opt_float(rec["est_coverage"]),
+                    completeness=_opt_float(rec["completeness"]),
+                    contamination=_opt_float(rec["contamination"]),
+                    ncbi_taxonomy=rec["ncbi_taxonomy"],
+                    gtdb_taxonomy=rec["gtdb_taxonomy"],
+                    label_source=rec["label_source"],
+                    taxonomy_flag=rec["taxonomy_flag"],
+                )
+            )
+    return rows
+
+
+@dataclass(frozen=True)
+class ExcusedRun:
+    """A selected run that produced no genome: which step gave up and why."""
+
+    run_accession: str
+    step: str  # fetch | assemble | qc | classify
+    reason: str
+
+
+def write_excused_runs(path: Path, rows: list[ExcusedRun]) -> None:
+    with atomic_replace(path, newline="") as fo:
+        writer = _tsv_writer(fo)
+        writer.writerow(["run_accession", "step", "reason"])
+        for r in rows:
+            writer.writerow([r.run_accession, r.step, r.reason])
+
+
+def read_excused_runs(path: Path) -> list[ExcusedRun]:
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.reader(fo, delimiter="\t")
+        next(reader, None)
+        return [ExcusedRun(row[0], row[1], row[2]) for row in reader if len(row) >= 3]
 
 
 def write_segments(path: Path, members: dict[str, list[str]]) -> None:
