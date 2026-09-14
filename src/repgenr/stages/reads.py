@@ -36,7 +36,8 @@ class ReadsParams:
     platform: str = "any"  # any | illumina | ont | pacbio
     max_runs: int | None = None
     min_bases: int = 0
-    # Keep the best run of each sample: long reads before short, then bases.
+    # Keep the best run of each sample: a long-read run with enough bases, else
+    # the largest run.
     one_per_sample: bool = True
 
 
@@ -123,15 +124,34 @@ def _filter(rows: list[ReadRow], params: ReadsParams) -> list[ReadRow]:
     ]
 
 
+# A long-read run is preferred over the sample's short-read runs only when it
+# carries enough sequence to assemble on its own: at least this many bases,
+# and at least this fraction of the largest short-read run. Below that it is
+# usually a scaffolding or test run next to the real data (seen on Wolbachia:
+# a 45 kb PacBio run and a 338 Mb ONT run beside 9 Gb and 11 Gb Illumina runs).
+LONG_READ_MIN_BASES = 100_000_000
+LONG_READ_MIN_FRACTION = 0.1
+
+
 def _best_per_sample(rows: list[ReadRow]) -> list[ReadRow]:
-    best: dict[str, ReadRow] = {}
+    by_sample: dict[str, list[ReadRow]] = {}
     for row in rows:
-        key = row.biosample or row.run_accession
-        rank = (row.platform in _LONG_READ, row.bases)
-        current = best.get(key)
-        if current is None or rank > (current.platform in _LONG_READ, current.bases):
-            best[key] = row
-    return list(best.values())
+        by_sample.setdefault(row.biosample or row.run_accession, []).append(row)
+    return [_best_run(runs) for runs in by_sample.values()]
+
+
+def _best_run(runs: list[ReadRow]) -> ReadRow:
+    short_max = max((r.bases for r in runs if r.platform not in _LONG_READ), default=0)
+
+    def rank(r: ReadRow) -> tuple[bool, int]:
+        usable_long = (
+            r.platform in _LONG_READ
+            and r.bases >= LONG_READ_MIN_BASES
+            and r.bases >= LONG_READ_MIN_FRACTION * short_max
+        )
+        return (usable_long, r.bases)
+
+    return max(runs, key=rank)
 
 
 def _label(rows: list[ReadRow], logger: logging.Logger) -> list[ReadRow]:

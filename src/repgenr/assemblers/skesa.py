@@ -8,7 +8,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs
+from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs, split_reads
 
 
 class SkesaAssembler(Assembler):
@@ -25,10 +25,17 @@ class SkesaAssembler(Assembler):
     ) -> AssemblyResult:
         out_dir.mkdir(parents=True, exist_ok=True)
         contigs = out_dir / "contigs.fa"
-        cmd: list[str | Path] = [
-            "skesa",
-            "--reads",
-            ",".join(str(f) for f in reads.files),
+        # One --reads per input: the pair as "R1,R2", each unpaired file (an
+        # orphan next to the pair, or a single-end run) on its own.
+        pair, singles = split_reads(reads)
+        inputs: list[str] = []
+        if pair is not None:
+            inputs.append(f"{pair[0]},{pair[1]}")
+        inputs += [str(f) for f in singles]
+        cmd: list[str | Path] = ["skesa"]
+        for item in inputs:
+            cmd += ["--reads", item]
+        cmd += [
             "--cores",
             str(params.threads),
             "--memory",

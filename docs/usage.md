@@ -103,9 +103,12 @@ resolved through the ENA taxonomy, synonyms included) or by accession: `--access
 (SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
 lists them one per line. `--platform illumina|ont|pacbio` keeps one
 platform, `--min-bases` drops small runs, `--one-per-sample` (the default)
-keeps the best run of each sample, long reads before short and then by
-bases (`--all-runs` keeps every run), and `--max-runs` caps the selection to
-the largest runs. Each run is labelled with the family, genus and species of
+keeps the best run of each sample: a long-read run when it carries at least
+100 Mb and a tenth of the sample's largest short-read run, else the largest
+run (`--all-runs` keeps every run); `--max-runs` caps the selection to the
+largest runs. At assembly, a paired run that ENA lists with a third, orphan
+FASTQ file is given to skesa as the pair plus the orphan file, and to shovill
+as the pair only. Each run is labelled with the family, genus and species of
 its NCBI taxid, in the same filename tokens the GTDB path uses.
 
 ```bash

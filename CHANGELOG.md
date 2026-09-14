@@ -182,6 +182,13 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- Paired runs that ENA lists with a third, orphan FASTQ file (260 of the 424
+  paired Illumina Wolbachia runs) no longer fail in skesa: the adapters find
+  the `_1`/`_2` pair; skesa also takes the orphan file as unpaired input,
+  shovill uses the pair only. The per-sample run choice prefers a long-read
+  run only when it carries at least 100 Mb and a tenth of the sample's
+  largest short-read run (a 45 kb PacBio run was chosen over 9 Gb of
+  Illumina reads).
 - Container mounts bind the real directory behind a symlinked path, so a
   containerised tool can open inputs that Nextflow staged through a linked
   directory (seen with sourmash `dereplicate-merge` under the docker

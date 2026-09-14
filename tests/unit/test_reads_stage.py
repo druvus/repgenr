@@ -9,7 +9,7 @@ import pytest
 
 from repgenr.core import ena
 from repgenr.core.context import WorkdirContext
-from repgenr.core.contracts import READS_TSV, read_reads
+from repgenr.core.contracts import READS_TSV, ReadRow, read_reads
 from repgenr.core.errors import UserInputError
 from repgenr.stages import reads as reads_mod
 from repgenr.stages.reads import ReadsParams, run
@@ -131,3 +131,33 @@ def test_no_matching_runs_is_an_input_error(workdir: Path, monkeypatch, ena_fake
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="No sequencing runs"):
         run(ctx, ReadsParams(target_genus="Nothing"))
+
+
+def _run_row(run: str, sample: str, platform: str, bases: int) -> ReadRow:
+    return ReadRow(run, sample, "PRJ", "Wolbachia", "953", platform, "", "SINGLE", bases, 0)
+
+
+def test_per_sample_rule_prefers_long_reads_only_when_they_carry_enough_bases() -> None:
+    """Seen on Wolbachia: a 45 kb PacBio run and a 338 Mb ONT run were chosen
+    over 9 Gb and 11 Gb Illumina runs of the same samples."""
+    from repgenr.stages.reads import _best_per_sample
+
+    rows = [
+        _run_row("PB_TINY", "S1", "PACBIO_SMRT", 45_000),
+        _run_row("ILL_S1", "S1", "ILLUMINA", 9_000_000_000),
+        _run_row("ONT_SMALL", "S2", "OXFORD_NANOPORE", 338_000_000),
+        _run_row("ILL_S2", "S2", "ILLUMINA", 11_000_000_000),
+        _run_row("ONT_OK", "S3", "OXFORD_NANOPORE", 865_000_000),
+        _run_row("ILL_S3", "S3", "ILLUMINA", 2_000_000_000),
+        _run_row("ONT_ALONE", "S4", "OXFORD_NANOPORE", 200_000_000),
+        _run_row("ILL_BIG", "S5", "ILLUMINA", 3_000_000_000),
+        _run_row("ILL_SMALL", "S5", "ILLUMINA", 100_000_000),
+    ]
+    chosen = {r.biosample: r.run_accession for r in _best_per_sample(rows)}
+    assert chosen == {
+        "S1": "ILL_S1",  # long-read run far below the floor
+        "S2": "ILL_S2",  # long-read run under a tenth of the short-read bases
+        "S3": "ONT_OK",  # enough long reads: preferred
+        "S4": "ONT_ALONE",
+        "S5": "ILL_BIG",
+    }
