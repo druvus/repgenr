@@ -149,3 +149,24 @@ def test_run_select_populates_manifest(workdir: Path) -> None:
     records = ctx.manifest.all_genomes()
     assert {g.filename for g in records} == {p.name for p in (workdir / "genomes").iterdir()}
     assert all(g.genus and g.source == "bvbrc" for g in records)
+
+
+def test_run_select_pinned_outgroup(workdir: Path) -> None:
+    """--outgroup-accession names a record id; the mashtree search is skipped."""
+    from repgenr.core.contracts import SELECTION_TSV, read_selection
+
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+    params = VgenomeParams(
+        target_genus="mastadenovirus", length_range="250-350", outgroup_accession="99999.1"
+    )
+    bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    # The BV-BRC id resolves to the record; the outgroup is staged under its record id.
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "acc3"
+    assert [p.name for p in ctx.outgroup_dir.iterdir()] == ["acc3.fasta"]
+    rows = read_selection(ctx.workdir / SELECTION_TSV)
+    assert {r.accession for r in rows if r.is_outgroup} == {"acc3"}

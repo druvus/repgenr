@@ -292,3 +292,126 @@ def test_group_segments_leaves_unannotated_isolates_separate(tmp_path) -> None:
     accessions = sorted(r.accession for r in rows)
     assert accessions[:2] == ["A1", "A2"], "unannotated same-isolate records stay separate"
     assert len(rows) == 3, "the annotated pair is one grouped genome"
+
+
+def _sister_record() -> VirusRecord:
+    return VirusRecord(
+        "OUT.1",
+        "11723",
+        "SIV",
+        "Retroviridae",
+        "Lentivirus",
+        "Simian-immunodeficiency-virus",
+        9000,
+        "COMPLETE",
+        "ANONYMOUS",
+        "",
+    )
+
+
+def _stage_records(workdir: Path, recs: list[VirusRecord]) -> WorkdirContext:
+    dl = workdir / "virus_download_wd"
+    dl.mkdir(parents=True)
+    (dl / "download.fa").write_text("".join(f">{r.accession} d\n{'ACGT' * 25}\n" for r in recs))
+    write_records(dl / "virus_records.json", recs)
+    return WorkdirContext(workdir, create=True)
+
+
+def test_vgenome_pinned_outgroup_accession(workdir: Path) -> None:
+    """--outgroup-accession names the outgroup; no distance matrix is computed."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    ctx = _stage_records(workdir, [*_fake_records(), _sister_record()])
+    vgenome_run(
+        ctx,
+        VgenomeParams(
+            target_species="Human-immunodeficiency-virus-1",
+            length_all=True,
+            outgroup_accession="OUT.1",
+        ),
+    )
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "OUT.1"
+    assert [p.name for p in ctx.outgroup_dir.iterdir()] == [
+        "Retroviridae_Lentivirus_Simian-immunodeficiency-virus_OUT.1.fasta"
+    ]
+    rows = read_selection(workdir / "selection.tsv")
+    assert {r.accession for r in rows if r.is_outgroup} == {"OUT.1"}
+    assert {r.accession for r in rows if not r.is_outgroup} == {"NC_001802.1", "AF033819.3"}
+    assert not any("OUT.1" in p.name for p in ctx.genomes_dir.iterdir())
+
+
+def test_vgenome_pinned_outgroup_must_be_a_downloaded_record(workdir: Path) -> None:
+    import pytest
+
+    from repgenr.core.errors import UserInputError
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    ctx = _stage_records(workdir, _fake_records())
+    with pytest.raises(UserInputError, match="OUT.9"):
+        vgenome_run(
+            ctx,
+            VgenomeParams(target_genus="lentivirus", length_all=True, outgroup_accession="OUT.9"),
+        )
+
+
+def test_vgenome_group_segments_still_selects_an_outgroup(workdir: Path, monkeypatch) -> None:
+    """Grouped runs are no longer left unrooted: the outgroup search runs with the
+    kept records' length span as its window."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+    from repgenr.viral import selection as sel
+
+    recs = [
+        VirusRecord(
+            "SEG1.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            2300,
+            "COMPLETE",
+            "1",
+            "A/iso/A/2020",
+        ),
+        VirusRecord(
+            "SEG2.1",
+            "1",
+            "Flu",
+            "Orthomyxoviridae",
+            "Alphainfluenzavirus",
+            "Influenza-A",
+            1700,
+            "COMPLETE",
+            "4",
+            "A/iso/A/2020",
+        ),
+        VirusRecord(
+            "OUTSEG.1",
+            "2",
+            "FluB",
+            "Orthomyxoviridae",
+            "Betainfluenzavirus",
+            "Influenza-B",
+            1800,
+            "COMPLETE",
+            "4",
+            "",
+        ),
+    ]
+    ctx = _stage_records(workdir, recs)
+    seen: dict = {}
+
+    def fake_outgroup(ctx_, records, kept, length_range, params, seqs, logger):
+        seen["length_range"] = length_range
+        seen["kept"] = sorted(r.accession for r in kept)
+        return recs[2], {"mashtree": "1.0"}
+
+    monkeypatch.setattr(sel, "_determine_outgroup_records", fake_outgroup)
+    vgenome_run(ctx, VgenomeParams(target_genus="alphainfluenzavirus", group_segments=True))
+    assert seen["kept"] == ["SEG1.1", "SEG2.1"]
+    assert seen["length_range"] == (1700, 2300)
+    rows = read_selection(workdir / "selection.tsv")
+    assert {r.accession for r in rows if r.is_outgroup} == {"OUTSEG.1"}

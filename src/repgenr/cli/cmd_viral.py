@@ -99,6 +99,12 @@ def vgenome(
     length_range: str | None = typer.Option(None, "--length-range", help="e.g. 25000-35000."),
     discard: str | None = typer.Option(None, "--discard", help="Comma-separated header tags."),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    outgroup_accession: str | None = typer.Option(
+        None,
+        "--outgroup-accession",
+        help="Use this downloaded record as the outgroup instead of searching for one "
+        "(an accession on the NCBI Virus path, a record id on BV-BRC).",
+    ),
     group_segments: bool = typer.Option(
         False,
         "--group-segments",
@@ -138,6 +144,7 @@ def vgenome(
             length_range=length_range,
             discard=discard,
             no_outgroup=no_outgroup,
+            outgroup_accession=outgroup_accession,
             group_segments=group_segments,
             outgroup_candidates_taxid_min_genomes=min_outgroup_genomes,
             outgroup_treebuilder=outgroup_treebuilder,
