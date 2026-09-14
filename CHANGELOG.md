@@ -25,6 +25,21 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- `tree2tax --root-name` was ignored unless `--remove-outgroup` was also
+  given; the top node was always labelled `root`.
+- The RAxML-NG tree builder published `.raxml.bestTree`, which carries no
+  support values, so `tree2tax --collapse-support` never collapsed anything
+  on its trees. It now publishes the support-annotated tree `--all` writes.
+- dRep in virus mode passed `--S_algorithm` twice, so a `S_algorithm=`
+  tool-arg was silently replaced by `ANImf`.
+- `derep-stock --action unpack` restored the derep tables and representatives
+  but left the `dereplicate` record with its previous fingerprint, the
+  manifest with the previous per-genome status and `cluster_summary.tsv`
+  absent. It now stores and restores the summary, refreshes the manifest and
+  re-stamps the record without a fingerprint so the next `dereplicate` runs.
+- The viral path (`vgenome`, both back-ends) never wrote the SQLite manifest;
+  `dereplicate` then created an empty one, `--reduce species|genus` was a
+  silent no-op and `doctor` reported every selected genome as missing.
 - The contract TSVs (`clusters.tsv`, `genome_status.tsv`, `selection.tsv`,
   `tree2tax.tsv`, `genomes_map.tsv`) ended their rows with `\r\n`, the
   `csv` module's default, so the last column of every row carried a stray
