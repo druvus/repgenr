@@ -238,7 +238,12 @@ def _tool_available(cap: ToolCapabilities) -> bool:
 
 # Tie-break order for auto-selection, matching the documented per-family
 # defaults; unlisted tools rank after these, alphabetically.
-_PREFERRED_ORDER = ("skder", "iqtree", "progressivemauve", "simple")
+def tool_available(caps: ToolCapabilities) -> bool:
+    """Whether an adapter can run here: on the host, or in an image under a backend."""
+    return _tool_available(caps)
+
+
+_PREFERRED_ORDER = ("skder", "iqtree", "progressivemauve", "simple", "skesa", "shovill", "flye")
 
 
 def _preference_rank(name: str) -> int:

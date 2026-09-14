@@ -220,6 +220,7 @@ def list_tools(
     verified before a run without a working directory.
     """
     from ..aligners.base import registry as aligners
+    from ..assemblers.base import registry as assemblers
     from ..dereplicators.base import registry as dereplicators
     from ..maskers.base import registry as maskers
     from ..snptypers.base import registry as snptypers
@@ -231,6 +232,7 @@ def list_tools(
         ("snptypers", snptypers),
         ("maskers", maskers),
         ("treebuilders", treebuilders),
+        ("assemblers", assemblers),
     ):
         entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]
         typer.echo(f"{label}: {', '.join(entries) or '(none)'}")

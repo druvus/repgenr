@@ -55,6 +55,9 @@ contract test, which checks the argument vector against canned output.
 | tree builder | raxmlng | yes | yes | test_species_set, test_container_runs (pinned image) |
 | tree builder | mashtree | yes | yes | test_treebuilders_offline, test_species_set, test_container_runs (pinned image) |
 | tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
+| assembler | skesa | no | no | offline contract test only (stage and live tests follow with the assemble stage) |
+| assembler | shovill | no | no | offline contract test only |
+| assembler | flye | no | no | offline contract test only |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their

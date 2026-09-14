@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from repgenr.aligners.base import registry as aligners
+from repgenr.assemblers.base import registry as assemblers
 from repgenr.dereplicators.base import registry as dereplicators
 from repgenr.maskers.base import registry as maskers
 from repgenr.snptypers.base import registry as snptypers
@@ -17,7 +18,7 @@ _NO_PARSEABLE_VERSION = {"progressiveMauve", "sibeliaz", "hal2maf"}
 
 
 def _specs():
-    for reg in (dereplicators, aligners, snptypers, maskers, treebuilders):
+    for reg in (dereplicators, aligners, snptypers, maskers, treebuilders, assemblers):
         for name in reg.names():
             for spec in reg.get(name).capabilities.required_binaries:
                 yield f"{name}:{spec.name}", spec
