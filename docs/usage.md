@@ -102,7 +102,9 @@ tree2tax`. Runs are chosen by taxon
 resolved through the ENA taxonomy, synonyms included) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
 (SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
 lists them one per line. `--platform illumina|ont|pacbio` keeps one
-platform, `--min-bases` drops small runs, `--one-per-sample` (the default)
+platform, `--min-bases` drops small runs, `--max-bases` drops runs above a
+size (an unenriched whole-host library, tens of Gb for a 1 Mb endosymbiont,
+would assemble into a host-dominated genome), `--one-per-sample` (the default)
 keeps the best run of each sample: a long-read run when it carries at least
 100 Mb and a tenth of the sample's largest short-read run, else the largest
 run (`--all-runs` keeps every run); `--max-runs` caps the selection to the

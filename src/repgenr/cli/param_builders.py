@@ -129,6 +129,7 @@ def reads_params(
     platform: Any = _UNSET,
     max_runs: Any = _UNSET,
     min_bases: Any = _UNSET,
+    max_bases: Any = _UNSET,
     one_per_sample: Any = _UNSET,
 ) -> ReadsParams:
     from ..stages.reads import PLATFORMS, ReadsParams
@@ -145,6 +146,7 @@ def reads_params(
         platform=platform,
         max_runs=max_runs,
         min_bases=min_bases,
+        max_bases=max_bases,
         one_per_sample=one_per_sample,
     )
 

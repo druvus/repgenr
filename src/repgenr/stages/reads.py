@@ -36,6 +36,9 @@ class ReadsParams:
     platform: str = "any"  # any | illumina | ont | pacbio
     max_runs: int | None = None
     min_bases: int = 0
+    # Drop runs above this many bases: a whole-host library (tens of Gb for a
+    # small endosymbiont) would assemble into a host-dominated genome.
+    max_bases: int | None = None
     # Keep the best run of each sample: a long-read run with enough bases, else
     # the largest run.
     one_per_sample: bool = True
@@ -65,7 +68,7 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     candidates = len(rows)
     logger.info("ENA returned %d whole-genome sequencing runs", candidates)
 
-    rows = _filter(rows, params)
+    rows = _filter(rows, params, logger)
     if params.one_per_sample:
         rows = _best_per_sample(rows)
     rows.sort(key=lambda r: -r.bases)
@@ -117,11 +120,24 @@ def _dedupe(rows: list[ReadRow]) -> list[ReadRow]:
     return out
 
 
-def _filter(rows: list[ReadRow], params: ReadsParams) -> list[ReadRow]:
+def _filter(rows: list[ReadRow], params: ReadsParams, logger: logging.Logger) -> list[ReadRow]:
     wanted = _ENA_PLATFORM.get(params.platform)
-    return [
+    kept = [
         r for r in rows if (wanted is None or r.platform == wanted) and r.bases >= params.min_bases
     ]
+    if params.max_bases is not None:
+        over = [r for r in kept if r.bases > params.max_bases]
+        if over:
+            logger.info(
+                "Dropping %d run(s) above --max-bases %d (largest %d bp, %s): likely "
+                "whole-host libraries",
+                len(over),
+                params.max_bases,
+                max(r.bases for r in over),
+                max(over, key=lambda r: r.bases).run_accession,
+            )
+        kept = [r for r in kept if r.bases <= params.max_bases]
+    return kept
 
 
 # A long-read run is preferred over the sample's short-read runs only when it

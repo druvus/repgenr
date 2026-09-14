@@ -28,6 +28,7 @@ def test_reads_command_builds_its_params(monkeypatch, tmp_path: Path) -> None:
             *("reads", "-wd", str(tmp_path / "wd"), "-ts", "Francisella tularensis"),
             *("--accession", "SRR2", "--accession-file", str(listing)),
             *("--platform", "ont", "--max-runs", "5", "--min-bases", "100", "--all-runs"),
+            *("--max-bases", "5000000000"),
         ],
     )
     assert result.exit_code == 0, result.output
@@ -36,6 +37,7 @@ def test_reads_command_builds_its_params(monkeypatch, tmp_path: Path) -> None:
     assert p.target_species == "Francisella tularensis" and p.accessions == ["SRR2"]
     assert p.accession_file == str(listing) and p.platform == "ont"
     assert (p.max_runs, p.min_bases, p.one_per_sample) == (5, 100, False)
+    assert p.max_bases == 5_000_000_000
 
 
 def test_reads_command_rejects_an_unknown_platform(monkeypatch, tmp_path: Path) -> None:
