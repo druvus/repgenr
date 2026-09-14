@@ -147,3 +147,17 @@ def test_verify_md5_manifest_unlisted_file_skips(monkeypatch, tmp_path: Path) ->
     f.write_bytes(b"payload")
     monkeypatch.setattr(http, "get_text", lambda url, **k: "aa" * 16 + "  ./other.txt\n")
     assert http.verify_md5_manifest(f, "https://x/MD5SUM.txt", logger=_LOG) is False
+
+
+def test_verify_md5_accepts_the_right_digest_and_rejects_a_wrong_one(tmp_path) -> None:
+    import hashlib
+
+    from repgenr.core.errors import WorkdirError
+    from repgenr.core.http import verify_md5
+
+    path = tmp_path / "reads.fastq.gz"
+    path.write_bytes(b"@r1\nACGT\n+\nIIII\n")
+    good = hashlib.md5(path.read_bytes()).hexdigest()
+    verify_md5(path, good.upper())  # case-insensitive, no return value needed
+    with pytest.raises(WorkdirError, match="Checksum mismatch"):
+        verify_md5(path, "0" * 32)

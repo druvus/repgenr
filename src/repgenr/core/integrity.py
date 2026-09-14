@@ -14,10 +14,12 @@ import logging
 from pathlib import Path
 
 from .contracts import (
+    EXCUSED_RUNS_TSV,
     MISSING_ACCESSIONS_TXT,
     SELECTION_TSV,
     list_fasta,
     read_clusters,
+    read_excused_runs,
     read_selection,
 )
 from .errors import WorkdirError
@@ -37,11 +39,24 @@ def looks_like_fasta(path: Path) -> bool:
     return head.lstrip().startswith(b">")
 
 
-def _known_missing_accessions(workdir: Path) -> set[str]:
+def excused_accessions(workdir: Path) -> set[str]:
+    """Selected accessions no genome is expected for.
+
+    The union of ``missing_accessions.txt`` (the genome stage asked NCBI and
+    got nothing) and the runs in ``excused_runs.tsv`` (the assemble stage could
+    not fetch, assemble or pass a run). Both are recorded deliberately, so the
+    completeness guard reports the rest of a shortfall without them.
+    """
+    excused: set[str] = set()
     path = workdir / MISSING_ACCESSIONS_TXT
-    if not path.exists():
-        return set()
-    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    if path.exists():
+        excused |= {
+            line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+        }
+    runs = workdir / EXCUSED_RUNS_TSV
+    if runs.exists():
+        excused |= {row.run_accession for row in read_excused_runs(runs)}
+    return excused
 
 
 def check_genome_completeness(
@@ -62,7 +77,7 @@ def check_genome_completeness(
     if not selection.exists():
         logger.debug("No %s; skipping genome completeness check", SELECTION_TSV)
         return []
-    excused = _known_missing_accessions(workdir)
+    excused = excused_accessions(workdir)
     expected = {
         row.filename
         for row in read_selection(selection)

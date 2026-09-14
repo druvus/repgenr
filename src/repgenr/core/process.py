@@ -322,3 +322,30 @@ def staged_dir(final: str | os.PathLike[str]) -> Iterator[Path]:
     if final.exists():
         remove_tree(final)
     os.replace(staging, final)
+
+
+# Hard floor for any stage about to write a lot: below this a download or an
+# assembly is refused rather than allowed to fill the volume mid-run.
+MIN_FREE_BYTES = 1_000_000_000
+
+
+def check_free_disk(path: str | os.PathLike[str], estimate: int, logger, *, what: str) -> None:
+    """Refuse to start ``what`` with almost no free disk under ``path``; warn when tight.
+
+    ``estimate`` is the caller's rough byte need (a genome count times a
+    typical size, the FASTQ sizes an archive reported); it decides the warning
+    only, the floor is absolute.
+    """
+    free = shutil.disk_usage(path).free
+    if free < MIN_FREE_BYTES:
+        raise WorkdirError(
+            f"Only {free / 1e9:.1f} GB free under {path}; refusing to {what}. "
+            "Free disk space or point the working directory at a larger volume."
+        )
+    if free < estimate:
+        logger.warning(
+            "Low disk: ~%.1f GB free, up to ~%.1f GB may be needed to %s.",
+            free / 1e9,
+            estimate / 1e9,
+            what,
+        )
