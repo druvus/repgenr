@@ -320,7 +320,7 @@ Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
 | `--platform` | `any` | Keep runs of one platform: any, illumina, ont or pacbio. |
 | `--max-runs` |  | Keep at most N runs, the largest by bases. |
 | `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
-| `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (long reads before short, then bases), or every run. |
+| `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (a long-read run with enough bases, else the largest run), or every run. |
 
 ## reads-gather
 

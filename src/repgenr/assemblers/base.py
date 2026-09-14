@@ -77,6 +77,41 @@ class Assembler(ABC):
         raise NotImplementedError
 
 
+_PAIR_SUFFIXES = (("_1", "_2"), ("_R1", "_R2"))
+
+
+def split_reads(reads: ReadSet) -> tuple[tuple[Path, Path] | None, list[Path]]:
+    """The read pair of a run, and the files that are not part of it.
+
+    ENA lists up to three FASTQ files for a paired run: ``<run>_1`` and
+    ``<run>_2`` plus an orphan ``<run>`` file of reads whose mate was dropped.
+    The pair is found by the ``_1``/``_2`` (or ``_R1``/``_R2``) stem suffix;
+    two files with no such suffix are taken as the pair as given. Everything
+    else is returned as single-end files, in the order listed.
+    """
+    files = [Path(f) for f in reads.files]
+
+    def stem(path: Path) -> str:
+        name = path.name
+        for ext in (".fastq.gz", ".fq.gz", ".fastq", ".fq", ".gz"):
+            if name.endswith(ext):
+                return name[: -len(ext)]
+        return path.stem
+
+    for one, two in _PAIR_SUFFIXES:
+        firsts = [f for f in files if stem(f).endswith(one)]
+        seconds = [f for f in files if stem(f).endswith(two)]
+        for r1 in firsts:
+            base = stem(r1)[: -len(one)]
+            r2 = next((f for f in seconds if stem(f) == base + two), None)
+            if r2 is not None:
+                singles = [f for f in files if f not in (r1, r2)]
+                return (r1, r2), singles
+    if len(files) == 2:
+        return (files[0], files[1]), []
+    return None, files
+
+
 def _read_dirs(reads: ReadSet) -> list[str]:
     """The directories holding a run's reads, for the container backend's mounts."""
     return sorted({str(Path(f).resolve().parent) for f in reads.files})

@@ -51,8 +51,8 @@ def reads(
     one_per_sample: bool = typer.Option(
         True,
         "--one-per-sample/--all-runs",
-        help="Keep the best run of each sample (long reads before short, then bases), "
-        "or every run.",
+        help="Keep the best run of each sample (a long-read run with enough bases, else "
+        "the largest run), or every run.",
     ),
 ) -> None:
     """Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv)."""

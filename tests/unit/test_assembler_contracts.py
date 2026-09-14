@@ -165,3 +165,49 @@ def test_shovill_raises_the_ram_cap_to_its_minimum(recorded, tmp_path, caplog) -
         )
     assert _flag(recorded[0], "--ram") == "8"
     assert any("refuses a RAM cap below 8" in r.message for r in caplog.records)
+
+
+def _three_files(tmp_path: Path) -> ReadSet:
+    """ENA lists an orphan file next to the pair for many paired runs."""
+    files = []
+    for name in ("SRR9.fastq.gz", "SRR9_1.fastq.gz", "SRR9_2.fastq.gz"):
+        f = tmp_path / name
+        f.write_bytes(b"x")
+        files.append(f)
+    return ReadSet("SRR9", "ILLUMINA", "Illumina HiSeq 2500", "PAIRED", tuple(files), 1000)
+
+
+def test_split_reads_finds_the_pair_and_the_orphans(tmp_path) -> None:
+    from repgenr.assemblers.base import split_reads
+
+    pair, singles = split_reads(_three_files(tmp_path))
+    assert pair is not None and [p.name for p in pair] == ["SRR9_1.fastq.gz", "SRR9_2.fastq.gz"]
+    assert [s.name for s in singles] == ["SRR9.fastq.gz"]
+    two = ReadSet("S", "ILLUMINA", "", "PAIRED", (tmp_path / "a_1.fq", tmp_path / "a_2.fq"))
+    assert split_reads(two) == ((tmp_path / "a_1.fq", tmp_path / "a_2.fq"), [])
+    one = ReadSet("S", "ILLUMINA", "", "SINGLE", (tmp_path / "a.fq",))
+    assert split_reads(one) == (None, [tmp_path / "a.fq"])
+
+
+def test_skesa_passes_the_pair_and_the_orphan_as_separate_reads(recorded, tmp_path) -> None:
+    registry.create("skesa").assemble(
+        _three_files(tmp_path), tmp_path / "out", AssembleParams(threads=2), _LOG
+    )
+    cmd = recorded[-1]
+    reads_args = [cmd[i + 1] for i, tok in enumerate(cmd) if tok == "--reads"]
+    assert reads_args == [
+        f"{tmp_path / 'SRR9_1.fastq.gz'},{tmp_path / 'SRR9_2.fastq.gz'}",
+        str(tmp_path / "SRR9.fastq.gz"),
+    ]
+
+
+def test_shovill_uses_the_pair_and_notes_the_orphan(recorded, tmp_path, caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        registry.create("shovill").assemble(
+            _three_files(tmp_path), tmp_path / "out", AssembleParams(threads=2, memory_gb=8), _LOG
+        )
+    cmd = recorded[-1]
+    assert _flag(cmd, "--R1").endswith("SRR9_1.fastq.gz") and _flag(cmd, "--R2").endswith(
+        "SRR9_2.fastq.gz"
+    )
+    assert any("SRR9.fastq.gz" in r.getMessage() for r in caplog.records)

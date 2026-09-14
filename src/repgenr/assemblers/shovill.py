@@ -9,7 +9,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import UserInputError
 from ..core.plugins import ToolCapabilities
-from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs
+from .base import AssembleParams, Assembler, AssemblyResult, ReadSet, _read_dirs, split_reads
 
 # shovill exits with "need at least 8" for a smaller --ram.
 _MIN_RAM_GB = 8
@@ -30,10 +30,17 @@ class ShovillAssembler(Assembler):
     def assemble(
         self, reads: ReadSet, out_dir: Path, params: AssembleParams, logger: logging.Logger
     ) -> AssemblyResult:
-        if len(reads.files) != 2:
+        pair, singles = split_reads(reads)
+        if pair is None:
             raise UserInputError(
                 f"shovill needs paired-end reads; run {reads.run_accession} is "
                 f"{reads.layout.lower()}. Use --assembler skesa for single-end Illumina."
+            )
+        if singles:
+            logger.info(
+                "%s: shovill takes the pair only; ignoring %s",
+                reads.run_accession,
+                ", ".join(f.name for f in singles),
             )
         out_dir.mkdir(parents=True, exist_ok=True)
         result_dir = out_dir / "shovill_out"
@@ -50,9 +57,9 @@ class ShovillAssembler(Assembler):
         cmd: list[str | Path] = [
             "shovill",
             "--R1",
-            reads.files[0],
+            pair[0],
             "--R2",
-            reads.files[1],
+            pair[1],
             "--outdir",
             result_dir,
             "--force",
