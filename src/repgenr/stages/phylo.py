@@ -471,6 +471,12 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
             "all_genomes": params.all_genomes,
             "bootstrap": params.bootstrap,
             "outgroup": None if params.no_outgroup else outcome.outgroup_leaf,
+            # What produced the alignment: the reference a mapping typer or
+            # aligner used, the masker if any, and the adapter tuning. Without
+            # them the record could not tell a masked tree from an unmasked one.
+            "reference": params.reference if is_msa else None,
+            "mask": (params.extra.get("mask") or None) if is_msa else None,
+            "extra": {k: str(v) for k, v in sorted(_adapter_extra(params.extra).items())},
         },
         tool_versions=outcome.versions,
         completed=datetime.now(UTC).isoformat(),
