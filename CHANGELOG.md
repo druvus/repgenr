@@ -115,6 +115,12 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- `vgenome` (both back-ends) deleted `genomes/` before writing the new set
+  and wrote `selection.tsv` last, so a crash mid-write left a partial set
+  with no selection table and the next stage ran on it without a guard. The
+  genomes are now built in a staging directory beside `genomes/` and swapped
+  in only when every file is written; a failed run leaves the previous set
+  and its table untouched.
 - `tree2tax --root-name` was ignored unless `--remove-outgroup` was also
   given; the top node was always labelled `root`.
 - The RAxML-NG tree builder published `.raxml.bestTree`, which carries no

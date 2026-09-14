@@ -19,7 +19,8 @@ import subprocess
 import threading
 import zipfile
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 from .errors import ToolExecutionError, WorkdirError
@@ -297,3 +298,27 @@ def remove_tree(path: str | os.PathLike[str]) -> None:
     shutil.rmtree(target, onexc=_ignore_vanished)
     if target.exists():  # a second pass catches what the first walk skipped
         shutil.rmtree(target, onexc=_ignore_vanished)
+
+
+@contextmanager
+def staged_dir(final: str | os.PathLike[str]) -> Iterator[Path]:
+    """Build a directory's new contents beside it; publish them only when complete.
+
+    Yields a sibling staging directory to fill. On clean exit the previous
+    ``final`` (if any) is removed and the staging directory takes its place;
+    on an exception the staging directory is removed and ``final`` is left as
+    it was. A crash mid-write therefore never leaves a partial set behind.
+    """
+    final = Path(final)
+    staging = final.parent / f".{final.name}.staging"
+    if staging.exists():
+        remove_tree(staging)
+    staging.mkdir(parents=True)
+    try:
+        yield staging
+    except BaseException:
+        remove_tree(staging)
+        raise
+    if final.exists():
+        remove_tree(final)
+    os.replace(staging, final)
