@@ -243,6 +243,13 @@ def test_vgenome_group_segments_per_isolate(workdir: Path) -> None:
     seq = "".join(ln for ln in combined.read_text().splitlines() if not ln.startswith(">"))
     assert len(seq) == 2300 + 1700 + 1000  # all three segments concatenated
     assert seq.startswith("A" * 10)  # longest segment first (length-desc order)
+    # The member accessions are recorded, so tree2tax can list them in genomes_map.
+    from repgenr.core.contracts import SEGMENTS_TSV, read_segments
+
+    segments = read_segments(workdir / SEGMENTS_TSV)
+    token = next(acc for acc in segments if acc.startswith("iso-"))
+    assert sorted(segments[token]) == ["SEG1.1", "SEG2.1", "SEG3.1"]
+    assert "SOLO.1" not in {a for accs in segments.values() for a in accs}
 
 
 def test_vgenome_records_no_taxonomy_match(workdir: Path) -> None:

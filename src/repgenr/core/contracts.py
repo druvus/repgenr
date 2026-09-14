@@ -38,6 +38,10 @@ CORE_SNP_FASTA = "core_snp.fasta"
 TREE_NWK = "tree.nwk"
 TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
+# Segment-grouped viral isolates (vgenome --group-segments): the synthetic
+# isolate token used as the genome's accession -> its member accessions, so
+# tree2tax can list the real accessions under the isolate's leaf.
+SEGMENTS_TSV = "segments.tsv"
 # Accessions the genome stage requested but NCBI returned nothing for;
 # the completeness guard excuses them (core.integrity).
 MISSING_ACCESSIONS_TXT = "missing_accessions.txt"
@@ -375,6 +379,28 @@ def write_tree2tax(path: Path, edges: list[tuple[str, str]]) -> None:
                 continue
             seen.add((child, parent))
             writer.writerow([child, parent])
+
+
+def write_segments(path: Path, members: dict[str, list[str]]) -> None:
+    """Write isolate token -> member accession rows (one row per member)."""
+    with atomic_replace(path, newline="") as fo:
+        writer = _tsv_writer(fo)
+        writer.writerow(["isolate", "accession"])
+        for token, accessions in members.items():
+            for accession in accessions:
+                writer.writerow([token, accession])
+
+
+def read_segments(path: Path) -> dict[str, list[str]]:
+    """Read ``segments.tsv`` back into isolate token -> member accessions."""
+    members: dict[str, list[str]] = {}
+    with open(path, encoding="utf-8", newline="") as fo:
+        reader = csv.reader(fo, delimiter="\t")
+        next(reader, None)
+        for row in reader:
+            if len(row) >= 2:
+                members.setdefault(row[0], []).append(row[1])
+    return members
 
 
 def write_genomes_map(path: Path, mapping: list[tuple[str, str]]) -> None:
