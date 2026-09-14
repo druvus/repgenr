@@ -241,6 +241,15 @@ def _default_mounts(
                 target = Path(os.path.abspath(os.path.join(d, os.readlink(entry))))
                 if target.parent.exists():
                     mounts.append(target.parent)
+    # A path may pass through a symlinked directory (Nextflow stages an input
+    # directory as a link inside the task dir: chunks/c0 -> /work/ab/c0). The
+    # container resolves that link to the real directory, which the mount of
+    # the link's path does not cover, so bind the real directory at its own
+    # path as well. The un-resolved mount stays, for tools given the link path.
+    for d in list(mounts):
+        real = Path(os.path.realpath(d))
+        if real != d and real.exists():
+            mounts.append(real)
     # de-duplicate, dropping any mount nested under another
     unique: list[Path] = []
     for m in sorted(set(mounts), key=lambda p: len(str(p))):

@@ -361,3 +361,27 @@ def test_run_chain_on_the_host_runs_each_command_itself(tmp_path, monkeypatch):
         logger=logging.getLogger("t"),
     )
     assert [prefix for prefix, _ in calls] == ["one", "two"]
+
+
+def test_mounts_follow_a_symlinked_directory_on_the_path(tmp_path, monkeypatch) -> None:
+    """Nextflow stages an input directory as a symlink inside the task dir
+    (chunks/c0 -> /work/ab/c0). The genome path a tool receives goes through
+    that link; inside the container the link resolves to the real directory,
+    which must therefore be bound at its own path as well."""
+    import os
+
+    from repgenr.core import containers as c
+
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(c.tempfile, "gettempdir", lambda: str(sys_tmp))
+    real = tmp_path / "work" / "ab" / "c0" / "representatives"
+    real.mkdir(parents=True)
+    (real / "g.fasta").write_text(">g\nACGT\n", encoding="utf-8")
+    task = tmp_path / "work" / "cd"
+    (task / "chunks").mkdir(parents=True)
+    os.symlink(real.parent, task / "chunks" / "c0")
+    via_link = task / "chunks" / "c0" / "representatives"
+
+    mounts = c._default_mounts(c.ContainerConfig(backend="docker"), task, [], [str(via_link)])
+    assert Path(os.path.realpath(real)) in mounts
