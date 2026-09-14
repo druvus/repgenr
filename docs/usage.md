@@ -104,7 +104,11 @@ resolved through the ENA taxonomy, synonyms included) or by accession: `--access
 lists them one per line. `--platform illumina|ont|pacbio` keeps one
 platform, `--min-bases` drops small runs, `--max-bases` drops runs above a
 size (an unenriched whole-host library, tens of Gb for a 1 Mb endosymbiont,
-would assemble into a host-dominated genome), `--one-per-sample` (the default)
+would assemble into a host-dominated genome), `--drop-selection` drops runs
+by ENA library selection (default `MDA`, whole-genome amplification, which
+assembles into chimeric and uneven contigs; repeat the flag for more values,
+`--drop-selection none` keeps every run; the value is kept in `reads.tsv` as
+`library_selection`), `--one-per-sample` (the default)
 keeps the best run of each sample: a long-read run when it carries at least
 100 Mb and a tenth of the sample's largest short-read run, else the largest
 run (`--all-runs` keeps every run); `--max-runs` caps the selection to the

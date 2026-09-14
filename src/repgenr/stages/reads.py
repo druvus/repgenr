@@ -39,6 +39,9 @@ class ReadsParams:
     # Drop runs above this many bases: a whole-host library (tens of Gb for a
     # small endosymbiont) would assemble into a host-dominated genome.
     max_bases: int | None = None
+    # ENA library_selection values to drop (case-insensitive). MDA (multiple
+    # displacement amplification) gives chimeric, uneven assemblies.
+    drop_selection: list[str] = field(default_factory=lambda: ["MDA"])
     # Keep the best run of each sample: a long-read run with enough bases, else
     # the largest run.
     one_per_sample: bool = True
@@ -77,7 +80,8 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     if not rows:
         raise UserInputError(
             f"No sequencing runs selected ({candidates} candidates before the platform, size "
-            "and per-sample filters). Loosen --platform/--min-bases or check the taxon."
+            "and per-sample filters). Loosen --platform/--min-bases/--drop-selection or "
+            "check the taxon."
         )
 
     rows = _label(rows, logger)
@@ -137,6 +141,18 @@ def _filter(rows: list[ReadRow], params: ReadsParams, logger: logging.Logger) ->
                 max(over, key=lambda r: r.bases).run_accession,
             )
         kept = [r for r in kept if r.bases <= params.max_bases]
+    drop = {s.upper() for s in params.drop_selection}
+    if drop:
+        amplified = [r for r in kept if r.library_selection.upper() in drop]
+        if amplified:
+            logger.info(
+                "Dropping %d run(s) by library selection (%s): %s",
+                len(amplified),
+                ", ".join(sorted(drop)),
+                ", ".join(r.run_accession for r in amplified[:5])
+                + (" ..." if len(amplified) > 5 else ""),
+            )
+        kept = [r for r in kept if r.library_selection.upper() not in drop]
     return kept
 
 

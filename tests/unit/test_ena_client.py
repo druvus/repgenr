@@ -99,5 +99,9 @@ def test_to_read_rows_normalises_the_portal_records() -> None:
     no_mirror = by_run["ERR2237850"]
     assert no_mirror.fastq_urls == () and no_mirror.fastq_bytes == ()
     assert no_mirror.platform == "PACBIO_SMRT"
-    paired = ena.to_read_rows(_load("ena_read_run_taxon.json"))[0]
+    assert ont.library_selection == "RANDOM"
+    taxon_rows = ena.to_read_rows(_load("ena_read_run_taxon.json"))
+    paired = taxon_rows[0]
     assert len(paired.fastq_urls) == 2 and paired.layout == "PAIRED"
+    assert {r.run_accession for r in taxon_rows if r.library_selection == "MDA"} == {"ERR17019821"}
+    assert "library_selection" in ena.RUN_FIELDS

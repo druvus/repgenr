@@ -1813,6 +1813,16 @@ commands:
         nextflow: params.reads_args
         live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
         invalid: '0'
+      --drop-selection:
+        param: ReadsParams.drop_selection
+        value: PCR
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.reads_args
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
       --one-per-sample:
         param: ReadsParams.one_per_sample
         validated: none

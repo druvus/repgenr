@@ -56,10 +56,14 @@ def _row(run: str = "SRR1", **over) -> ReadRow:
 
 
 def test_reads_table_round_trips(tmp_path: Path) -> None:
-    rows = [_row(), _row("SRR2", fastq_urls=(), fastq_md5=(), fastq_bytes=())]
+    rows = [
+        _row(library_selection="MDA"),
+        _row("SRR2", fastq_urls=(), fastq_md5=(), fastq_bytes=()),
+    ]
     write_reads(tmp_path / READS_TSV, rows)
     back = read_reads(tmp_path / READS_TSV)
     assert back == rows
+    assert back[0].library_selection == "MDA" and back[1].library_selection == ""
     assert back[1].fastq_urls == ()  # a run without an ENA mirror keeps empty lists
 
 

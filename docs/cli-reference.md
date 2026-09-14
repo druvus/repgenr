@@ -321,6 +321,7 @@ Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
 | `--max-runs` |  | Keep at most N runs, the largest by bases. |
 | `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
 | `--max-bases` |  | Drop runs with more sequenced bases than this (a guard against whole-host libraries, which would assemble into a host-dominated genome). |
+| `--drop-selection` | `['MDA']` | Drop runs whose ENA library selection is this value (repeatable; default MDA, whole-genome amplification). Pass 'none' to keep every selection. |
 | `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (a long-read run with enough bases, else the largest run), or every run. |
 
 ## reads-gather

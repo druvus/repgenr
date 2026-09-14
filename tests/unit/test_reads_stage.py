@@ -68,7 +68,12 @@ def ena_fake(monkeypatch):
 
 def test_taxon_query_writes_labelled_rows(workdir: Path, ena_fake) -> None:
     ctx = WorkdirContext(workdir, create=True)
-    n = run(ctx, ReadsParams(target_species="Mycoplasma genitalium", one_per_sample=False))
+    n = run(
+        ctx,
+        ReadsParams(
+            target_species="Mycoplasma genitalium", one_per_sample=False, drop_selection=[]
+        ),
+    )
     rows = read_reads(workdir / READS_TSV)
     assert n == len(rows) == 8  # 6 Illumina + 1 ONT + 1 PacBio without a mirror
     assert "tax_tree(2097)" in ena_fake["query"]
@@ -176,3 +181,19 @@ def test_max_bases_drops_whole_host_libraries(workdir: Path, ena_fake, caplog) -
     assert all(r.bases <= ceiling for r in kept) and len(kept) == len(sizes) - 1
     assert ctx.config.stages["reads"].params["max_bases"] == ceiling
     assert any("--max-bases" in r.getMessage() for r in caplog.records)
+
+
+def test_amplified_libraries_are_dropped_by_default(workdir: Path, ena_fake, caplog) -> None:
+    """Whole-genome amplification (MDA) gives chimeric, uneven assemblies; the
+    fixture marks ERR17019821 as MDA."""
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.logger.addHandler(caplog.handler)
+    run(ctx, ReadsParams(target_species="x", one_per_sample=False))
+    rows = read_reads(workdir / READS_TSV)
+    assert "ERR17019821" not in {r.run_accession for r in rows}
+    assert all(r.library_selection and r.library_selection != "MDA" for r in rows)
+    assert ctx.config.stages["reads"].params["drop_selection"] == ["MDA"]
+    assert any("library selection" in r.getMessage() for r in caplog.records)
+    run(ctx, ReadsParams(target_species="x", one_per_sample=False, drop_selection=[]))
+    kept = {r.run_accession: r for r in read_reads(workdir / READS_TSV)}
+    assert kept["ERR17019821"].library_selection == "MDA"
