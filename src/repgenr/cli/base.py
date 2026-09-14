@@ -60,6 +60,8 @@ PIPELINE_BACTERIAL = ("metadata", "genome", "dereplicate", "phylo", "tree2tax")
 PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
 # Offline chain: local genomes staged by `ingest` instead of downloaded.
 PIPELINE_LOCAL = ("ingest", "dereplicate", "phylo", "tree2tax")
+# Reads chain: sequencing runs selected from ENA/SRA and assembled.
+PIPELINE_READS = ("reads", "assemble", "dereplicate", "phylo", "tree2tax")
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
@@ -109,6 +111,8 @@ STAGE_INPUTS: dict[str, Any] = {
     "metadata": lambda ctx, p: [],  # network-only
     # ingest reads paths outside the workdir; they are keyed absolute.
     "ingest": _ingest_inputs,
+    # reads is network-only; an accession list is its one file input.
+    "reads": lambda ctx, p: [Path(p.accession_file)] if p.accession_file else [],
     "vmetadata": lambda ctx, p: [],
     "genome": lambda ctx, p: [ctx.workdir / SELECTION_TSV],
     # vgenome WRITES selection.tsv, so its inputs are the vmetadata download

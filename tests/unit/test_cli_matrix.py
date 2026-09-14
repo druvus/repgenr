@@ -21,7 +21,15 @@ import yaml
 from typer.testing import CliRunner
 
 from repgenr.cli import base as cli_base
-from repgenr.cli import cmd_bacterial, cmd_ingest, cmd_misc, cmd_phylo, cmd_run, cmd_viral
+from repgenr.cli import (
+    cmd_bacterial,
+    cmd_ingest,
+    cmd_misc,
+    cmd_phylo,
+    cmd_reads,
+    cmd_run,
+    cmd_viral,
+)
 from repgenr.cli.main import app
 from repgenr.core import containers
 
@@ -123,7 +131,7 @@ def recorder(monkeypatch, tmp_path: Path):
         calls.append(("workdir", workdir))
         calls.append(build())
 
-    for mod in (cmd_bacterial, cmd_viral, cmd_phylo, cmd_misc, cmd_run, cmd_ingest):
+    for mod in (cmd_bacterial, cmd_viral, cmd_phylo, cmd_misc, cmd_run, cmd_ingest, cmd_reads):
         monkeypatch.setattr(mod, "_run", fake_run)
     monkeypatch.setattr(cmd_run, "_preflight_tools", lambda *a, **k: None)
 

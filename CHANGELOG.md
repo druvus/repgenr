@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr reads`, the first stage of a reads chain (`reads -> assemble ->
+  dereplicate -> phylo -> tree2tax`): selects whole-genome sequencing runs
+  from ENA (which mirrors SRA) by taxon or by run, sample or study accession,
+  filters by platform and size, keeps the best run per sample, labels each
+  run with its NCBI family, genus and species, and writes `reads.tsv`.
+  `status` recognises the chain. The assemble stage follows.
+
 - `vgenome --outgroup-accession` (and `run --viral --outgroup-accession`)
   pins the viral outgroup to a downloaded record on either back-end; the
   BV-BRC path previously asked the user to "specify one manually" with no

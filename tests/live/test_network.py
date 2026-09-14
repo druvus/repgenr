@@ -485,3 +485,30 @@ def test_run_dry_run_reports_family_and_species_targets(run_repgenr, tmp_path: P
     ).stdout
     assert "family=Francisellaceae" in out and "species=tularensis" in out
     assert "aligner=sibeliaz" in out, "the dry run names the aligner the chain would use"
+
+
+def test_reads_selects_runs_from_ena(run_repgenr, tmp_path: Path) -> None:
+    """ENA taxon query, synonym resolution and NCBI labelling, as a real process."""
+    from repgenr.core.contracts import READS_TSV, read_reads
+
+    wd = tmp_path / "reads"
+    out = run_repgenr(
+        "reads",
+        "-wd",
+        wd,
+        "-ts",
+        "Mycoplasma genitalium",
+        "--platform",
+        "illumina",
+        "--max-runs",
+        "3",
+    )
+    assert "taxid 2097" in out.stderr + out.stdout
+    rows = read_reads(wd / READS_TSV)
+    assert len(rows) == 3
+    assert all(r.platform == "ILLUMINA" and r.fastq_urls for r in rows)
+    assert all(
+        (r.family, r.genus, r.species) == ("Mycoplasmoidaceae", "Mycoplasmoides", "genitalium")
+        for r in rows
+    )
+    assert [r.bases for r in rows] == sorted((r.bases for r in rows), reverse=True)

@@ -245,6 +245,23 @@ Build a phylogeny from a genomes directory (stateless data-channel step).
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
+## reads
+
+Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory (created). |
+| `-tf`, `--target-family` |  | Restrict the selection to this family. |
+| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
+| `-ts`, `--target-species` |  | Restrict the selection to this species. |
+| `--accession` |  | A run (SRR/ERR/DRR), sample (SAMN.., SRS..) or study (PRJNA.., SRP..) accession to include (repeatable). |
+| `--accession-file` |  | File of accessions, one per line (# comments allowed). |
+| `--platform` | `any` | Keep runs of one platform: any, illumina, ont or pacbio. |
+| `--max-runs` |  | Keep at most N runs, the largest by bases. |
+| `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
+| `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (long reads before short, then bases), or every run. |
+
 ## run
 
 Run the whole pipeline end to end (bacterial by default, --viral for viruses).

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ..stages.ingest import IngestParams
     from ..stages.metadata import MetadataParams
     from ..stages.phylo import PhyloParams
+    from ..stages.reads import ReadsParams
     from ..stages.tree2tax import Tree2taxParams
     from ..stages.vgenome import VgenomeParams
     from ..stages.vmetadata import VmetadataParams
@@ -106,6 +107,36 @@ def ingest_params(
 
     return _build(
         IngestParams, genomes_dir=genomes_dir, selection=selection, outgroup=outgroup, copy=copy
+    )
+
+
+def reads_params(
+    *,
+    target_family: Any = _UNSET,
+    target_genus: Any = _UNSET,
+    target_species: Any = _UNSET,
+    accessions: Any = _UNSET,
+    accession_file: Any = _UNSET,
+    platform: Any = _UNSET,
+    max_runs: Any = _UNSET,
+    min_bases: Any = _UNSET,
+    one_per_sample: Any = _UNSET,
+) -> ReadsParams:
+    from ..stages.reads import PLATFORMS, ReadsParams
+
+    if platform is not _UNSET:
+        _require_choice(platform, set(PLATFORMS), "--platform")
+    return _build(
+        ReadsParams,
+        target_family=target_family,
+        target_genus=target_genus,
+        target_species=target_species,
+        accessions=accessions,
+        accession_file=accession_file,
+        platform=platform,
+        max_runs=max_runs,
+        min_bases=min_bases,
+        one_per_sample=one_per_sample,
     )
 
 

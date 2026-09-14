@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-23 commands, 235 flags (235 with a live test or an n/a reason, 0 pending).
+24 commands, 245 flags (245 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -235,6 +235,23 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--msa-only` |  | PhyloBuildParams.msa_only | stage | module: PHYLO_MSA | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--msa` |  | PhyloBuildParams.msa | stage | module: PHYLO_TREE | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--mask` |  | PhyloBuildParams.phylo.extra | registry | params.phylo_args | n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the builder | docs/cli-reference.md, docs/audit/cli-matrix.md |
+
+## reads
+
+dispatch: `stage`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-family` | -tf | ReadsParams.target_family | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-genus` | -tg | ReadsParams.target_genus | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-species` | -ts | ReadsParams.target_species | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--accession` |  | ReadsParams.accessions | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--accession-file` |  | ReadsParams.accession_file | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--platform` |  | ReadsParams.platform | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--max-runs` |  | ReadsParams.max_runs | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_reads_selects_runs_from_ena | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--min-bases` |  | ReadsParams.min_bases | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--one-per-sample` |  | ReadsParams.one_per_sample | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## run
 

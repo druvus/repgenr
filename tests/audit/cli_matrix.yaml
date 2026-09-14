@@ -1491,6 +1491,126 @@ commands:
         nextflow: params.phylo_args
         live: 'n/a: the mask path is exercised on phylo (test_phylo_mask_gubbins); the step shares the
           builder'
+  reads:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    - -tg
+    - Francisella
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_network.py::test_reads_selects_runs_from_ena
+        observable: the workdir is created and reads.tsv written
+      --target-family:
+        aliases:
+        - -tf
+        param: ReadsParams.target_family
+        value: Francisellaceae
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+      --target-genus:
+        aliases:
+        - -tg
+        param: ReadsParams.target_genus
+        value: Mycoplasma
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+      --target-species:
+        aliases:
+        - -ts
+        param: ReadsParams.target_species
+        value: Francisella tularensis
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_network.py::test_reads_selects_runs_from_ena
+      --accession:
+        param: ReadsParams.accessions
+        value: SRR25474756
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+      --accession-file:
+        param: ReadsParams.accession_file
+        value: '{file}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+      --platform:
+        param: ReadsParams.platform
+        value: ont
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_network.py::test_reads_selects_runs_from_ena
+      --max-runs:
+        param: ReadsParams.max_runs
+        value: '3'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_network.py::test_reads_selects_runs_from_ena
+        invalid: '0'
+      --min-bases:
+        param: ReadsParams.min_bases
+        value: '1000'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+        invalid: '-1'
+      --one-per-sample:
+        param: ReadsParams.one_per_sample
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: network stage; covered offline on frozen ENA fixtures in tests/unit/test_reads_stage.py'
+        secondary:
+        - --all-runs
   run:
     dispatch: stage
     base_args:

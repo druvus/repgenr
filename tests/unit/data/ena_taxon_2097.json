@@ -1,0 +1,14 @@
+{
+  "taxId" : "2097",
+  "scientificName" : "Mycoplasmoides genitalium",
+  "formalName" : "true",
+  "rank" : "species",
+  "division" : "PRO",
+  "lineage" : "Bacteria; Bacillati; Mycoplasmatota; Mycoplasmoidales; Mycoplasmoidaceae; Mycoplasmoides; ",
+  "geneticCode" : "4",
+  "submittable" : "true",
+  "binomial" : "true",
+  "authority" : "(Tully et al. 1983) Gupta et al. 2018",
+  "otherNames" : [ "Mycoplasma genitalium Tully et al. 1983:authority", "Mycoplasmoides genitalium (Tully et al. 1983) Gupta et al. 2018:authority", "Mycoplasma genitalium:synonym" ],
+  "metagenome" : "false"
+}

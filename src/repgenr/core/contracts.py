@@ -424,6 +424,10 @@ class ReadRow:
     layout: str
     bases: int
     read_count: int
+    # Sanitised filename tokens resolved from the taxid by the reads stage.
+    family: str = ""
+    genus: str = ""
+    species: str = ""
     fastq_urls: tuple[str, ...] = ()
     fastq_md5: tuple[str, ...] = ()
     fastq_bytes: tuple[int, ...] = ()
@@ -440,6 +444,9 @@ _READS_COLUMNS = [
     "layout",
     "bases",
     "read_count",
+    "family",
+    "genus",
+    "species",
     "fastq_urls",
     "fastq_md5",
     "fastq_bytes",
@@ -463,6 +470,9 @@ def write_reads(path: Path, rows: list[ReadRow]) -> None:
                     r.layout,
                     r.bases,
                     r.read_count,
+                    r.family,
+                    r.genus,
+                    r.species,
                     ";".join(r.fastq_urls),
                     ";".join(r.fastq_md5),
                     ";".join(str(b) for b in r.fastq_bytes),
@@ -487,6 +497,9 @@ def read_reads(path: Path) -> list[ReadRow]:
                     layout=rec["layout"],
                     bases=int(rec["bases"] or 0),
                     read_count=int(rec["read_count"] or 0),
+                    family=rec["family"],
+                    genus=rec["genus"],
+                    species=rec["species"],
                     fastq_urls=split(rec["fastq_urls"]),
                     fastq_md5=split(rec["fastq_md5"]),
                     fastq_bytes=tuple(int(b) for b in split(rec["fastq_bytes"])),

@@ -1,0 +1,5 @@
+[
+{"run_accession":"ERR2237850","sample_accession":"SAMEA104224794","study_accession":"PRJEB6403","tax_id":"2094","scientific_name":"Mycoplasmopsis arginini","instrument_platform":"PACBIO_SMRT","instrument_model":"PacBio RS","library_layout":"SINGLE","library_strategy":"WGS","library_source":"GENOMIC","base_count":"0","read_count":"0","fastq_ftp":"","fastq_md5":"","fastq_bytes":"","first_public":"2018-01-09"}
+,
+{"run_accession":"SRR28800588","sample_accession":"SAMN41081172","study_accession":"PRJNA1104570","tax_id":"2097","scientific_name":"Mycoplasmoides genitalium","instrument_platform":"OXFORD_NANOPORE","instrument_model":"GridION","library_layout":"SINGLE","library_strategy":"WGS","library_source":"GENOMIC","base_count":"90992597","read_count":"65017","fastq_ftp":"ftp.sra.ebi.ac.uk/vol1/fastq/SRR288/088/SRR28800588/SRR28800588_1.fastq.gz","fastq_md5":"71c1ee7b23e8de46adbf1dc2c2b1363f","fastq_bytes":"85028322","first_public":"2025-06-23"}
+]
