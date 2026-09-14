@@ -91,6 +91,27 @@ one command; `--selection`, `--outgroup` and `--copy` pass through to
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
 out of the ingroup.
 
+### Starting from sequencing reads
+
+`repgenr reads` selects whole-genome sequencing runs from ENA (which mirrors
+SRA) and writes `reads.tsv`; `repgenr assemble` then turns them into genomes
+(the assemble stage arrives in a later release; the chain is `reads ->
+assemble -> dereplicate -> phylo -> tree2tax`). Runs are chosen by taxon
+(`--target-family`/`-tf`, `--target-genus`/`-tg` or `--target-species`/`-ts`,
+resolved through the ENA taxonomy, synonyms included) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
+(SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
+lists them one per line. `--platform illumina|ont|pacbio` keeps one
+platform, `--min-bases` drops small runs, `--one-per-sample` (the default)
+keeps the best run of each sample, long reads before short and then by
+bases (`--all-runs` keeps every run), and `--max-runs` caps the selection to
+the largest runs. Each run is labelled with the family, genus and species of
+its NCBI taxid, in the same filename tokens the GTDB path uses.
+
+```bash
+repgenr reads -wd $WD -ts "Francisella tularensis" --platform illumina --max-runs 20
+repgenr reads -wd $WD --accession PRJNA954307 --accession SRR28800588
+```
+
 ### Viruses
 
 The viral path selects from NCBI Virus by default (via the `datasets` CLI);

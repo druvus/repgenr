@@ -18,6 +18,7 @@ from . import (  # noqa: F401  (registration side effects)
     cmd_ingest,
     cmd_misc,
     cmd_phylo,
+    cmd_reads,
     cmd_run,
     cmd_steps,
     cmd_viral,

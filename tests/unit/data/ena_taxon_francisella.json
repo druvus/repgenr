@@ -1,0 +1,13 @@
+[ {
+  "taxId" : "262",
+  "scientificName" : "Francisella",
+  "formalName" : "false",
+  "rank" : "genus",
+  "division" : "PRO",
+  "lineage" : "Bacteria; Pseudomonadati; Pseudomonadota; Gammaproteobacteria; Thiotrichales; Francisellaceae; ",
+  "geneticCode" : "11",
+  "submittable" : "false",
+  "binomial" : "false",
+  "otherNames" : [ "Francisella Dorofe'ev 1947 (Approved Lists 1980) emend. Huber et al. 2010:authority" ],
+  "metagenome" : "false"
+} ]

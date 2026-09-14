@@ -12,6 +12,7 @@ from .base import (
     HELP_THREADS,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
+    PIPELINE_READS,
     PIPELINE_VIRAL,
     _derep_help,
     _require_choice,
@@ -61,7 +62,9 @@ def status(
     cfg = Config.load(workdir)
     recorded = cfg.stages
     chain: tuple[str, ...]
-    if "ingest" in recorded:
+    if "reads" in recorded and "metadata" not in recorded:
+        lineage, chain = "reads", PIPELINE_READS
+    elif "ingest" in recorded:
         lineage, chain = "local", PIPELINE_LOCAL
     elif any(name in recorded for name in ("vmetadata", "vgenome")):
         lineage, chain = "viral", PIPELINE_VIRAL
