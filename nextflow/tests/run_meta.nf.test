@@ -81,4 +81,20 @@ nextflow_function {
             assert function.result == [id: 'bacterial', mode: 'bacterial']
         }
     }
+
+    test("reads target comes from reads_args") {
+        when {
+            function {
+                """
+                input[0] = [mode: 'reads', metadata_args: '-tg Francisella',
+                            reads_args: '-ts "Mycoplasmopsis arginini" --platform illumina',
+                            vmetadata_args: '', vgenome_args: '']
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == [id: 'mycoplasmopsis', mode: 'reads']
+        }
+    }
 }

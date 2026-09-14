@@ -2,7 +2,8 @@
 
 // RepGenR pipeline entry point (data-channel form).
 //
-// Stages exchange typed channel files -- metadata selection, genome FASTAs,
+// Stages exchange typed channel files -- metadata selection (or a reads
+// selection assembled per run), genome FASTAs,
 // per-chunk and merged representatives, the tree and the taxonomy -- rather than
 // sharing one working directory. Nextflow owns the fan-out (scatter-gather
 // dereplication), and results are published under --outdir.
@@ -11,6 +12,7 @@ include { validateParameters; paramsSummaryLog } from 'plugin/nf-schema'
 
 include { BACTERIAL_DATAFLOW } from './subworkflows/local/bacterial_dataflow'
 include { VIRAL_DATAFLOW     } from './subworkflows/local/viral_dataflow'
+include { READS_DATAFLOW     } from './subworkflows/local/reads_dataflow'
 include { PUBLISH_VERSIONS   } from './subworkflows/local/publish_versions'
 include { run_meta           } from './subworkflows/local/run_meta'
 
@@ -25,9 +27,10 @@ workflow {
 
         Key parameters (see nextflow_schema.json and docs/usage.md for all):
           --outdir <DIR>         Published results (default: results)
-          --mode bacterial|viral Lineage pipeline to run (default: bacterial)
+          --mode bacterial|viral|reads  Pipeline to run (default: bacterial)
           --metadata_args '<str>'  GTDB selection (bacterial)
           --vmetadata_args / --vgenome_args '<str>'  NCBI Virus selection (viral)
+          --reads_args '<str>'   ENA/SRA run selection (reads); --assembler, --checkm2_db, --gtdb_sketch
           --derep_tool <tool>    Dereplicator for the scatter-gather step
           --derep_process_size N Genomes per dereplication chunk (large inputs)
           --phylo_args '<str>'   Aligner or tree builder for the phylogeny
@@ -44,6 +47,10 @@ workflow {
     if (params.mode == 'viral') {
         VIRAL_DATAFLOW(ch_meta)
         ch_versions = VIRAL_DATAFLOW.out.versions
+    }
+    else if (params.mode == 'reads') {
+        READS_DATAFLOW(ch_meta)
+        ch_versions = READS_DATAFLOW.out.versions
     }
     else {
         BACTERIAL_DATAFLOW(ch_meta)

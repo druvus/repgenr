@@ -1,0 +1,43 @@
+nextflow_process {
+
+    name "GENOME_QC (stub)"
+    script "../modules/local/dataflow/genome_qc.nf"
+    tag "stub"
+    process "GENOME_QC"
+    options "-stub"
+    config "./reads_debug.config"
+
+    test("scores and classifies every finished assembly; the databases reach the command line") {
+        when {
+            params {
+                checkm2_db = '/db/checkm2'
+                gtdb_sketch = '/db/gtdb-rs226-reps.k31-sc10k.sig.zip'
+                gtdb_lineages = '/db/lineages.csv'
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'reads'],
+                    [ file("${projectDir}/nextflow/tests/data/assemblies/SRR000001"),
+                      file("${projectDir}/nextflow/tests/data/assemblies/SRR000002"),
+                      file("${projectDir}/nextflow/tests/data/assemblies/SRR000003") ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.qc.get(0)) {
+                assert get(0).id == 'test'
+                def quality = path("${get(1)}/quality.tsv").text.split('\n')
+                assert quality.size() == 3  // header + the two assembled runs
+                assert quality.any { l -> l.startsWith('SRR000001\t') }
+                assert !quality.any { l -> l.startsWith('SRR000003\t') }
+                assert path("${get(1)}/classification.tsv").text.contains('g__Francisella')
+            }
+            assert process.stdout.any { line ->
+                line.contains('ext.args: --checkm2-db /db/checkm2 --gtdb-sketch /db/gtdb-rs226-reps.k31-sc10k.sig.zip --gtdb-lineages /db/lineages.csv')
+            }
+        }
+    }
+}

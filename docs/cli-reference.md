@@ -42,6 +42,24 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
 
+## assemble-run
+
+Fetch and assemble one run of a reads.tsv (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--reads-tsv` | required | reads.tsv from the reads stage. |
+| `--run` | required | The run accession (a row of reads.tsv) to assemble. |
+| `-o`, `--out` | required | Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv. |
+| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--memory-gb` | `16` | Memory hint for the assembly, in GB, for tools that cap RAM. |
+| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
+| `--keep-files` | off | Keep the assembler scratch directory. |
+| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
 ## cluster-summary
 
 Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
@@ -168,6 +186,22 @@ Download genomes listed in a selection.tsv (stateless data-channel step).
 | `--keep-files` | off | Keep download intermediates. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
+## genome-qc
+
+Score (CheckM2) and classify a batch of assemblies (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
+| `-o`, `--out` | required | Output dir for quality.tsv and classification.tsv. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
+| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
+| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
+| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
+| `--tool-arg` |  | Classifier tuning as key=value (repeatable). |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
 ## glance
 
 Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
@@ -287,6 +321,19 @@ Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
 | `--max-runs` |  | Keep at most N runs, the largest by bases. |
 | `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
 | `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (long reads before short, then bases), or every run. |
+
+## reads-gather
+
+Write the genome contract from per-run assemblies (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--reads-tsv` | required | reads.tsv from the reads stage. |
+| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
+| `-o`, `--out` | required | Output dir for genomes/, selection.tsv and the stats tables. |
+| `--qc` |  | genome-qc output dir (quality.tsv, classification.tsv), if it ran. |
+| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
+| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |
 
 ## run
 

@@ -1,0 +1,32 @@
+nextflow_process {
+
+    name "READS_SELECT (stub)"
+    script "../modules/local/dataflow/reads_select.nf"
+    tag "stub"
+    process "READS_SELECT"
+    options "-stub"
+    config "./reads_debug.config"
+
+    test("emits reads.tsv under the run meta with the reads_args on the command line") {
+        when {
+            params {
+                reads_args = '-tg francisella --platform illumina --max-runs 5'
+            }
+            process {
+                """
+                input[0] = [id: 'francisella', mode: 'reads']
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.reads.get(0)) {
+                assert get(0).id == 'francisella'
+                def lines = path(get(1)).text.split('\n')
+                assert lines[0].startsWith('run_accession\tbiosample')
+                assert lines.size() == 4
+            }
+            assert process.stdout.any { line -> line.contains('ext.args: -tg francisella --platform illumina --max-runs 5') }
+        }
+    }
+}

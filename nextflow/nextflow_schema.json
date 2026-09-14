@@ -21,8 +21,8 @@
                 "mode": {
                     "type": "string",
                     "default": "bacterial",
-                    "enum": ["bacterial", "viral"],
-                    "description": "Which lineage pipeline to run: 'bacterial' (GTDB) or 'viral' (NCBI Virus by default, BV-BRC via --source).",
+                    "enum": ["bacterial", "viral", "reads"],
+                    "description": "Which pipeline to run: 'bacterial' (GTDB), 'viral' (NCBI Virus by default, BV-BRC via --source) or 'reads' (ENA/SRA sequencing runs assembled per run).",
                     "fa_icon": "fas fa-bacteria"
                 }
             }
@@ -69,6 +69,50 @@
                     "default": "",
                     "description": "Arguments for the tree-to-taxonomy (FlexTaxD) stage. Reaches the process as task.ext.args; a site config can override it with withName.",
                     "fa_icon": "fas fa-sitemap"
+                }
+            }
+        },
+        "reads_options": {
+            "title": "Reads mode",
+            "type": "object",
+            "fa_icon": "fas fa-dna",
+            "description": "Selection, assembly and quality options for --mode reads.",
+            "properties": {
+                "reads_args": {
+                    "type": "string",
+                    "default": "-tg francisella --platform illumina --max-runs 5",
+                    "description": "Arguments for the reads stage (ENA/SRA run selection by taxon or accession). Reaches READS_SELECT as task.ext.args.",
+                    "fa_icon": "fas fa-table"
+                },
+                "assembler": {
+                    "type": "string",
+                    "default": "auto",
+                    "description": "Assembler for every run: 'auto' picks by platform (skesa for Illumina, flye for long reads), or any registered adapter name.",
+                    "fa_icon": "fas fa-puzzle-piece"
+                },
+                "assemble_args": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Extra flags for assemble-run (for example --min-contig-length or --tool-arg). Reaches READS_ASSEMBLE as task.ext.args after --assembler.",
+                    "fa_icon": "fas fa-sliders-h"
+                },
+                "checkm2_db": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "description": "CheckM2 DIAMOND database. When set, GENOME_QC scores every assembly and the gather step excuses those outside the completeness/contamination gate.",
+                    "fa_icon": "fas fa-database"
+                },
+                "gtdb_sketch": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "description": "GTDB sourmash sketch database (.sig.zip). When set, GENOME_QC classifies every assembly and the gather step names genomes by the GTDB tokens where the genus agrees.",
+                    "fa_icon": "fas fa-database"
+                },
+                "gtdb_lineages": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "description": "The lineages CSV published with the GTDB sketch.",
+                    "fa_icon": "fas fa-file-csv"
                 }
             }
         },
@@ -161,6 +205,7 @@
     "allOf": [
         { "$ref": "#/$defs/input_output_options" },
         { "$ref": "#/$defs/stage_options" },
+        { "$ref": "#/$defs/reads_options" },
         { "$ref": "#/$defs/scaling_options" },
         { "$ref": "#/$defs/generic_options" }
     ]

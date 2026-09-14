@@ -1,0 +1,4 @@
+run_accession	biosample	bioproject	organism	taxid	platform	instrument_model	layout	bases	read_count	family	genus	species	fastq_urls	fastq_md5	fastq_bytes
+SRR000001	SAMN000001	PRJNA000001	Francisella tularensis	263	ILLUMINA	Illumina MiSeq	PAIRED	600000000	2000000	Francisellaceae	Francisella	tularensis	https://example.org/SRR000001_1.fastq.gz;https://example.org/SRR000001_2.fastq.gz	a;b	100;100
+SRR000002	SAMN000002	PRJNA000001	Francisella tularensis	263	OXFORD_NANOPORE	GridION	SINGLE	400000000	40000	Francisellaceae	Francisella	tularensis	https://example.org/SRR000002_1.fastq.gz	c	100
+SRR000003	SAMN000003	PRJNA000001	Francisella tularensis	263	ION_TORRENT	Ion Torrent S5	SINGLE	100000000	500000	Francisellaceae	Francisella	tularensis	https://example.org/SRR000003.fastq.gz	d	100

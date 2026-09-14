@@ -1,0 +1,54 @@
+nextflow_workflow {
+
+    name "ACQUIRE_READS (stub)"
+    script "../subworkflows/local/acquire_reads.nf"
+    tag "stub"
+    workflow "ACQUIRE_READS"
+    options "-stub"
+
+    test("every run of reads.tsv is assembled in its own task and gathered under the run meta") {
+        when {
+            workflow {
+                """
+                input[0] = channel.value([id: 'test', mode: 'reads'])
+                """
+            }
+        }
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks().collect { t -> t.name }
+            assert names.count { n -> n.contains('READS_ASSEMBLE') } == 3
+            assert names.any { n -> n.contains('READS_ASSEMBLE (test.SRR000002)') }
+            assert !names.any { n -> n.contains('GENOME_QC') }  // no database configured
+            with(workflow.out.genomes.get(0)) {
+                assert get(0) == [id: 'test', mode: 'reads']
+                assert get(1).size() == 2  // the ION_TORRENT run is excused
+            }
+            with(workflow.out.outgroup.get(0)) {
+                assert get(0).id == 'test'
+                assert get(1) == []
+            }
+            assert workflow.out.selection.get(0).get(0).id == 'test'
+            assert path(workflow.out.outgroup_accession.get(0).get(1)).text == ''
+        }
+    }
+
+    test("a CheckM2 database switches the QC task on") {
+        when {
+            params {
+                checkm2_db = '/db/checkm2'
+            }
+            workflow {
+                """
+                input[0] = channel.value([id: 'test', mode: 'reads'])
+                """
+            }
+        }
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks().collect { t -> t.name }
+            assert names.any { n -> n.contains('GENOME_QC (test)') }
+            assert workflow.out.genomes.get(0).get(1).size() == 2
+        }
+    }
+}

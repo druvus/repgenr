@@ -170,6 +170,34 @@ database the checks are skipped and the log says so. `run --reads` forwards
 `--accession-file`, `--platform`, `--max-runs`, `--assembler`, `--threads`
 and `--outgroup`; the rest is available on the stage commands.
 
+The same work is available as three stateless steps, which the Nextflow reads
+mode runs as separate tasks and which also serve a scheduler of your own:
+
+```bash
+repgenr reads -wd $WD -tg mycoplasmopsis --platform illumina --max-runs 20
+# one task per run: fetch, assemble, filter contigs
+repgenr assemble-run --reads-tsv $WD/reads.tsv --run SRR25474756 -o asm/SRR25474756 \
+    --assembler auto -t 8 --memory-gb 16 --min-contig-length 500
+# one batch: CheckM2 and/or the classifier over every finished run directory
+repgenr genome-qc --assemblies asm -o qc --checkm2-db $CHECKM2DB \
+    --gtdb-sketch gtdb-rs226-reps.k31-sc10k.sig.zip --gtdb-lineages lineages.csv \
+    --classifier auto -t 16
+# the genome contract: genomes/, selection.tsv, assembly_stats.tsv, excused_runs.tsv
+repgenr reads-gather --reads-tsv $WD/reads.tsv --assemblies asm --qc qc -o out \
+    --min-completeness 50 --max-contamination 10
+```
+
+`assemble-run` writes `contigs.fasta` and the `assembly.ok` marker into its
+`--out` directory, or `excused_runs.tsv` when the run has no FASTQ mirror, an
+unsupported platform, or fails to download or assemble (`--keep-reads`,
+`--keep-files` and `--tool-arg` as on `assemble`). `genome-qc` reads a
+directory of such run directories (`--assemblies`) and writes `quality.tsv`
+and `classification.tsv` keyed by run accession; it needs at least one
+database. `reads-gather` applies the quality gate and the naming policy above
+from the optional `--qc` directory and writes an empty
+`outgroup_accession.txt`, since the reads chain has no outgroup at this
+point. None of the steps touches a working directory or the manifest.
+
 ### Viruses
 
 The viral path selects from NCBI Virus by default (via the `datasets` CLI);
@@ -397,9 +425,14 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--outdir` | `results` | Published results and execution reports. |
-| `--mode` | `bacterial` | `bacterial` (GTDB) or `viral` (NCBI Virus; BV-BRC via `--vmetadata_args "--source bvbrc"`). |
+| `--mode` | `bacterial` | `bacterial` (GTDB), `viral` (NCBI Virus; BV-BRC via `--vmetadata_args "--source bvbrc"`) or `reads` (ENA/SRA sequencing runs, assembled per run). |
 | `--metadata_args` | see config | Arguments for the bacterial metadata stage. |
 | `--vmetadata_args` / `--vgenome_args` | see config | Viral metadata / genome selection arguments. |
+| `--reads_args` | see config | Arguments for the reads stage (ENA/SRA run selection by taxon or accession). |
+| `--assembler` | `auto` | Assembler for every run in reads mode (`auto` picks by platform). |
+| `--assemble_args` | (empty) | Extra `assemble-run` flags in reads mode (`--min-contig-length`, `--tool-arg`). |
+| `--checkm2_db` | `null` | CheckM2 database; switches on quality scoring and the completeness/contamination gate in reads mode. |
+| `--gtdb_sketch` / `--gtdb_lineages` | `null` | GTDB sourmash sketch and its lineages CSV; switch on classification and GTDB naming in reads mode. |
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
@@ -475,9 +508,11 @@ nextflow run nextflow/main.nf --outdir results \
     --derep_tool sourmash --derep_process_size 2000 -profile slurm -c site.config
 ```
 
-Resource labels (`process_low/medium/high`) scale memory and time with the retry
-attempt, so a task killed for memory or time is resubmitted with more headroom.
-Tune the label values per environment in `nextflow.config`.
+Resource labels (`process_low/medium/high`, and `process_assembly` for the
+per-run assembly tasks of reads mode, whose memory follows the read platform)
+scale memory and time with the retry attempt, so a task killed for memory or
+time is resubmitted with more headroom. Tune the label values per environment
+in `nextflow/conf/base.config`.
 
 #### Scatter-gather dereplication
 
@@ -551,12 +586,14 @@ The pipeline requires Nextflow 26.04 or later (`nextflowVersion =
 
 #### Pipeline structure
 
-`nextflow/main.nf` dispatches by `--mode` to one of two data-channel subworkflows
-that share the dereplication, phylo and tree2tax modules:
+`nextflow/main.nf` dispatches by `--mode` to one of three data-channel
+subworkflows that share the dereplication, phylo and tree2tax modules:
 
 ```
-bacterial: ACQUIRE  (metadata -> genome)  -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
-viral:     VACQUIRE (vmetadata -> vgenome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+bacterial: ACQUIRE       (metadata -> genome)          -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+viral:     VACQUIRE      (vmetadata -> vgenome)        -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
+reads:     ACQUIRE_READS (reads -> assemble per run
+                          -> [genome-qc] -> gather)    -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
 ```
 
 `metadata` emits a portable `selection.tsv`; `genome-fetch` downloads the genomes
@@ -564,6 +601,26 @@ and emits them as a channel feeding the scatter-gather dereplication; `phylo` an
 `tree2tax` run in task-local working directories and emit `tree.nwk`,
 `tree2tax.tsv` and `genomes_map.tsv` to `--outdir`. Add `-stub` to any run for a
 quick wiring check without external tools.
+
+In reads mode `READS_SELECT` runs `repgenr reads` and emits `reads.tsv`; every
+row becomes one `READS_ASSEMBLE` task (`assemble-run`, label
+`process_assembly`: 8 CPUs, 16 GB for a short-read run and 32 GB for a
+long-read one, 6 h, scaled by attempt), so a hundred runs assemble in
+parallel on a cluster. When `--checkm2_db` or `--gtdb_sketch` is set, one
+`GENOME_QC` task (`genome-qc`, `process_medium`) scores and classifies the
+batch; `READS_GATHER` (`reads-gather`) applies the gate and the naming
+policy and emits the genome FASTAs, `selection.tsv` and an empty outgroup
+accession file, the same tuple `ACQUIRE` emits. `reads.tsv`,
+`selection.tsv`, `assembly_stats.tsv`, `excused_runs.tsv` and the QC tables
+are published under `reads/`.
+
+```bash
+nextflow run nextflow/main.nf --mode reads --outdir results \
+    --reads_args "-tg mycoplasmopsis --platform illumina --max-runs 20" \
+    --assembler auto --checkm2_db /db/checkm2 \
+    --gtdb_sketch /db/gtdb-rs226-reps.k31-sc10k.sig.zip --gtdb_lineages /db/lineages.csv \
+    -profile slurm,singularity
+```
 
 ## Running tools in containers
 

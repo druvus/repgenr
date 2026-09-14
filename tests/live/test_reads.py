@@ -43,3 +43,48 @@ def test_reads_and_assemble_a_public_illumina_run(run_repgenr, tmp_path: Path) -
     assert stats.n50 > 20_000 and stats.est_coverage > 100
     assert (wd / "genomes" / rows[0].filename).exists()
     assert not (wd / "scratch" / "assemble" / "SRR25474756").exists()  # reads removed
+
+
+def test_reads_steps_assemble_a_public_run(run_repgenr, tmp_path: Path) -> None:
+    """The stateless steps behind the Nextflow reads mode, on SRR25474756:
+    assemble-run for the one run, then reads-gather into the genome contract
+    (genome-qc needs a reference database, which the audit machine lacks)."""
+    wd = tmp_path / "wd"
+    listing = tmp_path / "runs.txt"
+    listing.write_text("SRR25474756\n", encoding="utf-8")
+    run_repgenr("reads", "-wd", wd, "--accession-file", listing)
+    assemblies = tmp_path / "assemblies"
+    versions = tmp_path / "versions.yml"
+    run_repgenr(
+        *DOCKER,
+        "assemble-run",
+        "--reads-tsv",
+        wd / "reads.tsv",
+        "--run",
+        "SRR25474756",
+        "-o",
+        assemblies / "SRR25474756",
+        "--assembler",
+        "skesa",
+        "-t",
+        "4",
+        "--memory-gb",
+        "8",
+        "--min-contig-length",
+        "1000",
+        "--versions-out",
+        versions,
+        timeout=3600,
+    )
+    assert (assemblies / "SRR25474756" / "assembly.ok").exists()
+    assert "skesa:" in versions.read_text(encoding="utf-8")
+    out = tmp_path / "out"
+    run_repgenr(
+        "reads-gather", "--reads-tsv", wd / "reads.tsv", "--assemblies", assemblies, "-o", out
+    )
+    rows = read_selection(out / "selection.tsv")
+    assert [r.accession for r in rows] == ["SRR25474756"]
+    assert (out / "genomes" / rows[0].filename).exists()
+    stats = read_assembly_stats(out / "assembly_stats.tsv")[0]
+    assert stats.assembler == "skesa" and stats.n50 > 20_000
+    assert (out / "outgroup_accession.txt").read_text(encoding="utf-8") == ""

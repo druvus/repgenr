@@ -42,4 +42,24 @@ nextflow_pipeline {
             assert !names.any { n -> n.contains(':METADATA (') }
         }
     }
+
+    test("the entry point runs the reads chain when mode is reads") {
+        when {
+            params {
+                outdir = "$outputDir"
+                mode = 'reads'
+                derep_process_size = 1
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/reads/selection.tsv").exists()
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains(':READS_SELECT (') }
+            assert names.any { n -> n.contains(':READS_ASSEMBLE (') }
+            assert !names.any { n -> n.contains(':METADATA (') }
+        }
+    }
 }

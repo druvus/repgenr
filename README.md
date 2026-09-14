@@ -75,7 +75,8 @@ nextflow run nextflow/main.nf -profile standard --outdir results \
     --derep_tool sourmash --phylo_args "--treebuilder mashtree"
 ```
 
-Nextflow 26.04 or later is required.
+`--mode viral` and `--mode reads` (ENA/SRA sequencing runs, one assembly task
+per run) select the other two front ends. Nextflow 26.04 or later is required.
 
 ## Documentation
 

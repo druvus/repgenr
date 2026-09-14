@@ -1,0 +1,61 @@
+nextflow_process {
+
+    name "READS_GATHER (stub)"
+    script "../modules/local/dataflow/reads_gather.nf"
+    tag "stub"
+    process "READS_GATHER"
+    options "-stub"
+
+    test("assembled runs become named genomes, the rest an excuse; the outgroup accession is empty") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'reads'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv"),
+                    [ file("${projectDir}/nextflow/tests/data/assemblies/SRR000001"),
+                      file("${projectDir}/nextflow/tests/data/assemblies/SRR000002"),
+                      file("${projectDir}/nextflow/tests/data/assemblies/SRR000003") ],
+                    file("${projectDir}/nextflow/tests/data/qc")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.genomes.get(0)) {
+                assert get(0).id == 'test'
+                def genomes = [get(1)].flatten().collect { p -> file(p).name }.sort()
+                assert genomes == [
+                    'Francisellaceae_Francisella_tularensis_SRR000001.fasta',
+                    'Francisellaceae_Francisella_tularensis_SRR000002.fasta',
+                ]
+            }
+            def selection = path(process.out.selection.get(0).get(1)).text.split('\n')
+            assert selection.size() == 3 && selection[1].startsWith('SRR000001\tFrancisellaceae')
+            assert path(process.out.assembly_stats.get(0).get(1)).text.contains('SRR000002')
+            assert path(process.out.excused.get(0).get(1)).text.contains('SRR000003\tassemble\tunsupported_platform')
+            assert path(process.out.outgroup_accession.get(0).get(1)).text == ''
+        }
+    }
+
+    test("runs without a qc directory") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'reads'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv"),
+                    [ file("${projectDir}/nextflow/tests/data/assemblies/SRR000001") ],
+                    []
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert [process.out.genomes.get(0).get(1)].flatten().size() == 1
+            assert process.out.excused.size() == 0
+        }
+    }
+}
