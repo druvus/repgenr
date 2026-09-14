@@ -3,8 +3,10 @@
 The CLI writes all stage outputs into the shared working directory
 (`--workdir`). The Nextflow data-channel pipeline instead flows results between
 processes as staged channel files and publishes under `--outdir` (default
-`results/`): `metadata/selection.tsv`, the dereplication contract under
-`dereplicate/`, the phylogeny under `phylo/` (the tree and the tree builder's
+`results/`): `metadata/selection.tsv` (or, in reads mode, `reads/reads.tsv`,
+`reads/selection.tsv`, `reads/assembly_stats.tsv`, `reads/excused_runs.tsv` and
+the `quality.tsv` and `classification.tsv` tables of the QC step), the
+dereplication contract under `dereplicate/`, the phylogeny under `phylo/` (the tree and the tree builder's
 files under `phylo/tree/`, the alignment it was built from under
 `phylo/align/` or `phylo/snp/`), `tree2tax.tsv` and `genomes_map.tsv` at the
 top level, and the execution reports under `pipeline_info/`.

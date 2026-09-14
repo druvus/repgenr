@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import gzip
-import hashlib
 import json
 import logging
+import sys
 from pathlib import Path
 
 import pytest
 
-from repgenr.assemblers.base import Assembler, AssemblyResult, registry
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import (
     ASSEMBLY_STATS_TSV,
@@ -25,78 +23,30 @@ from repgenr.core.contracts import (
     write_reads,
     write_selection,
 )
-from repgenr.core.errors import ToolExecutionError, WorkdirError
+from repgenr.core.errors import WorkdirError
 from repgenr.core.integrity import check_genome_completeness
-from repgenr.core.plugins import ToolCapabilities
 from repgenr.stages.assemble import AssembleParams, run
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from assemble_fakes import FakeAssembler as _FakeAssembler  # noqa: E402
+from assemble_fakes import FakeClassifier as _FakeClassifier  # noqa: E402
+from assemble_fakes import fake_checkm2 as _fake_checkm2  # noqa: E402
+from assemble_fakes import read_row as _row  # noqa: E402
+from assemble_fakes import (  # noqa: E402
+    register_fake_assembler,
+    register_fake_classifier,
+    unregister_fake_assembler,
+    unregister_fake_classifier,
+)
+
 _LOG = logging.getLogger("test")
-_GENOME = "ACGT" * 300  # 1200 bp, above the default contig floor
-
-
-class _FakeAssembler(Assembler):
-    """Writes one contig from the reads it was given; records every call."""
-
-    capabilities = ToolCapabilities(name="fakeasm")
-    read_types = frozenset({"ILLUMINA", "OXFORD_NANOPORE"})
-    calls: list[str] = []
-    fail_runs: frozenset[str] = frozenset()
-
-    def preflight(self) -> dict[str, str]:
-        return {"fakeasm": "1.0"}
-
-    def assemble(self, reads, out_dir, params, logger) -> AssemblyResult:  # noqa: ANN001
-        type(self).calls.append(reads.run_accession)
-        if reads.run_accession in type(self).fail_runs:
-            raise ToolExecutionError(["fakeasm"], 1, "boom")
-        assert all(f.exists() for f in reads.files)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        contigs = out_dir / "raw.fa"
-        contigs.write_text(f">node1\n{_GENOME}\n>tiny\nACGT\n", encoding="utf-8")
-        return AssemblyResult(contigs=contigs, tool_stats={"threads": params.threads})
 
 
 @pytest.fixture
 def fake_assembler():
-    registry._load()
-    registry.register("fakeasm", _FakeAssembler, replace=True)
-    _FakeAssembler.calls = []
-    _FakeAssembler.fail_runs = frozenset()
+    register_fake_assembler()
     yield
-    registry._classes.pop("fakeasm", None)
-
-
-def _fastq(path: Path) -> tuple[str, str, int]:
-    """Write a tiny gzipped FASTQ; return (local url, md5, bytes)."""
-    data = gzip.compress(b"@r1\nACGT\n+\nIIII\n")
-    path.write_bytes(data)
-    return str(path), hashlib.md5(data).hexdigest(), len(data)
-
-
-def _row(tmp_path: Path, run: str, platform: str = "ILLUMINA", layout: str = "PAIRED", **over):
-    files = [
-        _fastq(tmp_path / f"{run}_{i}.fastq.gz") for i in ((1, 2) if layout == "PAIRED" else (1,))
-    ]
-    base = dict(
-        run_accession=run,
-        biosample=f"SAM{run}",
-        bioproject="PRJ1",
-        organism="Francisella tularensis",
-        taxid="263",
-        platform=platform,
-        instrument_model="MiSeq",
-        layout=layout,
-        bases=1_200_000,
-        read_count=1000,
-        family="Francisellaceae",
-        genus="Francisella",
-        species="tularensis",
-        fastq_urls=tuple(f[0] for f in files),
-        fastq_md5=tuple(f[1] for f in files),
-        fastq_bytes=tuple(f[2] for f in files),
-    )
-    base.update(over)
-    return ReadRow(**base)
+    unregister_fake_assembler()
 
 
 def _prepare(workdir: Path, rows: list[ReadRow]) -> WorkdirContext:
@@ -236,52 +186,11 @@ def test_jobs_default_is_two_for_short_reads(workdir, tmp_path, fake_assembler, 
 # --- quality and classification -----------------------------------------------------
 
 
-class _FakeClassifier:
-    """Registered classifier returning a canned GTDB lineage per genome."""
-
-    from repgenr.core.plugins import ToolCapabilities as _TC
-
-    capabilities = _TC(name="fakecls")
-    lineages: dict[str, str] = {}
-
-    def preflight(self) -> dict[str, str]:
-        return {"fakecls": "1.0"}
-
-    def classify(self, genomes, out_dir, params, logger):  # noqa: ANN001
-        from repgenr.classifiers.base import Classification, db_version
-
-        return {
-            g.name: Classification(
-                taxonomy=type(self).lineages[g.name],
-                rank="species",
-                score=0.9,
-                db_version=db_version(params.db),
-            )
-            for g in genomes
-            if g.name in type(self).lineages
-        }
-
-
 @pytest.fixture
 def fake_classifier():
-    from repgenr.classifiers.base import Classifier
-    from repgenr.classifiers.base import registry as cls_registry
-
-    class Fake(_FakeClassifier, Classifier):
-        pass
-
-    cls_registry._load()
-    cls_registry.register("fakecls", Fake, replace=True)
-    _FakeClassifier.lineages = {}
+    register_fake_classifier()
     yield
-    cls_registry._classes.pop("fakecls", None)
-
-
-def _fake_checkm2(quality: dict[str, tuple[float, float]]):
-    def run_checkm2(genomes, out_dir, *, db, threads, logger):
-        return {g.name: quality[g.name] for g in genomes if g.name in quality}
-
-    return run_checkm2
+    unregister_fake_classifier()
 
 
 def test_checkm2_quality_gates_and_feeds_the_selection(
@@ -295,8 +204,8 @@ def test_checkm2_quality_gates_and_feeds_the_selection(
         "run_checkm2",
         _fake_checkm2(
             {
-                "Francisellaceae_Francisella_tularensis_SRR1.fasta": (98.5, 0.4),
-                "Francisellaceae_Francisella_tularensis_SRR2.fasta": (40.0, 15.0),
+                "SRR1.fasta": (98.5, 0.4),
+                "SRR2.fasta": (40.0, 15.0),
             }
         ),
     )
@@ -320,11 +229,11 @@ def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
     workdir, tmp_path, fake_assembler, fake_classifier
 ) -> None:
     _FakeClassifier.lineages = {
-        "Francisellaceae_Francisella_tularensis_SRR1.fasta": (
+        "SRR1.fasta": (
             "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Francisellales;"
             "f__Francisellaceae;g__Francisella;s__Francisella tularensis_A"
         ),
-        "Francisellaceae_Francisella_tularensis_SRR2.fasta": (
+        "SRR2.fasta": (
             "d__Bacteria;p__Bacillota;c__Bacilli;o__Bacillales;f__Bacillaceae;"
             "g__Bacillus;s__Bacillus subtilis"
         ),

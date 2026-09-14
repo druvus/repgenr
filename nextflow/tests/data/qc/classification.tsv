@@ -1,0 +1,2 @@
+run_accession	taxonomy	rank	score	db_version
+SRR000001	d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Francisellales;f__Francisellaceae;g__Francisella;s__Francisella tularensis_A	species	0.9	gtdb-rs226-reps.k31-sc10k

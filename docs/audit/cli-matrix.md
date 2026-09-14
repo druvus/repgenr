@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-25 commands, 269 flags (269 with a live test or an n/a reason, 0 pending).
+28 commands, 295 flags (295 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -453,6 +453,53 @@ dispatch: `stage`
 | `--complete-only` |  | VmetadataParams.complete_only | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_ncbi_virus_complete_only | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--released-after` |  | VmetadataParams.released_after | callback | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_released_after_and_host_narrow_the_set | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--list` |  | VmetadataParams.list_targets | none | params.vmetadata_args | tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc | docs/cli-reference.md, docs/audit/cli-matrix.md |
+
+## assemble-run
+
+dispatch: `step:repgenr.stages.assemble_steps.assemble_run`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--reads-tsv` |  | AssembleRunParams.reads_tsv | stage | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--run` |  | AssembleRunParams.run | stage | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--out` | -o | AssembleRunParams.out_dir | none | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--assembler` |  | AssembleRunParams.assembler | registry | params.assembler | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--threads` | -t | AssembleRunParams.threads | range | module: task.cpus | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--memory-gb` |  | AssembleRunParams.memory_gb | range | module: task.memory | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--min-contig-length` |  | AssembleRunParams.min_contig_length | range | params.assemble_args | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-reads` |  | AssembleRunParams.keep_reads | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-files` |  | AssembleRunParams.keep_files | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--tool-arg` |  | AssembleRunParams.extra | none | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--versions-out` |  | AssembleRunParams.versions_out | none | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
+
+## genome-qc
+
+dispatch: `step:repgenr.stages.assemble_steps.genome_qc`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--assemblies` |  | GenomeQcParams.assemblies_dir | stage | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--out` | -o | GenomeQcParams.out_dir | none | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--threads` | -t | GenomeQcParams.threads | range | module: task.cpus | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--checkm2-db` |  | GenomeQcParams.checkm2_db | none | params.checkm2_db | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--classifier` |  | GenomeQcParams.classifier | choice | n/a: sourmash when params.gtdb_sketch is set | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-sketch` |  | GenomeQcParams.gtdb_sketch | none | params.gtdb_sketch | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-lineages` |  | GenomeQcParams.gtdb_lineages | none | params.gtdb_lineages | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--tool-arg` |  | GenomeQcParams.extra | none | n/a: not exposed by the GENOME_QC module | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--versions-out` |  | GenomeQcParams.versions_out | none | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+
+## reads-gather
+
+dispatch: `step:repgenr.stages.assemble_steps.reads_gather`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--reads-tsv` |  | ReadsGatherParams.reads_tsv | stage | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--assemblies` |  | ReadsGatherParams.assemblies_dir | stage | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--out` | -o | ReadsGatherParams.out_dir | none | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--qc` |  | ReadsGatherParams.qc_dir | none | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--min-completeness` |  | ReadsGatherParams.min_completeness | range | n/a: site config withName READS_GATHER ext.args | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--max-contamination` |  | ReadsGatherParams.max_contamination | range | n/a: site config withName READS_GATHER ext.args | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## Short-alias collisions
 

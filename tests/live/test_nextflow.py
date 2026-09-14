@@ -172,3 +172,36 @@ def test_docker_profile_with_progressivemauve(run_nextflow, synthetic_set) -> No
     )
     out = proc.outdir
     assert _leaves((out / "phylo" / "tree" / "tree.nwk").read_text(encoding="utf-8")) == 4
+
+
+@pytest.mark.network
+@pytest.mark.container
+@pytest.mark.requires_binary("docker", "sourmash", "mashtree")
+def test_main_reads_mode(run_nextflow) -> None:
+    """--mode reads on two public runs (Illumina MiSeq and ONT) through the
+    pinned assembler images: one READS_ASSEMBLE task per run, no QC database,
+    then dereplication, a mashtree tree and tree2tax."""
+    if subprocess.run(["docker", "info"], capture_output=True).returncode != 0:
+        pytest.skip("docker daemon not running")
+    # The standard profile: the test profile's 4 GB and 1 h caps are too tight
+    # for a long-read assembly under emulation.
+    proc = run_nextflow(
+        NF / "main.nf",
+        "-profile",
+        "standard",
+        "--mode",
+        "reads",
+        "--reads_args=--accession SRR25474756 --accession SRR28800588",
+        "--repgenr_opts=--container docker --platform linux/amd64",
+        "--derep_tool",
+        "sourmash",
+        timeout=7200,
+    )
+    out = proc.outdir
+    rows = (out / "reads" / "selection.tsv").read_text(encoding="utf-8").splitlines()
+    assert len(rows) == 3  # header + two assembled runs
+    assert (out / "reads" / "assembly_stats.tsv").is_file()
+    assert (out / "tree2tax.tsv").is_file() and (out / "genomes_map.tsv").is_file()
+    assert _leaves((out / "phylo" / "tree" / "tree.nwk").read_text(encoding="utf-8")) == 2
+    versions = (out / "pipeline_info" / "software_versions.yml").read_text(encoding="utf-8")
+    assert "skesa" in versions and "flye" in versions

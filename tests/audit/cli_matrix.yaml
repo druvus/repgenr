@@ -3141,4 +3141,296 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
         live: tests/live/test_network.py::test_vmetadata_list_targets_reaches_bvbrc
+  assemble-run:
+    dispatch: step:repgenr.stages.assemble_steps.assemble_run
+    base_args:
+    - --reads-tsv
+    - '{file}'
+    - --run
+    - SRR1
+    - -o
+    - '{out}'
+    flags:
+      --reads-tsv:
+        param: AssembleRunParams.reads_tsv
+        value: '{alt_file}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --run:
+        param: AssembleRunParams.run
+        value: SRR2
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --out:
+        aliases:
+        - -o
+        param: AssembleRunParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --assembler:
+        param: AssembleRunParams.assembler
+        value: skesa
+        validated: registry
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assembler
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --threads:
+        aliases:
+        - -t
+        param: AssembleRunParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: task.cpus'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --memory-gb:
+        param: AssembleRunParams.memory_gb
+        value: '8'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: task.memory'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --min-contig-length:
+        param: AssembleRunParams.min_contig_length
+        value: '200'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --keep-reads:
+        param: AssembleRunParams.keep_reads
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: not exposed by the READS_ASSEMBLE module'
+        live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
+      --keep-files:
+        param: AssembleRunParams.keep_files
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: not exposed by the READS_ASSEMBLE module'
+        live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
+      --tool-arg:
+        param: AssembleRunParams.extra
+        value: mode=nano-raw
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
+      --versions-out:
+        param: AssembleRunParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+        observable: a versions YAML fragment is written
+  genome-qc:
+    dispatch: step:repgenr.stages.assemble_steps.genome_qc
+    base_args:
+    - --assemblies
+    - '{dir}'
+    - -o
+    - '{out}'
+    flags:
+      --assemblies:
+        param: GenomeQcParams.assemblies_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --out:
+        aliases:
+        - -o
+        param: GenomeQcParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --threads:
+        aliases:
+        - -t
+        param: GenomeQcParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: task.cpus'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --checkm2-db:
+        param: GenomeQcParams.checkm2_db
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.checkm2_db
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --classifier:
+        param: GenomeQcParams.classifier
+        value: none
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: sourmash when params.gtdb_sketch is set'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --gtdb-sketch:
+        param: GenomeQcParams.gtdb_sketch
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.gtdb_sketch
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --gtdb-lineages:
+        param: GenomeQcParams.gtdb_lineages
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.gtdb_lineages
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --tool-arg:
+        param: GenomeQcParams.extra
+        value: k=v
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: not exposed by the GENOME_QC module'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --versions-out:
+        param: GenomeQcParams.versions_out
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+        observable: a versions YAML fragment is written
+  reads-gather:
+    dispatch: step:repgenr.stages.assemble_steps.reads_gather
+    base_args:
+    - --reads-tsv
+    - '{file}'
+    - --assemblies
+    - '{dir}'
+    - -o
+    - '{out}'
+    flags:
+      --reads-tsv:
+        param: ReadsGatherParams.reads_tsv
+        value: '{alt_file}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --assemblies:
+        param: ReadsGatherParams.assemblies_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --out:
+        aliases:
+        - -o
+        param: ReadsGatherParams.out_dir
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --qc:
+        param: ReadsGatherParams.qc_dir
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: fixed by the process script'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --min-completeness:
+        param: ReadsGatherParams.min_completeness
+        value: '90'
+        validated: range
+        invalid: '101'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: site config withName READS_GATHER ext.args'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --max-contamination:
+        param: ReadsGatherParams.max_contamination
+        value: '5'
+        validated: range
+        invalid: '-1'
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: site config withName READS_GATHER ext.args'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
 known_short_alias_collisions: {}

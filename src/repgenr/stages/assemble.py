@@ -145,7 +145,13 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
 
     def work(outcome: _Outcome) -> _Outcome:
         return _fetch_and_assemble(
-            outcome, params, threads_each, assemblies, scratch, versions, logger
+            outcome,
+            params,
+            threads_each,
+            assemblies / outcome.row.run_accession,
+            scratch / outcome.row.run_accession,
+            versions,
+            logger,
         )
 
     done = parallel_map(work, pending, jobs, logger=logger)
@@ -157,80 +163,31 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         o.label = _taxa(o.row)
 
     # Every run's contigs file is named alike; QC and classification see them
-    # through links carrying the final genome names, which are unique.
-    named = _named_links(assembled, assemblies, scratch / "named")
-
-    # Quality: excuse assemblies outside the gate before anything is published.
+    # through links named by run accession, which are unique.
+    named = named_links(
+        {o.row.run_accession: assemblies / o.row.run_accession / _CONTIGS_NAME for o in assembled},
+        scratch / "named",
+    )
     checkm2_db = params.checkm2_db or checkm2_db_from_env()
-    if checkm2_db and assembled:
-        versions.update(preflight_checkm2())
-        quality = run_checkm2(
-            [named[o.row.run_accession] for o in assembled],
-            scratch / "checkm2",
-            db=Path(checkm2_db),
-            threads=params.threads,
-            logger=logger,
-        )
-        for o in assembled:
-            o.quality = quality.get(_name(o))
-            if o.quality is None:
-                logger.warning("%s: CheckM2 reported no quality", o.row.run_accession)
-                continue
-            completeness, contamination = o.quality
-            if completeness < params.min_completeness or contamination > params.max_contamination:
-                o.excused = ExcusedRun(
-                    o.row.run_accession,
-                    "qc",
-                    f"qc_failed: completeness {completeness:.1f} "
-                    f"(min {params.min_completeness:g}), contamination {contamination:.1f} "
-                    f"(max {params.max_contamination:g})",
-                )
+    classifier_name = classifier_for(params.classifier, params.gtdb_sketch)
+    quality, classified = assess(
+        named,
+        checkm2_db=checkm2_db,
+        classifier=classifier_name,
+        gtdb_sketch=params.gtdb_sketch,
+        gtdb_lineages=params.gtdb_lineages,
+        threads=params.threads,
+        extra=params.extra,
+        scratch=scratch,
+        versions=versions,
+        logger=logger,
+    )
+    if quality is not None:
+        apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
         assembled = [o for o in assembled if o.excused is None]
-    elif not checkm2_db:
-        logger.info(
-            "No CheckM2 database configured (--checkm2-db or %s); assemblies are not "
-            "quality-scored and --keeper quality will fall back to the tool's pick.",
-            "CHECKM2DB",
-        )
-
-    # Classification: verify the submitted organism, and name by GTDB when it agrees.
     n_disagree = 0
-    classifier_name = _classifier_name(params)
-    if classifier_name and assembled:
-        classifier = classifier_registry.create(classifier_name)
-        versions.update(classifier.preflight())
-        sketch = Path(params.gtdb_sketch or os.environ[GTDB_SKETCH_ENV])
-        lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
-        classified = classifier.classify(
-            [named[o.row.run_accession] for o in assembled],
-            scratch / "classify",
-            ClassifyParams(
-                db=sketch,
-                lineages=None if lineages is None else Path(lineages),
-                threads=params.threads,
-                extra=dict(params.extra),
-            ),
-            logger,
-        )
-        for o in assembled:
-            o.gtdb = classified.get(_name(o))
-            if o.gtdb is None:
-                continue
-            versions["gtdb_sketch"] = o.gtdb.db_version or versions.get("gtdb_sketch", "")
-            gtdb_tokens = _gtdb_tokens(o.gtdb.taxonomy)
-            assert o.label is not None
-            if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
-                o.label = gtdb_tokens
-                o.label_source = "classifier"
-            else:
-                o.taxonomy_flag = "classifier_disagrees"
-                n_disagree += 1
-                logger.warning(
-                    "%s: submitted as %s but classified as %s; keeping the submitted name",
-                    o.row.run_accession,
-                    o.row.organism,
-                    o.gtdb.taxonomy.split(";")[-1],
-                )
+    if classified is not None:
+        n_disagree = apply_classification(assembled, classified, versions, logger)
 
     excused = [o.excused for o in outcomes if o.excused is not None]
     excused_path = ctx.workdir / EXCUSED_RUNS_TSV
@@ -352,13 +309,13 @@ def _fetch_and_assemble(
     outcome: _Outcome,
     params: AssembleParams,
     threads: int,
-    assemblies: Path,
-    scratch: Path,
+    out_dir: Path,
+    run_scratch: Path,
     versions: dict[str, str],
     logger: logging.Logger,
 ) -> _Outcome:
+    """Fetch and assemble one run into ``out_dir`` (contigs and the done marker)."""
     row = outcome.row
-    run_scratch = scratch / row.run_accession
     if run_scratch.exists():
         remove_tree(run_scratch)
     run_scratch.mkdir(parents=True)
@@ -375,7 +332,6 @@ def _fetch_and_assemble(
     reads = ReadSet(
         row.run_accession, row.platform, row.instrument_model, row.layout, files, row.bases
     )
-    out_dir = assemblies / row.run_accession
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
         result = adapter.assemble(
@@ -454,32 +410,150 @@ def _taxa(row: ReadRow) -> tuple[str, str, str]:
     return row.family or "unknown", row.genus or "unknown", row.species or "unknown"
 
 
-def _named_links(assembled: list[_Outcome], assemblies: Path, link_dir: Path) -> dict[str, Path]:
-    """Run accession -> a link to its contigs named as the genome will be."""
+def named_links(contigs: dict[str, Path], link_dir: Path) -> dict[str, Path]:
+    """Run accession -> a link ``<run>.fasta`` to its contigs (unique names for
+    tools that key their reports by file name)."""
     if link_dir.exists():
         remove_tree(link_dir)
     link_dir.mkdir(parents=True)
     links = {}
-    for o in assembled:
-        link = link_dir / _name(o)
-        os.symlink((assemblies / o.row.run_accession / _CONTIGS_NAME).resolve(), link)
-        links[o.row.run_accession] = link
+    for run, path in contigs.items():
+        link = link_dir / f"{run}.fasta"
+        os.symlink(path.resolve(), link)
+        links[run] = link
     return links
 
 
-def _classifier_name(params: AssembleParams) -> str | None:
+def classifier_for(classifier: str, gtdb_sketch: str | None) -> str | None:
     """The classifier to run: explicit, or sourmash when a sketch is configured."""
-    if params.classifier == "none":
+    if classifier == "none":
         return None
-    sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
-    if params.classifier == "auto":
+    sketch = gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    if classifier == "auto":
         return "sourmash" if sketch else None
     if not sketch:
         raise UserInputError(
-            f"--classifier {params.classifier} needs a reference sketch (--gtdb-sketch or "
+            f"--classifier {classifier} needs a reference sketch (--gtdb-sketch or "
             f"{GTDB_SKETCH_ENV})."
         )
-    return params.classifier
+    return classifier
+
+
+def assess(
+    named: dict[str, Path],
+    *,
+    checkm2_db: str | None,
+    classifier: str | None,
+    gtdb_sketch: str | None,
+    gtdb_lineages: str | None,
+    threads: int,
+    extra: dict[str, str],
+    scratch: Path,
+    versions: dict[str, str],
+    logger: logging.Logger,
+) -> tuple[dict[str, tuple[float, float]] | None, dict[str, Classification] | None]:
+    """Score (CheckM2) and classify the assemblies in ``named`` (run -> FASTA).
+
+    Either result is None when the corresponding database is not configured.
+    Both are keyed by run accession.
+    """
+    quality: dict[str, tuple[float, float]] | None = None
+    classified: dict[str, Classification] | None = None
+    if checkm2_db and named:
+        versions.update(preflight_checkm2())
+        by_name = run_checkm2(
+            list(named.values()),
+            scratch / "checkm2",
+            db=Path(checkm2_db),
+            threads=threads,
+            logger=logger,
+        )
+        quality = {run: by_name[link.name] for run, link in named.items() if link.name in by_name}
+        for run, link in named.items():
+            if link.name not in by_name:
+                logger.warning("%s: CheckM2 reported no quality", run)
+    elif not checkm2_db:
+        logger.info(
+            "No CheckM2 database configured (--checkm2-db or %s); assemblies are not "
+            "quality-scored and --keeper quality will fall back to the tool's pick.",
+            "CHECKM2DB",
+        )
+    if classifier and named:
+        adapter = classifier_registry.create(classifier)
+        versions.update(adapter.preflight())
+        sketch = Path(gtdb_sketch or os.environ[GTDB_SKETCH_ENV])
+        lineages = gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
+        by_name_cls = adapter.classify(
+            list(named.values()),
+            scratch / "classify",
+            ClassifyParams(
+                db=sketch,
+                lineages=None if lineages is None else Path(lineages),
+                threads=threads,
+                extra=dict(extra),
+            ),
+            logger,
+        )
+        classified = {
+            run: by_name_cls[link.name] for run, link in named.items() if link.name in by_name_cls
+        }
+    return quality, classified
+
+
+def apply_quality(
+    outcomes: list[_Outcome],
+    quality: dict[str, tuple[float, float]],
+    min_completeness: float,
+    max_contamination: float,
+    logger: logging.Logger,
+) -> None:
+    """Attach CheckM2 values and excuse assemblies outside the gate."""
+    for o in outcomes:
+        o.quality = quality.get(o.row.run_accession)
+        if o.quality is None:
+            continue
+        completeness, contamination = o.quality
+        if completeness < min_completeness or contamination > max_contamination:
+            o.excused = ExcusedRun(
+                o.row.run_accession,
+                "qc",
+                f"qc_failed: completeness {completeness:.1f} "
+                f"(min {min_completeness:g}), contamination {contamination:.1f} "
+                f"(max {max_contamination:g})",
+            )
+
+
+def apply_classification(
+    outcomes: list[_Outcome],
+    classified: dict[str, Classification],
+    versions: dict[str, str],
+    logger: logging.Logger,
+) -> int:
+    """Name by GTDB tokens where the classifier agrees at genus; flag the rest.
+
+    Returns the number of disagreements.
+    """
+    n_disagree = 0
+    for o in outcomes:
+        o.gtdb = classified.get(o.row.run_accession)
+        if o.gtdb is None:
+            continue
+        versions["gtdb_sketch"] = o.gtdb.db_version or versions.get("gtdb_sketch", "")
+        gtdb_tokens = _gtdb_tokens(o.gtdb.taxonomy)
+        assert o.label is not None
+        if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
+            o.label = gtdb_tokens
+            o.label_source = "classifier"
+        else:
+            o.taxonomy_flag = "classifier_disagrees"
+            n_disagree += 1
+            logger.warning(
+                "%s: submitted as %s but classified as %s; keeping the submitted name",
+                o.row.run_accession,
+                o.row.organism,
+                o.gtdb.taxonomy.split(";")[-1],
+            )
+    return n_disagree
 
 
 def _gtdb_tokens(lineage: str) -> tuple[str, str, str]:

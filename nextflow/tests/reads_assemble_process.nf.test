@@ -1,0 +1,63 @@
+nextflow_process {
+
+    name "READS_ASSEMBLE (stub)"
+    script "../modules/local/dataflow/reads_assemble.nf"
+    tag "stub"
+    process "READS_ASSEMBLE"
+    options "-stub"
+    config "./reads_debug.config"
+
+    test("an Illumina run yields a directory named by the accession with contigs and the marker") {
+        when {
+            params {
+                assembler = 'skesa'
+                assemble_args = '--min-contig-length 1000'
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.SRR000001', mode: 'reads', run: [id: 'test', mode: 'reads'],
+                     accession: 'SRR000001', platform: 'ILLUMINA'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.assembly.get(0)) {
+                assert get(0).accession == 'SRR000001'
+                assert file(get(1)).name == 'SRR000001'
+                assert path("${get(1)}/contigs.fasta").exists()
+                assert path("${get(1)}/assembly.ok").text.contains('"assembler"')
+            }
+            // modules.config: --assembler from params.assembler, then assemble_args;
+            // the platform reaches task.ext for the process_assembly memory rule.
+            assert process.stdout.any { line -> line.contains('ext.args: --assembler skesa --min-contig-length 1000') }
+            assert process.stdout.any { line -> line.contains('ext.platform: ILLUMINA') }
+        }
+    }
+
+    test("an unsupported platform yields an excuse file instead of contigs") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.SRR000003', mode: 'reads', run: [id: 'test', mode: 'reads'],
+                     accession: 'SRR000003', platform: 'ION_TORRENT'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.assembly.get(0)) {
+                assert !path("${get(1)}/assembly.ok").exists()
+                assert path("${get(1)}/excused_runs.tsv").text.contains('unsupported_platform')
+            }
+            // auto: no --assembler flag on the command line
+            assert process.stdout.any { line -> line.trim() == 'ext.args:' }
+        }
+    }
+}

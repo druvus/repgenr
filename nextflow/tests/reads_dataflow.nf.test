@@ -1,0 +1,36 @@
+nextflow_pipeline {
+
+    name "READS_DATAFLOW (stub)"
+    script "../tests/reads_dataflow.nf"
+    tag "stub"
+    options "-stub"
+
+    test("the reads data-channel pipeline wires select -> assemble -> gather -> derep -> phylo -> tree2tax") {
+        when {
+            params {
+                outdir = "$outputDir"
+                mode = 'reads'
+                reads_args = '-tg francisella --platform illumina --max-runs 5'
+                derep_process_size = 1
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            assert path("$outputDir/tree2tax.tsv").exists()
+            assert path("$outputDir/genomes_map.tsv").exists()
+            assert path("$outputDir/phylo/tree/tree.nwk").exists()
+            assert path("$outputDir/reads/reads.tsv").exists()
+            assert path("$outputDir/reads/selection.tsv").exists()
+            assert path("$outputDir/reads/assembly_stats.tsv").exists()
+            assert path("$outputDir/reads/excused_runs.tsv").exists()
+            assert path("$outputDir/pipeline_info/software_versions.yml").text.contains("repgenr")
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains('READS_SELECT (francisella)') }
+            assert names.count { n -> n.contains('READS_ASSEMBLE (francisella.SRR') } == 3
+            assert names.any { n -> n.contains('READS_GATHER (francisella)') }
+            assert names.any { n -> n.contains('DEREP_MERGE (francisella.merged)') }
+            assert names.any { n -> n.contains('TREE2TAX (francisella)') }
+        }
+    }
+}

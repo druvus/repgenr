@@ -1,4 +1,5 @@
-"""Stateless data-channel steps: genome-fetch, dereplicate-chunk, dereplicate-merge.
+"""Stateless data-channel steps: genome-fetch, dereplicate-chunk, dereplicate-merge,
+assemble-run, genome-qc, reads-gather.
 
 These run as discrete Nextflow process steps (no shared workdir); they read
 explicit inputs (a selection.tsv or a file-of-filenames) and write a result
@@ -21,6 +22,8 @@ from .base import (
     HELP_SECONDARY_ANI,
     HELP_THREADS,
     _aligner_help,
+    _assembler_help,
+    _classifier_help,
     _derep_help,
     _parse_key_values,
     _read_path_fofn,
@@ -367,6 +370,160 @@ def dereplicate_merge_cmd(
                 reduce=reduce,
                 target_reps=target_reps,
                 versions_out=versions_out,
+            ),
+            logger,
+        )
+
+
+# --- reads chain ------------------------------------------------------------------
+
+
+@app.command(name="assemble-run")
+def assemble_run_cmd(
+    reads_tsv: Path = typer.Option(..., "--reads-tsv", help="reads.tsv from the reads stage."),
+    run: str = typer.Option(
+        ..., "--run", help="The run accession (a row of reads.tsv) to assemble."
+    ),
+    out_dir: Path = typer.Option(
+        ..., "-o", "--out", help="Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv."
+    ),
+    assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    memory_gb: int = typer.Option(
+        16,
+        "--memory-gb",
+        min=1,
+        help="Memory hint for the assembly, in GB, for tools that cap RAM.",
+    ),
+    min_contig_length: int = typer.Option(
+        500, "--min-contig-length", min=0, help="Drop contigs shorter than this many bases."
+    ),
+    keep_reads: bool = typer.Option(
+        False, "--keep-reads", help="Keep the downloaded FASTQ files after assembling."
+    ),
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep the assembler scratch directory."
+    ),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
+    ),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
+) -> None:
+    """Fetch and assemble one run of a reads.tsv (stateless data-channel step)."""
+    from ..assemblers.base import registry as asm_registry
+    from ..stages.assemble_steps import AssembleRunParams, assemble_run
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    with stage_errors(logger):
+        _require_choice(assembler, {"auto", *asm_registry.names()}, "--assembler")
+        assemble_run(
+            AssembleRunParams(
+                reads_tsv=reads_tsv,
+                run=run,
+                out_dir=out_dir,
+                assembler=assembler,
+                threads=threads,
+                memory_gb=memory_gb,
+                min_contig_length=min_contig_length,
+                keep_reads=keep_reads,
+                keep_files=keep_files,
+                extra=_parse_key_values(tool_arg, "--tool-arg"),
+                versions_out=versions_out,
+            ),
+            logger,
+        )
+
+
+@app.command(name="genome-qc")
+def genome_qc_cmd(
+    assemblies: Path = typer.Option(
+        ..., "--assemblies", help="Directory of assemble-run output dirs, one per run."
+    ),
+    out_dir: Path = typer.Option(
+        ..., "-o", "--out", help="Output dir for quality.tsv and classification.tsv."
+    ),
+    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    checkm2_db: Path | None = typer.Option(
+        None,
+        "--checkm2-db",
+        help="CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB).",
+    ),
+    classifier: str = typer.Option("auto", "--classifier", help=_classifier_help()),
+    gtdb_sketch: Path | None = typer.Option(
+        None,
+        "--gtdb-sketch",
+        help="GTDB sourmash sketch database (.sig.zip); enables classification "
+        "(or set REPGENR_GTDB_SKETCH).",
+    ),
+    gtdb_lineages: Path | None = typer.Option(
+        None,
+        "--gtdb-lineages",
+        help="The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES).",
+    ),
+    tool_arg: list[str] = typer.Option(
+        [], "--tool-arg", help="Classifier tuning as key=value (repeatable)."
+    ),
+    versions_out: Path | None = typer.Option(
+        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
+    ),
+) -> None:
+    """Score (CheckM2) and classify a batch of assemblies (stateless data-channel step)."""
+    from ..classifiers.base import registry as cls_registry
+    from ..stages.assemble_steps import GenomeQcParams, genome_qc
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    with stage_errors(logger):
+        _require_choice(classifier, {"auto", "none", *cls_registry.names()}, "--classifier")
+        genome_qc(
+            GenomeQcParams(
+                assemblies_dir=assemblies,
+                out_dir=out_dir,
+                threads=threads,
+                checkm2_db=None if checkm2_db is None else str(checkm2_db),
+                classifier=classifier,
+                gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),
+                gtdb_lineages=None if gtdb_lineages is None else str(gtdb_lineages),
+                extra=_parse_key_values(tool_arg, "--tool-arg"),
+                versions_out=versions_out,
+            ),
+            logger,
+        )
+
+
+@app.command(name="reads-gather")
+def reads_gather_cmd(
+    reads_tsv: Path = typer.Option(..., "--reads-tsv", help="reads.tsv from the reads stage."),
+    assemblies: Path = typer.Option(
+        ..., "--assemblies", help="Directory of assemble-run output dirs, one per run."
+    ),
+    out_dir: Path = typer.Option(
+        ..., "-o", "--out", help="Output dir for genomes/, selection.tsv and the stats tables."
+    ),
+    qc: Path | None = typer.Option(
+        None, "--qc", help="genome-qc output dir (quality.tsv, classification.tsv), if it ran."
+    ),
+    min_completeness: float = typer.Option(
+        50.0, "--min-completeness", min=0.0, max=100.0, help="CheckM2 completeness floor."
+    ),
+    max_contamination: float = typer.Option(
+        10.0, "--max-contamination", min=0.0, max=100.0, help="CheckM2 contamination ceiling."
+    ),
+) -> None:
+    """Write the genome contract from per-run assemblies (stateless data-channel step)."""
+    from ..stages.assemble_steps import ReadsGatherParams, reads_gather
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    with stage_errors(logger):
+        reads_gather(
+            ReadsGatherParams(
+                reads_tsv=reads_tsv,
+                assemblies_dir=assemblies,
+                out_dir=out_dir,
+                qc_dir=qc,
+                min_completeness=min_completeness,
+                max_contamination=max_contamination,
             ),
             logger,
         )

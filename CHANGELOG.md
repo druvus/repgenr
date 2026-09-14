@@ -7,6 +7,19 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Nextflow `--mode reads`: the reads chain as data-channel tasks. `READS_SELECT`
+  runs the reads stage, `READS_ASSEMBLE` assembles one run per task (new
+  `process_assembly` label: 8 CPUs, 16 GB for short reads and 32 GB for long
+  reads via the run's platform), `GENOME_QC` scores and classifies the batch
+  when `--checkm2_db` or `--gtdb_sketch` is set, and `READS_GATHER` writes the
+  genome contract that feeds the shared dereplication, phylo and tree2tax
+  modules. Parameters `reads_args`, `assembler`, `assemble_args`,
+  `checkm2_db`, `gtdb_sketch`, `gtdb_lineages`; tables published under
+  `reads/`. Behind the modules, three stateless CLI steps: `assemble-run`,
+  `genome-qc` and `reads-gather`. The `assemble` stage now keys its QC and
+  classification inputs by run accession rather than by the final genome
+  name.
+
 - `assemble --append` adds reads-derived genomes to a working directory that
   already holds a GTDB or local selection, keeping its rows, files and
   outgroup; `metadata --drop-foreign` and `ingest --drop-foreign` are the
@@ -161,6 +174,11 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- Container mounts bind the real directory behind a symlinked path, so a
+  containerised tool can open inputs that Nextflow staged through a linked
+  directory (seen with sourmash `dereplicate-merge` under the docker
+  backend). The stateless reads steps resolve their directories before any
+  path reaches a tool.
 - Segment-grouped viral isolates (`vgenome --group-segments`) reached
   `genomes_map.tsv` only as their synthetic `iso-` token; the member segment
   accessions were lost from the deliverable. `vgenome` now writes
