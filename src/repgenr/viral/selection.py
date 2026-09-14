@@ -21,7 +21,13 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 from ..core.context import WorkdirContext
-from ..core.contracts import SelectionRow, genome_filename, write_selection
+from ..core.contracts import (
+    SEGMENTS_TSV,
+    SelectionRow,
+    genome_filename,
+    write_segments,
+    write_selection,
+)
 from ..core.errors import UserInputError
 from ..core.manifest import record_from_selection
 from ..core.process import staged_dir
@@ -77,9 +83,10 @@ def run_records(
     # The genomes are built beside genomes/ and swapped in only when every
     # file is written; selection.tsv follows. A crash mid-write leaves the
     # previous genome set and its selection table as they were.
+    segments: dict[str, list[str]] = {}
     with staged_dir(ctx.genomes_dir) as genomes_dir:
         if params.group_segments:
-            selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger)
+            selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger, segments)
         else:
             selection_rows = []
             for r in kept:
@@ -111,6 +118,13 @@ def run_records(
         )
 
     write_selection(ctx.workdir / "selection.tsv", selection_rows)
+    # The member accessions behind each grouped isolate, for tree2tax's
+    # genomes_map; a run without grouping must not leave a stale table.
+    segments_path = ctx.workdir / SEGMENTS_TSV
+    if segments:
+        write_segments(segments_path, segments)
+    else:
+        segments_path.unlink(missing_ok=True)
     ctx.manifest.replace_genomes([record_from_selection(r, "ncbi_virus") for r in selection_rows])
     n_written = sum(1 for r in selection_rows if not r.is_outgroup)
     ctx.config.record_stage(
@@ -214,7 +228,7 @@ def _segment_labels(recs) -> set[str]:
     return {r.segment for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"}
 
 
-def _write_isolate_groups(genomes_dir, records, seqs, logger):
+def _write_isolate_groups(genomes_dir, records, seqs, logger, segments=None):
     """Combine each isolate's segments into one genome; keep singletons as-is.
 
     Records sharing an ``isolate`` name (segmented viruses) are concatenated in
@@ -246,6 +260,8 @@ def _write_isolate_groups(genomes_dir, records, seqs, logger):
         seq = "".join(str(seqs[r.accession].seq) for r in ordered)
         (genomes_dir / name).write_text(f">{acc} {iso} ({len(ordered)} segments)\n{seq}\n")
         rows.append(SelectionRow(acc, rep.family, rep.genus, rep.species, False, name))
+        if segments is not None:
+            segments[acc] = [r.accession for r in ordered]
         grouped += len(recs)
     for r in singletons:
         name = genome_filename(r.family, r.genus, r.species, r.accession)

@@ -33,7 +33,8 @@ top level, and the execution reports under `pipeline_info/`.
 | `align/msa.fasta` | phylo | Whole-genome alignment from the aligner (`--msa-source aligner`). |
 | `align/msa_source.json`, `snp/msa_source.json` | phylo | Stamp beside the alignment phylo built: the genome set, the source settings and the alignment's digest, so a later `phylo` that changes only the tree builder reuses it. |
 | `tree/` | phylo | Phylogeny (`tree.nwk`) and the tree builder's own files (logs, bootstrap trees). |
-| `genomes_map.tsv` | tree2tax | Map from each representative to its dereplicated members. |
+| `segments.tsv` | vgenome | With `--group-segments`: each grouped isolate's token and its member segment accessions, one row per member. Absent otherwise. |
+| `genomes_map.tsv` | tree2tax | Accession to leaf: each representative, its dereplicated members, and for a grouped viral isolate its member segment accessions. |
 | `tree2tax.tsv` | tree2tax | FlexTaxD-compatible taxonomy derived from the tree. |
 
 ## Cluster summary

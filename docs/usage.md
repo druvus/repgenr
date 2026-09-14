@@ -113,7 +113,9 @@ or a record id on BV-BRC, and `run --viral --outgroup-accession` forwards
 the same choice. With `--group-segments` the search still runs, with the
 kept records' length span as its window, and the outgroup is one record of
 the sister species rather than a grouped isolate. `--no-outgroup` leaves the
-tree unrooted.
+tree unrooted. A grouped isolate's genome carries a synthetic `iso-` token as
+its accession; `segments.tsv` records the member accessions behind it, and
+`tree2tax` lists them under the isolate's leaf in `genomes_map.tsv`.
 
 ### Viral length filtering and over-represented species
 

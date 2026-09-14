@@ -22,10 +22,12 @@ from ..core.context import WorkdirContext
 from ..core.contracts import (
     CLUSTERS_TSV,
     GENOMES_MAP_TSV,
+    SEGMENTS_TSV,
     TREE2TAX_TSV,
     TREE_NWK,
     accession_from_filename,
     read_clusters,
+    read_segments,
     strip_fasta_suffix,
     write_genomes_map,
     write_tree2tax,
@@ -81,6 +83,7 @@ def _emit_relations(
     logger: logging.Logger,
     collapse_support: float | None = None,
     collapse_length: float | None = None,
+    segments: dict[str, list[str]] | None = None,
 ) -> tuple[Path, Path, int]:
     """Build FlexTaxD relations from a tree and write the two output tables.
 
@@ -109,7 +112,7 @@ def _emit_relations(
         del leaves_nodes[outgroup_leaf]
 
     write_tree2tax(out_tree2tax, _edges(leaves_nodes))
-    write_genomes_map(out_map, _genome_map(leaves_nodes, redundant))
+    write_genomes_map(out_map, _genome_map(leaves_nodes, redundant, segments))
     logger.info("Wrote %s and %s", out_tree2tax.name, out_map.name)
     return out_tree2tax, out_map, stats.collapsed
 
@@ -159,6 +162,8 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
 
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}
+    segments_path = ctx.workdir / SEGMENTS_TSV
+    segments = read_segments(segments_path) if segments_path.exists() else None
 
     out_tree2tax, out_map, collapsed = _emit_relations(
         tree_file.read_text().strip(),
@@ -172,6 +177,7 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
         logger=logger,
         collapse_support=params.collapse_support,
         collapse_length=params.collapse_length,
+        segments=segments,
     )
 
     ctx.config.record_stage(
@@ -396,13 +402,26 @@ def _load_redundant_from(clusters_file: Path) -> dict[str, list[str]]:
 
 
 def _genome_map(
-    leaves_nodes: dict[str, list[str]], redundant: dict[str, list[str]]
+    leaves_nodes: dict[str, list[str]],
+    redundant: dict[str, list[str]],
+    segments: dict[str, list[str]] | None = None,
 ) -> list[tuple[str, str]]:
+    """accession -> leaf rows: each leaf, its redundant members, and for a
+    segment-grouped isolate (whose accession is a synthetic token) the member
+    segment accessions as well, so every real accession reaches the map."""
+    members = segments or {}
     mapping: list[tuple[str, str]] = []
+
+    def _add(genome: str, leaf: str) -> None:
+        accession = _accession(genome)
+        mapping.append((accession, leaf))
+        for segment in members.get(accession, []):
+            mapping.append((segment, leaf))
+
     for leaf in leaves_nodes:
-        mapping.append((_accession(leaf), leaf))
+        _add(leaf, leaf)
         for red in redundant.get(leaf, []):
-            mapping.append((_accession(red), leaf))
+            _add(red, leaf)
     return mapping
 
 

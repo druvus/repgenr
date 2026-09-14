@@ -145,3 +145,16 @@ def test_tree2tax_root_name_applies_without_remove_outgroup(workdir: Path) -> No
     parents = {p for _, p in _edges(t2t)}
     assert "TOP" in parents
     assert "root" not in parents
+
+
+def test_tree2tax_lists_segment_members_under_their_isolate(workdir: Path) -> None:
+    """A segment-grouped isolate genome maps its member accessions, not only its token."""
+    from repgenr.core.contracts import SEGMENTS_TSV, write_segments
+
+    _setup(workdir)
+    write_segments(workdir / SEGMENTS_TSV, {"GCA_000001.1": ["SEG1.1", "SEG2.1"]})
+    ctx = WorkdirContext(workdir, create=True)
+    _, gmap = tree2tax_run(ctx, Tree2taxParams())
+    rows = {ln.split("\t")[0]: ln.split("\t")[1] for ln in gmap.read_text().splitlines()}
+    assert rows["SEG1.1"] == rows["SEG2.1"] == rows["GCA_000001.1"] == "Fam_Gen_sp_GCA_000001.1"
+    assert "GCA_000002.1" in rows
