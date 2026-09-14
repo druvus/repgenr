@@ -73,17 +73,21 @@ def test_sourmash_classifier_chain_and_parse(tmp_path: Path, monkeypatch) -> Non
         for _prefix, argv in steps:
             cmd = [str(c) for c in argv]
             recorded.append(cmd)
-            if cmd[:3] == ["sourmash", "tax", "genome"]:
-                base = Path(cmd[cmd.index("--output-base") + 1])
-                base.parent.mkdir(parents=True, exist_ok=True)
-                Path(str(base) + ".classifications.csv").write_text(
-                    _CLASSIFICATION, encoding="utf-8"
-                )
-            elif cmd[:2] == ["sourmash", "gather"]:
+            if cmd[:2] == ["sourmash", "gather"]:
                 Path(cmd[cmd.index("-o") + 1]).write_text(_GATHER_HEADER, encoding="utf-8")
         return 0
 
+    def fake_run_tool(caps, argv, *, logger, **kwargs):
+        cmd = [str(c) for c in argv]
+        recorded.append(cmd)
+        assert cmd[:3] == ["sourmash", "tax", "genome"]
+        base = Path(cmd[cmd.index("--output-base") + 1])
+        base.parent.mkdir(parents=True, exist_ok=True)
+        Path(str(base) + ".classifications.csv").write_text(_CLASSIFICATION, encoding="utf-8")
+        return 0
+
     monkeypatch.setattr(sm, "run_chain", fake_run_chain)
+    monkeypatch.setattr(sm, "run_tool", fake_run_tool)
     genome = tmp_path / "Fam_Gen_sp_SRR1.fasta"
     genome.write_text(">a\nACGT\n", encoding="utf-8")
     db, lineages = tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip", tmp_path / "lineages.csv"
@@ -112,3 +116,60 @@ def test_classifier_family_is_registered_and_listed() -> None:
     assert any(
         ln.startswith("classifiers:") and "sourmash" in ln for ln in result.output.splitlines()
     )
+
+
+def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkeypatch) -> None:
+    """A gather is single-threaded and takes tens of seconds against a GTDB
+    sketch, so the classifier runs one per genome side by side (up to the
+    thread budget) and resolves every gather with one tax call."""
+    import threading
+
+    import repgenr.classifiers.sourmash as sm
+
+    active, peak, lock = 0, 0, threading.Lock()
+    tax_calls: list[list[str]] = []
+
+    def fake_run_chain(caps, steps, *, logger, **kwargs):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        import time
+
+        time.sleep(0.05)
+        for _prefix, argv in steps:
+            cmd = [str(c) for c in argv]
+            if cmd[:2] == ["sourmash", "gather"]:
+                Path(cmd[cmd.index("-o") + 1]).write_text(_GATHER_HEADER, encoding="utf-8")
+        with lock:
+            active -= 1
+        return 0
+
+    def fake_run_tool(caps, argv, *, logger, **kwargs):
+        cmd = [str(c) for c in argv]
+        tax_calls.append(cmd)
+        base = Path(cmd[cmd.index("--output-base") + 1])
+        rows = [_CLASSIFICATION.splitlines()[0]]
+        for i in range(4):
+            rows.append(_CLASSIFICATION.splitlines()[1].replace("Fam_Gen_sp_SRR1", f"SRR{i}"))
+        Path(str(base) + ".classifications.csv").write_text(
+            "\n".join(rows) + "\n", encoding="utf-8"
+        )
+        return 0
+
+    monkeypatch.setattr(sm, "run_chain", fake_run_chain)
+    monkeypatch.setattr(sm, "run_tool", fake_run_tool)
+    genomes = []
+    for i in range(4):
+        g = tmp_path / f"SRR{i}.fasta"
+        g.write_text(">a\nACGT\n", encoding="utf-8")
+        genomes.append(g)
+    db, lineages = tmp_path / "gtdb.sig.zip", tmp_path / "lineages.csv"
+    db.write_bytes(b"zip"), lineages.write_text("ident\n", encoding="utf-8")
+    result = registry.create("sourmash").classify(
+        genomes, tmp_path / "cls", ClassifyParams(db=db, lineages=lineages, threads=4), _LOG
+    )
+    assert sorted(result) == [f"SRR{i}.fasta" for i in range(4)]
+    assert peak > 1, "gathers did not overlap"
+    assert len(tax_calls) == 1 and tax_calls[0].count("--gather-csv") == 1
+    assert sum(1 for t in tax_calls[0] if t.endswith("gather.csv")) == 4

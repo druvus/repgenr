@@ -169,13 +169,15 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         scratch / "named",
     )
     checkm2_db = params.checkm2_db or checkm2_db_from_env()
-    classifier_name = classifier_for(params.classifier, params.gtdb_sketch)
+    gtdb_sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    gtdb_lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
+    classifier_name = classifier_for(params.classifier, gtdb_sketch)
     quality, classified = assess(
         named,
         checkm2_db=checkm2_db,
         classifier=classifier_name,
-        gtdb_sketch=params.gtdb_sketch,
-        gtdb_lineages=params.gtdb_lineages,
+        gtdb_sketch=gtdb_sketch,
+        gtdb_lineages=gtdb_lineages,
         threads=params.threads,
         extra=params.extra,
         scratch=scratch,
@@ -230,7 +232,10 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         tool=params.assembler,
         params={
             **asdict(params),
+            # The databases as resolved (flag or environment variable).
             "checkm2_db": checkm2_db,
+            "gtdb_sketch": gtdb_sketch,
+            "gtdb_lineages": gtdb_lineages,
             "classifier_effective": classifier_name,
             "assemblers_used": sorted({o.assembler for o in assembled if o.assembler}),
             "n_assembled": len(assembled),
@@ -296,8 +301,10 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
 
 
 def _preflight(plan: list[_Outcome], logger: logging.Logger) -> dict[str, str]:
+    """Check the assemblers the pending runs need; finished runs need none."""
     versions: dict[str, str] = {}
-    for name in sorted({o.assembler for o in plan if o.assembler and o.excused is None}):
+    pending = [o for o in plan if o.assembler and o.excused is None and o.stats is None]
+    for name in sorted({o.assembler for o in pending if o.assembler}):
         versions.update(registry.create(name).preflight())
     return versions
 
@@ -548,9 +555,12 @@ def apply_classification(
             o.taxonomy_flag = "classifier_disagrees"
             n_disagree += 1
             logger.warning(
-                "%s: submitted as %s but classified as %s; keeping the submitted name",
+                "%s: submitted as genus %s (%s) but classified as %s, %s; keeping the "
+                "submitted name and flagging classifier_disagrees",
                 o.row.run_accession,
+                o.label[1],
                 o.row.organism,
+                next((c for c in o.gtdb.taxonomy.split(";") if c.startswith("g__")), "g__?"),
                 o.gtdb.taxonomy.split(";")[-1],
             )
     return n_disagree
