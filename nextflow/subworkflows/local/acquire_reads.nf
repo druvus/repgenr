@@ -37,7 +37,9 @@ workflow ACQUIRE_READS {
     }
 
     READS_ASSEMBLE(ch_runs)
-    ch_versions = ch_versions.mix(READS_ASSEMBLE.out.versions.first())
+    // Every task's fragment: a mixed batch records both assemblers (the
+    // publish step de-duplicates identical fragments).
+    ch_versions = ch_versions.mix(READS_ASSEMBLE.out.versions)
 
     // Every run directory back under the run meta.
     def ch_assemblies = READS_ASSEMBLE.out.assembly

@@ -174,6 +174,11 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- Container mounts bind the real directory behind a symlinked path, so a
+  containerised tool can open inputs that Nextflow staged through a linked
+  directory (seen with sourmash `dereplicate-merge` under the docker
+  backend). The stateless reads steps resolve their directories before any
+  path reaches a tool.
 - Segment-grouped viral isolates (`vgenome --group-segments`) reached
   `genomes_map.tsv` only as their synthetic `iso-` token; the member segment
   accessions were lost from the deliverable. `vgenome` now writes
