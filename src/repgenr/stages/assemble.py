@@ -49,6 +49,8 @@ from ..core.errors import RepGenRError, UserInputError, WorkdirError
 from ..core.executors import parallel_map
 from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
+from ..polishers.base import PolishParams, select_polisher
+from ..polishers.base import registry as polisher_registry
 from .assemble_qc import checkm2_db_from_env, preflight_checkm2, run_checkm2
 from .ingest import OUTGROUP_ACCESSION_TXT
 
@@ -70,6 +72,10 @@ class AssembleParams:
     jobs: int | None = None
     memory_gb: int = 16
     min_contig_length: int = 500
+    # Correct long-read assemblies with the run's reads: auto picks by platform
+    # (medaka for ONT, racon for PacBio CLR, none for HiFi and Illumina).
+    polisher: str = "auto"
+    polish_rounds: int = 1
     # A FASTA file to set aside as the outgroup (ingest semantics).
     outgroup: str | None = None
     # Add the assemblies to a working directory that already holds a selection
@@ -97,6 +103,8 @@ class AssembleParams:
 class _Outcome:
     row: ReadRow
     assembler: str | None = None
+    polisher: str | None = None
+    polish_rounds: int = 0
     stats: ContigStats | None = None
     tool_stats: dict = field(default_factory=dict)
     excused: ExcusedRun | None = None
@@ -238,6 +246,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "gtdb_lineages": gtdb_lineages,
             "classifier_effective": classifier_name,
             "assemblers_used": sorted({o.assembler for o in assembled if o.assembler}),
+            "polishers_used": sorted({o.polisher for o in assembled if o.polisher}),
             "n_assembled": len(assembled),
             "n_excused": len(excused),
             "n_disagree": n_disagree,
@@ -275,6 +284,11 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
         raise UserInputError(
             f"Unknown assembler {params.assembler!r}; available: {', '.join(registry.names())}."
         )
+    if params.polisher not in ("auto", "none") and params.polisher not in polisher_registry.names():
+        raise UserInputError(
+            f"Unknown polisher {params.polisher!r}; available: "
+            f"{', '.join(polisher_registry.names())}, none."
+        )
     plan = []
     for row in rows:
         outcome = _Outcome(row=row)
@@ -282,6 +296,8 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
         if marker.exists() and (assemblies / row.run_accession / _CONTIGS_NAME).exists():
             done = json.loads(marker.read_text(encoding="utf-8"))
             outcome.assembler = done["assembler"]
+            outcome.polisher = done.get("polisher") or None
+            outcome.polish_rounds = done.get("polish_rounds", 0)
             outcome.stats = ContigStats(**done["stats"])
             outcome.tool_stats = done.get("tool_stats", {})
         elif not row.fastq_urls:
@@ -296,6 +312,12 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
                 outcome.assembler = params.assembler
             if outcome.assembler is None:
                 outcome.excused = ExcusedRun(row.run_accession, "assemble", "unsupported_platform")
+            elif params.polisher == "auto":
+                outcome.polisher = select_polisher(polisher_registry, reads)
+            elif params.polisher != "none":
+                probe_cls = polisher_registry.get(params.polisher)
+                if probe_cls.__new__(probe_cls).accepts(reads):
+                    outcome.polisher = params.polisher
         plan.append(outcome)
     return plan
 
@@ -306,6 +328,8 @@ def _preflight(plan: list[_Outcome], logger: logging.Logger) -> dict[str, str]:
     pending = [o for o in plan if o.assembler and o.excused is None and o.stats is None]
     for name in sorted({o.assembler for o in pending if o.assembler}):
         versions.update(registry.create(name).preflight())
+    for name in sorted({o.polisher for o in pending if o.polisher}):
+        versions.update(polisher_registry.create(name).preflight())
     return versions
 
 
@@ -347,14 +371,43 @@ def _fetch_and_assemble(
             AdapterParams(threads=threads, memory_gb=params.memory_gb, extra=dict(params.extra)),
             logger,
         )
+    except RepGenRError as exc:
+        logger.warning("%s: assembly failed (%s)", row.run_accession, exc)
+        outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {exc}")
+        if not params.keep_files:
+            remove_tree(run_scratch)
+        return outcome
+    contigs_in = result.contigs
+    polish_stats: dict = {}
+    if outcome.polisher is not None:
+        try:
+            polished = polisher_registry.create(outcome.polisher).polish(
+                reads,
+                result.contigs,
+                run_scratch / "polish",
+                PolishParams(
+                    threads=threads, rounds=params.polish_rounds, extra=dict(params.extra)
+                ),
+                logger,
+            )
+        except RepGenRError as exc:
+            logger.warning("%s: polishing failed (%s)", row.run_accession, exc)
+            outcome.excused = ExcusedRun(row.run_accession, "assemble", f"polish_failed: {exc}")
+            if not params.keep_files:
+                remove_tree(run_scratch)
+            return outcome
+        contigs_in = polished.contigs
+        outcome.polish_rounds = polished.rounds
+        polish_stats = dict(polished.tool_stats)
+    try:
         stats = filter_contigs(
-            result.contigs,
+            contigs_in,
             out_dir / _CONTIGS_NAME,
             min_length=params.min_contig_length,
             prefix=row.run_accession,
         )
     except RepGenRError as exc:
-        logger.warning("%s: assembly failed (%s)", row.run_accession, exc)
+        logger.warning("%s: contig filtering failed (%s)", row.run_accession, exc)
         outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {exc}")
         if not params.keep_files:
             remove_tree(run_scratch)
@@ -372,6 +425,9 @@ def _fetch_and_assemble(
     marker = {
         "assembler": outcome.assembler,
         "version": versions.get(adapter.capabilities.name, ""),
+        "polisher": outcome.polisher or "",
+        "polish_rounds": outcome.polish_rounds,
+        "polish_stats": polish_stats,
         "stats": asdict(stats),
         "tool_stats": outcome.tool_stats,
     }
@@ -616,6 +672,7 @@ def _stats_row(o: _Outcome) -> AssemblyStatsRow:
         gtdb_taxonomy=o.gtdb.taxonomy if o.gtdb else "",
         label_source=o.label_source,
         taxonomy_flag=o.taxonomy_flag,
+        polisher=o.polisher or "",
     )
 
 

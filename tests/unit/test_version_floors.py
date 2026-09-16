@@ -10,6 +10,7 @@ from repgenr.assemblers.base import registry as assemblers
 from repgenr.classifiers.base import registry as classifiers
 from repgenr.dereplicators.base import registry as dereplicators
 from repgenr.maskers.base import registry as maskers
+from repgenr.polishers.base import registry as polishers
 from repgenr.snptypers.base import registry as snptypers
 from repgenr.treebuilders.base import registry as treebuilders
 
@@ -19,7 +20,16 @@ _NO_PARSEABLE_VERSION = {"progressiveMauve", "sibeliaz", "hal2maf"}
 
 
 def _specs():
-    for reg in (dereplicators, aligners, snptypers, maskers, treebuilders, assemblers, classifiers):
+    for reg in (
+        dereplicators,
+        aligners,
+        snptypers,
+        maskers,
+        treebuilders,
+        assemblers,
+        classifiers,
+        polishers,
+    ):
         for name in reg.names():
             for spec in reg.get(name).capabilities.required_binaries:
                 yield f"{name}:{spec.name}", spec

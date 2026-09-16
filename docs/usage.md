@@ -158,6 +158,19 @@ longer lists, both refuse to re-run while appended genomes are present;
 `--drop-foreign` discards them deliberately, and `assemble --append` can put
 them back afterwards.
 
+Long-read assemblies are polished with the run's own reads before the
+contig filter: `--polisher auto` (the default) runs medaka for ONT runs and
+racon (minimap2 overlaps, `--polish-rounds` rounds) for PacBio CLR runs, and
+nothing for PacBio HiFi or Illumina; `--polisher none` turns it off. medaka
+needs the basecaller model: reads basecalled with Dorado name it in their
+FASTQ headers and medaka resolves it from there, otherwise give it with
+`--tool-arg model=...` or medaka's default model is used, and the marker
+records which of the three happened. The bacterial methylation-aware model
+set is on (`--tool-arg bacteria=false` turns it off). A polishing failure
+excuses the run with `polish_failed`; `assembly_stats.tsv` names the
+polisher per genome. Unpolished ONT assemblies carry indel errors that break
+genes, which CheckM2 reads as lower completeness and higher contamination.
+
 Two optional checks run on the assemblies. With a CheckM2 database
 (`--checkm2-db`, or the `CHECKM2DB` variable CheckM2 itself reads; obtain it
 with `checkm2 database --download`), every assembly is scored, the
@@ -198,8 +211,9 @@ repgenr reads-gather --reads-tsv $WD/reads.tsv --assemblies asm --qc qc -o out \
 
 `assemble-run` writes `contigs.fasta` and the `assembly.ok` marker into its
 `--out` directory, or `excused_runs.tsv` when the run has no FASTQ mirror, an
-unsupported platform, or fails to download or assemble (`--keep-reads`,
-`--keep-files` and `--tool-arg` as on `assemble`). `genome-qc` reads a
+unsupported platform, or fails to download, assemble or polish (`--polisher`,
+`--polish-rounds`, `--keep-reads`, `--keep-files` and `--tool-arg` as on
+`assemble`). `genome-qc` reads a
 directory of such run directories (`--assemblies`) and writes `quality.tsv`
 and `classification.tsv` keyed by run accession; it needs at least one
 database. `reads-gather` applies the quality gate and the naming policy above
@@ -439,7 +453,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--vmetadata_args` / `--vgenome_args` | see config | Viral metadata / genome selection arguments. |
 | `--reads_args` | see config | Arguments for the reads stage (ENA/SRA run selection by taxon or accession). |
 | `--assembler` | `auto` | Assembler for every run in reads mode (`auto` picks by platform). |
-| `--assemble_args` | (empty) | Extra `assemble-run` flags in reads mode (`--min-contig-length`, `--tool-arg`). |
+| `--assemble_args` | (empty) | Extra `assemble-run` flags in reads mode (`--polisher`, `--min-contig-length`, `--tool-arg`). |
 | `--checkm2_db` | `null` | CheckM2 database; switches on quality scoring and the completeness/contamination gate in reads mode. |
 | `--gtdb_sketch` / `--gtdb_lineages` | `null` | GTDB sourmash sketch and its lineages CSV; switch on classification and GTDB naming in reads mode. |
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |

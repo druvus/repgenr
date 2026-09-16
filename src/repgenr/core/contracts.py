@@ -533,6 +533,8 @@ class AssemblyStatsRow:
     gtdb_taxonomy: str = ""
     label_source: str = "metadata"
     taxonomy_flag: str = ""
+    # The polisher that corrected the assembly, empty when none ran.
+    polisher: str = ""
 
 
 _ASSEMBLY_STATS_COLUMNS = [
@@ -550,6 +552,7 @@ _ASSEMBLY_STATS_COLUMNS = [
     "gtdb_taxonomy",
     "label_source",
     "taxonomy_flag",
+    "polisher",
 ]
 
 
@@ -574,6 +577,7 @@ def write_assembly_stats(path: Path, rows: list[AssemblyStatsRow]) -> None:
                     r.gtdb_taxonomy,
                     r.label_source,
                     r.taxonomy_flag,
+                    r.polisher,
                 ]
             )
 
@@ -598,6 +602,7 @@ def read_assembly_stats(path: Path) -> list[AssemblyStatsRow]:
                     gtdb_taxonomy=rec["gtdb_taxonomy"],
                     label_source=rec["label_source"],
                     taxonomy_flag=rec["taxonomy_flag"],
+                    polisher=rec.get("polisher", "") or "",
                 )
             )
     return rows

@@ -243,7 +243,17 @@ def tool_available(caps: ToolCapabilities) -> bool:
     return _tool_available(caps)
 
 
-_PREFERRED_ORDER = ("skder", "iqtree", "progressivemauve", "simple", "skesa", "shovill", "flye")
+_PREFERRED_ORDER = (
+    "skder",
+    "iqtree",
+    "progressivemauve",
+    "simple",
+    "skesa",
+    "shovill",
+    "flye",
+    "medaka",
+    "racon",
+)
 
 
 def _preference_rank(name: str) -> int:

@@ -58,7 +58,9 @@ contract test, which checks the argument vector against canned output.
 | assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
 | assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
-| classifier | sourmash | no | no | offline chain test with canned gather and tax outputs; live use needs the GTDB sketch (not on the audit machine) |
+| classifier | sourmash | yes | yes | genome-qc and assemble on Wolbachia assemblies against the GTDB rs226 sketch, native and pinned image (2026-09-14) |
+| polisher | medaka | no | yes | test_reads (SRR28800588 through the pinned image, see below) |
+| polisher | racon | no | no | offline contract test (minimap2 and racon argv, rounds, stdout capture) |
 | quality | checkm2 | no | no | offline test on a canned quality report; live use needs the CheckM2 database (not on the audit machine) |
 
 drep, progressivemauve, cactus and snippy have been verified only inside

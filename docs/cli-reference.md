@@ -30,6 +30,8 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
 | `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
+| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
 | `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
 | `--append` | off | Add the assemblies to a working directory that already holds a selection (metadata and genome, or ingest) instead of replacing it. |
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
@@ -55,6 +57,8 @@ Fetch and assemble one run of a reads.tsv (stateless data-channel step).
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--memory-gb` | `16` | Memory hint for the assembly, in GB, for tools that cap RAM. |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
+| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
 | `--keep-files` | off | Keep the assembler scratch directory. |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |

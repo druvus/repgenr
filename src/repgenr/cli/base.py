@@ -231,6 +231,15 @@ def _assembler_help() -> str:
     return tool_choices_help(registry, auto=True, prefix="Assembler: ")
 
 
+def _polisher_help() -> str:
+    from ..core.plugins import tool_choices_help
+    from ..polishers.base import registry
+
+    return tool_choices_help(
+        registry, auto=True, prefix="Polisher for long-read assemblies: none, "
+    )
+
+
 def _classifier_help() -> str:
     from ..classifiers.base import registry
     from ..core.plugins import tool_choices_help
