@@ -26,6 +26,7 @@ from .base import (
     _classifier_help,
     _derep_help,
     _parse_key_values,
+    _polisher_help,
     _read_path_fofn,
     _require_choice,
     _require_unit_interval,
@@ -398,6 +399,10 @@ def assemble_run_cmd(
     min_contig_length: int = typer.Option(
         500, "--min-contig-length", min=0, help="Drop contigs shorter than this many bases."
     ),
+    polisher: str = typer.Option("auto", "--polisher", help=_polisher_help()),
+    polish_rounds: int = typer.Option(
+        1, "--polish-rounds", min=1, help="Polishing rounds (racon; medaka runs one)."
+    ),
     keep_reads: bool = typer.Option(
         False, "--keep-reads", help="Keep the downloaded FASTQ files after assembling."
     ),
@@ -413,11 +418,13 @@ def assemble_run_cmd(
 ) -> None:
     """Fetch and assemble one run of a reads.tsv (stateless data-channel step)."""
     from ..assemblers.base import registry as asm_registry
+    from ..polishers.base import registry as pol_registry
     from ..stages.assemble_steps import AssembleRunParams, assemble_run
 
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
         _require_choice(assembler, {"auto", *asm_registry.names()}, "--assembler")
+        _require_choice(polisher, {"auto", "none", *pol_registry.names()}, "--polisher")
         assemble_run(
             AssembleRunParams(
                 reads_tsv=reads_tsv,
@@ -427,6 +434,8 @@ def assemble_run_cmd(
                 threads=threads,
                 memory_gb=memory_gb,
                 min_contig_length=min_contig_length,
+                polisher=polisher,
+                polish_rounds=polish_rounds,
                 keep_reads=keep_reads,
                 keep_files=keep_files,
                 extra=_parse_key_values(tool_arg, "--tool-arg"),

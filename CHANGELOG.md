@@ -7,6 +7,14 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- An eighth tool family, polishers (`repgenr.polishers`), corrects long-read
+  assemblies with the run's reads inside `assemble` and `assemble-run`:
+  medaka for ONT (basecaller model from Dorado read headers, `--tool-arg
+  model=...`, or ONT's bacterial methylation model assumed for SRA-mirrored
+  reads whose headers name none; recorded in the marker) and racon with minimap2 overlaps for PacBio CLR
+  (`--polish-rounds`). `--polisher auto|medaka|racon|none`; HiFi and
+  Illumina are never polished. `assembly_stats.tsv` gains a `polisher`
+  column and a failed polish excuses the run with `polish_failed`.
 - `reads.tsv` records ENA's `library_selection`, and `reads --drop-selection`
   (default `MDA`, repeatable, `none` to keep all) drops amplified libraries,
   which assemble into chimeric and uneven contigs (68 of the 551 Wolbachia

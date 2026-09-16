@@ -1583,6 +1583,27 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py'
         invalid: '-1'
+      --polisher:
+        param: AssembleParams.polisher
+        value: none
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_reads.py::test_ont_assembly_is_polished_with_medaka
+      --polish-rounds:
+        param: AssembleParams.polish_rounds
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_reads.py::test_ont_assembly_is_polished_with_medaka
       --outgroup:
         param: AssembleParams.outgroup
         value: '{file}'
@@ -3246,6 +3267,27 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.assemble_args
         live: tests/live/test_reads.py::test_reads_steps_assemble_a_public_run
+      --polisher:
+        param: AssembleRunParams.polisher
+        value: none
+        validated: choice
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
+      --polish-rounds:
+        param: AssembleRunParams.polish_rounds
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
       --keep-reads:
         param: AssembleRunParams.keep_reads
         validated: none

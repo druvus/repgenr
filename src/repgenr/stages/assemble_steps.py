@@ -61,6 +61,8 @@ class AssembleRunParams:
     threads: int = 16
     memory_gb: int = 16
     min_contig_length: int = 500
+    polisher: str = "auto"
+    polish_rounds: int = 1
     keep_reads: bool = False
     keep_files: bool = False
     extra: dict[str, str] = field(default_factory=dict)
@@ -86,6 +88,8 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         threads=params.threads,
         memory_gb=params.memory_gb,
         min_contig_length=params.min_contig_length,
+        polisher=params.polisher,
+        polish_rounds=params.polish_rounds,
         keep_reads=params.keep_reads,
         keep_files=params.keep_files,
         extra=dict(params.extra),

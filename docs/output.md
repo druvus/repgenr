@@ -25,7 +25,7 @@ top level, and the execution reports under `pipeline_info/`.
 | `missing_accessions.txt` | genome | Accessions the download did not return; the completeness guard of later stages reads it. |
 | `reads.tsv` | reads | The selected sequencing runs: run, sample and study accessions, organism and taxid, the resolved family/genus/species tokens, platform, instrument, layout, bases, the FASTQ locations, checksums and sizes ENA reports (empty when ENA holds no FASTQ mirror), and ENA's library selection (RANDOM, MDA, PCR, ...). |
 | `assemblies/<run>/` | assemble | Each assembled run's filtered contigs and its `assembly.ok` marker (assembler, version, metrics); a re-run skips runs that have one. |
-| `assembly_stats.tsv` | assemble | Per-assembly metrics: assembler, contigs, total length, N50, largest contig, estimated coverage, the NCBI taxonomy used for the name, and quality and classification columns once those steps run. |
+| `assembly_stats.tsv` | assemble | Per-assembly metrics: assembler, contigs, total length, N50, largest contig, estimated coverage, the NCBI taxonomy used for the name, quality and classification columns once those steps run, and the polisher that corrected a long-read assembly. |
 | `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |

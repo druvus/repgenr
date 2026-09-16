@@ -396,3 +396,62 @@ def test_disagreement_warning_names_the_compared_genera(
     messages = [r.getMessage() for r in caplog.records if "classifier_disagrees" in r.getMessage()]
     assert messages, [r.getMessage() for r in caplog.records]
     assert "genus Francisella" in messages[0] and "g__Bacillus" in messages[0]
+
+
+# --- polishing -----------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_polisher():
+    from assemble_fakes import register_fake_polisher, unregister_fake_polisher
+
+    register_fake_polisher()
+    yield
+    unregister_fake_polisher()
+
+
+def _ont_row(tmp_path, run="ONT1"):
+    return _row(
+        tmp_path, run, platform="OXFORD_NANOPORE", layout="SINGLE", instrument_model="GridION"
+    )
+
+
+def test_long_read_assemblies_are_polished_and_the_marker_says_so(
+    workdir, tmp_path, fake_assembler, fake_polisher
+) -> None:
+    from assemble_fakes import FakePolisher
+
+    ctx = _prepare(workdir, [_ont_row(tmp_path), _row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol", polish_rounds=2, threads=4))
+    assert FakePolisher.calls == ["ONT1"]  # the Illumina run is not polished
+    genome = next(p for p in ctx.genomes_dir.iterdir() if "ONT1" in p.name)
+    assert "AAAA" in genome.read_text(encoding="utf-8")  # the polished sequence was kept
+    marker = json.loads((workdir / "assemblies" / "ONT1" / "assembly.ok").read_text())
+    assert marker["polisher"] == "fakepol" and marker["polish_rounds"] == 2
+    stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
+    assert stats["ONT1"].polisher == "fakepol" and stats["ONT1"].total_length == 1204
+    assert stats["SRR1"].polisher == "" and stats["SRR1"].total_length == 1200
+    record = ctx.config.stages["assemble"]
+    assert record.params["polishers_used"] == ["fakepol"]
+    assert record.tool_versions["fakepol"] == "0.1"
+
+
+def test_polisher_none_skips_polishing(workdir, tmp_path, fake_assembler, fake_polisher) -> None:
+    from assemble_fakes import FakePolisher
+
+    ctx = _prepare(workdir, [_ont_row(tmp_path)])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="none"))
+    assert FakePolisher.calls == []
+    stats = read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)[0]
+    assert stats.polisher == "" and stats.total_length == 1200
+
+
+def test_a_failed_polish_excuses_the_run(workdir, tmp_path, fake_assembler, fake_polisher) -> None:
+    from assemble_fakes import FakePolisher
+
+    FakePolisher.fail_runs = frozenset({"ONT1"})
+    ctx = _prepare(workdir, [_ont_row(tmp_path), _row(tmp_path, "SRR1")])
+    n = run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol"))
+    assert n == 1
+    excused = read_excused_runs(workdir / EXCUSED_RUNS_TSV)
+    assert excused[0].run_accession == "ONT1" and "polish_failed" in excused[0].reason

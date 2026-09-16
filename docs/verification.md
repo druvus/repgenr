@@ -58,13 +58,36 @@ contract test, which checks the argument vector against canned output.
 | assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
 | assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
-| classifier | sourmash | no | no | offline chain test with canned gather and tax outputs; live use needs the GTDB sketch (not on the audit machine) |
+| classifier | sourmash | yes | yes | genome-qc and assemble on Wolbachia assemblies against the GTDB rs226 sketch, native and pinned image (2026-09-14) |
+| polisher | medaka | no | yes | test_reads (SRR28800588 through the pinned image, see below); CheckM2 before/after recorded below |
+| polisher | racon | no | no | offline contract test (minimap2 and racon argv, rounds, stdout capture) |
 | quality | checkm2 | no | no | offline test on a canned quality report; live use needs the CheckM2 database (not on the audit machine) |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their
 BioContainer images are BusyBox-based and the GNU-only calls in their shell
 wrappers fail there, which is why they carry no pinned image.
+
+## Polishing an ONT assembly (2026-09-16)
+
+SRR28800588 (Mycoplasmoides genitalium, MinION, 85 MB) assembled with Flye
+and polished with medaka through the pinned images under amd64 emulation.
+SRA rewrites FASTQ headers, so the reads named no basecaller; the adapter
+used ONT's bacterial R10.4.1 model and recorded that assumption.
+
+| Step | Result | Wall time |
+|---|---|---|
+| flye | 2 contigs, 593908 bp, N50 579957 | about 3 min |
+| medaka (assumed bacterial model) | 2 contigs, 593932 bp | about 1 min |
+| CheckM2, unpolished draft | 98.90 complete, 0.09 contamination | |
+| CheckM2, polished | 98.90 complete, 0.09 contamination | 22 min for both, emulated |
+
+On this run the Flye draft was already gene-complete at CheckM2 resolution
+and polishing changed 24 bp of total length without moving the scores. The
+12% contamination seen earlier on DRR351706 came from an MDA-amplified
+library, which `reads --drop-selection` now excludes by default, not from a
+lack of polishing. Polishing still matters for downstream SNP typing and
+alignment, where indel errors are not absorbed by gene calling.
 
 ## Reads chain on a public run (2026-09-14)
 

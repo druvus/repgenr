@@ -78,6 +78,10 @@ flye = "repgenr.assemblers.flye:FlyeAssembler"
 [project.entry-points."repgenr.classifiers"]
 sourmash = "repgenr.classifiers.sourmash:SourmashClassifier"
 
+[project.entry-points."repgenr.polishers"]
+medaka = "repgenr.polishers.medaka:MedakaPolisher"
+racon = "repgenr.polishers.racon:RaconPolisher"
+
 [project.entry-points."repgenr.treebuilders"]
 iqtree = "repgenr.treebuilders.iqtree:IqtreeBuilder"
 fasttree = "repgenr.treebuilders.fasttree:FasttreeBuilder"

@@ -3,6 +3,7 @@ download with checksum verification, and assembly in the pinned images."""
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -88,3 +89,17 @@ def test_reads_steps_assemble_a_public_run(run_repgenr, tmp_path: Path) -> None:
     stats = read_assembly_stats(out / "assembly_stats.tsv")[0]
     assert stats.assembler == "skesa" and stats.n50 > 20_000
     assert (out / "outgroup_accession.txt").read_text(encoding="utf-8") == ""
+
+
+def test_ont_assembly_is_polished_with_medaka(run_repgenr, tmp_path: Path) -> None:
+    """SRR28800588: Mycoplasmoides genitalium, ONT, 85 MB. Flye then medaka
+    through the pinned images; the marker and the stats name the polisher."""
+    wd = tmp_path / "wd"
+    run_repgenr("reads", "-wd", wd, "--accession", "SRR28800588", "--drop-selection", "none")
+    run_repgenr(*DOCKER, "assemble", "-wd", wd, "-t", "8", "--polisher", "medaka", timeout=7200)
+    stats = read_assembly_stats(wd / "assembly_stats.tsv")[0]
+    assert stats.assembler == "flye" and stats.polisher == "medaka"
+    assert 500_000 < stats.total_length < 700_000  # M. genitalium is 580 kb
+    marker = json.loads((wd / "assemblies" / "SRR28800588" / "assembly.ok").read_text())
+    assert marker["polisher"] == "medaka" and marker["polish_rounds"] == 1
+    assert marker["polish_stats"]["model_source"].startswith("assumed")  # SRA headers

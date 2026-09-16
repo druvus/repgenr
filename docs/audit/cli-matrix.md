@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 297 flags (297 with a live test or an n/a reason, 0 pending).
+28 commands, 301 flags (301 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -250,6 +250,8 @@ dispatch: `stage`
 | `--jobs` |  | AssembleParams.jobs | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--memory-gb` |  | AssembleParams.memory_gb | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--min-contig-length` |  | AssembleParams.min_contig_length | range | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--polisher` |  | AssembleParams.polisher | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_reads.py::test_ont_assembly_is_polished_with_medaka | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--polish-rounds` |  | AssembleParams.polish_rounds | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_reads.py::test_ont_assembly_is_polished_with_medaka | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup` |  | AssembleParams.outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-reads` |  | AssembleParams.keep_reads | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | AssembleParams.keep_files | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
@@ -469,6 +471,8 @@ dispatch: `step:repgenr.stages.assemble_steps.assemble_run`
 | `--threads` | -t | AssembleRunParams.threads | range | module: task.cpus | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--memory-gb` |  | AssembleRunParams.memory_gb | range | module: task.memory | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--min-contig-length` |  | AssembleRunParams.min_contig_length | range | params.assemble_args | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--polisher` |  | AssembleRunParams.polisher | choice | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--polish-rounds` |  | AssembleRunParams.polish_rounds | range | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-reads` |  | AssembleRunParams.keep_reads | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | AssembleRunParams.keep_files | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--tool-arg` |  | AssembleRunParams.extra | none | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |

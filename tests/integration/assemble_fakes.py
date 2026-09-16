@@ -124,3 +124,53 @@ def read_row(tmp_path: Path, run: str, platform: str = "ILLUMINA", layout: str =
     )
     base.update(over)
     return ReadRow(**base)
+
+
+class FakePolisher:
+    """Registered polisher appending four bases to every contig; records calls."""
+
+    capabilities = ToolCapabilities(name="fakepol")
+    read_types = frozenset({"OXFORD_NANOPORE"})
+    calls: list[str] = []
+    fail_runs: frozenset[str] = frozenset()
+
+    def preflight(self) -> dict[str, str]:
+        return {"fakepol": "0.1"}
+
+    def accepts(self, reads) -> bool:  # noqa: ANN001
+        return reads.platform in self.read_types
+
+    def polish(self, reads, draft, out_dir, params, logger):  # noqa: ANN001
+        from repgenr.polishers.base import PolishResult
+
+        type(self).calls.append(reads.run_accession)
+        if reads.run_accession in type(self).fail_runs:
+            raise ToolExecutionError(["fakepol"], 1, "boom")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / "polished.fa"
+        lines = []
+        for line in draft.read_text(encoding="utf-8").splitlines():
+            lines.append(line if line.startswith(">") else line + "AAAA")
+        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return PolishResult(
+            contigs=out, rounds=params.rounds, tool_stats={"threads": params.threads}
+        )
+
+
+def register_fake_polisher():
+    from repgenr.polishers.base import Polisher
+    from repgenr.polishers.base import registry as pol_registry
+
+    class Fake(FakePolisher, Polisher):
+        pass
+
+    pol_registry._load()
+    pol_registry.register("fakepol", Fake, replace=True)
+    FakePolisher.calls = []
+    FakePolisher.fail_runs = frozenset()
+
+
+def unregister_fake_polisher():
+    from repgenr.polishers.base import registry as pol_registry
+
+    pol_registry._classes.pop("fakepol", None)

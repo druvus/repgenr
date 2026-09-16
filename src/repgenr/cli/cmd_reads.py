@@ -15,6 +15,7 @@ from .base import (
     _assembler_help,
     _classifier_help,
     _parse_key_values,
+    _polisher_help,
     _run,
     app,
 )
@@ -107,6 +108,10 @@ def assemble(
     min_contig_length: int = typer.Option(
         500, "--min-contig-length", min=0, help="Drop contigs shorter than this many bases."
     ),
+    polisher: str = typer.Option("auto", "--polisher", help=_polisher_help()),
+    polish_rounds: int = typer.Option(
+        1, "--polish-rounds", min=1, help="Polishing rounds (racon; medaka runs one)."
+    ),
     outgroup: Path | None = typer.Option(
         None, "--outgroup", help="A FASTA file to set aside as the outgroup for rooting."
     ),
@@ -159,6 +164,8 @@ def assemble(
             jobs=jobs,
             memory_gb=memory_gb,
             min_contig_length=min_contig_length,
+            polisher=polisher,
+            polish_rounds=polish_rounds,
             outgroup=None if outgroup is None else str(outgroup),
             append=append,
             keep_reads=keep_reads,

@@ -160,6 +160,8 @@ def assemble_params(
     jobs: Any = _UNSET,
     memory_gb: Any = _UNSET,
     min_contig_length: Any = _UNSET,
+    polisher: Any = _UNSET,
+    polish_rounds: Any = _UNSET,
     outgroup: Any = _UNSET,
     append: Any = _UNSET,
     keep_reads: Any = _UNSET,
@@ -174,12 +176,15 @@ def assemble_params(
 ) -> AssembleParams:
     from ..assemblers.base import registry as _asm_registry
     from ..classifiers.base import registry as _cls_registry
+    from ..polishers.base import registry as _pol_registry
     from ..stages.assemble import AssembleParams
 
     if assembler is not _UNSET:
         _require_choice(assembler, {"auto", *_asm_registry.names()}, "--assembler")
     if classifier is not _UNSET:
         _require_choice(classifier, {"auto", "none", *_cls_registry.names()}, "--classifier")
+    if polisher is not _UNSET:
+        _require_choice(polisher, {"auto", "none", *_pol_registry.names()}, "--polisher")
     return _build(
         AssembleParams,
         assembler=assembler,
@@ -187,6 +192,8 @@ def assemble_params(
         jobs=jobs,
         memory_gb=memory_gb,
         min_contig_length=min_contig_length,
+        polisher=polisher,
+        polish_rounds=polish_rounds,
         outgroup=outgroup,
         append=append,
         keep_reads=keep_reads,
