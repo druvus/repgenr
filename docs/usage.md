@@ -162,11 +162,14 @@ Long-read assemblies are polished with the run's own reads before the
 contig filter: `--polisher auto` (the default) runs medaka for ONT runs and
 racon (minimap2 overlaps, `--polish-rounds` rounds) for PacBio CLR runs, and
 nothing for PacBio HiFi or Illumina; `--polisher none` turns it off. medaka
-needs the basecaller model: reads basecalled with Dorado name it in their
-FASTQ headers and medaka resolves it from there, otherwise give it with
-`--tool-arg model=...` or medaka's default model is used, and the marker
-records which of the three happened. The bacterial methylation-aware model
-set is on (`--tool-arg bacteria=false` turns it off). A polishing failure
+needs the basecaller model. Reads basecalled with Dorado name it in their
+FASTQ headers and medaka resolves it from there; reads mirrored through SRA
+have their headers rewritten and never do, so for them give the model with
+`--tool-arg model=...` or the default applies: ONT's bacterial
+methylation-aware model for R10.4.1 400 bps chemistry, the usual case for
+public bacterial ONT runs since 2023 (`--tool-arg bacteria=false` uses
+medaka's general default model instead). The marker records which of the
+three applied. A polishing failure
 excuses the run with `polish_failed`; `assembly_stats.tsv` names the
 polisher per genome. Unpolished ONT assemblies carry indel errors that break
 genes, which CheckM2 reads as lower completeness and higher contamination.

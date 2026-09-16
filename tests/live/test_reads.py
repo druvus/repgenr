@@ -102,4 +102,4 @@ def test_ont_assembly_is_polished_with_medaka(run_repgenr, tmp_path: Path) -> No
     assert 500_000 < stats.total_length < 700_000  # M. genitalium is 580 kb
     marker = json.loads((wd / "assemblies" / "SRR28800588" / "assembly.ok").read_text())
     assert marker["polisher"] == "medaka" and marker["polish_rounds"] == 1
-    assert marker["polish_stats"]["model_source"] in ("read headers", "medaka default")
+    assert marker["polish_stats"]["model_source"].startswith("assumed")  # SRA headers

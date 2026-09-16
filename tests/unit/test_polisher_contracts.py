@@ -75,14 +75,27 @@ def test_medaka_runs_consensus_with_the_bacterial_model_and_auto_detection(recor
     assert str(tmp_path.resolve()) in call["mounts"]
 
 
-def test_medaka_takes_an_explicit_model_and_warns_without_one(recorded, tmp_path, caplog):
-    reads, draft = _ont(tmp_path)  # no basecaller tag in the header
+def test_medaka_assumes_the_bacterial_model_for_sra_reads(recorded, tmp_path, caplog):
+    """SRA rewrites FASTQ headers, so mirrored reads never name their basecaller."""
+    from repgenr.polishers.medaka import BACTERIAL_MODEL
+
+    reads, draft = _ont(tmp_path, "@SRR1.1 32921a8b-d4e2-417a-bf31-034a6749932f/1")
     with caplog.at_level(logging.WARNING):
         result = registry.create("medaka").polish(
             reads, draft, tmp_path / "pol", PolishParams(threads=2), _LOG
         )
-    assert "-m" not in recorded[-1]["cmd"] and result.tool_stats["model_source"] == "medaka default"
+    cmd = recorded[-1]["cmd"]
+    assert _flag(cmd, "-m") == BACTERIAL_MODEL and "--bacteria" not in cmd
+    assert result.tool_stats["model_source"].startswith("assumed")
     assert any("basecaller" in r.getMessage() for r in caplog.records)
+    result = registry.create("medaka").polish(
+        reads, draft, tmp_path / "pol2", PolishParams(threads=2, extra={"bacteria": "false"}), _LOG
+    )
+    assert "-m" not in recorded[-1]["cmd"] and result.tool_stats["model_source"] == "medaka default"
+
+
+def test_medaka_takes_an_explicit_model(recorded, tmp_path):
+    reads, draft = _ont(tmp_path)
     result = registry.create("medaka").polish(
         reads,
         draft,
@@ -149,3 +162,32 @@ def test_polishers_are_a_registered_family_and_listed() -> None:
     assert {"medaka", "racon"} <= set(registry.names())
     result = CliRunner().invoke(app, ["list-tools"])
     assert result.exit_code == 0 and "polishers: medaka, racon" in result.output
+
+
+def test_medaka_retries_without_bacteria_when_medaka_refuses(monkeypatch, tmp_path, caplog):
+    import repgenr.polishers.medaka as md
+    from repgenr.core.errors import ToolExecutionError
+
+    calls: list[list[str]] = []
+
+    def run_tool(caps, command, *, logger, **kwargs):
+        cmd = [str(c) for c in command]
+        calls.append(cmd)
+        if "--bacteria" in cmd:
+            raise ToolExecutionError(
+                cmd, 1, output="ERROR: --bacteria was specified but input data was not compatible."
+            )
+        out = Path(_flag(cmd, "-o"))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "consensus.fasta").write_text(_POLISHED, encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(md, "run_tool", run_tool)
+    reads, draft = _ont(tmp_path, "@r1 basecall_model_version_id=dna_r9.4.1_e8_sup@v3.3")
+    with caplog.at_level(logging.WARNING):
+        result = registry.create("medaka").polish(
+            reads, draft, tmp_path / "pol", PolishParams(threads=2), _LOG
+        )
+    assert [("--bacteria" in c) for c in calls] == [True, False]
+    assert result.tool_stats["bacteria"] is False and result.contigs.exists()
+    assert any("no bacterial model" in r.getMessage() for r in caplog.records)

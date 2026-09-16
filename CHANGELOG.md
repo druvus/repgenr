@@ -9,9 +9,9 @@ All notable changes to RepGenR are documented here. The format follows
 ### Added
 - An eighth tool family, polishers (`repgenr.polishers`), corrects long-read
   assemblies with the run's reads inside `assemble` and `assemble-run`:
-  medaka for ONT (bacterial model set on, basecaller model from the read
-  headers, `--tool-arg model=...` or medaka's default, recorded in the
-  marker) and racon with minimap2 overlaps for PacBio CLR
+  medaka for ONT (basecaller model from Dorado read headers, `--tool-arg
+  model=...`, or ONT's bacterial methylation model assumed for SRA-mirrored
+  reads whose headers name none; recorded in the marker) and racon with minimap2 overlaps for PacBio CLR
   (`--polish-rounds`). `--polisher auto|medaka|racon|none`; HiFi and
   Illumina are never polished. `assembly_stats.tsv` gains a `polisher`
   column and a failed polish excuses the run with `polish_failed`.
