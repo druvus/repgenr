@@ -73,3 +73,109 @@ def test_many_missing_members_are_listed_on_one_line(workdir: Path, caplog) -> N
     warnings = _unpack_with_missing(workdir, 11, caplog)
     assert len(warnings) == 1
     assert "11" in warnings[0] and "m00.fasta" in warnings[0] and "m10.fasta" in warnings[0]
+
+
+def test_representatives_sharing_a_stem_get_distinct_directories(workdir: Path) -> None:
+    gdir = workdir / "genomes"
+    gdir.mkdir(parents=True)
+    for name in ("dup.fasta", "dup.fna", "m.fasta", "a.b.c.fasta"):
+        (gdir / name).write_text(f">{name}\nACGT\n")
+    derep = workdir / "derep"
+    derep.mkdir()
+    (derep / "clusters.tsv").write_text(
+        "representative\tmember\n"
+        "dup.fasta\tdup.fasta\ndup.fasta\tm.fasta\n"
+        "dup.fna\tdup.fna\n"
+        "a.b.c.fasta\ta.b.c.fasta\n"
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    unpack = run(ctx, DerepUnpackParams())
+
+    # Stems that collide fall back to the full file name; others keep the stem.
+    assert sorted(p.name for p in unpack.iterdir()) == ["a.b.c", "dup.fasta", "dup.fna"]
+    assert sorted(p.name for p in (unpack / "dup.fasta").iterdir()) == ["dup.fasta", "m.fasta"]
+    assert [p.name for p in (unpack / "dup.fna").iterdir()] == ["dup.fna"]
+
+
+def test_a_failed_run_keeps_the_previous_unpacked_tree(workdir: Path, monkeypatch) -> None:
+    import pytest
+
+    from repgenr.stages import derep_unpack
+
+    gdir = workdir / "genomes"
+    gdir.mkdir(parents=True)
+    for name in ("a.fasta", "b.fasta", "c.fasta"):
+        (gdir / name).write_text(">x\nACGT\n")
+    derep = workdir / "derep"
+    derep.mkdir()
+    (derep / "clusters.tsv").write_text(
+        "representative\tmember\na.fasta\ta.fasta\na.fasta\tb.fasta\nc.fasta\tc.fasta\n"
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    unpack = run(ctx, DerepUnpackParams())
+    before = sorted(str(p.relative_to(unpack)) for p in unpack.rglob("*"))
+
+    calls = {"n": 0}
+    real = derep_unpack.link_or_copy
+
+    def fail_on_second(src, dst):  # noqa: ANN001
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("disk full")
+        return real(src, dst)
+
+    monkeypatch.setattr(derep_unpack, "link_or_copy", fail_on_second)
+    with pytest.raises(OSError):
+        run(ctx, DerepUnpackParams())
+
+    assert sorted(str(p.relative_to(unpack)) for p in unpack.rglob("*")) == before
+    assert sorted(p.name for p in derep.iterdir()) == ["clusters.tsv", "unpacked"]
+
+
+def _three_genome_workdir(workdir: Path) -> WorkdirContext:
+    gdir = workdir / "genomes"
+    gdir.mkdir(parents=True)
+    for name in ("a.fasta", "b.fasta", "c.fasta"):
+        (gdir / name).write_text(">x\nACGT\n")
+    derep = workdir / "derep"
+    derep.mkdir()
+    (derep / "clusters.tsv").write_text(
+        "representative\tmember\na.fasta\ta.fasta\na.fasta\tb.fasta\nc.fasta\tc.fasta\n"
+    )
+    return WorkdirContext(workdir, create=True)
+
+
+def _info_messages(ctx: WorkdirContext, caplog, params: DerepUnpackParams) -> list[str]:
+    import logging
+
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, params)
+    return [r.getMessage() for r in caplog.records]
+
+
+def test_summary_counts_directories_written_not_clusters_read(workdir: Path, caplog) -> None:
+    ctx = _three_genome_workdir(workdir)
+    messages = _info_messages(ctx, caplog, DerepUnpackParams(no_representant=True))
+    # Cluster c holds only its representative, so no directory is written for it.
+    assert any("1 genome files into 1 cluster directories" in m for m in messages)
+
+
+def test_copying_instead_of_linking_is_logged(workdir: Path, caplog, monkeypatch) -> None:
+    import os
+
+    def no_link(src, dst):  # noqa: ANN001
+        raise OSError("hard links not supported")
+
+    monkeypatch.setattr(os, "link", no_link)
+    ctx = _three_genome_workdir(workdir)
+    messages = _info_messages(ctx, caplog, DerepUnpackParams())
+    assert sum("copying files" in m for m in messages) == 1
+    assert (ctx.derep_dir / "unpacked" / "a" / "b.fasta").read_text() == ">x\nACGT\n"
+
+
+def test_linking_logs_no_copy_notice(workdir: Path, caplog) -> None:
+    ctx = _three_genome_workdir(workdir)
+    messages = _info_messages(ctx, caplog, DerepUnpackParams())
+    assert not any("copying files" in m for m in messages)
+    assert any("3 genome files into 2 cluster directories" in m for m in messages)
