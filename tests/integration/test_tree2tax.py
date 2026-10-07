@@ -215,3 +215,16 @@ def test_tree2tax_records_dendropy_as_its_tool(workdir: Path) -> None:
     record = ctx.config.stages["tree2tax"]
     assert record.tool == "dendropy"
     assert record.tool_versions == {"dendropy": version("dendropy")}
+
+
+def test_tree2tax_rejects_two_concatenated_trees(workdir: Path) -> None:
+    """A second complete tree after the first is refused, not silently dropped."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    _setup(workdir)
+    (workdir / "tree" / "tree.nwk").write_text(_NWK.strip() + "\n" + _NWK)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError, match=r"more than one tree"):
+        tree2tax_run(ctx, Tree2taxParams())

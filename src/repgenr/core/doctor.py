@@ -271,7 +271,8 @@ def _check_tree(workdir: Path, config: Config) -> list[Finding]:
             Finding(
                 "fail",
                 "phylo",
-                f"{tree} is empty or truncated (no terminating ';'); re-run phylo.",
+                f"{tree} is empty, truncated or holds more than one tree (it must hold one "
+                "tree ended by ';'); re-run phylo.",
             )
         ]
     return [Finding("ok", "phylo", f"{TREE_NWK} looks like a complete tree")]
