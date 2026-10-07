@@ -75,3 +75,42 @@ def test_sigterm_stops_the_running_tool(tmp_path: Path) -> None:
     time.sleep(3.5)
     assert not finished.exists(), "the tool kept running after repgenr was terminated"
     assert not out.exists() and not (tmp_path / "tree.nwk.part").exists()
+
+
+def test_sigterm_during_parallel_map_starts_no_queued_tool(tmp_path: Path) -> None:
+    """Queued pool items do not launch their tools once SIGTERM arrived (review
+    of #223: 8 tasks on 2 workers all started before repgenr exited)."""
+    import os
+    import signal
+    import subprocess
+
+    marks = tmp_path / "marks"
+    marks.mkdir()
+    tool = (
+        "import pathlib, sys, time; "
+        f"pathlib.Path({str(marks)!r}, sys.argv[1]).write_text('x'); time.sleep(3)"
+    )
+    driver = (
+        "import logging, sys\n"
+        "from repgenr.core import process\n"
+        "from repgenr.core.executors import parallel_map\n"
+        "process.install_termination_handler()\n"
+        "log = logging.getLogger('t')\n"
+        f"parallel_map(lambda i: process.run([sys.executable, '-c', {tool!r}, str(i)],"
+        " logger=log), range(8), 2)\n"
+    )
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    proc = subprocess.Popen(
+        [sys.executable, "-c", driver], stderr=subprocess.PIPE, env=env, text=True
+    )
+    deadline = time.monotonic() + 10
+    while len(list(marks.iterdir())) < 2:
+        assert time.monotonic() < deadline, "the first tools never started"
+        time.sleep(0.05)
+    sent = time.monotonic()
+    proc.send_signal(signal.SIGTERM)
+    proc.communicate(timeout=20)
+    assert proc.returncode == 128 + signal.SIGTERM
+    assert time.monotonic() - sent < 2.5, "repgenr waited for queued work"
+    time.sleep(1)
+    assert len(list(marks.iterdir())) == 2, sorted(p.name for p in marks.iterdir())

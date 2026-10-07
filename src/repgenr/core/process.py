@@ -36,8 +36,13 @@ _warned_bad_timeout = False
 # Tools running now, with whether each leads its own process group, so a
 # termination signal can stop them before repgenr exits (see
 # install_termination_handler). Several run at once under parallel_map.
-_live_lock = threading.Lock()
+# Reentrant: the signal handler runs on the main thread, which may hold the
+# lock inside run() when the signal arrives.
+_live_lock = threading.RLock()
 _live: dict[subprocess.Popen[bytes], bool] = {}
+# Set by the termination handler: run() then starts no further tool, so tasks
+# still queued in a thread pool do not launch while repgenr shuts down.
+stop_requested = threading.Event()
 
 
 def stop_running_tools() -> int:
@@ -78,6 +83,7 @@ def install_termination_handler() -> None:
 
     def _on_signal(signum: int, _frame: object) -> None:
         signal.signal(signum, signal.SIG_DFL)
+        stop_requested.set()
         stopped = stop_running_tools()
         # os.write is safe in a signal handler; logging is not.
         os.write(
@@ -148,6 +154,10 @@ def run(
     """
     cmd = [str(part) for part in command]
     prefix = f"[{log_prefix}] " if log_prefix else ""
+    if stop_requested.is_set():
+        raise ToolExecutionError(
+            cmd, -signal.SIGTERM, output="not started: repgenr is stopping", tool=log_prefix
+        )
     logger.info("%s$ %s", prefix, " ".join(cmd))
 
     full_env = {**os.environ, **env} if env else None
@@ -191,6 +201,9 @@ def run(
         )
         with _live_lock:
             _live[proc] = limit is not None
+        if stop_requested.is_set():
+            # Started while the handler was stopping the others.
+            stop_running_tools()
 
         if limit is not None:
 
