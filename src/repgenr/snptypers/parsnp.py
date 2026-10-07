@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
+from ..core.process import link_or_copy
 from .base import SnpParams, SnpResult, SnpTyper
 
 
@@ -40,12 +40,14 @@ class ParsnpTyper(SnpTyper):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # ParSNP wants a directory of query genomes (excluding the reference).
+        # Hardlinked where the file system allows, as the representatives are:
+        # copies would hold a second set of every genome in scratch.
         gdir = out_dir / "input_genomes"
         gdir.mkdir(exist_ok=True)
         for genome in genomes:
             if genome.resolve() == reference.resolve():
                 continue
-            shutil.copy2(genome, gdir / genome.name)
+            link_or_copy(genome, gdir / genome.name)
 
         results = out_dir / "parsnp_out"
         cmd: list[str | Path] = [

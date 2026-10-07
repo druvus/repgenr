@@ -357,3 +357,16 @@ def test_parsnp_names_records_by_genome_stem(tmp_path, monkeypatch) -> None:
     assert result.full_alignment is not None
     assert _read_headers(result.full_alignment) == set(stems)
     assert sorted(p.name for p in (tmp_path / "snp_out").glob("harvest_*")) == []
+
+
+def test_parsnp_hardlinks_its_query_genomes(genomes, recorded, tmp_path) -> None:
+    """The query directory ParSNP reads holds links to the genomes, not copies."""
+    if "parsnp" not in snp_registry.names():
+        pytest.skip("parsnp not registered")
+    snp_registry.create("parsnp").call(
+        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=2), _LOG
+    )
+    staged = tmp_path / "snp_out" / "input_genomes"
+    assert sorted(p.name for p in staged.iterdir()) == [g.name for g in genomes[1:]]
+    for genome in genomes[1:]:
+        assert (staged / genome.name).stat().st_ino == genome.stat().st_ino
