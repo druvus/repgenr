@@ -7,6 +7,7 @@ import re
 import typer
 from typer.testing import CliRunner
 
+from repgenr.cli import base
 from repgenr.cli.base import COMMAND_ORDER, COMMAND_PANELS
 from repgenr.cli.main import app
 
@@ -42,3 +43,14 @@ def test_help_shows_panels_in_order() -> None:
     listed = [r for r in rows if r in COMMAND_ORDER]
     assert listed == list(COMMAND_ORDER)
     assert "\u2500 Commands " not in out
+
+
+def test_help_shows_stage_chains() -> None:
+    out = _help()
+    assert "ingest -> dereplicate" in out
+    for panel in COMMAND_PANELS:
+        assert panel in out
+
+
+def test_epilog_uses_pipeline_tuples() -> None:
+    assert " -> ".join(base.PIPELINE_READS) in base.APP_EPILOG

@@ -58,6 +58,25 @@ PIPELINE_LOCAL = ("ingest", "dereplicate", "phylo", "tree2tax")
 # Reads chain: sequencing runs selected from ENA/SRA and assembled.
 PIPELINE_READS = ("reads", "assemble", "dereplicate", "phylo", "tree2tax")
 
+
+def _chain(label: str, stages: tuple[str, ...]) -> str:
+    return f"{label}: " + " -> ".join(stages)
+
+
+# Paragraphs are separated by blank lines because Rich joins single newlines.
+APP_EPILOG = "\n\n".join(
+    [
+        "Typical order of commands (or let 'run' chain them; "
+        "'status -wd WD' says what comes next):",
+        _chain("bacterial", PIPELINE_BACTERIAL),
+        _chain("viral", PIPELINE_VIRAL),
+        _chain("local genomes", PIPELINE_LOCAL),
+        _chain("sequencing reads", PIPELINE_READS),
+        "Add 'snptype' between dereplicate and phylo when the SNP tables are a deliverable. "
+        "Global options go before the command name: repgenr --container docker dereplicate ...",
+    ]
+)
+
 PANEL_PIPELINE = "Pipeline"
 PANEL_ENTRY = "Entry points: select and fetch genomes"
 PANEL_CORE = "Core stages"
@@ -101,6 +120,7 @@ app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
     help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
+    epilog=APP_EPILOG,
 )
 
 
