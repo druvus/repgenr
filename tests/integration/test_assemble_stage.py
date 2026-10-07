@@ -787,3 +787,19 @@ def test_failed_downloads_are_named_with_how_to_retry(
         run(ctx, AssembleParams(assembler="fakeasm"))
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert any("1 run(s) could not be fetched" in w and "--force" in w for w in warnings)
+
+
+def test_a_marker_without_settings_still_gets_a_higher_floor(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    """Markers written before the settings were recorded are reused, at the requested floor."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    marker_path = workdir / "assemblies" / "SRR1" / "assembly.ok"
+    marker = json.loads(marker_path.read_text())
+    del marker["settings"]
+    marker_path.write_text(json.dumps(marker), encoding="utf-8")
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert _FakeAssembler.calls == ["SRR1"]
+    assert next(ctx.genomes_dir.iterdir()).read_text(encoding="utf-8").count(">") == 1
+    assert "settings" not in json.loads(marker_path.read_text())

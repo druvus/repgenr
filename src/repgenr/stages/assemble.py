@@ -476,7 +476,9 @@ def _reuse_finished(
     outcome.versions = dict(done.get("tool_versions") or {})
     if not outcome.versions and done.get("version"):
         outcome.versions = {done["assembler"]: done["version"]}
-    if old_floor is not None and old_floor < params.min_contig_length:
+    if check_settings and (old_floor is None or old_floor < params.min_contig_length):
+        # A marker without settings may hold contigs below the floor; filtering
+        # again is a no-op when it does not.
         _refilter(outcome, done, run_dir, params.min_contig_length, logger)
     return True
 
@@ -503,9 +505,13 @@ def _refilter(
             run, "assemble", f"assembly_failed: no contig of {min_length} bp or more"
         )
         return
+    if "settings" in done:
+        done["settings"]["min_contig_length"] = min_length
+    elif stats == outcome.stats:
+        trial.unlink()
+        return
     trial.replace(contigs)
     done["stats"] = asdict(stats)
-    done["settings"]["min_contig_length"] = min_length
     _write_marker(run_dir / _DONE_MARKER, done)
     outcome.stats = stats
     if logger is not None:
