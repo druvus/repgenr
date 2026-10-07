@@ -287,6 +287,25 @@ def test_checkm2_quality_gates_and_feeds_the_selection(
     assert ctx.config.stages["assemble"].params["checkm2_db"] == str(tmp_path / "db")
 
 
+def test_checkm2_gate_and_missing_results_are_warned_about(
+    workdir, tmp_path, fake_assembler, monkeypatch, caplog
+) -> None:
+    """Both reach the console under --quiet: an excused assembly and one kept unscored."""
+    from repgenr.stages import assemble as stage
+
+    monkeypatch.setattr(stage, "preflight_checkm2", lambda: {"checkm2": "1.1.0"})
+    monkeypatch.setattr(stage, "run_checkm2", _fake_checkm2({"SRR2.fasta": (40.0, 15.0)}))
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "db")))
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(
+        "SRR1" in w and "no quality" in w and "kept without quality values" in w for w in warnings
+    )
+    assert any("SRR2" in w and "qc_failed" in w and "completeness 40.0" in w for w in warnings)
+
+
 def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
     workdir, tmp_path, fake_assembler, fake_classifier
 ) -> None:

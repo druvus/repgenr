@@ -832,7 +832,10 @@ def assess(
         quality = {run: by_name[link.name] for run, link in named.items() if link.name in by_name}
         for run, link in named.items():
             if link.name not in by_name:
-                logger.warning("%s: CheckM2 reported no quality", run)
+                logger.warning(
+                    "%s: CheckM2 reported no quality; the assembly is kept without quality values",
+                    run,
+                )
     elif not checkm2_db:
         logger.info(
             "No CheckM2 database configured (--checkm2-db or %s); assemblies are not "
@@ -882,6 +885,7 @@ def apply_quality(
                 f"(min {min_completeness:g}), contamination {contamination:.1f} "
                 f"(max {max_contamination:g})",
             )
+            logger.warning("%s: excused, %s", o.row.run_accession, o.excused.reason)
 
 
 def apply_classification(
