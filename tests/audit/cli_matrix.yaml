@@ -887,10 +887,11 @@ commands:
         - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
+        - docs/output.md
         - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
-        live: tests/live/test_container_runs.py::test_glance_drep_compare
+        live: tests/live/test_aux_commands.py::test_glance_sourmash
       --threads:
         aliases:
         - -t
