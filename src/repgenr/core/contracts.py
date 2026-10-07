@@ -96,6 +96,24 @@ def newick_is_complete(text: str) -> bool:
     return terminators == 1 and not quoted and not comment_depth
 
 
+def rename_fasta_records(src: Path, dst: Path, names: dict[str, str]) -> None:
+    """Copy a FASTA from ``src`` to ``dst``, renaming the records in ``names``.
+
+    Tools rename their samples (harvesttools adds the file extension, cactus
+    turns '.' into '_'); records are renamed back to genome stems so that
+    tree leaves, the outgroup lookup and the masker's outgroup exclusion see
+    the input names. Streams line by line, since whole-genome alignments are
+    large, and removes ``src``. A record not in ``names`` keeps its name.
+    """
+    with open(src, encoding="utf-8") as fi, open(dst, "w", encoding="utf-8") as fo:
+        for line in fi:
+            if line.startswith(">"):
+                name = line[1:].strip()
+                line = f">{names.get(name, name)}\n"
+            fo.write(line)
+    src.unlink()
+
+
 def list_fasta(source: Path) -> list[Path]:
     """Sorted genome FASTA files directly under ``source``.
 

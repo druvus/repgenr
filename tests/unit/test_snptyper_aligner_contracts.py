@@ -370,3 +370,44 @@ def test_parsnp_hardlinks_its_query_genomes(genomes, recorded, tmp_path) -> None
     assert sorted(p.name for p in staged.iterdir()) == [g.name for g in genomes[1:]]
     for genome in genomes[1:]:
         assert (staged / genome.name).stat().st_ino == genome.stat().st_ino
+
+
+def test_cactus_names_msa_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+    """cactus sample names replace '.' with '_'; the MSA records are renamed back
+    to genome stems so a versioned outgroup (x_GCF_9.1) stays findable by
+    IQ-TREE's -o and by tree2tax."""
+    if "cactus" not in align_registry.names():
+        pytest.skip("cactus not registered")
+
+    import repgenr.aligners.cactus as cactus_mod
+    import repgenr.converters.hal_to_maf as h2m
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    seqs = {"Fam_Gen_sp_GCF_1.1": "AAAACCCC", "Fam_Gen_sp_GCF_2.1": "AAATCCCC"}
+    seqs["Fam_Gen_sp_GCF_9.1"] = "TAAACCCA"
+    genomes = []
+    for stem, seq in seqs.items():
+        path = gdir / f"{stem}.fasta"
+        path.write_text(f">contig1\n{seq}\n", encoding="utf-8")
+        genomes.append(path)
+    maf_rows = "\n".join(
+        f"s {stem.replace('.', '_')}.contig1 0 8 + 8 {seq}" for stem, seq in seqs.items()
+    )
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        tool = Path(cmd[0]).name
+        if tool == "cactus-pangenome":
+            _write(Path(_flag_value(cmd, "--outDir")) / "pangenome.full.hal", "HAL")
+        elif tool == "hal2maf":
+            _write(Path(cmd[-1]), f"##maf version=1\na score=0\n{maf_rows}\n")
+        return 0
+
+    monkeypatch.setattr(cactus_mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(h2m, "run_tool", fake_run_tool)
+    result = align_registry.create("cactus").align(
+        genomes, genomes[0], tmp_path / "align", AlignParams(threads=2), _LOG
+    )
+    assert _read_headers(result.msa_fasta) == set(seqs)
+    assert not (tmp_path / "align" / "cactus_samples.fasta").exists()
