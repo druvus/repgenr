@@ -14,6 +14,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import dendropy
@@ -151,11 +152,11 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
     )
     params.out_dir.mkdir(parents=True, exist_ok=True)
     if params.versions_out is not None:
-        # No external tools on this step (pure dendropy); the empty fragment lets
-        # the Nextflow module still record repgenr.
+        # No external binaries on this step; the tree work is the dendropy
+        # library, recorded as the tool, as the workdir stage does.
         from ..core.versions import write_versions_fragment
 
-        write_versions_fragment(params.versions_out, {})
+        write_versions_fragment(params.versions_out, _dendropy_versions())
     out_tree2tax, out_map, _collapsed = _emit_relations(
         params.tree.read_text().strip(),
         outgroup_leaf,
@@ -202,6 +203,8 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
 
     ctx.config.record_stage(
         "tree2tax",
+        tool="dendropy",
+        tool_versions=_dendropy_versions(),
         params={
             "remove_outgroup": params.remove_outgroup,
             "include_dereplicated": params.include_dereplicated,
@@ -214,6 +217,14 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     )
     ctx.save_config()
     return out_tree2tax, out_map
+
+
+def _dendropy_versions() -> dict[str, str]:
+    """The dendropy library version, recorded as this stage's tool version."""
+    try:
+        return {"dendropy": version("dendropy")}
+    except PackageNotFoundError:  # pragma: no cover - dendropy is a hard dependency
+        return {}
 
 
 def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:

@@ -24,7 +24,7 @@ def test_fragment_empty_is_empty_file(tmp_path: Path) -> None:
     assert out.read_text() == ""
 
 
-def test_tree2tax_step_writes_empty_versions(tmp_path: Path) -> None:
+def test_tree2tax_step_writes_dendropy_version(tmp_path: Path) -> None:
     tree = tmp_path / "tree.nwk"
     tree.write_text(_NWK + "\n")
     versions = tmp_path / "tool_versions.yml"
@@ -32,8 +32,10 @@ def test_tree2tax_step_writes_empty_versions(tmp_path: Path) -> None:
         Tree2taxStepParams(tree=tree, out_dir=tmp_path / "out", versions_out=versions),
         logging.getLogger("test"),
     )
-    # tree2tax uses no external tool -> empty fragment (module still adds repgenr)
-    assert versions.exists() and versions.read_text() == ""
+    # tree2tax runs no external binary; the dendropy library is its tool.
+    from importlib.metadata import version
+
+    assert versions.read_text() == f"    dendropy: {version('dendropy')}\n"
 
 
 def test_fragment_into_missing_directory(tmp_path) -> None:

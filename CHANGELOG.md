@@ -381,6 +381,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `tree2tax` and `tree2tax-relations` exit 3 on a `tree.nwk` with text after
   its final `;`, the rule `doctor` uses to flag a truncated tree; dendropy
   read the first tree and ignored the rest.
+- The `tree2tax` record in `repgenr.yaml` names `dendropy` as its tool with
+  the library version, and `tree2tax-relations --versions-out` writes the same
+  version; the record had no tool and no versions.
 
 ### Changed
 - A run whose assembler is not installed is excused as

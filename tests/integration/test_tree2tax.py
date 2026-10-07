@@ -203,3 +203,15 @@ def test_tree2tax_follows_phylo_built_without_outgroup(workdir: Path) -> None:
     )
     t2t, _ = tree2tax_run(ctx, Tree2taxParams())
     assert any(p == "root" for _, p in _edges(t2t))
+
+
+def test_tree2tax_records_dendropy_as_its_tool(workdir: Path) -> None:
+    """The record names the library that does the work and its version."""
+    from importlib.metadata import version
+
+    _setup(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    tree2tax_run(ctx, Tree2taxParams())
+    record = ctx.config.stages["tree2tax"]
+    assert record.tool == "dendropy"
+    assert record.tool_versions == {"dendropy": version("dendropy")}
