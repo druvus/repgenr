@@ -317,3 +317,43 @@ def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
     builtin_aln = {"progressivemauve", "cactus", "sibeliaz"}
     assert builtin_snp & set(snp_registry.names()) <= set(_SNP_PARAM_TOKENS)
     assert builtin_aln & set(align_registry.names()) <= set(_ALIGN_PARAM_TOKENS)
+
+
+def test_parsnp_names_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+    """harvesttools names records by file name, the reference with '.ref'; the
+    typer renames them to genome stems, so tree leaves match the input genomes
+    and tree2tax finds a versioned outgroup such as 'x_GCF_9.1'."""
+    if "parsnp" not in snp_registry.names():
+        pytest.skip("parsnp not registered")
+
+    import repgenr.snptypers.parsnp as parsnp_mod
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    stems = ["Fam_Gen_sp_GCF_1.1", "Fam_Gen_sp_GCF_2.1", "Fam_Gen_sp_GCF_9.1"]
+    genomes = []
+    for stem in stems:
+        path = gdir / f"{stem}.fasta"
+        path.write_text(f">{stem}\nACGT\n", encoding="utf-8")
+        genomes.append(path)
+    # As observed with parsnp 2 and harvesttools 1.3 on the 50-genome set.
+    harvest = f">{stems[0]}.fasta.ref\nACGT\n>{stems[1]}.fasta\nACGA\n>{stems[2]}.fasta\nACTT\n"
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        if Path(cmd[0]).name == "parsnp":
+            _write(Path(_flag_value(cmd, "-o")) / "parsnp.ggr", "GGR")
+        elif "-S" in cmd:
+            _write(Path(_flag_value(cmd, "-S")), harvest)
+        elif "-M" in cmd:
+            _write(Path(_flag_value(cmd, "-M")), harvest)
+        return 0
+
+    monkeypatch.setattr(parsnp_mod, "run_tool", fake_run_tool)
+    result = snp_registry.create("parsnp").call(
+        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=2), _LOG
+    )
+    assert _read_headers(result.core_snp_fasta) == set(stems)
+    assert result.full_alignment is not None
+    assert _read_headers(result.full_alignment) == set(stems)
+    assert sorted(p.name for p in (tmp_path / "snp_out").glob("harvest_*")) == []
