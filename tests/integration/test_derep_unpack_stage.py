@@ -78,7 +78,7 @@ def test_many_missing_members_are_listed_on_one_line(workdir: Path, caplog) -> N
 def test_representatives_sharing_a_stem_get_distinct_directories(workdir: Path) -> None:
     gdir = workdir / "genomes"
     gdir.mkdir(parents=True)
-    for name in ("dup.fasta", "dup.fna", "m.fasta", "a.b.c.fasta"):
+    for name in ("dup.fasta", "dup.fna", "m.fasta", "a.b.c.fasta", "z.fasta.gz", "Up.fa", "up.fna"):
         (gdir / name).write_text(f">{name}\nACGT\n")
     derep = workdir / "derep"
     derep.mkdir()
@@ -87,12 +87,23 @@ def test_representatives_sharing_a_stem_get_distinct_directories(workdir: Path) 
         "dup.fasta\tdup.fasta\ndup.fasta\tm.fasta\n"
         "dup.fna\tdup.fna\n"
         "a.b.c.fasta\ta.b.c.fasta\n"
+        "z.fasta.gz\tz.fasta.gz\n"
+        "Up.fa\tUp.fa\n"
+        "up.fna\tup.fna\n"
     )
     ctx = WorkdirContext(workdir, create=True)
     unpack = run(ctx, DerepUnpackParams())
 
-    # Stems that collide fall back to the full file name; others keep the stem.
-    assert sorted(p.name for p in unpack.iterdir()) == ["a.b.c", "dup.fasta", "dup.fna"]
+    # Names that collide (also ignoring case) fall back to the full file name;
+    # others drop the genome extension, ".fasta.gz" included.
+    assert sorted(p.name for p in unpack.iterdir()) == [
+        "Up.fa",
+        "a.b.c",
+        "dup.fasta",
+        "dup.fna",
+        "up.fna",
+        "z",
+    ]
     assert sorted(p.name for p in (unpack / "dup.fasta").iterdir()) == ["dup.fasta", "m.fasta"]
     assert [p.name for p in (unpack / "dup.fna").iterdir()] == ["dup.fna"]
 

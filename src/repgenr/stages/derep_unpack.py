@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, read_clusters
+from ..core.contracts import CLUSTERS_TSV, FASTA_SUFFIXES, read_clusters
 from ..core.errors import WorkdirError
 from ..core.process import link_or_copy, staged_dir
 
@@ -81,10 +81,20 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
 
 
 def _cluster_dir_names(clusters: dict[str, list[str]]) -> dict[str, str]:
-    """Directory name per representative: the file stem, or the full file name
-    when two representatives share a stem (``x.fasta`` and ``x.fna``)."""
-    stems = Counter(Path(rep).stem for rep in clusters)
-    return {rep: Path(rep).stem if stems[Path(rep).stem] == 1 else rep for rep in clusters}
+    """Directory name per representative: the file name without its genome
+    extension, or the full file name when two representatives would share a
+    directory (``x.fasta`` and ``x.fna``; ``X.fa`` and ``x.fa`` on a
+    case-insensitive file system)."""
+    stems = {rep: _strip_genome_suffix(rep) for rep in clusters}
+    folded = Counter(s.lower() for s in stems.values())
+    return {rep: stem if folded[stem.lower()] == 1 else rep for rep, stem in stems.items()}
+
+
+def _strip_genome_suffix(name: str) -> str:
+    for suffix in FASTA_SUFFIXES:
+        if name.endswith(suffix) and len(name) > len(suffix):
+            return name[: -len(suffix)]
+    return Path(name).stem
 
 
 _MAX_MISSING_LINES = 10
