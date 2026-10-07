@@ -62,6 +62,16 @@ EXCUSED_RUNS_TSV = "excused_runs.tsv"
 FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
 
 
+def newick_is_complete(text: str) -> bool:
+    """True when a Newick text is non-empty and ends with its terminating ';'.
+
+    Text after the final ';' (or no ';' at all) marks a truncated or
+    concatenated file. ``doctor`` and ``tree2tax`` share this rule.
+    """
+    content = text.strip()
+    return bool(content) and content.endswith(";")
+
+
 def list_fasta(source: Path) -> list[Path]:
     """Sorted genome FASTA files directly under ``source``.
 

@@ -27,6 +27,7 @@ from ..core.contracts import (
     TREE2TAX_TSV,
     TREE_NWK,
     accession_from_filename,
+    newick_is_complete,
     read_clusters,
     read_segments,
     strip_fasta_suffix,
@@ -95,12 +96,19 @@ def _emit_relations(
     ``genomes_map.tsv`` to the given paths. Returns the two paths and the
     number of internal nodes collapsed.
     """
+    source = tree_source if tree_source is not None else "the tree"
+    if not newick_is_complete(tree_text):
+        # Same rule as doctor: dendropy would read the first tree and ignore
+        # whatever follows its ';', which hides a truncated or concatenated file.
+        raise WorkdirError(
+            f"{source} is empty or truncated (no terminating ';' at the end of the file); "
+            "re-run phylo."
+        )
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
     try:
         tree = dendropy.Tree.get(data=tree_text, schema="newick", preserve_underscores=True)
     except (DataParseError, ValueError) as exc:
-        source = tree_source if tree_source is not None else "the tree"
         raise WorkdirError(f"{source} is not a valid Newick tree: {exc}") from exc
 
     if outgroup_leaf is not None:

@@ -374,6 +374,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `snptype --tool simple` with no variable sites names the genome count and
   the reference, and suggests a closer reference, more divergent genomes, or
   an alignment-free tree.
+- `tree2tax` and `tree2tax-relations` exit 3 on a `tree.nwk` with text after
+  its final `;`, the rule `doctor` uses to flag a truncated tree; dendropy
+  read the first tree and ignored the rest.
 
 ### Changed
 - A run whose assembler is not installed is excused as

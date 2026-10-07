@@ -188,3 +188,12 @@ def test_phylo_build_needs_three_genomes(tmp_path: Path, register_tool, n: int) 
         assert calls == []
     else:
         assert phylo_build(params, logger).exists()
+
+
+def test_tree2tax_relations_rejects_text_after_the_final_semicolon(tmp_path: Path) -> None:
+    from repgenr.core.errors import WorkdirError
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(a,(b,c));garbage\n")
+    with pytest.raises(WorkdirError, match=r"tree\.nwk.*truncated"):
+        tree2tax_relations(Tree2taxStepParams(tree=tree, out_dir=tmp_path / "out"), _LOG)

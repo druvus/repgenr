@@ -158,3 +158,16 @@ def test_tree2tax_lists_segment_members_under_their_isolate(workdir: Path) -> No
     rows = {ln.split("\t")[0]: ln.split("\t")[1] for ln in gmap.read_text().splitlines()}
     assert rows["SEG1.1"] == rows["SEG2.1"] == rows["GCA_000001.1"] == "Fam_Gen_sp_GCA_000001.1"
     assert "GCA_000002.1" in rows
+
+
+def test_tree2tax_rejects_text_after_the_final_semicolon(workdir: Path) -> None:
+    """A tree with text after its final ';' is treated as truncated, as doctor does."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    _setup(workdir)
+    (workdir / "tree" / "tree.nwk").write_text(_NWK + "(extra\n")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError, match=r"tree\.nwk.*truncated"):
+        tree2tax_run(ctx, Tree2taxParams())
