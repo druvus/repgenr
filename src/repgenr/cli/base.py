@@ -219,7 +219,9 @@ def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
 # --msa-source snptype, --include-dereplicated) live in the helpers above.
 # Stages not listed digest no inputs and fingerprint on params alone.
 STAGE_INPUTS: dict[str, Any] = {
-    "metadata": lambda ctx, p: [],  # network-only
+    # metadata downloads its table unless --metadata-path names a local one,
+    # which is then its one file input.
+    "metadata": lambda ctx, p: [Path(p.metadata_path)] if getattr(p, "metadata_path", None) else [],
     # ingest reads paths outside the workdir; they are keyed absolute.
     "ingest": _ingest_inputs,
     # reads is network-only; an accession list is its one file input.
