@@ -693,7 +693,11 @@ def main(
 ) -> None:
     """RepGenR top-level entry point."""
     from ..core.containers import configure_container
+    from ..core.process import install_termination_handler
 
+    # A terminated repgenr stops the tool it is running instead of leaving it
+    # behind (SIGTERM from kill or a scheduler; SIGHUP when the terminal closes).
+    install_termination_handler()
     _RUN_STATE["force"] = force
     if quiet:
         level = logging.WARNING
