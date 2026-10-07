@@ -187,7 +187,7 @@ Select and organize viral genomes (virus equivalent of genome).
 | `--outgroup-accession` |  | Use this downloaded record as the outgroup instead of searching for one (an accession on the NCBI Virus path, a record id on BV-BRC). |
 | `--group-segments` | off | ncbi_virus: combine an isolate's segments into one genome (segmented viruses). |
 | `--outgroup-candidates-taxid-min-genomes` | `5` | Genomes a sister taxid needs to qualify as an outgroup candidate. |
-| `--outgroup-treebuilder` | `mashtree` | Tree builder used for the outgroup distance matrix. |
+| `--outgroup-treebuilder` | `mashtree` | Tree builder used for the outgroup distance matrix. Accepted: mashtree. |
 | `--glance` | off | Print selection and stop. |
 | `--print-fasta-headers` | off | Print the headers of the selected records. |
 | `--ignore-duplicates` | off | bvbrc: tolerate duplicate record ids (last wins). |

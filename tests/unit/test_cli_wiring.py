@@ -684,3 +684,16 @@ def test_tree2tax_relations_collapse_flags_wiring(monkeypatch, tmp_path) -> None
     assert result.exit_code == 0, result.output
     assert seen["params"].collapse_support == 0.7
     assert seen["params"].collapse_length == 0.001
+
+
+def test_outgroup_treebuilder_help_names_accepted_values() -> None:
+    import re
+
+    from repgenr.viral._outgroup import distance_matrix_builders
+
+    result = _runner.invoke(app, ["vgenome", "--help"])
+    assert result.exit_code == 0
+    plain = re.sub(r"[^A-Za-z0-9/]", "", re.sub(r"\x1b\[[0-9;]*m", "", result.output))
+    for name in distance_matrix_builders():
+        assert plain.count(name) >= 1
+    assert "Accepted" in plain

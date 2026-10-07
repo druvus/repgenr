@@ -15,6 +15,7 @@ from .base import (
     HELP_WORKDIR,
     HELP_WORKDIR_CREATED,
     PANEL_ENTRY,
+    _outgroup_builder_help,
     _run,
     app,
 )
@@ -124,7 +125,7 @@ def vgenome(
     outgroup_treebuilder: str = typer.Option(
         "mashtree",
         "--outgroup-treebuilder",
-        help="Tree builder used for the outgroup distance matrix.",
+        help=_outgroup_builder_help(),
     ),
     glance: bool = typer.Option(False, "--glance", help="Print selection and stop."),
     print_fasta_headers: bool = typer.Option(
