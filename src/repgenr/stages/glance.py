@@ -17,6 +17,12 @@ from ..core.contracts import list_fasta
 from ..core.errors import UserInputError, WorkdirError
 from ..core.process import remove_tree
 
+GLANCE_OUTPUTS = (
+    "glance_clustering_dendrogram.pdf",
+    "glance_MASH_ANI_similarity_boxplot.png",
+    "glance_MASH_ANI_similarity_histogram.png",
+)
+
 
 @dataclass
 class GlanceParams:
@@ -54,6 +60,11 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
 
     result = adapter.compare(genomes, glance_wd, params.threads, logger)
 
+    # The comparison succeeded: drop the previous outputs before writing new
+    # ones, so a plot that is not drawn this time (no similarity in range)
+    # does not survive from an earlier run.
+    for name in GLANCE_OUTPUTS:
+        (ctx.workdir / name).unlink(missing_ok=True)
     out_pdf = ctx.workdir / "glance_clustering_dendrogram.pdf"
     if result.dendrogram is not None:
         shutil.copy2(result.dendrogram, out_pdf)

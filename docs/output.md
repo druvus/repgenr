@@ -33,7 +33,7 @@ top level, and the execution reports under `pipeline_info/`.
 | `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster with its member genomes (and the representative unless `--no-representant`), linked or copied from `genomes/`. Replaced on each run. |
 | `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv` and a `representatives/` directory of links to the representative genomes. `unpack` restores it. |
 | `glance_clustering_dendrogram.pdf` | glance | dRep's clustering dendrogram over all genomes. |
-| `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all Mash ANI values within `--plot-min`/`--plot-max`. |
+| `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all Mash ANI values within `--plot-min`/`--plot-max`. A run removes the previous glance plots and dendrogram once the comparison succeeds, so a plot with no values in range is absent rather than stale. |
 | `glance_wd/` | glance | dRep working files; kept only with `--keep-files`. |
 | `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
 | `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |

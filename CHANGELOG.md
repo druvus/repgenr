@@ -224,6 +224,11 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- `glance` removes the previous dendrogram and plots once the comparison
+  succeeds, so a plot with no similarity in the `--plot-min`/`--plot-max`
+  range is absent instead of left from an earlier run. A dRep failure prints
+  one console line; its command and output tail go to the run log (a test now
+  covers this for glance).
 - `derep-stock --action delete` of a run that is not stored exits 3 with a
   message naming the run and listing the stored runs. A repeat delete was
   skipped by the resume check and exited 0; delete is no longer recorded or
