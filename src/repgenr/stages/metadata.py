@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import re
 import shutil
 import tarfile
 import time
@@ -71,10 +72,21 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     _validate(params)
 
     if params.source == "api":
-        if params.release or params.version:
+        ignored = [
+            flag
+            for flag, value in (
+                ("--release", params.release),
+                ("--gtdb-version", params.version),
+                ("--metadata-path", params.metadata_path),
+                ("--nodownload", params.nodownload),
+            )
+            if value
+        ]
+        if ignored:
             logger.warning(
-                "--source api serves the current GTDB release; --release/--version are "
-                "ignored. Use --source tsv to pin a specific release."
+                "--source api serves the current GTDB release; ignoring %s. "
+                "Use --source tsv to pin a release or to read a local table.",
+                ", ".join(ignored),
             )
         selected, outgroup = _select_via_api(params, logger)
     else:
@@ -107,14 +119,25 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     return len(selected)
 
 
+GTDB_VERSIONS = ("bac120", "ar53")
+_RELEASE_RE = re.compile(r"^\d+\.\d+$")
+
+
 def _validate(params: MetadataParams) -> None:
     if params.source not in ("tsv", "api"):
         raise UserInputError("--source must be 'tsv' or 'api'.")
     if params.source == "tsv":
-        if not params.release or "." not in params.release:
+        if not params.release or not _RELEASE_RE.match(params.release):
             raise UserInputError("tsv source needs --release like '232.0' (major.minor).")
         if not params.version:
             raise UserInputError("tsv source needs --gtdb-version (bac120 or ar53).")
+        if params.version not in GTDB_VERSIONS:
+            raise UserInputError(
+                f"Invalid --gtdb-version '{params.version}'. Choose from: "
+                f"{', '.join(GTDB_VERSIONS)}."
+            )
+        if params.metadata_path and not Path(params.metadata_path).is_file():
+            raise UserInputError(f"--metadata-path not found: {params.metadata_path}")
     if not (params.target_genus or params.target_family):
         raise UserInputError("Supply --target-genus or --target-family.")
     if params.level == "species" and not params.target_species:
@@ -194,8 +217,38 @@ def workdir_tables(workdir: Path, release: str, version: str) -> list[Path]:
     return [workdir / f"{version}_metadata_r{major}{ext}" for ext in _TABLE_SUFFIXES]
 
 
+def release_marker(workdir: Path, release: str, version: str) -> Path:
+    """The file naming the exact release (e.g. ``232.0``) the workdir table came from.
+
+    Table names carry only the major release, so ``--nodownload`` reads this
+    marker to avoid serving a 214.0 table as 214.1.
+    """
+    major = int(float(release))
+    return workdir / f"{version}_metadata_r{major}.release"
+
+
+def _check_reused_release(ctx: WorkdirContext, params: MetadataParams, table: Path, logger) -> None:
+    marker = release_marker(ctx.workdir, str(params.release), str(params.version))
+    try:
+        recorded = marker.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        logger.warning(
+            "Cannot confirm which GTDB release %s came from (no %s); using it as %s.",
+            table.name,
+            marker.name,
+            params.release,
+        )
+        return
+    if recorded != params.release:
+        raise UserInputError(
+            f"{table.name} in the workdir was downloaded for GTDB release {recorded}, "
+            f"not {params.release}. Pass -r {recorded}, or drop --nodownload to download "
+            f"release {params.release}."
+        )
+
+
 def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Path:
-    if params.metadata_path and Path(params.metadata_path).exists():
+    if params.metadata_path:
         logger.info("Using provided metadata: %s", params.metadata_path)
         return Path(params.metadata_path)
 
@@ -207,35 +260,43 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
         f"https://data.gtdb.ecogenomic.org/releases/release{major}/"
         f"{params.release}/{params.version}_metadata_r{major}"
     )
+    tables = workdir_tables(ctx.workdir, params.release, str(params.version))
+    if params.nodownload:
+        for dest in tables:
+            if dest.exists():
+                _check_reused_release(ctx, params, dest, logger)
+                logger.info("Using previously downloaded %s", dest.name)
+                return dest
     # Try the modern layout first, then fall back, so current releases
-    # resolve on the first request.
-    for ext, dest in zip(
-        _TABLE_SUFFIXES,
-        workdir_tables(ctx.workdir, params.release, str(params.version)),
-        strict=True,
-    ):
+    # resolve on the first request. Only a 404 moves on to the next naming
+    # scheme; any other failure (network, checksum) is reported as is.
+    for ext, dest in zip(_TABLE_SUFFIXES, tables, strict=True):
         url = base + ext
-        if params.nodownload and dest.exists():
-            logger.info("Using previously downloaded %s", dest.name)
-            return dest
+        logger.info("Downloading %s", url)
         try:
-            logger.info("Downloading %s", url)
             # Streams through a .part file with a size check (core.http), and
-            # retries transient 5xx/429; a 404 for this layout falls through to
-            # the next naming scheme.
+            # retries transient 5xx/429.
             http.download(url, dest, logger=logger)
-            try:
-                http.verify_md5_manifest(
-                    dest, base.rsplit("/", 1)[0] + "/MD5SUM.txt", logger=logger
-                )
-            except WorkdirError:
-                # corrupt transfer: remove it so a re-run downloads afresh
-                dest.unlink(missing_ok=True)
+        except http.HTTPStatusError as exc:
+            if exc.status != 404:
                 raise
-            return dest
-        except WorkdirError as exc:  # try the next naming scheme
-            logger.warning("Download failed (%s); trying next target", exc)
-    raise WorkdirError("Could not download GTDB metadata; check release/version.")
+            logger.info("Not found: %s", url)
+            continue
+        try:
+            http.verify_md5_manifest(dest, base.rsplit("/", 1)[0] + "/MD5SUM.txt", logger=logger)
+        except WorkdirError:
+            # corrupt transfer: remove it so a re-run downloads afresh
+            dest.unlink(missing_ok=True)
+            raise
+        release_marker(ctx.workdir, params.release, str(params.version)).write_text(
+            params.release + "\n", encoding="utf-8"
+        )
+        return dest
+    raise UserInputError(
+        f"GTDB has no {params.version} metadata table for release {params.release} "
+        f"({base}{' or '.join(_TABLE_SUFFIXES)} not found); check -r/--release and "
+        "--gtdb-version."
+    )
 
 
 def _open_metadata(path: Path, workdir: Path):
@@ -272,9 +333,12 @@ def _parse_metadata(path: Path, params: MetadataParams, logger) -> dict[str, dic
             rep = fields[idx["gtdb_genome_representative"]]
             is_rep = acc_raw == rep
 
-            if params.dataset == "rep" and not is_rep:
-                if not (params.outgroup_accession and accession == params.outgroup_accession):
-                    continue
+            # Under --dataset rep a non-representative row is kept only when it
+            # is the named outgroup, and then only to resolve that outgroup:
+            # it never joins the selection.
+            outgroup_only = params.dataset == "rep" and not is_rep
+            if outgroup_only and accession != params.outgroup_accession:
+                continue
 
             tax = _parse_taxonomy(fields[idx["gtdb_taxonomy"]])
             completeness = _opt_column(fields, idx, "checkm2_completeness", "checkm_completeness")
@@ -286,6 +350,7 @@ def _parse_metadata(path: Path, params: MetadataParams, logger) -> dict[str, dic
                 "accession_ncbi": fields[idx.get("ncbi_genbank_assembly_accession", 0)],
                 "tax": tax,
                 "is_rep": is_rep,
+                "outgroup_only": outgroup_only,
                 "completeness": completeness,
                 "contamination": contamination,
             }
@@ -417,7 +482,8 @@ def _select(accessions: dict[str, dict], target_levels: dict[str, str], limit: i
     matching = {
         acc: data
         for acc, data in accessions.items()
-        if all(data["tax"][lvl] == val for lvl, val in target_levels.items())
+        if not data.get("outgroup_only")
+        and all(data["tax"][lvl] == val for lvl, val in target_levels.items())
     }
     if not limit or len(matching) <= limit:
         return matching
@@ -442,18 +508,30 @@ def _pick_outgroup(accessions, selected, target_levels, params):
             raise UserInputError(
                 f"Outgroup accession {params.outgroup_accession} not in GTDB metadata."
             )
+        _refuse_outgroup_in_selection(params.outgroup_accession, selected)
         return params.outgroup_accession, accessions[params.outgroup_accession]
 
-    # one level above the selection level
+    # A representative one level above the selection level, outside the target
+    # taxon itself: under --limit, genomes of the target that the cap left out
+    # are neither selected nor an outgroup.
     levels = list(target_levels)
     upper = levels[-2] if len(levels) >= 2 else levels[-1]
     upper_val = next(iter(selected.values()))["tax"][upper]
+    target_val = target_levels[params.level]
     for acc, data in accessions.items():
-        if acc in selected:
+        if acc in selected or data["tax"][params.level] == target_val:
             continue
         if data["tax"][upper] == upper_val and data["is_rep"]:
             return acc, data
     raise WorkdirError("Could not determine an outgroup; specify --outgroup-accession.")
+
+
+def _refuse_outgroup_in_selection(accession: str, selected) -> None:
+    if accession in selected:
+        raise UserInputError(
+            f"--outgroup-accession {accession} is part of the selection itself; "
+            "an outgroup must lie outside it."
+        )
 
 
 def _populate_manifest(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) -> None:
@@ -508,12 +586,24 @@ def _target_taxon(params: MetadataParams) -> str:
 
 
 def _capitalize_taxon(name: str) -> str:
-    """GTDB names capitalize the first word only (e.g. 'francisella tularensis')."""
+    """Spell a target the way GTDB does: the first word starts upper case and
+    a species epithet is lower case ('francisella Tularensis' ->
+    'Francisella tularensis').
+
+    Only the first letter of the first word is raised and only the epithet
+    before a GTDB suffix is lowered; the rest is kept as typed, so suffixes
+    and placeholders ('Bacillus_A', 'CAG-74', 'copri_A') survive.
+    """
+
+    def epithet(word: str) -> str:
+        stem, sep, suffix = word.partition("_")
+        return stem.lower() + sep + suffix
+
     parts = name.strip().split()
     if not parts:
         return name
-    parts[0] = parts[0].capitalize()
-    return " ".join(parts)
+    parts[0] = parts[0][:1].upper() + parts[0][1:]
+    return " ".join([parts[0], *(epithet(p) for p in parts[1:])])
 
 
 # Parallel card fetches. Measured 2026-09-05 on 1540 Wolbachia cards: eight in
@@ -665,7 +755,18 @@ def _select_via_api(params: MetadataParams, logger) -> tuple[list[GenomeRecord],
 
 def _api_genomes_detail(taxon: str, sp_reps_only: bool, logger) -> list[dict]:
     encoded = urllib.parse.quote(taxon, safe="")
-    data = _api_get(f"/taxon/{encoded}/genomes-detail", {"sp_reps_only": str(sp_reps_only).lower()})
+    try:
+        data = _api_get(
+            f"/taxon/{encoded}/genomes-detail", {"sp_reps_only": str(sp_reps_only).lower()}
+        )
+    except http.HTTPStatusError as exc:
+        if exc.status != 404:
+            raise
+        # The API answers 404 for a taxon name it does not know.
+        raise UserInputError(
+            f"GTDB API has no taxon {taxon}. Check the spelling against GTDB "
+            "(names are case-sensitive, e.g. Bacillus_A)."
+        ) from exc
     return data.get("rows", [])
 
 
@@ -674,7 +775,15 @@ def _select_outgroup_via_api(
 ) -> GenomeRecord:
     # Explicit outgroup: fetch its card for taxonomy.
     if params.outgroup_accession:
-        card = _api_get(f"/genome/{urllib.parse.quote(params.outgroup_accession, safe='')}/card")
+        _refuse_outgroup_in_selection(params.outgroup_accession, selected_acc)
+        try:
+            card = _api_card(params.outgroup_accession)
+        except http.HTTPStatusError as exc:
+            if exc.status != 404:
+                raise
+            raise UserInputError(
+                f"Outgroup accession {params.outgroup_accession} not found in the GTDB API."
+            ) from exc
         tax_row = card.get("metadataTaxonomy", {})
         completeness, contamination = _api_quality(card)
         return _record_from_tax(
