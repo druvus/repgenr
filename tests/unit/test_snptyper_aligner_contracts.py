@@ -236,6 +236,36 @@ def test_snippy_without_full_aln_returns_none_full_alignment(
     assert result.full_alignment is None
 
 
+def test_snippy_names_the_reference_by_its_genome(genomes, tmp_path, monkeypatch) -> None:
+    """snippy-core labels the reference 'Reference'; the typer renames it to the
+    reference genome's stem so tree leaves match the genome names."""
+    if "snippy" not in snp_registry.names():
+        pytest.skip("snippy not registered")
+
+    import repgenr.snptypers.snippy as snippy_mod
+
+    ref_stem = genomes[0].stem
+    msa = _CANNED_MSA.replace(f">{ref_stem}\n", ">Reference\n")
+    assert ">Reference\n" in msa
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        tool = Path(cmd[0]).name
+        if tool == "snippy":
+            Path(_flag_value(cmd, "--outdir")).mkdir(parents=True, exist_ok=True)
+        elif tool == "snippy-core":
+            _write(Path(_flag_value(cmd, "--prefix") + ".aln"), msa)
+            _write(Path(_flag_value(cmd, "--prefix") + ".full.aln"), msa)
+        return 0
+
+    monkeypatch.setattr(snippy_mod, "run_tool", fake_run_tool)
+    typer_ = snp_registry.create("snippy")
+    result = typer_.call(genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=7), _LOG)
+    assert _read_headers(result.core_snp_fasta) == set(_STEMS)
+    assert result.full_alignment is not None
+    assert _read_headers(result.full_alignment) == set(_STEMS)
+
+
 def test_gubbins_masking_returns_filtered_fasta(genomes, recorded, tmp_path) -> None:
     from repgenr.maskers.base import MaskParams
     from repgenr.maskers.gubbins import GubbinsMasker

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -85,14 +84,27 @@ class SnippyTyper(SnpTyper):
         if not core_aln.exists():
             raise WorkdirError("snippy-core did not produce a core alignment (.aln)")
         core_fasta = out_dir / "core_snp.fasta"
-        core_fasta.write_text(core_aln.read_text(encoding="utf-8"))
+        _copy_naming_reference(core_aln, core_fasta, reference.stem)
 
         full_aln = Path(str(core_prefix) + ".full.aln")
         full: Path | None = None
         if full_aln.exists():
-            # The whole-genome alignment is the largest artifact snippy-core
-            # writes; copy the file instead of reading it into memory as text.
             full = out_dir / "full_alignment.fasta"
-            shutil.copy2(full_aln, full)
+            _copy_naming_reference(full_aln, full, reference.stem)
 
         return SnpResult(core_snp_fasta=core_fasta, masked=False, full_alignment=full)
+
+
+def _copy_naming_reference(src: Path, dst: Path, reference_name: str) -> None:
+    """Copy a snippy-core alignment, renaming its 'Reference' record.
+
+    snippy-core labels the reference 'Reference'; every other typer names it
+    by its genome, as the tree leaves and tree2tax expect. Streams line by
+    line, since the whole-genome alignment is the largest file snippy-core
+    writes.
+    """
+    with open(src, encoding="utf-8") as fi, open(dst, "w", encoding="utf-8") as fo:
+        for line in fi:
+            if line.rstrip("\r\n") == ">Reference":
+                line = f">{reference_name}\n"
+            fo.write(line)
