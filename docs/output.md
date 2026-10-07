@@ -28,14 +28,14 @@ top level, and the execution reports under `pipeline_info/`.
 | `assembly_stats.tsv` | assemble | Per-assembly metrics: assembler, contigs, total length, N50, largest contig, estimated coverage, the NCBI taxonomy used for the name, quality and classification columns once those steps run, and the polisher that corrected a long-read assembly. |
 | `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
-| `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
+| `derep/` | dereplicate | Representative genomes (`derep/representatives/`) and the cluster tables below; the dereplicator's own intermediates go to `scratch/dereplicate/`. |
 | `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
 | `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |
 | `derep/cluster_summary.tsv` | dereplicate, cluster-summary | One row per representative: member count, species spanned and keeper quality against the members (below). |
 | `snp/core_snp.fasta` | snptype | Core-SNP (variable-site) alignment; masked in place when `--mask` is set. |
 | `snp/full_alignment.fasta` | snptype | Whole-genome alignment in reference coordinates, when the SNP typer produces one (snippy, parsnp, simple); required input for `--mask`. |
 | `snp/snp_distance_matrix.tsv` | snptype | Pairwise SNP distances between genomes; the `simple` typer writes it, the others do not. |
-| `scratch/` | snptype | The typer's per-genome intermediates. Each genome's are removed once its consensus has been read; a genome whose chain failed keeps its own. |
+| `scratch/` | dereplicate, snptype | Tool intermediates: `scratch/dereplicate/` for the dereplicator, `scratch/snptype/` for the SNP typer. The `simple` typer removes each genome's intermediates once its consensus has been read; a genome whose chain failed keeps its own. |
 | `align/msa.fasta` | phylo | Whole-genome alignment from the aligner (`--msa-source aligner`). |
 | `align/msa_source.json`, `snp/msa_source.json` | phylo | Stamp beside the alignment phylo built: the genome set, the source settings and the alignment's digest, so a later `phylo` that changes only the tree builder reuses it. |
 | `tree/` | phylo | Phylogeny (`tree.nwk`) and the tree builder's own files (logs, bootstrap trees). |
