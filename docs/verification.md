@@ -318,11 +318,11 @@ ok, and also counts the docs agreement check.
 | status | ok | ok | ok | n/a | n/a | ok | fixed |
 | metadata | ok | fixed | ok | fixed | fixed | not run | open |
 | genome | ok | ok | ok | not run | open | not run | open |
-| vmetadata | ok | ok | ok | ok | fixed | not run | open |
+| vmetadata | ok | ok | ok | ok | open | not run | open |
 | vgenome | open | ok | ok | ok | ok | not run | open |
 | ingest | ok | ok | ok | ok | ok | ok | ok |
 | reads | ok | ok | ok | ok | ok | not run | ok |
-| assemble | ok | ok | fixed | ok | fixed | n/a | fixed |
+| assemble | ok | ok | fixed | ok | fixed | not run | open |
 | dereplicate | ok | fixed | fixed | ok | ok | ok | fixed |
 | snptype | ok | ok | fixed | ok | ok | n/a | fixed |
 | phylo | fixed | ok | fixed | ok | ok | ok | fixed |
@@ -367,7 +367,7 @@ parser), so they also apply to commands other than the one named.
 | assemble, assemble-run | With `--assembler auto` and no assembler installed, runs were excused as `unsupported_platform`; they are now excused as `assembler_not_installed` with a warning, and the stage exits 4 only when nothing can be assembled | e7afca7, 68bef93 |
 | dereplicate, tree2tax | A missing workdir gave a traceback or was created silently; the stage runner now exits 3 (it also covers glance, derep-unpack, cluster-summary, derep-stock, genome, vgenome and assemble) | c04fc22 |
 | dereplicate | docs/output.md placed tool intermediates under `derep/`; they are under `scratch/` | 02f44ec |
-| snptype | Switching typers left the previous typer's optional outputs in `snp/`; they are now dropped | 1429100 |
+| snptype | Switching typers left the previous typer's optional outputs (`full_alignment.fasta`, `snp_distance_matrix.tsv`, `variants.vcf`) in `snp/`; they are now dropped | 1429100 |
 | phylo | Switching tree builders left the previous builder's files in `tree/`; they are now cleared | d2dfbb1 |
 | phylo | The SibeliaZ macOS wrapper concatenated AppleDouble `._*` files into the alignment | a09ede2 |
 | phylo | The SibeliaZ macOS wrapper left thousands of empty block temp files | 82dc1c0 |
@@ -410,7 +410,6 @@ they are recorded here and not fixed.
 | derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
 | derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
 | glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
-| Entry stages | `genome` on a nonexistent workdir creates the directory and an empty manifest before exiting 3, while `vgenome` creates nothing. |
 | Entry stages | `ncbi_acc_download_list.txt` has no trailing newline, so `wc -l` undercounts and a `while read` loop drops the last accession. |
 | Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
 | Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
@@ -418,7 +417,7 @@ they are recorded here and not fixed.
 | Network | The BV-BRC path uses FTPS directly, so proxy variables do not block it, and `vmetadata --list` needs the network whatever `--source` says. |
 | Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
 | Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table, and `vgenome --outgroup-treebuilder` does not name its accepted values (mashtree only). |
-| Docs | docs/output.md does not list `ncbi_acc_download_list.txt` and attributes `scratch/` to snptype only, although `genome` also writes `scratch/genome_download/`. |
+| Docs | docs/output.md does not list `ncbi_acc_download_list.txt`, the deliverable of `genome --accession-list-only`. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |

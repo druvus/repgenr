@@ -360,7 +360,8 @@ def _excuse_missing_assemblers(plan: list[_Outcome], logger: logging.Logger) -> 
         )
         logger.warning(
             "%d %s run(s) excused as %s: none of %s is installed. Put one on PATH, run "
-            "with --container, or narrow the runs with reads --platform.",
+            "with --container, or narrow the runs with reads --platform, then rerun "
+            "assemble with --force.",
             n,
             platform,
             ASSEMBLER_NOT_INSTALLED,

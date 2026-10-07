@@ -391,6 +391,7 @@ def run(
             aligner=aligner,
             snptyper=snptyper,
             extra=phylo_extra,
+            on_run=True,
         )
         local = genomes_dir is not None
         if local and viral:

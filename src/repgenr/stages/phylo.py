@@ -313,7 +313,6 @@ def build_tree(
     )
     warn_ignored_params(builder.capabilities, tree_params, logger, family="Tree builder")
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
-    _clear_previous_builder_files(dirs.tree_dir)
 
     if builder.input_kind == InputKind.GENOMES:
         inputs = list(genomes)
@@ -324,6 +323,7 @@ def build_tree(
             treebuilder,
             len(inputs),
         )
+        _clear_previous_builder_files(dirs.tree_dir)
         tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
     else:
         if msa is not None:
@@ -336,6 +336,7 @@ def build_tree(
         versions = {**versions, **source_versions}
         _warn_low_diversity(msa, logger)
         logger.info("Building tree with %s from MSA %s", treebuilder, msa)
+        _clear_previous_builder_files(dirs.tree_dir)
         tree = builder.build(msa, dirs.tree_dir, tree_params, logger)
 
     final = dirs.tree_dir / TREE_NWK

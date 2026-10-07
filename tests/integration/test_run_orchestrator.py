@@ -334,5 +334,8 @@ def test_run_mask_without_snptype_source_is_still_rejected(monkeypatch, tmp_path
         ["run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "x", "--mask", "gubbins"],
     )
     assert result.exit_code == 2
-    assert "--mask applies only with --msa-source snptype" in result.output
+    assert (
+        "--mask applies only with --msa-source snptype, or on run with --with-snptype"
+        in result.output
+    )
     assert calls == []

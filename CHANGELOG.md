@@ -277,7 +277,7 @@ All notable changes to RepGenR are documented here. The format follows
 - `excused_runs.tsv` keeps each excused run on one line; a multi-line failure
   reason no longer spans several physical lines.
 - `snptype` drops optional outputs (`full_alignment.fasta`,
-  `snp_distance_matrix.tsv`) that the current typer does not write, and
+  `snp_distance_matrix.tsv`, `variants.vcf`) that the current typer does not write, and
   `phylo` clears the previous tree builder's files from `tree/` before a
   rebuild.
 - The SibeliaZ wrapper on macOS skips AppleDouble `._*` files and leaves no
