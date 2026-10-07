@@ -232,13 +232,18 @@ def _segment_labels(recs) -> set[str]:
     return {r.segment for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"}
 
 
-def _segment_rank(r) -> tuple:
+def _segment_rank(r: VirusRecord) -> tuple[bool, int, str]:
     """Which of several records of one segment an isolate keeps: complete
     first, then the longest, then the lowest accession (deterministic)."""
     return (r.completeness != "COMPLETE", -r.length, r.accession)
 
 
-def _isolate_segment_sets(records, logger):
+_IsolateKey = tuple[str, str]  # (species, isolate)
+
+
+def _isolate_segment_sets(
+    records: list[VirusRecord], logger: logging.Logger
+) -> tuple[dict[_IsolateKey, list[VirusRecord]], list[VirusRecord]]:
     """Split records into isolate segment sets and singletons.
 
     Records group by (species, isolate): isolate names repeat across species
@@ -248,14 +253,14 @@ def _isolate_segment_sets(records, logger):
     stays a singleton and a segment submitted more than once (Lassa 'Josiah':
     three L and three S records) is kept once.
     """
-    by_key: dict[tuple[str, str], list] = {}
-    singletons: list = []
+    by_key: dict[_IsolateKey, list[VirusRecord]] = {}
+    singletons: list[VirusRecord] = []
     for r in records:
         if r.isolate:
             by_key.setdefault((r.species, r.isolate), []).append(r)
         else:
             singletons.append(r)
-    groups: dict[tuple[str, str], list] = {}
+    groups: dict[_IsolateKey, list[VirusRecord]] = {}
     duplicates = 0
     for key, recs in by_key.items():
         labelled = [r for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"]
@@ -263,7 +268,7 @@ def _isolate_segment_sets(records, logger):
             singletons.extend(recs)
             continue
         singletons.extend(r for r in recs if r not in labelled)
-        per_segment: dict[str, list] = {}
+        per_segment: dict[str, list[VirusRecord]] = {}
         for r in labelled:
             per_segment.setdefault(r.segment, []).append(r)
         kept = [min(rs, key=_segment_rank) for rs in per_segment.values()]
@@ -277,7 +282,7 @@ def _isolate_segment_sets(records, logger):
     return groups, singletons
 
 
-def _isolate_tokens(groups) -> dict[tuple[str, str], str]:
+def _isolate_tokens(groups: dict[_IsolateKey, list[VirusRecord]]) -> dict[_IsolateKey, str]:
     """A unique accession-like token per isolate group.
 
     Two groups whose names sanitise alike ('Candid #1' and 'Candid-1') or that
@@ -288,7 +293,7 @@ def _isolate_tokens(groups) -> dict[tuple[str, str], str]:
     counts: dict[str, int] = {}
     for token in base.values():
         counts[token] = counts.get(token, 0) + 1
-    out: dict[tuple[str, str], str] = {}
+    out: dict[_IsolateKey, str] = {}
     for key, token in base.items():
         if counts[token] > 1:
             first = min(r.accession for r in groups[key])
