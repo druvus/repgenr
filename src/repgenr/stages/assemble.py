@@ -145,8 +145,21 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         _require_something_to_assemble(plan)
     if params.polisher == "auto":
         _warn_missing_polishers(plan, logger)
+    checkm2_db = params.checkm2_db or checkm2_db_from_env()
+    gtdb_sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    gtdb_lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
+    classifier_name = classifier_for(params.classifier, gtdb_sketch)
     versions = {k: v for o in plan for k, v in o.versions.items()}
     versions.update(_preflight(plan, logger))
+    # Databases and QC tools are checked before the assemblies, which can take hours.
+    versions.update(
+        check_quality_inputs(
+            checkm2_db=checkm2_db,
+            classifier=classifier_name,
+            gtdb_sketch=gtdb_sketch,
+            gtdb_lineages=gtdb_lineages,
+        )
+    )
     pending = [o for o in plan if o.excused is None and o.stats is None]
     if pending:  # a rerun over finished runs downloads nothing
         check_free_disk(
@@ -192,10 +205,6 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         {o.row.run_accession: assemblies / o.row.run_accession / _CONTIGS_NAME for o in assembled},
         scratch / "named",
     )
-    checkm2_db = params.checkm2_db or checkm2_db_from_env()
-    gtdb_sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
-    gtdb_lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
-    classifier_name = classifier_for(params.classifier, gtdb_sketch)
     quality, classified = assess(
         named,
         checkm2_db=checkm2_db,
@@ -799,6 +808,42 @@ def classifier_for(classifier: str, gtdb_sketch: str | None) -> str | None:
             f"{GTDB_SKETCH_ENV})."
         )
     return classifier
+
+
+def check_quality_inputs(
+    *,
+    checkm2_db: str | None,
+    classifier: str | None,
+    gtdb_sketch: str | None,
+    gtdb_lineages: str | None,
+) -> dict[str, str]:
+    """Refuse missing databases and find the QC tools; return their versions."""
+    versions: dict[str, str] = {}
+    if checkm2_db:
+        if not Path(checkm2_db).expanduser().exists():
+            raise UserInputError(
+                f"--checkm2-db {checkm2_db} does not exist (from the flag or CHECKM2DB)."
+            )
+        versions.update(preflight_checkm2())
+    if classifier:
+        assert gtdb_sketch is not None  # classifier_for() requires one
+        if not Path(gtdb_sketch).expanduser().exists():
+            raise UserInputError(
+                f"--gtdb-sketch {gtdb_sketch} does not exist (from the flag or {GTDB_SKETCH_ENV})."
+            )
+        if gtdb_lineages and not Path(gtdb_lineages).expanduser().exists():
+            raise UserInputError(
+                f"--gtdb-lineages {gtdb_lineages} does not exist (from the flag or "
+                f"{GTDB_LINEAGES_ENV})."
+            )
+        cls = classifier_registry.get(classifier)
+        if cls.needs_lineages and not gtdb_lineages:
+            raise UserInputError(
+                f"The {classifier} classifier needs the lineages CSV published with the GTDB "
+                f"sketch (--gtdb-lineages or {GTDB_LINEAGES_ENV})."
+            )
+        versions.update(classifier_registry.create(classifier).preflight())
+    return versions
 
 
 def assess(

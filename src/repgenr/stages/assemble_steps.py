@@ -160,12 +160,17 @@ def genome_qc(params: GenomeQcParams, logger: logging.Logger) -> int:
             "genome-qc needs a CheckM2 database (--checkm2-db or CHECKM2DB) and/or a "
             f"reference sketch (--gtdb-sketch or {stage.GTDB_SKETCH_ENV})."
         )
+    versions = stage.check_quality_inputs(
+        checkm2_db=checkm2_db,
+        classifier=classifier,
+        gtdb_sketch=params.gtdb_sketch,
+        gtdb_lineages=params.gtdb_lineages,
+    )
     contigs = _assembled_contigs(params.assemblies_dir.resolve())
     out = params.out_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     scratch = out / "scratch"
     named = stage.named_links(contigs, scratch / "named")
-    versions: dict[str, str] = {}
     quality, classified = stage.assess(
         named,
         checkm2_db=checkm2_db,

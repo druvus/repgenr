@@ -24,6 +24,7 @@ class SourmashClassifier(Classifier):
         default_params={"ksize": 31, "scaled": 1000, "threshold_bp": 50000},
         accepted_extras=frozenset({"ksize", "scaled", "threshold_bp"}),
     )
+    needs_lineages = True
 
     def classify(
         self,

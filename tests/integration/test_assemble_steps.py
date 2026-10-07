@@ -183,7 +183,7 @@ def test_genome_qc_scores_and_classifies_every_assembly(tmp_path, fakes, monkeyp
         GenomeQcParams(
             assemblies_dir=assemblies,
             out_dir=out,
-            checkm2_db="/db/checkm2",
+            checkm2_db=str(sketch),  # any existing path; CheckM2 is faked
             classifier="fakecls",
             gtdb_sketch=str(sketch),
             versions_out=tmp_path / "v.yml",
@@ -272,7 +272,7 @@ def test_reads_gather_applies_the_quality_gate_and_gtdb_names(tmp_path, fakes, m
         GenomeQcParams(
             assemblies_dir=assemblies,
             out_dir=qc,
-            checkm2_db="/db",
+            checkm2_db=str(sketch),  # any existing path; CheckM2 is faked
             classifier="fakecls",
             gtdb_sketch=str(sketch),
         ),

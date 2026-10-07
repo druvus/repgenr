@@ -47,6 +47,9 @@ class Classifier(ABC):
     """Base class for genome classifiers."""
 
     capabilities: ToolCapabilities
+    # Whether classify() needs ClassifyParams.lineages; checked before any
+    # assembly so a missing file is reported at once.
+    needs_lineages: bool = False
 
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)

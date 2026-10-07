@@ -49,6 +49,12 @@ def fake_assembler():
     unregister_fake_assembler()
 
 
+def _db(path: Path) -> str:
+    """A stand-in database file: the stage refuses database paths that do not exist."""
+    path.write_text("db\n", encoding="utf-8")
+    return str(path)
+
+
 def _prepare(workdir: Path, rows: list[ReadRow]) -> WorkdirContext:
     ctx = WorkdirContext(workdir, create=True)
     write_reads(workdir / READS_TSV, rows)
@@ -272,7 +278,7 @@ def test_checkm2_quality_gates_and_feeds_the_selection(
         ),
     )
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
-    n = run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "db")))
+    n = run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=_db(tmp_path / "db")))
     assert n == 1
     rows = read_selection(workdir / SELECTION_TSV)
     assert [(r.accession, r.completeness, r.contamination) for r in rows] == [("SRR1", 98.5, 0.4)]
@@ -298,7 +304,7 @@ def test_checkm2_gate_and_missing_results_are_warned_about(
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
     ctx.logger.addHandler(caplog.handler)
     with caplog.at_level(logging.WARNING):
-        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "db")))
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=_db(tmp_path / "db")))
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert any(
         "SRR1" in w and "no quality" in w and "kept without quality values" in w for w in warnings
@@ -325,8 +331,8 @@ def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
         AssembleParams(
             assembler="fakeasm",
             classifier="fakecls",
-            gtdb_sketch=str(tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"),
-            gtdb_lineages=str(tmp_path / "lineages.csv"),
+            gtdb_sketch=_db(tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"),
+            gtdb_lineages=_db(tmp_path / "lineages.csv"),
         ),
     )
     rows = {r.accession: r for r in read_selection(workdir / SELECTION_TSV)}
@@ -430,6 +436,7 @@ def test_databases_from_the_environment_are_recorded(
 ) -> None:
     sketch = tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"
     lineages = tmp_path / "lineages.csv"
+    _db(sketch), _db(lineages)
     monkeypatch.setenv("REPGENR_GTDB_SKETCH", str(sketch))
     monkeypatch.setenv("REPGENR_GTDB_LINEAGES", str(lineages))
     _FakeClassifier.lineages = {
@@ -471,7 +478,7 @@ def test_disagreement_warning_names_the_compared_genera(
     run(
         ctx,
         AssembleParams(
-            assembler="fakeasm", classifier="fakecls", gtdb_sketch=str(tmp_path / "db.sig.zip")
+            assembler="fakeasm", classifier="fakecls", gtdb_sketch=_db(tmp_path / "db.sig.zip")
         ),
     )
     messages = [r.getMessage() for r in caplog.records if "classifier_disagrees" in r.getMessage()]
@@ -668,3 +675,56 @@ def test_a_rerun_with_nothing_to_fetch_needs_no_free_disk(
     usage = namedtuple("usage", "total used free")
     monkeypatch.setattr(_shutil, "disk_usage", lambda path: usage(1, 1, 1))
     assert run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0)) == 1
+
+
+# --- quality inputs are checked before any assembly ------------------------------------
+
+
+def test_a_missing_checkm2_database_is_refused_before_assembling(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    from repgenr.core.errors import UserInputError
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(UserInputError, match="--checkm2-db"):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "nope.dmnd")))
+    assert _FakeAssembler.calls == []
+
+
+def test_a_missing_checkm2_binary_is_found_before_assembling(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    from repgenr.core.errors import MissingBinaryError
+    from repgenr.stages import assemble as stage
+
+    def absent():
+        raise MissingBinaryError("checkm2 not found")
+
+    monkeypatch.setattr(stage, "preflight_checkm2", absent)
+    db = tmp_path / "db.dmnd"
+    db.write_text("x", encoding="utf-8")
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(MissingBinaryError):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(db)))
+    assert _FakeAssembler.calls == []
+
+
+def test_sourmash_without_lineages_is_refused_before_assembling(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    from repgenr.core.errors import UserInputError
+
+    monkeypatch.delenv("REPGENR_GTDB_LINEAGES", raising=False)
+    sketch = tmp_path / "gtdb.sig.zip"
+    sketch.write_text("x", encoding="utf-8")
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(UserInputError, match="lineages"):
+        run(ctx, AssembleParams(assembler="fakeasm", gtdb_sketch=str(sketch)))
+    with pytest.raises(UserInputError, match="--gtdb-lineages"):
+        run(
+            ctx,
+            AssembleParams(
+                assembler="fakeasm", gtdb_sketch=str(sketch), gtdb_lineages=str(tmp_path / "no")
+            ),
+        )
+    assert _FakeAssembler.calls == []
