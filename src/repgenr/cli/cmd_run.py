@@ -19,14 +19,43 @@ from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
     HELP_ALIGNED_FRACTION,
+    HELP_ALIGNER_ARG,
+    HELP_ALL_GENOMES,
+    HELP_ALLOW_INCOMPLETE,
+    HELP_BOOTSTRAP,
+    HELP_COLLAPSE_LENGTH,
+    HELP_COLLAPSE_SUPPORT,
+    HELP_DATASET,
+    HELP_DEREP_TOOL_ARG,
+    HELP_GTDB_RELEASE,
+    HELP_GTDB_VERSION,
+    HELP_INCLUDE_DEREPLICATED,
+    HELP_KEEPER,
+    HELP_LEVEL,
+    HELP_LIMIT,
+    HELP_METADATA_PATH,
+    HELP_MSA_SOURCE,
     HELP_NO_OUTGROUP,
+    HELP_NODE_BASENAME,
+    HELP_NODOWNLOAD,
+    HELP_NUM_PROCESSES,
     HELP_OUTGROUP_ACCESSION,
+    HELP_PRE_PRIMARY_ANI,
+    HELP_PRE_SECONDARY_ANI,
     HELP_PRIMARY_ANI,
+    HELP_PROCESS_SIZE,
+    HELP_REDUCE,
+    HELP_REFERENCE,
+    HELP_REMOVE_OUTGROUP,
+    HELP_ROOT_NAME,
     HELP_SECONDARY_ANI,
     HELP_TARGET_FAMILY,
     HELP_TARGET_GENUS,
+    HELP_TARGET_REPS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    HELP_WORKDIR_CREATED,
+    PANEL_PIPELINE,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
     PIPELINE_READS,
@@ -34,6 +63,7 @@ from .base import (
     _aligner_help,
     _assembler_help,
     _derep_help,
+    _mask_help_msa,
     _parse_key_values,
     _require_choice,
     _run,
@@ -126,9 +156,9 @@ def _msa_source_summary(treebuilder: str, msa_source: str, aligner: str, snptype
     return f", aligner={aligner}"
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PIPELINE)
 def run(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     viral: bool = typer.Option(
         False, "--viral", help="Run the viral chain (vmetadata -> vgenome) instead of bacterial."
     ),
@@ -171,8 +201,8 @@ def run(
     ),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
     # --- selection: bacterial (GTDB) ---
-    dataset: str = typer.Option("rep", "-d", "--dataset", help="all or rep (bacterial)."),
-    level: str | None = typer.Option(None, "-l", "--level", help="family/genus/species."),
+    dataset: str = typer.Option("rep", "-d", "--dataset", help=HELP_DATASET),
+    level: str | None = typer.Option(None, "-l", "--level", help=HELP_LEVEL),
     target_family: str | None = typer.Option(
         None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
     ),
@@ -180,15 +210,11 @@ def run(
     target_species: str | None = typer.Option(
         None, "-ts", "--target-species", help=HELP_TARGET_SPECIES
     ),
-    release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
-    gtdb_version: str | None = typer.Option(None, "--gtdb-version", help="bac120/ar53."),
+    release: str | None = typer.Option(None, "-r", "--release", help=HELP_GTDB_RELEASE),
+    gtdb_version: str | None = typer.Option(None, "--gtdb-version", help=HELP_GTDB_VERSION),
     metadata_source: str = typer.Option("tsv", "--metadata-source", help="tsv or api."),
-    metadata_path: str | None = typer.Option(
-        None, "--metadata-path", help="Use this GTDB metadata table instead of downloading."
-    ),
-    nodownload: bool = typer.Option(
-        False, "--nodownload", help="Reuse a GTDB table already present in the workdir."
-    ),
+    metadata_path: str | None = typer.Option(None, "--metadata-path", help=HELP_METADATA_PATH),
+    nodownload: bool = typer.Option(False, "--nodownload", help=HELP_NODOWNLOAD),
     outgroup_accession: str | None = typer.Option(
         None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
     ),
@@ -196,7 +222,7 @@ def run(
         None,
         "--limit",
         min=1,
-        help="Keep at most N genomes, round-robin over species by CheckM quality (bacterial).",
+        help=HELP_LIMIT,
     ),
     # --- selection: viral (NCBI Virus) ---
     target: str | None = typer.Option(None, "--target", help="Virus taxon (viral)."),
@@ -216,7 +242,7 @@ def run(
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- genome download ---
     keep_files: bool = typer.Option(
-        False, "--keep-files", help="Keep the download scratch after the genome stage."
+        False, "--keep-files", help="Keep the genome-download intermediates (bacterial chain)."
     ),
     # --- dereplication ---
     derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
@@ -226,34 +252,23 @@ def run(
     keeper: str = typer.Option(
         "quality",
         "--keeper",
-        help="Representative choice per cluster: quality (CheckM score from GTDB) "
-        "or tool (adapter's own).",
+        help=HELP_KEEPER,
     ),
-    process_size: int | None = typer.Option(
-        None, "-s", "--process-size", help="Chunk size for two-stage dereplication."
-    ),
-    num_processes: int = typer.Option(
-        0, "-p", "--num-processes", help="Parallel chunk workers (0 = auto)."
-    ),
+    process_size: int | None = typer.Option(None, "-s", "--process-size", help=HELP_PROCESS_SIZE),
+    num_processes: int = typer.Option(0, "-p", "--num-processes", help=HELP_NUM_PROCESSES),
     pre_primary_ani: float | None = typer.Option(
         None,
         "--pre-primary-ani",
-        help="Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani.",
+        help=HELP_PRE_PRIMARY_ANI,
     ),
     pre_secondary_ani: float | None = typer.Option(
         None,
         "--pre-secondary-ani",
-        help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
+        help=HELP_PRE_SECONDARY_ANI,
     ),
-    reduce: str = typer.Option(
-        "none", "--reduce", help="Taxonomy-aware reduction after ANI: none, species or genus."
-    ),
-    target_reps: int = typer.Option(
-        0, "--target-reps", help="Target representative count (0 = off)."
-    ),
-    tool_arg: list[str] = typer.Option(
-        [], "--tool-arg", help="Dereplicator tuning as key=value (repeatable)."
-    ),
+    reduce: str = typer.Option("none", "--reduce", help=HELP_REDUCE),
+    target_reps: int = typer.Option(0, "--target-reps", help=HELP_TARGET_REPS),
+    tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     # --- SNP typing ---
     with_snptype: bool = typer.Option(
         False,
@@ -263,63 +278,60 @@ def run(
     ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
-    msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
+    msa_source: str = typer.Option("aligner", "--msa-source", help=HELP_MSA_SOURCE),
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
-    all_genomes: bool = typer.Option(
-        False, "--all-genomes", help="Build the tree from all genomes, not the representatives."
-    ),
-    bootstrap: int = typer.Option(
-        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000 for IQ-TREE)."
-    ),
-    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
-    aligner_arg: list[str] = typer.Option(
-        [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
-    ),
-    mask: str = typer.Option(
-        "none", "--mask", help="Recombination masking for --msa-source snptype."
-    ),
+    all_genomes: bool = typer.Option(False, "--all-genomes", help=HELP_ALL_GENOMES),
+    bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
+    reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
+    aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
+    mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
     # --- taxonomy output ---
     node_basename: str | None = typer.Option(
         None,
         "--node-basename",
-        help="Name internal nodes <basename><n> instead of by content hash.",
+        help=HELP_NODE_BASENAME,
     ),
-    root_name: str = typer.Option("root", "--root-name", help="Label of the top node."),
-    remove_outgroup: bool = typer.Option(
-        False, "--remove-outgroup", help="Leave the outgroup out of the taxonomy after rooting."
-    ),
+    root_name: str = typer.Option("root", "--root-name", help=HELP_ROOT_NAME),
+    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help=HELP_REMOVE_OUTGROUP),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
-        help="List redundant genomes under their representative in tree2tax.",
+        help=HELP_INCLUDE_DEREPLICATED,
     ),
     collapse_support: float | None = typer.Option(
         None,
         "--collapse-support",
         min=0.0,
         max=1.0,
-        help="Merge nodes whose support is below this fraction into their parent.",
+        help=HELP_COLLAPSE_SUPPORT,
     ),
     collapse_length: float | None = typer.Option(
         None,
         "--collapse-length",
         min=0.0,
-        help="Merge nodes whose branch is shorter than this length into their parent.",
+        help=HELP_COLLAPSE_LENGTH,
     ),
     # --- common ---
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     allow_incomplete: bool = typer.Option(
         False,
         "--allow-incomplete",
-        help="Proceed with a warning when genomes/ is missing selected genomes.",
+        help=HELP_ALLOW_INCOMPLETE,
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Print the stages and key parameters, then exit."
     ),
 ) -> None:
-    """Run the whole pipeline end to end (bacterial by default, --viral for viruses)."""
+    """Run the whole pipeline end to end (bacterial by default, --viral for viruses).
+
+    Some option names differ from the single commands. Here --tool selects the
+    dereplicator, while 'snptype --tool' selects the SNP typer (--snptyper on
+    phylo, run and phylo-build). --metadata-source is 'metadata --source' and --viral-source
+    is 'vmetadata --source'. --platform filters the sequencing platform with
+    --reads, while the global --platform sets the container platform.
+    """
     from .param_builders import (
         METADATA_DATASETS,
         METADATA_LEVELS,

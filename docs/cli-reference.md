@@ -1,8 +1,17 @@
 # Command reference
 
 Generated from the command tree by `scripts/render_cli_matrix.py`; the
-matrix test keeps it in sync. Global options go before the command name
+matrix test keeps it in sync. Commands are grouped as in `repgenr --help`.
+Global options go before the command name
 (`repgenr --container docker dereplicate ...`).
+
+A few option names differ between commands. `--tool` selects the
+dereplicator on `run` and the derep commands but the SNP typer on `snptype`
+(`--snptyper` on `phylo`, `run` and `phylo-build`). `run --metadata-source`
+and `run --viral-source` correspond to `metadata --source` and `vmetadata
+--source`. The global `--platform` is the container platform, while
+`run --platform` filters the sequencing platform. On the step commands
+`--outgroup-accession` takes a file that names the accession.
 
 ## Global options
 
@@ -18,332 +27,17 @@ matrix test keeps it in sync. Global options go before the command name
 | `--verbose`, `-v` | off | Verbose (DEBUG) logging. |
 | `--quiet`, `-q` | off | Only warnings and errors. |
 
-## assemble
+## Pipeline
 
-Fetch and assemble the selected runs; write genomes/ and selection.tsv.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
-| `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
-| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
-| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
-| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
-| `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
-| `--append` | off | Add the assemblies to a working directory that already holds a selection (metadata and genome, or ingest) instead of replacing it. |
-| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
-| `--keep-files` | off | Keep each run's assembler scratch directory. |
-| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
-| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
-| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |
-| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
-| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
-| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
-| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
-
-## assemble-run
-
-Fetch and assemble one run of a reads.tsv (stateless data-channel step).
-
-| option | default | description |
-|---|---|---|
-| `--reads-tsv` | required | reads.tsv from the reads stage. |
-| `--run` | required | The run accession (a row of reads.tsv) to assemble. |
-| `-o`, `--out` | required | Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv. |
-| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--memory-gb` | `16` | Memory hint for the assembly, in GB, for tools that cap RAM. |
-| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
-| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
-| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
-| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
-| `--keep-files` | off | Keep the assembler scratch directory. |
-| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## cluster-summary
-
-Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-
-## derep-stock
-
-Store, load, list or delete named dereplication runs.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--action` | required | list, pack, unpack or delete. |
-| `--name` |  | Run name for pack/unpack/delete. |
-
-## derep-unpack
-
-Explode clusters into one directory per representative.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--no-representant` | off | Leave the representative out of its cluster directory. |
-
-## dereplicate
-
-Cluster genomes by ANI and select representatives.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
-| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
-| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
-| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
-| `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
-| `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
-| `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
-| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon). |
-| `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
-| `--allow-incomplete` | off | Proceed with a warning when genomes/ is missing selected genomes. |
-| `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
-
-## dereplicate-chunk
-
-Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
-
-| option | default | description |
-|---|---|---|
-| `--genomes-fofn` | required | File of genome FASTA paths, one per line. |
-| `-o`, `--out` | required | Output directory for the chunk result. |
-| `--tool` | `skder` | drep, galah, skder, sourmash. |
-| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
-| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
-| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
-| `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
-| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## dereplicate-merge
-
-Dereplicate the union of chunk representatives (gather step).
-
-| option | default | description |
-|---|---|---|
-| `-o`, `--out` | required | Output dir for the merged result. |
-| `--chunk-dir` |  | A chunk result directory (repeatable). |
-| `--chunk-fofn` |  | File listing chunk result directories, one per line. |
-| `--tool` | `skder` | drep, galah, skder, sourmash. |
-| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
-| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
-| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
-| `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
-| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
-| `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
-| `--target-reps` | `0` | Target representative count: search --secondary-ani of the merge pass to land near it (0 = off; re-runs the merge per search step). |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## doctor
-
-Verify a workdir's outputs against its records (read-only health check).
-
-`status` reports what repgenr.yaml claims; `doctor` checks the claims
-against the filesystem and the manifest: interrupted stages, missing or
-corrupt genomes, manifest drift, representative/cluster mismatches,
-truncated deliverables, and stages whose inputs changed since completion.
-Exits 1 when any failure is found.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-
-## genome
-
-Download and organize genomes selected by the metadata stage.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--accession-list-only` | off | Write the accession list and stop (no download). |
-| `--keep-files` | off | Keep download and scratch intermediates. |
-
-## genome-fetch
-
-Download genomes listed in a selection.tsv (stateless data-channel step).
-
-| option | default | description |
-|---|---|---|
-| `--selection` | required | selection.tsv from the metadata stage. |
-| `-o`, `--out` | required | Output dir for downloaded genomes. |
-| `--keep-files` | off | Keep download intermediates. |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## genome-qc
-
-Score (CheckM2) and classify a batch of assemblies (stateless data-channel step).
-
-| option | default | description |
-|---|---|---|
-| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
-| `-o`, `--out` | required | Output dir for quality.tsv and classification.tsv. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
-| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
-| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
-| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
-| `--tool-arg` |  | Classifier tuning as key=value (repeatable). |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## glance
-
-Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--tool` | `drep` | drep, galah, skder, sourmash. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--plot-max` | `1.0` | Upper similarity bound of the values plotted. |
-| `--plot-min` | `0.0` | Lower similarity bound of the values plotted. |
-| `--keep-files` | off | Keep download and scratch intermediates. |
-
-## ingest
-
-Populate a working directory from local genomes (no download).
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory (created). |
-| `--genomes-dir` | required | Directory of genome FASTA files to stage under genomes/. |
-| `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
-| `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir, or a path to a FASTA file elsewhere. |
-| `--copy` | off | Copy the files into genomes/ instead of symlinking them. |
-| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
-
-## list-tools
-
-List the available pluggable tools in each family.
-
-With --check, every adapter's required binaries are looked up (version
-floors included) and reported per tool, so an environment can be
-verified before a run without a working directory.
-
-| option | default | description |
-|---|---|---|
-| `--check` | off | Run each adapter's preflight and report whether its binaries are present. |
-
-## metadata
-
-Select a taxon's genomes from GTDB (full table or the GTDB API).
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory (created). |
-| `-d`, `--dataset` | required | all or rep. |
-| `-l`, `--level` | required | family, genus or species. |
-| `--source` | `tsv` | tsv (download full table) or api (GTDB API, target only). |
-| `-r`, `--release` |  | GTDB release (tsv source). |
-| `--gtdb-version` |  | bac120/ar53 (tsv source). |
-| `-tf`, `--target-family` |  | Restrict the selection to this family. |
-| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
-| `-ts`, `--target-species` |  | Restrict the selection to this species. |
-| `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
-| `--nodownload` | off | Reuse a table already present in the workdir. |
-| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
-| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
-
-## phylo
-
-Build a phylogenetic tree from an alignment, SNP alignment, or directly.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
-| `--msa-source` | `aligner` | aligner or snptype. |
-| `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
-| `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
-| `--all-genomes` | off | Use all genomes, not reps. |
-| `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000). |
-| `--reference` |  | Reference genome filename. |
-| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
-| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
-
-## phylo-build
-
-Build a phylogeny from a genomes directory (stateless data-channel step).
-
-| option | default | description |
-|---|---|---|
-| `--genomes-dir` | required | Directory of genome FASTA files to build the tree from. |
-| `-o`, `--out` | required | Output dir (writes tree/tree.nwk). |
-| `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
-| `--outgroup-accession` |  | File naming the outgroup accession. |
-| `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
-| `--msa-source` | `aligner` | aligner or snptype. |
-| `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
-| `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
-| `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000). |
-| `--reference` |  | Reference genome filename. |
-| `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
-| `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
-| `--msa` |  | Build the tree from this alignment instead of constructing one. |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-
-## reads
-
-Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory (created). |
-| `-tf`, `--target-family` |  | Restrict the selection to this family. |
-| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
-| `-ts`, `--target-species` |  | Restrict the selection to this species. |
-| `--accession` |  | A run (SRR/ERR/DRR), sample (SAMN.., SRS..) or study (PRJNA.., SRP..) accession to include (repeatable). |
-| `--accession-file` |  | File of accessions, one per line (# comments allowed). |
-| `--platform` | `any` | Keep runs of one platform: any, illumina, ont or pacbio. |
-| `--max-runs` |  | Keep at most N runs, the largest by bases. |
-| `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
-| `--max-bases` |  | Drop runs with more sequenced bases than this (a guard against whole-host libraries, which would assemble into a host-dominated genome). |
-| `--drop-selection` | `['MDA']` | Drop runs whose ENA library selection is this value (repeatable; default MDA, whole-genome amplification). Pass 'none' to keep every selection. |
-| `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (a long-read run with enough bases, else the largest run), or every run. |
-
-## reads-gather
-
-Write the genome contract from per-run assemblies (stateless data-channel step).
-
-| option | default | description |
-|---|---|---|
-| `--reads-tsv` | required | reads.tsv from the reads stage. |
-| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
-| `-o`, `--out` | required | Output dir for genomes/, selection.tsv and the stats tables. |
-| `--qc` |  | genome-qc output dir (quality.tsv, classification.tsv), if it ran. |
-| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
-| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |
-
-## run
+### run
 
 Run the whole pipeline end to end (bacterial by default, --viral for viruses).
+
+Some option names differ from the single commands. Here --tool selects the
+dereplicator, while 'snptype --tool' selects the SNP typer (--snptyper on
+phylo, run and phylo-build). --metadata-source is 'metadata --source' and --viral-source
+is 'vmetadata --source'. --platform filters the sequencing platform with
+--reads, while the global --platform sets the container platform.
 
 | option | default | description |
 |---|---|---|
@@ -358,74 +52,59 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--platform` | `any` | With --reads: any, illumina, ont or pacbio. |
 | `--max-runs` |  | With --reads: keep at most N runs, the largest by bases. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-d`, `--dataset` | `rep` | all or rep (bacterial). |
-| `-l`, `--level` |  | family/genus/species. |
+| `-d`, `--dataset` | `rep` | GTDB dataset: all or rep. |
+| `-l`, `--level` |  | family, genus or species. |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
 | `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
 | `-ts`, `--target-species` |  | Restrict the selection to this species. |
 | `-r`, `--release` |  | GTDB release (tsv source). |
-| `--gtdb-version` |  | bac120/ar53. |
+| `--gtdb-version` |  | GTDB table: bac120 or ar53 (tsv source). |
 | `--metadata-source` | `tsv` | tsv or api. |
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality (bacterial). |
+| `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
 | `--target` |  | Virus taxon (viral). |
 | `--viral-source` | `ncbi_virus` | ncbi_virus or bvbrc. |
 | `--complete-only` | off | ncbi_virus: only COMPLETE sequences (viral). |
 | `--host` |  | ncbi_virus: restrict to a host species (viral). |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY (viral). |
 | `--group-segments` | off | Group viral segments. |
-| `--keep-files` | off | Keep the download scratch after the genome stage. |
+| `--keep-files` | off | Keep the genome-download intermediates (bacterial chain). |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
-| `-s`, `--process-size` |  | Chunk size for two-stage dereplication. |
-| `-p`, `--num-processes` | `0` | Parallel chunk workers (0 = auto). |
+| `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
+| `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
 | `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
 | `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
-| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species or genus. |
-| `--target-reps` | `0` | Target representative count (0 = off). |
-| `--tool-arg` |  | Dereplicator tuning as key=value (repeatable). |
+| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon). |
+| `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--with-snptype` | off | Run the standalone snptype stage (with --snptyper, --mask, --reference) after dereplication, so the SNP tables are produced whatever builds the tree. |
 | `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
 | `--msa-source` | `aligner` | aligner or snptype. |
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `--all-genomes` | off | Build the tree from all genomes, not the representatives. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000 for IQ-TREE). |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
-| `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--allow-incomplete` | off | Proceed with a warning when genomes/ is missing selected genomes. |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 | `--dry-run` | off | Print the stages and key parameters, then exit. |
 
-## snptype
-
-Call SNPs and build a core-SNP alignment.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--tool` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
-| `--reference` |  | Reference genome filename. |
-| `--all-genomes` | off | Use all genomes, not reps. |
-| `--mask` | `none` | Recombination masking: none, gubbins. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
-| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
-
-## status
+### status
 
 Show which pipeline stages have completed in a working directory.
 
@@ -433,52 +112,59 @@ Show which pipeline stages have completed in a working directory.
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 
-## tree2tax
+## Entry points: select and fetch genomes
 
-Emit FlexTaxD-compatible taxonomy relations from the tree.
+### metadata
+
+Select a taxon's genomes from GTDB (full table or the GTDB API).
+
+The --source option is called --metadata-source in 'run'.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory (created). |
+| `-d`, `--dataset` | required | GTDB dataset: all or rep. |
+| `-l`, `--level` | required | family, genus or species. |
+| `--source` | `tsv` | tsv (download full table) or api (GTDB API, target only). |
+| `-r`, `--release` |  | GTDB release (tsv source). |
+| `--gtdb-version` |  | GTDB table: bac120 or ar53 (tsv source). |
+| `-tf`, `--target-family` |  | Restrict the selection to this family. |
+| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
+| `-ts`, `--target-species` |  | Restrict the selection to this species. |
+| `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
+| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
+| `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
+| `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
+| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
+
+### genome
+
+Download and organize genomes selected by the metadata stage.
 
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
-| `--node-basename` |  | Prefix for nodes. |
-| `--root-name` | `root` | Name for the root node. |
-| `--remove-outgroup` | off | Drop outgroup. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
-| `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
-| `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
+| `--accession-list-only` | off | Write the accession list and stop (no download). |
+| `--keep-files` | off | Keep download and scratch intermediates. |
 
-## tree2tax-relations
+### vmetadata
 
-Emit FlexTaxD relations from a tree (stateless data-channel step).
+Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
+
+The --source option is called --viral-source in 'run'.
 
 | option | default | description |
 |---|---|---|
-| `--tree` | required | Rooted/unrooted tree in Newick (tree.nwk). |
-| `-o`, `--out` | required | Output dir (writes tree2tax.tsv + genomes_map.tsv). |
-| `--clusters` |  | derep clusters.tsv (for --include-dereplicated). |
-| `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
-| `--outgroup-accession` |  | File naming the outgroup accession. |
-| `--node-basename` |  | Prefix for nodes. |
-| `--root-name` | `root` | Name for the root node. |
-| `--remove-outgroup` | off | Drop outgroup. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
-| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
-| `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
-| `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
+| `-wd`, `--workdir` | required | Working directory (created). |
+| `--target` |  | Virus taxon/group/family. |
+| `--source` | `ncbi_virus` | ncbi_virus (NCBI Virus via datasets) or bvbrc. |
+| `--filter` |  | bvbrc: keep records whose header carries this tag (default: complete genome). |
+| `--host` |  | ncbi_virus: restrict to a host species. |
+| `--complete-only` | off | ncbi_virus: only COMPLETE sequences. |
+| `--released-after` |  | ncbi_virus: MM/DD/YYYY. |
+| `--list` | off | List BV-BRC targets and exit. |
 
-## versions
-
-Print the external-tool versions recorded in a workdir's repgenr.yaml.
-
-Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
-surface the resolved tool versions into versions.yml.
-
-| option | default | description |
-|---|---|---|
-| `-wd`, `--workdir` | required | Working directory. |
-| `--versions-out` |  | Write a versions.yml fragment here instead of stdout. |
-
-## vgenome
+### vgenome
 
 Select and organize viral genomes (virus equivalent of genome).
 
@@ -504,17 +190,371 @@ Select and organize viral genomes (virus equivalent of genome).
 | `--ignore-duplicates` | off | bvbrc: tolerate duplicate record ids (last wins). |
 | `--keep-files` | off | Keep download and scratch intermediates. |
 
-## vmetadata
+### ingest
 
-Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
+Populate a working directory from local genomes (no download).
 
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `--target` |  | Virus taxon/group/family. |
-| `--source` | `ncbi_virus` | ncbi_virus (NCBI Virus via datasets) or bvbrc. |
-| `--filter` |  | bvbrc: keep records whose header carries this tag (default: complete genome). |
-| `--host` |  | ncbi_virus: restrict to a host species. |
-| `--complete-only` | off | ncbi_virus: only COMPLETE sequences. |
-| `--released-after` |  | ncbi_virus: MM/DD/YYYY. |
-| `--list` | off | List BV-BRC targets and exit. |
+| `--genomes-dir` | required | Directory of genome FASTA files to stage under genomes/. |
+| `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
+| `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir, or a path to a FASTA file elsewhere. |
+| `--copy` | off | Copy the files into genomes/ instead of symlinking them. |
+| `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
+
+### reads
+
+Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory (created). |
+| `-tf`, `--target-family` |  | Restrict the selection to this family. |
+| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
+| `-ts`, `--target-species` |  | Restrict the selection to this species. |
+| `--accession` |  | A run (SRR/ERR/DRR), sample (SAMN.., SRS..) or study (PRJNA.., SRP..) accession to include (repeatable). |
+| `--accession-file` |  | File of accessions, one per line (# comments allowed). |
+| `--platform` | `any` | Keep runs of one platform: any, illumina, ont or pacbio. |
+| `--max-runs` |  | Keep at most N runs, the largest by bases. |
+| `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
+| `--max-bases` |  | Drop runs with more sequenced bases than this (a guard against whole-host libraries, which would assemble into a host-dominated genome). |
+| `--drop-selection` | `['MDA']` | Drop runs whose ENA library selection is this value (repeatable; default MDA, whole-genome amplification). Pass 'none' to keep every selection. |
+| `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (a long-read run with enough bases, else the largest run), or every run. |
+
+### assemble
+
+Fetch and assemble the selected runs; write genomes/ and selection.tsv.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
+| `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
+| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
+| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
+| `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
+| `--append` | off | Add the assemblies to a working directory that already holds a selection (metadata and genome, or ingest) instead of replacing it. |
+| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
+| `--keep-files` | off | Keep each run's assembler scratch directory. |
+| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
+| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
+| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |
+| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
+| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
+| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
+| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+
+## Core stages
+
+### dereplicate
+
+Cluster genomes by ANI and select representatives.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
+| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
+| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
+| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
+| `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
+| `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
+| `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
+| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon). |
+| `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
+| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
+| `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
+
+### snptype
+
+Call SNPs and build a core-SNP alignment.
+
+On this command --tool selects the SNP typer, whereas on the dereplication
+commands it selects the dereplicator.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--tool` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
+| `--reference` |  | Reference genome filename. |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
+
+### phylo
+
+Build a phylogenetic tree from an alignment, SNP alignment, or directly.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
+| `--msa-source` | `aligner` | aligner or snptype. |
+| `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
+| `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
+| `--no-outgroup` | off | Do not root with an outgroup. |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
+| `--reference` |  | Reference genome filename. |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
+
+### tree2tax
+
+Emit FlexTaxD-compatible taxonomy relations from the tree.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--root-name` | `root` | Label of the top node. |
+| `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
+| `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
+| `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
+
+## Inspect a dereplication
+
+### glance
+
+Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--tool` | `drep` | drep, galah, skder, sourmash. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--plot-max` | `1.0` | Upper similarity bound of the values plotted. |
+| `--plot-min` | `0.0` | Lower similarity bound of the values plotted. |
+| `--keep-files` | off | Keep download and scratch intermediates. |
+
+### cluster-summary
+
+Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+
+### derep-unpack
+
+Explode clusters into one directory per representative.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--no-representant` | off | Leave the representative out of its cluster directory. |
+
+### derep-stock
+
+Store, load, list or delete named dereplication runs.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--action` | required | list, pack, unpack or delete. |
+| `--name` |  | Run name for pack/unpack/delete. |
+
+## Environment and diagnostics
+
+### list-tools
+
+List the available pluggable tools in each family.
+
+A tool that declares a recommended scale is shown as 'name (up to N
+genomes)'; auto-selection and the scale warnings use the same limit.
+With --check, every adapter's required binaries are looked up (version
+floors included) and reported per tool, so an environment can be
+verified before a run without a working directory.
+
+| option | default | description |
+|---|---|---|
+| `--check` | off | Run each adapter's preflight and report whether its binaries are present. |
+
+### doctor
+
+Verify a workdir's outputs against its records (read-only health check).
+
+`status` reports what repgenr.yaml claims; `doctor` checks the claims
+against the filesystem and the manifest: interrupted stages, missing or
+corrupt genomes, manifest drift, representative/cluster mismatches,
+truncated deliverables, and stages whose inputs changed since completion.
+Exits 1 when any failure is found.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+
+### versions
+
+Print the external-tool versions recorded in a workdir's repgenr.yaml.
+
+Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
+surface the resolved tool versions into versions.yml.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `--versions-out` |  | Write a versions.yml fragment here instead of stdout. |
+
+## Nextflow data-channel steps
+
+### genome-fetch
+
+Download genomes listed in a selection.tsv (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--selection` | required | selection.tsv from the metadata stage. |
+| `-o`, `--out` | required | Output dir for downloaded genomes. |
+| `--keep-files` | off | Keep download and scratch intermediates. |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### dereplicate-chunk
+
+Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
+
+| option | default | description |
+|---|---|---|
+| `--genomes-fofn` | required | File of genome FASTA paths, one per line. |
+| `-o`, `--out` | required | Output directory for the chunk result. |
+| `--tool` | `skder` | drep, galah, skder, sourmash. |
+| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
+| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
+| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
+| `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
+| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### dereplicate-merge
+
+Dereplicate the union of chunk representatives (gather step).
+
+| option | default | description |
+|---|---|---|
+| `-o`, `--out` | required | Output dir for the merged result. |
+| `--chunk-dir` |  | A chunk result directory (repeatable). |
+| `--chunk-fofn` |  | File listing chunk result directories, one per line. |
+| `--tool` | `skder` | drep, galah, skder, sourmash. |
+| `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
+| `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
+| `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
+| `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
+| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
+| `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
+| `--target-reps` | `0` | Target representative count: search --secondary-ani of the merge pass to land near it (0 = off; re-runs the merge per search step). |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### phylo-build
+
+Build a phylogeny from a genomes directory (stateless data-channel step).
+
+Here --outgroup-accession takes a file that names the accession, not the accession itself.
+
+| option | default | description |
+|---|---|---|
+| `--genomes-dir` | required | Directory of genome FASTA files to build the tree from. |
+| `-o`, `--out` | required | Output dir (writes tree/tree.nwk). |
+| `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
+| `--outgroup-accession` |  | File naming the outgroup accession. |
+| `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
+| `--msa-source` | `aligner` | aligner or snptype. |
+| `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
+| `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
+| `--no-outgroup` | off | Do not root with an outgroup. |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
+| `--reference` |  | Reference genome filename. |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
+| `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
+| `--msa` |  | Build the tree from this alignment instead of constructing one. |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### tree2tax-relations
+
+Emit FlexTaxD relations from a tree (stateless data-channel step).
+
+Here --outgroup-accession takes a file that names the accession, not the accession itself.
+
+| option | default | description |
+|---|---|---|
+| `--tree` | required | Rooted/unrooted tree in Newick (tree.nwk). |
+| `-o`, `--out` | required | Output dir (writes tree2tax.tsv + genomes_map.tsv). |
+| `--clusters` |  | derep clusters.tsv (for --include-dereplicated). |
+| `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
+| `--outgroup-accession` |  | File naming the outgroup accession. |
+| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--root-name` | `root` | Label of the top node. |
+| `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+| `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
+| `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
+
+### assemble-run
+
+Fetch and assemble one run of a reads.tsv (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--reads-tsv` | required | reads.tsv from the reads stage. |
+| `--run` | required | The run accession (a row of reads.tsv) to assemble. |
+| `-o`, `--out` | required | Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv. |
+| `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--memory-gb` | `16` | Memory hint for the assembly, in GB, for tools that cap RAM. |
+| `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
+| `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
+| `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
+| `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
+| `--keep-files` | off | Keep the assembler scratch directory. |
+| `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### genome-qc
+
+Score (CheckM2) and classify a batch of assemblies (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
+| `-o`, `--out` | required | Output dir for quality.tsv and classification.tsv. |
+| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
+| `--classifier` | `auto` | Classifier: none, auto, sourmash. |
+| `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
+| `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
+| `--tool-arg` |  | Classifier tuning as key=value (repeatable). |
+| `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
+
+### reads-gather
+
+Write the genome contract from per-run assemblies (stateless data-channel step).
+
+| option | default | description |
+|---|---|---|
+| `--reads-tsv` | required | reads.tsv from the reads stage. |
+| `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
+| `-o`, `--out` | required | Output dir for genomes/, selection.tsv and the stats tables. |
+| `--qc` |  | genome-qc output dir (quality.tsv, classification.tsv), if it ran. |
+| `--min-completeness` | `50.0` | CheckM2 completeness floor. |
+| `--max-contamination` | `10.0` | CheckM2 contamination ceiling. |

@@ -6,12 +6,12 @@ from pathlib import Path
 
 import typer
 
-from .base import _run, app
+from .base import HELP_WORKDIR_CREATED, PANEL_ENTRY, _run, app
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def ingest(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     genomes_dir: Path = typer.Option(
         ..., "--genomes-dir", help="Directory of genome FASTA files to stage under genomes/."
     ),

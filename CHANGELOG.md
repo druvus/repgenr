@@ -7,6 +7,13 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `repgenr --help` groups the commands into panels (pipeline, entry points,
+  core stages, inspection, environment, Nextflow steps) in pipeline order, and
+  its epilog lists the four stage chains (bacterial, viral, local genomes,
+  sequencing reads).
+- `list-tools` prints each adapter's declared genome limit, for example
+  `iqtree (up to 500 genomes)`; a tool without a declared limit shows its name
+  only.
 - An eighth tool family, polishers (`repgenr.polishers`), corrects long-read
   assemblies with the run's reads inside `assemble` and `assemble-run`:
   medaka for ONT (basecaller model from Dorado read headers, `--tool-arg
@@ -108,6 +115,13 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- One help string per shared flag: duplicated option texts are now shared
+  constants, so `run` and the single commands read the same. `--mask` lists
+  the registered maskers on snptype, phylo, run and phylo-build, and the three
+  alignment commands say it needs `--msa-source snptype`. The known option-name
+  differences (`--tool`, `--platform`, `--metadata-source`, `--viral-source`,
+  and `--outgroup-accession` on the step commands) are described in the
+  command help and the reference. No option was renamed.
 - The sourmash classifier runs its per-genome gathers side by side within the
   thread budget and resolves all of them with one `tax genome` call (a gather
   against a GTDB-sized sketch is single-threaded and takes tens of seconds).

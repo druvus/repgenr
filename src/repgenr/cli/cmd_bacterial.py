@@ -9,14 +9,34 @@ import typer
 from .base import (
     DEFAULT_THREADS,
     HELP_ALIGNED_FRACTION,
+    HELP_ALLOW_INCOMPLETE,
+    HELP_DATASET,
+    HELP_DEREP_TOOL_ARG,
+    HELP_GTDB_RELEASE,
+    HELP_GTDB_VERSION,
     HELP_KEEP_FILES,
+    HELP_KEEPER,
+    HELP_LEVEL,
+    HELP_LIMIT,
+    HELP_METADATA_PATH,
+    HELP_NODOWNLOAD,
+    HELP_NUM_PROCESSES,
     HELP_OUTGROUP_ACCESSION,
+    HELP_PRE_PRIMARY_ANI,
+    HELP_PRE_SECONDARY_ANI,
     HELP_PRIMARY_ANI,
+    HELP_PROCESS_SIZE,
+    HELP_REDUCE,
     HELP_SECONDARY_ANI,
     HELP_TARGET_FAMILY,
     HELP_TARGET_GENUS,
+    HELP_TARGET_REPS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    HELP_WORKDIR,
+    HELP_WORKDIR_CREATED,
+    PANEL_CORE,
+    PANEL_ENTRY,
     _derep_help,
     _parse_key_values,
     _run,
@@ -25,18 +45,16 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def metadata(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
-    dataset: str = typer.Option(..., "-d", "--dataset", help="all or rep."),
-    level: str = typer.Option(..., "-l", "--level", help="family, genus or species."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
+    dataset: str = typer.Option(..., "-d", "--dataset", help=HELP_DATASET),
+    level: str = typer.Option(..., "-l", "--level", help=HELP_LEVEL),
     source: str = typer.Option(
         "tsv", "--source", help="tsv (download full table) or api (GTDB API, target only)."
     ),
-    release: str | None = typer.Option(None, "-r", "--release", help="GTDB release (tsv source)."),
-    gtdb_version: str | None = typer.Option(
-        None, "--gtdb-version", help="bac120/ar53 (tsv source)."
-    ),
+    release: str | None = typer.Option(None, "-r", "--release", help=HELP_GTDB_RELEASE),
+    gtdb_version: str | None = typer.Option(None, "--gtdb-version", help=HELP_GTDB_VERSION),
     target_family: str | None = typer.Option(
         None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
     ),
@@ -47,17 +65,13 @@ def metadata(
     outgroup_accession: str | None = typer.Option(
         None, "--outgroup-accession", help=HELP_OUTGROUP_ACCESSION
     ),
-    metadata_path: str | None = typer.Option(
-        None, "--metadata-path", help="Use this GTDB metadata table instead of downloading."
-    ),
-    nodownload: bool = typer.Option(
-        False, "--nodownload", help="Reuse a table already present in the workdir."
-    ),
+    metadata_path: str | None = typer.Option(None, "--metadata-path", help=HELP_METADATA_PATH),
+    nodownload: bool = typer.Option(False, "--nodownload", help=HELP_NODOWNLOAD),
     limit: int | None = typer.Option(
         None,
         "--limit",
         min=1,
-        help="Keep at most N genomes, round-robin over species by CheckM quality.",
+        help=HELP_LIMIT,
     ),
     drop_foreign: bool = typer.Option(
         False,
@@ -66,7 +80,10 @@ def metadata(
         "refusing to overwrite the selection that holds them.",
     ),
 ) -> None:
-    """Select a taxon's genomes from GTDB (full table or the GTDB API)."""
+    """Select a taxon's genomes from GTDB (full table or the GTDB API).
+
+    The --source option is called --metadata-source in 'run'.
+    """
     from .param_builders import metadata_params
 
     def build():
@@ -89,9 +106,9 @@ def metadata(
     _run("metadata", workdir, build, create=True)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def genome(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     accession_list_only: bool = typer.Option(
         False, "--accession-list-only", help="Write the accession list and stop (no download)."
     ),
@@ -106,9 +123,9 @@ def genome(
     _run("genome", workdir, build)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CORE)
 def dereplicate(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     tool: str = typer.Option("skder", "--tool", help=_derep_help()),
     primary_ani: float = typer.Option(0.90, "-pani", "--primary-ani", help=HELP_PRIMARY_ANI),
     secondary_ani: float = typer.Option(0.99, "-sani", "--secondary-ani", help=HELP_SECONDARY_ANI),
@@ -120,51 +137,45 @@ def dereplicate(
         None,
         "-s",
         "--process-size",
-        help="Chunk size; when set and exceeded, two-stage chunking runs for any tool.",
+        help=HELP_PROCESS_SIZE,
     ),
     num_processes: int = typer.Option(
         0,
         "-p",
         "--num-processes",
-        help="Parallel stage-1 chunk workers (threads split across them). "
-        "0 = auto (~threads/4, capped by cores).",
+        help=HELP_NUM_PROCESSES,
     ),
     pre_primary_ani: float | None = typer.Option(
         None,
         "--pre-primary-ani",
-        help="Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani.",
+        help=HELP_PRE_PRIMARY_ANI,
     ),
     pre_secondary_ani: float | None = typer.Option(
         None,
         "--pre-secondary-ani",
-        help="Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani.",
+        help=HELP_PRE_SECONDARY_ANI,
     ),
     reduce: str = typer.Option(
         "none",
         "--reduce",
-        help="Taxonomy-aware reduction after ANI: none, species, or genus "
-        "(one representative per taxon).",
+        help=HELP_REDUCE,
     ),
     target_reps: int = typer.Option(
         0,
         "--target-reps",
-        help="Target representative count: search --secondary-ani to land near it "
-        "(0 = off; re-runs dereplication per search step).",
+        help=HELP_TARGET_REPS,
     ),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
-    tool_arg: list[str] = typer.Option(
-        [], "--tool-arg", help="Tool tuning as key=value (repeatable), e.g. mode=greedy."
-    ),
+    tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     allow_incomplete: bool = typer.Option(
         False,
         "--allow-incomplete",
-        help="Proceed with a warning when genomes/ is missing selected genomes.",
+        help=HELP_ALLOW_INCOMPLETE,
     ),
     keeper: str = typer.Option(
         "quality",
         "--keeper",
-        help="Representative choice per cluster: quality (CheckM score from GTDB) "
-        "or tool (adapter's own).",
+        help=HELP_KEEPER,
     ),
 ) -> None:
     """Cluster genomes by ANI and select representatives."""

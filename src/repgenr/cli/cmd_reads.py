@@ -12,6 +12,9 @@ from .base import (
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    HELP_WORKDIR,
+    HELP_WORKDIR_CREATED,
+    PANEL_ENTRY,
     _assembler_help,
     _classifier_help,
     _parse_key_values,
@@ -21,9 +24,9 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def reads(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     target_family: str | None = typer.Option(
         None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
     ),
@@ -90,9 +93,9 @@ def reads(
     _run("reads", workdir, build, create=True)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def assemble(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     jobs: int | None = typer.Option(

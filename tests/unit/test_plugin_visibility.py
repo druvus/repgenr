@@ -349,3 +349,17 @@ def test_list_tools_shows_the_assembler_family() -> None:
     assert result.exit_code == 0
     line = next(ln for ln in result.output.splitlines() if ln.startswith("assemblers:"))
     assert "skesa" in line and "shovill" in line and "flye" in line
+
+
+def test_list_tools_shows_declared_genome_limits() -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    result = CliRunner().invoke(app, ["list-tools"])
+    assert result.exit_code == 0
+    lines = {ln.split(":")[0]: ln for ln in result.output.splitlines() if ": " in ln}
+    assert "iqtree (up to 500 genomes)" in lines["treebuilders"]
+    assert "mashtree (up to 10000 genomes)" in lines["treebuilders"]
+    entries = lines["dereplicators"].split(": ", 1)[1].split(", ")
+    assert "skder" in entries

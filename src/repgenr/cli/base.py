@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from typer.core import TyperGroup
 
 from .. import __version__
 from ..core.context import WorkdirContext
@@ -26,12 +27,6 @@ from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
-
-app = typer.Typer(
-    add_completion=False,
-    no_args_is_help=True,
-    help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
-)
 
 # Top-level run options shared by every subcommand (set in the callback).
 _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
@@ -53,6 +48,49 @@ HELP_TARGET_SPECIES = "Restrict the selection to this species."
 HELP_OUTGROUP_ACCESSION = "Accession to fetch and set aside as the outgroup."
 HELP_NO_OUTGROUP = "Do not root with an outgroup."
 HELP_KEEP_FILES = "Keep download and scratch intermediates."
+HELP_WORKDIR = "Working directory."
+HELP_WORKDIR_CREATED = "Working directory (created)."
+HELP_GTDB_RELEASE = "GTDB release (tsv source)."
+HELP_GTDB_VERSION = "GTDB table: bac120 or ar53 (tsv source)."
+HELP_METADATA_PATH = "Use this GTDB metadata table instead of downloading."
+HELP_NODOWNLOAD = "Reuse a GTDB table already present in the workdir."
+HELP_LIMIT = "Keep at most N GTDB genomes, round-robin over species by CheckM quality."
+HELP_DATASET = "GTDB dataset: all or rep."
+HELP_LEVEL = "family, genus or species."
+HELP_ALL_GENOMES = "Use all genomes, not only the representatives."
+HELP_BOOTSTRAP = "Bootstrap replicates (0 = off; IQ-TREE needs >=1000)."
+HELP_REFERENCE = "Reference genome filename."
+HELP_MSA_SOURCE = "aligner or snptype."
+HELP_ALIGNER_ARG = (
+    "Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
+    "or seed_weight=11 (progressivemauve)."
+)
+HELP_DEREP_TOOL_ARG = "Tool tuning as key=value (repeatable), e.g. mode=greedy."
+HELP_KEEPER = (
+    "Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own)."
+)
+HELP_PROCESS_SIZE = "Chunk size; when set and exceeded, two-stage chunking runs for any tool."
+HELP_NUM_PROCESSES = (
+    "Parallel stage-1 chunk workers (threads split across them). "
+    "0 = auto (~threads/4, capped by cores)."
+)
+HELP_PRE_PRIMARY_ANI = "Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani."
+HELP_PRE_SECONDARY_ANI = "Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani."
+HELP_REDUCE = (
+    "Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon)."
+)
+HELP_TARGET_REPS = (
+    "Target representative count: search --secondary-ani to land near it "
+    "(0 = off; re-runs dereplication per search step)."
+)
+HELP_ALLOW_INCOMPLETE = "Proceed with a warning when the input genome set is incomplete."
+HELP_NODE_BASENAME = "Name internal nodes <basename><n> instead of by content hash."
+HELP_ROOT_NAME = "Label of the top node."
+HELP_REMOVE_OUTGROUP = "Leave the outgroup out of the taxonomy after rooting."
+HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative in the taxonomy."
+HELP_COLLAPSE_SUPPORT = "Merge nodes whose support is below this fraction into their parent."
+HELP_COLLAPSE_LENGTH = "Merge nodes whose branch is shorter than this length into their parent."
+HELP_VERSIONS_OUT = "Write resolved tool versions (YAML fragment) here."
 
 # Canonical stage order per lineage. Used to show progress (`status`) and by
 # `run --dry-run` to print the chain.
@@ -62,6 +100,71 @@ PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
 PIPELINE_LOCAL = ("ingest", "dereplicate", "phylo", "tree2tax")
 # Reads chain: sequencing runs selected from ENA/SRA and assembled.
 PIPELINE_READS = ("reads", "assemble", "dereplicate", "phylo", "tree2tax")
+
+
+def _chain(label: str, stages: tuple[str, ...]) -> str:
+    return f"{label}: " + " -> ".join(stages)
+
+
+# Paragraphs are separated by blank lines because Rich joins single newlines.
+APP_EPILOG = "\n\n".join(
+    [
+        "Typical order of commands (or let 'run' chain them; "
+        "'status -wd WD' says what comes next):",
+        _chain("bacterial", PIPELINE_BACTERIAL),
+        _chain("viral", PIPELINE_VIRAL),
+        _chain("local genomes", PIPELINE_LOCAL),
+        _chain("sequencing reads", PIPELINE_READS),
+        "Add 'snptype' between dereplicate and phylo when the SNP tables are a deliverable. "
+        "Global options go before the command name: repgenr --container docker dereplicate ...",
+    ]
+)
+
+PANEL_PIPELINE = "Pipeline"
+PANEL_ENTRY = "Entry points: select and fetch genomes"
+PANEL_CORE = "Core stages"
+PANEL_INSPECT = "Inspect a dereplication"
+PANEL_ENV = "Environment and diagnostics"
+PANEL_STEPS = "Nextflow data-channel steps"
+
+# Panel -> commands in display order. The single source of truth for the
+# grouped --help, the rendered command reference, and the panel test.
+COMMAND_PANELS: dict[str, tuple[str, ...]] = {
+    PANEL_PIPELINE: ("run", "status"),
+    PANEL_ENTRY: ("metadata", "genome", "vmetadata", "vgenome", "ingest", "reads", "assemble"),
+    PANEL_CORE: ("dereplicate", "snptype", "phylo", "tree2tax"),
+    PANEL_INSPECT: ("glance", "cluster-summary", "derep-unpack", "derep-stock"),
+    PANEL_ENV: ("list-tools", "doctor", "versions"),
+    PANEL_STEPS: (
+        "genome-fetch",
+        "dereplicate-chunk",
+        "dereplicate-merge",
+        "phylo-build",
+        "tree2tax-relations",
+        "assemble-run",
+        "genome-qc",
+        "reads-gather",
+    ),
+}
+
+COMMAND_ORDER: tuple[str, ...] = tuple(c for cmds in COMMAND_PANELS.values() for c in cmds)
+
+
+class _PanelOrderedGroup(TyperGroup):
+    """--help lists commands in COMMAND_ORDER (pipeline order), not import order."""
+
+    def list_commands(self, ctx):  # type: ignore[no-untyped-def]
+        rank = {n: i for i, n in enumerate(COMMAND_ORDER)}
+        return sorted(self.commands, key=lambda n: (rank.get(n, len(rank)), n))
+
+
+app = typer.Typer(
+    cls=_PanelOrderedGroup,
+    add_completion=False,
+    no_args_is_help=True,
+    help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
+    epilog=APP_EPILOG,
+)
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
@@ -251,7 +354,14 @@ def _mask_help() -> str:
     from ..core.plugins import tool_choices_help
     from ..maskers.base import registry
 
-    return tool_choices_help(registry, auto=False, prefix="Recombination masking: none, ")
+    return tool_choices_help(
+        registry, auto=False, prefix="Recombination masking of the SNP alignment: none, "
+    )
+
+
+def _mask_help_msa() -> str:
+    """--mask help on the commands where it applies only with --msa-source snptype."""
+    return _mask_help() + " Needs --msa-source snptype."
 
 
 def _require_choice(value: str, choices: AbstractSet[str], label: str) -> None:
