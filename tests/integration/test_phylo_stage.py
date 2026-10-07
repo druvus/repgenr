@@ -344,6 +344,51 @@ def test_snptype_source_types_the_outgroup_too(
     assert core.count(">") == 4 and ">Fam_gen_og_GCA_000009" in core
 
 
+def test_snptype_source_releases_the_snptype_record_it_replaces(
+    workdir: Path, fake_phylo_tools, fake_snptyper, caplog
+) -> None:
+    """phylo's typing pass writes into snp/, where the snptype stage's tables
+    were; the snptype record no longer describes them and is removed, so status
+    says so and a repeat snptype rebuilds them instead of skipping."""
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = workdir / "snp"
+    snp.mkdir()
+    (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
+    ctx.save_config()
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_msa",
+                msa_source="snptype",
+                snptyper="fakesnptyper",
+                no_outgroup=True,
+            ),
+        )
+    assert "snptype" not in Config.load(workdir).stages
+    assert "phylo" in Config.load(workdir).stages
+    assert any("snptype ska2" in r.getMessage() for r in caplog.records)
+
+
+def test_aligner_source_keeps_the_snptype_record(workdir: Path, fake_phylo_tools) -> None:
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = workdir / "snp"
+    snp.mkdir()
+    (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
+    ctx.save_config()
+    run(ctx, PhyloParams(treebuilder="faketree_msa", aligner="fakealigner", no_outgroup=True))
+    assert "snptype" in Config.load(workdir).stages
+    assert (snp / "core_snp.fasta").read_text() == ">from_snptype\nACGT\n"
+
+
 def _align_calls(monkeypatch) -> list[int]:
     """Count aligner invocations across phylo runs."""
     calls: list[int] = []

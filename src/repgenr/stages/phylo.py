@@ -591,16 +591,22 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         snp_dir=ctx.snp_dir,
         scratch_dir=ctx.scratch_dir,
     )
-    outcome = build_tree(
-        genomes,
-        outgroup_file,
-        outgroup_leaf,
-        dirs,
-        params,
-        logger,
-        # --force means recompute this stage, cached alignment included.
-        reuse_msa=not ctx.force,
-    )
+    snp_before = _file_identity(ctx.snp_dir / CORE_SNP_FASTA)
+    try:
+        outcome = build_tree(
+            genomes,
+            outgroup_file,
+            outgroup_leaf,
+            dirs,
+            params,
+            logger,
+            # --force means recompute this stage, cached alignment included.
+            reuse_msa=not ctx.force,
+        )
+    finally:
+        # Also on failure: the typing pass may have replaced snp/ before the
+        # tree builder failed.
+        _release_replaced_snptype_record(ctx, snp_before, logger)
 
     is_msa = treebuilder_registry.create(outcome.treebuilder).input_kind == InputKind.MSA_FASTA
     ctx.config.record_stage(
@@ -628,6 +634,39 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     )
     ctx.save_config()
     return outcome.tree
+
+
+def _file_identity(path: Path) -> tuple[int, int, int] | None:
+    """Inode, size and mtime of ``path``; None when absent. Outputs are
+    replaced by rename, so a rewrite changes the inode."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def _release_replaced_snptype_record(
+    ctx: WorkdirContext, before: tuple[int, int, int] | None, logger: logging.Logger
+) -> None:
+    """Drop the snptype record when phylo's own typing pass replaced its tables.
+
+    With --msa-source snptype, phylo types the genome set (outgroup included)
+    into snp/, the directory the snptype stage writes. The snptype record then
+    describes tables that are no longer there, and a repeat snptype would skip.
+    Removing the record makes status say so and lets snptype rebuild them.
+    """
+    record = ctx.config.stages.get("snptype")
+    if record is None or _file_identity(ctx.snp_dir / CORE_SNP_FASTA) == before:
+        return
+    del ctx.config.stages["snptype"]
+    ctx.save_config()
+    logger.warning(
+        "phylo's SNP typing pass (--msa-source snptype) replaced the tables the "
+        "snptype stage wrote in snp/ (snptype %s); its record is removed. Run "
+        "'repgenr snptype' again to rebuild them.",
+        record.tool or "",
+    )
 
 
 def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
