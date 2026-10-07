@@ -18,14 +18,27 @@ from .base import (
     _RUN_STATE,
     DEFAULT_THREADS,
     HELP_ALIGNED_FRACTION,
+    HELP_ALIGNER_ARG,
+    HELP_BOOTSTRAP,
+    HELP_DEREP_TOOL_ARG,
+    HELP_INCLUDE_DEREPLICATED,
+    HELP_KEEP_FILES,
+    HELP_MSA_SOURCE,
+    HELP_NO_OUTGROUP,
+    HELP_NODE_BASENAME,
     HELP_PRIMARY_ANI,
+    HELP_REFERENCE,
+    HELP_REMOVE_OUTGROUP,
+    HELP_ROOT_NAME,
     HELP_SECONDARY_ANI,
     HELP_THREADS,
+    HELP_VERSIONS_OUT,
     PANEL_STEPS,
     _aligner_help,
     _assembler_help,
     _classifier_help,
     _derep_help,
+    _mask_help,
     _parse_key_values,
     _polisher_help,
     _read_path_fofn,
@@ -45,10 +58,8 @@ def genome_fetch_cmd(
         ..., "--selection", help="selection.tsv from the metadata stage."
     ),
     out_dir: Path = typer.Option(..., "-o", "--out", help="Output dir for downloaded genomes."),
-    keep_files: bool = typer.Option(False, "--keep-files", help="Keep download intermediates."),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Download genomes listed in a selection.tsv (stateless data-channel step)."""
     from ..stages.genome_steps import GenomeFetchParams, genome_fetch
@@ -80,9 +91,7 @@ def dereplicate_chunk_cmd(
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
-    tool_arg: list[str] = typer.Option(
-        [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
-    ),
+    tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
         None,
         "--selection-tsv",
@@ -94,9 +103,7 @@ def dereplicate_chunk_cmd(
         help="Representative choice when --selection-tsv is given: "
         "quality (manifest completeness/contamination) or tool (adapter's own pick).",
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Dereplicate one chunk of genomes (scatter step; writes a chunk result dir)."""
     from ..dereplicators.base import registry as _derep_registry
@@ -145,21 +152,15 @@ def phylo_build_cmd(
         None, "--outgroup-accession", help="File naming the outgroup accession."
     ),
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
-    msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
+    msa_source: str = typer.Option("aligner", "--msa-source", help=HELP_MSA_SOURCE),
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
-    no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
-    bootstrap: int = typer.Option(
-        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000)."
-    ),
-    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
-    aligner_arg: list[str] = typer.Option(
-        [], "--aligner-arg", help="Aligner tuning as key=value (repeatable)."
-    ),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
+    reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
+    aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
-    mask: str = typer.Option(
-        "none", "--mask", help="Recombination masking for --msa-source snptype."
-    ),
+    mask: str = typer.Option("none", "--mask", help=_mask_help()),
     msa_only: bool = typer.Option(
         False,
         "--msa-only",
@@ -168,11 +169,12 @@ def phylo_build_cmd(
     msa: Path | None = typer.Option(
         None, "--msa", help="Build the tree from this alignment instead of constructing one."
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
-    """Build a phylogeny from a genomes directory (stateless data-channel step)."""
+    """Build a phylogeny from a genomes directory (stateless data-channel step).
+
+    Here --outgroup-accession takes a file that names the accession, not the accession itself.
+    """
     from ..aligners.base import registry as _aln_registry
     from ..snptypers.base import registry as _snp_registry
     from ..stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
@@ -239,17 +241,15 @@ def tree2tax_relations_cmd(
     outgroup_accession: Path | None = typer.Option(
         None, "--outgroup-accession", help="File naming the outgroup accession."
     ),
-    node_basename: str | None = typer.Option(None, "--node-basename", help="Prefix for nodes."),
-    root_name: str = typer.Option("root", "--root-name", help="Name for the root node."),
-    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
+    node_basename: str | None = typer.Option(None, "--node-basename", help=HELP_NODE_BASENAME),
+    root_name: str = typer.Option("root", "--root-name", help=HELP_ROOT_NAME),
+    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help=HELP_REMOVE_OUTGROUP),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
-        help="List redundant genomes under their representative.",
+        help=HELP_INCLUDE_DEREPLICATED,
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
     collapse_support: float | None = typer.Option(
         None,
         "--collapse-support",
@@ -264,7 +264,10 @@ def tree2tax_relations_cmd(
         help="Merge nodes whose branch is shorter than this length into their parent.",
     ),
 ) -> None:
-    """Emit FlexTaxD relations from a tree (stateless data-channel step)."""
+    """Emit FlexTaxD relations from a tree (stateless data-channel step).
+
+    Here --outgroup-accession takes a file that names the accession, not the accession itself.
+    """
     from ..stages.tree2tax import Tree2taxStepParams, tree2tax_relations
 
     logger = configure_logging(None, level=_RUN_STATE["log_level"])
@@ -305,9 +308,7 @@ def dereplicate_merge_cmd(
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
-    tool_arg: list[str] = typer.Option(
-        [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
-    ),
+    tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
         None,
         "--selection-tsv",
@@ -331,9 +332,7 @@ def dereplicate_merge_cmd(
         help="Target representative count: search --secondary-ani of the merge pass "
         "to land near it (0 = off; re-runs the merge per search step).",
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Dereplicate the union of chunk representatives (gather step)."""
     from ..dereplicators.base import registry as _derep_registry
@@ -413,9 +412,7 @@ def assemble_run_cmd(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Fetch and assemble one run of a reads.tsv (stateless data-channel step)."""
     from ..assemblers.base import registry as asm_registry
@@ -475,9 +472,7 @@ def genome_qc_cmd(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Classifier tuning as key=value (repeatable)."
     ),
-    versions_out: Path | None = typer.Option(
-        None, "--versions-out", help="Write resolved tool versions (YAML fragment) here."
-    ),
+    versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Score (CheckM2) and classify a batch of assemblies (stateless data-channel step)."""
     from ..classifiers.base import registry as cls_registry

@@ -8,7 +8,19 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
+    HELP_ALIGNER_ARG,
+    HELP_ALL_GENOMES,
+    HELP_ALLOW_INCOMPLETE,
+    HELP_BOOTSTRAP,
+    HELP_INCLUDE_DEREPLICATED,
+    HELP_MSA_SOURCE,
+    HELP_NO_OUTGROUP,
+    HELP_NODE_BASENAME,
+    HELP_REFERENCE,
+    HELP_REMOVE_OUTGROUP,
+    HELP_ROOT_NAME,
     HELP_THREADS,
+    HELP_WORKDIR,
     PANEL_CORE,
     _aligner_help,
     _mask_help,
@@ -23,10 +35,10 @@ from .base import (
 
 @app.command(rich_help_panel=PANEL_CORE)
 def snptype(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     tool: str = typer.Option("simple", "--tool", help=_snp_help()),
-    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
-    all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
+    reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
+    all_genomes: bool = typer.Option(False, "--all-genomes", help=HELP_ALL_GENOMES),
     mask: str = typer.Option("none", "--mask", help=_mask_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     tool_arg: list[str] = typer.Option(
@@ -35,10 +47,14 @@ def snptype(
     allow_incomplete: bool = typer.Option(
         False,
         "--allow-incomplete",
-        help="Proceed with a warning when the input genome set is incomplete.",
+        help=HELP_ALLOW_INCOMPLETE,
     ),
 ) -> None:
-    """Call SNPs and build a core-SNP alignment."""
+    """Call SNPs and build a core-SNP alignment.
+
+    On this command --tool selects the SNP typer, whereas on the dereplication
+    commands it selects the dereplicator.
+    """
     from ..snptypers.base import registry as _snp_registry
     from ..stages.snptype import SnptypeParams
     from .param_builders import require_mask
@@ -61,33 +77,30 @@ def snptype(
 
 @app.command(rich_help_panel=PANEL_CORE)
 def phylo(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
-    msa_source: str = typer.Option("aligner", "--msa-source", help="aligner or snptype."),
+    msa_source: str = typer.Option("aligner", "--msa-source", help=HELP_MSA_SOURCE),
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
-    all_genomes: bool = typer.Option(False, "--all-genomes", help="Use all genomes, not reps."),
-    no_outgroup: bool = typer.Option(False, "--no-outgroup", help="Do not root with an outgroup."),
-    bootstrap: int = typer.Option(
-        0, "-B", "--bootstrap", min=0, help="Bootstrap replicates (>=1000)."
-    ),
-    reference: str | None = typer.Option(None, "--reference", help="Reference genome filename."),
+    all_genomes: bool = typer.Option(False, "--all-genomes", help=HELP_ALL_GENOMES),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
+    reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option(
         [],
         "--aligner-arg",
-        help="Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
-        "or seed_weight=11 (progressivemauve).",
+        help=HELP_ALIGNER_ARG,
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     mask: str = typer.Option(
         "none",
         "--mask",
-        help="Recombination masking for --msa-source snptype.",
+        help=_mask_help(),
     ),
     allow_incomplete: bool = typer.Option(
         False,
         "--allow-incomplete",
-        help="Proceed with a warning when the input genome set is incomplete.",
+        help=HELP_ALLOW_INCOMPLETE,
     ),
 ) -> None:
     """Build a phylogenetic tree from an alignment, SNP alignment, or directly."""
@@ -116,14 +129,14 @@ def phylo(
 
 @app.command(rich_help_panel=PANEL_CORE)
 def tree2tax(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
-    node_basename: str | None = typer.Option(None, "--node-basename", help="Prefix for nodes."),
-    root_name: str = typer.Option("root", "--root-name", help="Name for the root node."),
-    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help="Drop outgroup."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
+    node_basename: str | None = typer.Option(None, "--node-basename", help=HELP_NODE_BASENAME),
+    root_name: str = typer.Option("root", "--root-name", help=HELP_ROOT_NAME),
+    remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help=HELP_REMOVE_OUTGROUP),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
-        help="List redundant genomes under their representative.",
+        help=HELP_INCLUDE_DEREPLICATED,
     ),
     collapse_support: float | None = typer.Option(
         None,

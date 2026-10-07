@@ -12,6 +12,8 @@ from .base import (
     HELP_NO_OUTGROUP,
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
+    HELP_WORKDIR,
+    HELP_WORKDIR_CREATED,
     PANEL_ENTRY,
     _run,
     app,
@@ -31,7 +33,7 @@ def _validate_released_after(value: str | None) -> str | None:
 
 @app.command(rich_help_panel=PANEL_ENTRY)
 def vmetadata(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     target: str | None = typer.Option(None, "--target", help="Virus taxon/group/family."),
     source: str = typer.Option(
         "ncbi_virus", "--source", help="ncbi_virus (NCBI Virus via datasets) or bvbrc."
@@ -53,7 +55,10 @@ def vmetadata(
     ),
     list_targets: bool = typer.Option(False, "--list", help="List BV-BRC targets and exit."),
 ) -> None:
-    """Retrieve viral metadata from NCBI Virus (default) or BV-BRC."""
+    """Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
+
+    In 'run' this option is called --viral-source.
+    """
     from .param_builders import vmetadata_params
 
     def build():
@@ -72,7 +77,7 @@ def vmetadata(
 
 @app.command(rich_help_panel=PANEL_ENTRY)
 def vgenome(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),
     target_species: str | None = typer.Option(
         None, "-ts", "--target-species", help=HELP_TARGET_SPECIES

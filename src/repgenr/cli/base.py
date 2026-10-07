@@ -48,6 +48,47 @@ HELP_TARGET_SPECIES = "Restrict the selection to this species."
 HELP_OUTGROUP_ACCESSION = "Accession to fetch and set aside as the outgroup."
 HELP_NO_OUTGROUP = "Do not root with an outgroup."
 HELP_KEEP_FILES = "Keep download and scratch intermediates."
+HELP_WORKDIR = "Working directory."
+HELP_WORKDIR_CREATED = "Working directory (created)."
+HELP_GTDB_RELEASE = "GTDB release (tsv source)."
+HELP_GTDB_VERSION = "GTDB table: bac120 or ar53 (tsv source)."
+HELP_METADATA_PATH = "Use this GTDB metadata table instead of downloading."
+HELP_NODOWNLOAD = "Reuse a GTDB table already present in the workdir."
+HELP_LIMIT = "Keep at most N genomes, round-robin over species by CheckM quality."
+HELP_DATASET = "all or rep."
+HELP_LEVEL = "family, genus or species."
+HELP_ALL_GENOMES = "Use all genomes, not only the representatives."
+HELP_BOOTSTRAP = "Bootstrap replicates (0 = off; IQ-TREE needs >=1000)."
+HELP_REFERENCE = "Reference genome filename."
+HELP_MSA_SOURCE = "aligner or snptype."
+HELP_ALIGNER_ARG = (
+    "Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) "
+    "or seed_weight=11 (progressivemauve)."
+)
+HELP_DEREP_TOOL_ARG = "Tool tuning as key=value (repeatable), e.g. mode=greedy."
+HELP_KEEPER = (
+    "Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own)."
+)
+HELP_PROCESS_SIZE = "Chunk size; when set and exceeded, two-stage chunking runs for any tool."
+HELP_NUM_PROCESSES = (
+    "Parallel stage-1 chunk workers (threads split across them). "
+    "0 = auto (~threads/4, capped by cores)."
+)
+HELP_PRE_PRIMARY_ANI = "Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani."
+HELP_PRE_SECONDARY_ANI = "Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani."
+HELP_REDUCE = (
+    "Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon)."
+)
+HELP_TARGET_REPS = (
+    "Target representative count: search --secondary-ani to land near it "
+    "(0 = off; re-runs dereplication per search step)."
+)
+HELP_ALLOW_INCOMPLETE = "Proceed with a warning when the input genome set is incomplete."
+HELP_NODE_BASENAME = "Name internal nodes <basename><n> instead of by content hash."
+HELP_ROOT_NAME = "Label of the top node."
+HELP_REMOVE_OUTGROUP = "Leave the outgroup out of the taxonomy after rooting."
+HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative in tree2tax."
+HELP_VERSIONS_OUT = "Write resolved tool versions (YAML fragment) here."
 
 # Canonical stage order per lineage. Used to show progress (`status`) and by
 # `run --dry-run` to print the chain.
@@ -311,7 +352,9 @@ def _mask_help() -> str:
     from ..core.plugins import tool_choices_help
     from ..maskers.base import registry
 
-    return tool_choices_help(registry, auto=False, prefix="Recombination masking: none, ")
+    return tool_choices_help(
+        registry, auto=False, prefix="Recombination masking (with --msa-source snptype): none, "
+    )
 
 
 def _require_choice(value: str, choices: AbstractSet[str], label: str) -> None:

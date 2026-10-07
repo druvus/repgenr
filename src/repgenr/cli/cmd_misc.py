@@ -10,6 +10,7 @@ from .base import (
     DEFAULT_THREADS,
     HELP_KEEP_FILES,
     HELP_THREADS,
+    HELP_WORKDIR,
     PANEL_ENV,
     PANEL_INSPECT,
     PANEL_PIPELINE,
@@ -26,7 +27,7 @@ from .base import (
 
 @app.command(rich_help_panel=PANEL_ENV)
 def versions(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     versions_out: Path | None = typer.Option(
         None, "--versions-out", help="Write a versions.yml fragment here instead of stdout."
     ),
@@ -52,7 +53,7 @@ def versions(
 
 @app.command(rich_help_panel=PANEL_PIPELINE)
 def status(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
 ) -> None:
     """Show which pipeline stages have completed in a working directory."""
     from ..core.config import CONFIG_FILENAME, Config
@@ -111,7 +112,7 @@ def status(
 
 @app.command(rich_help_panel=PANEL_ENV)
 def doctor(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
 ) -> None:
     """Verify a workdir's outputs against its records (read-only health check).
 
@@ -137,7 +138,7 @@ def doctor(
 
 @app.command(rich_help_panel=PANEL_INSPECT)
 def glance(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     tool: str = typer.Option("drep", "--tool", help=_derep_help(auto=False)),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     plot_max: float = typer.Option(
@@ -167,7 +168,7 @@ def glance(
 
 @app.command(name="derep-unpack", rich_help_panel=PANEL_INSPECT)
 def derep_unpack(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     no_representant: bool = typer.Option(
         False, "--no-representant", help="Leave the representative out of its cluster directory."
     ),
@@ -183,7 +184,7 @@ def derep_unpack(
 
 @app.command(name="cluster-summary", rich_help_panel=PANEL_INSPECT)
 def cluster_summary(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
 ) -> None:
     """Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster)."""
     from ..stages.cluster_summary import ClusterSummaryParams
@@ -193,7 +194,7 @@ def cluster_summary(
 
 @app.command(name="derep-stock", rich_help_panel=PANEL_INSPECT)
 def derep_stock(
-    workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     action: str = typer.Option(..., "--action", help="list, pack, unpack or delete."),
     name: str | None = typer.Option(None, "--name", help="Run name for pack/unpack/delete."),
 ) -> None:

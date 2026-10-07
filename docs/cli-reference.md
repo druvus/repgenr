@@ -5,6 +5,14 @@ matrix test keeps it in sync. Commands are grouped as in `repgenr --help`.
 Global options go before the command name
 (`repgenr --container docker dereplicate ...`).
 
+A few option names differ between commands. `--tool` selects the
+dereplicator on `run` and the derep commands but the SNP typer on `snptype`
+(`--snptyper` on `phylo`, `run` and `phylo-build`). `run --metadata-source`
+and `run --viral-source` correspond to `metadata --source` and `vmetadata
+--source`. The global `--platform` is the container platform, while
+`run --platform` filters the sequencing platform. On the step commands
+`--outgroup-accession` takes a file that names the accession.
+
 ## Global options
 
 | option | default | description |
@@ -25,6 +33,12 @@ Global options go before the command name
 
 Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 
+Some option names differ from the single commands. Here --tool selects the
+dereplicator, while 'snptype --tool' selects the SNP typer (--snptyper on
+phylo and run). --metadata-source is 'metadata --source' and --viral-source
+is 'vmetadata --source'. --platform filters the sequencing platform with
+--reads, while the global --platform sets the container platform.
+
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
@@ -38,48 +52,48 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--platform` | `any` | With --reads: any, illumina, ont or pacbio. |
 | `--max-runs` |  | With --reads: keep at most N runs, the largest by bases. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-d`, `--dataset` | `rep` | all or rep (bacterial). |
-| `-l`, `--level` |  | family/genus/species. |
+| `-d`, `--dataset` | `rep` | all or rep. |
+| `-l`, `--level` |  | family, genus or species. |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
 | `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
 | `-ts`, `--target-species` |  | Restrict the selection to this species. |
 | `-r`, `--release` |  | GTDB release (tsv source). |
-| `--gtdb-version` |  | bac120/ar53. |
+| `--gtdb-version` |  | GTDB table: bac120 or ar53 (tsv source). |
 | `--metadata-source` | `tsv` | tsv or api. |
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality (bacterial). |
+| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
 | `--target` |  | Virus taxon (viral). |
 | `--viral-source` | `ncbi_virus` | ncbi_virus or bvbrc. |
 | `--complete-only` | off | ncbi_virus: only COMPLETE sequences (viral). |
 | `--host` |  | ncbi_virus: restrict to a host species (viral). |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY (viral). |
 | `--group-segments` | off | Group viral segments. |
-| `--keep-files` | off | Keep the download scratch after the genome stage. |
+| `--keep-files` | off | Keep download and scratch intermediates. |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
-| `-s`, `--process-size` |  | Chunk size for two-stage dereplication. |
-| `-p`, `--num-processes` | `0` | Parallel chunk workers (0 = auto). |
+| `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
+| `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
 | `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
 | `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
-| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species or genus. |
-| `--target-reps` | `0` | Target representative count (0 = off). |
-| `--tool-arg` |  | Dereplicator tuning as key=value (repeatable). |
+| `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon). |
+| `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--with-snptype` | off | Run the standalone snptype stage (with --snptyper, --mask, --reference) after dereplication, so the SNP tables are produced whatever builds the tree. |
 | `--treebuilder` | `iqtree` | auto, fasttree, iqtree, mashtree, raxmlng, sourmash. |
 | `--msa-source` | `aligner` | aligner or snptype. |
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `--all-genomes` | off | Build the tree from all genomes, not the representatives. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000 for IQ-TREE). |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
-| `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
+| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
@@ -87,7 +101,7 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--allow-incomplete` | off | Proceed with a warning when genomes/ is missing selected genomes. |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 | `--dry-run` | off | Print the stages and key parameters, then exit. |
 
 ### status
@@ -104,6 +118,8 @@ Show which pipeline stages have completed in a working directory.
 
 Select a taxon's genomes from GTDB (full table or the GTDB API).
 
+In 'run' this option is called --metadata-source.
+
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
@@ -111,13 +127,13 @@ Select a taxon's genomes from GTDB (full table or the GTDB API).
 | `-l`, `--level` | required | family, genus or species. |
 | `--source` | `tsv` | tsv (download full table) or api (GTDB API, target only). |
 | `-r`, `--release` |  | GTDB release (tsv source). |
-| `--gtdb-version` |  | bac120/ar53 (tsv source). |
+| `--gtdb-version` |  | GTDB table: bac120 or ar53 (tsv source). |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
 | `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
 | `-ts`, `--target-species` |  | Restrict the selection to this species. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
-| `--nodownload` | off | Reuse a table already present in the workdir. |
+| `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
 | `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
 
@@ -134,6 +150,8 @@ Download and organize genomes selected by the metadata stage.
 ### vmetadata
 
 Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
+
+In 'run' this option is called --viral-source.
 
 | option | default | description |
 |---|---|---|
@@ -252,20 +270,23 @@ Cluster genomes by ANI and select representatives.
 | `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
 | `--virus` | off | Pass virus-tuned parameters to the tool. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
-| `--allow-incomplete` | off | Proceed with a warning when genomes/ is missing selected genomes. |
+| `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
 
 ### snptype
 
 Call SNPs and build a core-SNP alignment.
 
+On this command --tool selects the SNP typer, whereas on the dereplication
+commands it selects the dereplicator.
+
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 | `--tool` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--reference` |  | Reference genome filename. |
-| `--all-genomes` | off | Use all genomes, not reps. |
-| `--mask` | `none` | Recombination masking: none, gubbins. |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
+| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable). |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
@@ -281,13 +302,13 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `--msa-source` | `aligner` | aligner or snptype. |
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
-| `--all-genomes` | off | Use all genomes, not reps. |
+| `--all-genomes` | off | Use all genomes, not only the representatives. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000). |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 
 ### tree2tax
@@ -297,10 +318,10 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
-| `--node-basename` |  | Prefix for nodes. |
-| `--root-name` | `root` | Name for the root node. |
-| `--remove-outgroup` | off | Drop outgroup. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
+| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--root-name` | `root` | Label of the top node. |
+| `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 
@@ -396,7 +417,7 @@ Download genomes listed in a selection.tsv (stateless data-channel step).
 |---|---|---|
 | `--selection` | required | selection.tsv from the metadata stage. |
 | `-o`, `--out` | required | Output dir for downloaded genomes. |
-| `--keep-files` | off | Keep download intermediates. |
+| `--keep-files` | off | Keep download and scratch intermediates. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### dereplicate-chunk
@@ -413,7 +434,7 @@ Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--virus` | off | Pass virus-tuned parameters to the tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
@@ -433,7 +454,7 @@ Dereplicate the union of chunk representatives (gather step).
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--virus` | off | Pass virus-tuned parameters to the tool. |
-| `--tool-arg` |  | Tool tuning as key=value (repeatable). |
+| `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
 | `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
@@ -443,6 +464,8 @@ Dereplicate the union of chunk representatives (gather step).
 ### phylo-build
 
 Build a phylogeny from a genomes directory (stateless data-channel step).
+
+Here --outgroup-accession takes a file that names the accession, not the accession itself.
 
 | option | default | description |
 |---|---|---|
@@ -455,11 +478,11 @@ Build a phylogeny from a genomes directory (stateless data-channel step).
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (>=1000). |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
-| `--aligner-arg` |  | Aligner tuning as key=value (repeatable). |
+| `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking for --msa-source snptype. |
+| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
 | `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
@@ -468,6 +491,8 @@ Build a phylogeny from a genomes directory (stateless data-channel step).
 
 Emit FlexTaxD relations from a tree (stateless data-channel step).
 
+Here --outgroup-accession takes a file that names the accession, not the accession itself.
+
 | option | default | description |
 |---|---|---|
 | `--tree` | required | Rooted/unrooted tree in Newick (tree.nwk). |
@@ -475,10 +500,10 @@ Emit FlexTaxD relations from a tree (stateless data-channel step).
 | `--clusters` |  | derep clusters.tsv (for --include-dereplicated). |
 | `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
 | `--outgroup-accession` |  | File naming the outgroup accession. |
-| `--node-basename` |  | Prefix for nodes. |
-| `--root-name` | `root` | Name for the root node. |
-| `--remove-outgroup` | off | Drop outgroup. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative. |
+| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--root-name` | `root` | Label of the top node. |
+| `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
