@@ -241,6 +241,9 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `glance` rejects `--plot-min` above `--plot-max`, or either bound outside
+  0 to 1, with exit 2. Before, such bounds selected no values, the run
+  exited 0 and removed the plots of the previous run.
 - `glance` on a workdir with one genome exits 3 with "glance needs at least
   two genomes" before running dRep. Before, `dRep compare` failed inside
   scipy (empty distance matrix) and glance exited 6.

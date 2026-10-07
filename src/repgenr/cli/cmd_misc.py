@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 
+from ..core.errors import UserInputError
 from .base import (
     DEFAULT_THREADS,
     HELP_KEEP_FILES,
@@ -188,6 +189,11 @@ def glance(
 
     def build() -> GlanceParams:
         _require_choice(tool, set(_derep_registry.names()), "--tool")
+        if not 0.0 <= plot_min <= plot_max <= 1.0:
+            raise UserInputError(
+                "--plot-min and --plot-max are Mash ANI fractions with "
+                f"0 <= --plot-min <= --plot-max <= 1; got {plot_min} and {plot_max}."
+            )
         return GlanceParams(
             tool=tool,
             threads=threads,

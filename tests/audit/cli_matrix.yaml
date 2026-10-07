@@ -906,7 +906,8 @@ commands:
       --plot-max:
         param: GlanceParams.plot_max
         value: '0.99'
-        validated: none
+        validated: callback
+        invalid: '1.5'
         docs:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
@@ -915,7 +916,8 @@ commands:
       --plot-min:
         param: GlanceParams.plot_min
         value: '0.5'
-        validated: none
+        validated: callback
+        invalid: '-0.1'
         docs:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md

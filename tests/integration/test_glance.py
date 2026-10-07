@@ -213,3 +213,26 @@ def test_glance_with_one_genome_exits_3_before_the_tool_runs(workdir: Path, monk
     with pytest.raises(WorkdirError, match="at least two genomes"):
         glance_run(ctx, GlanceParams(threads=2))
     assert not called
+
+
+def test_glance_rejects_inverted_or_out_of_range_plot_bounds(workdir: Path, monkeypatch) -> None:
+    # Bounds outside 0-1 (for example a percentage) or --plot-min above
+    # --plot-max can never select a value; they were accepted and the run
+    # removed the plots of the previous run.
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _setup(workdir)
+    called: list[object] = []
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", lambda *a, **k: called.append(a))
+    for bounds in (
+        ["--plot-min", "0.99", "--plot-max", "0.5"],
+        ["--plot-max", "99"],
+        ["--plot-min", "-0.1"],
+    ):
+        result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), *bounds])
+        assert result.exit_code == 2, (bounds, result.output)
+        assert "--plot-m" in result.output
+    assert not called
