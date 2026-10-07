@@ -43,3 +43,15 @@ def test_versions_empty_workdir(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["versions", "-wd", str(tmp_path), "--versions-out", str(out)])
     assert result.exit_code == 0
     assert out.read_text() == ""  # nothing recorded -> empty fragment
+
+
+def test_versions_missing_workdir_exits_3(tmp_path: Path) -> None:
+    """A path with no repgenr.yaml is a wrong -wd, not an empty run: exit 3 and
+    write no fragment, so a Nextflow module cannot publish an empty versions.yml."""
+    out = tmp_path / "frag.yml"
+    result = _runner.invoke(
+        app, ["versions", "-wd", str(tmp_path / "missing"), "--versions-out", str(out)]
+    )
+    assert result.exit_code == 3, result.output
+    assert "repgenr.yaml" in result.output
+    assert not out.exists()
