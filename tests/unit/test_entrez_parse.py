@@ -122,3 +122,51 @@ def test_persistent_transport_failure_raises(monkeypatch) -> None:
     monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
     with pytest.raises(WorkdirError, match="attempts"):
         get_taxon_data_from_entrez(["30003"], _LOG)
+
+
+def test_an_unreachable_network_stops_after_the_first_sublist(monkeypatch) -> None:
+    # A connection error (no HTTP status) means the network or host is down:
+    # retrying every remaining sublist would only repeat the wait.
+    import requests
+
+    from repgenr.core import http
+
+    class _DownSession:
+        calls = 0
+
+        def get(self, url, **kwargs):
+            _DownSession.calls += 1
+            raise requests.ConnectionError("Failed to resolve 'eutils.ncbi.nlm.nih.gov'")
+
+    monkeypatch.setattr(http, "session", lambda: _DownSession())
+    monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
+    taxids = [str(40000 + i) for i in range(250)]  # three sublists of 100
+    with pytest.raises(WorkdirError, match="eutils.ncbi.nlm.nih.gov") as info:
+        get_taxon_data_from_entrez(taxids, _LOG)
+    assert "unreachable" in str(info.value)
+    assert _DownSession.calls == 1
+
+
+def test_an_http_error_still_retries_the_other_sublists(monkeypatch) -> None:
+    import requests
+
+    from repgenr.core import http
+
+    seen: list[int] = []
+
+    class _Resp:
+        status_code = 503
+
+        def raise_for_status(self):
+            raise requests.HTTPError("503 Server Error")
+
+    class _BusySession:
+        def get(self, url, **kwargs):
+            seen.append(len(kwargs["params"]["id"]))
+            return _Resp()
+
+    monkeypatch.setattr(http, "session", lambda: _BusySession())
+    monkeypatch.setattr(entrez, "sleep", lambda *_a, **_k: None)
+    with pytest.raises(WorkdirError, match="attempts"):
+        get_taxon_data_from_entrez([str(50000 + i) for i in range(150)], _LOG)
+    assert len(seen) == 6  # two sublists, three attempts each

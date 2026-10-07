@@ -760,7 +760,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
-  optionally `NCBI_EMAIL`) to raise the request-rate limit.
+  optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
+  is retried per batch of taxids; a connection error (no network, or the
+  host cannot be reached) stops the lookup at the first batch with exit 3.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
 - **Exit codes.** A script can tell the failure classes apart without
