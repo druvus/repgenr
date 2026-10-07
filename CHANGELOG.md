@@ -398,7 +398,9 @@ All notable changes to RepGenR are documented here. The format follows
   parameters.
 - `metadata --nodownload` reruns when the GTDB table it reuses from the
   workdir is replaced, and logs the changed input; the table was not a
-  declared resume input, so the stage was skipped.
+  declared resume input, so the stage was skipped. An existing workdir run
+  with `--nodownload` reruns once, since its record holds no digest of the
+  table.
 
 ### Changed
 - A run whose assembler is not installed is excused as

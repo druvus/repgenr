@@ -392,10 +392,12 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 
 
 # Invocations that rewrite their own declared inputs (derep-stock unpack
-# restores derep/): the record is stamped with digests taken after the run,
-# so an identical repeat matches the restored state and skips.
+# restores derep/; metadata --nodownload downloads the table it then reuses
+# when none is present yet): the record is stamped with digests taken after
+# the run, so an identical repeat matches the new state and skips.
 _REDIGEST_AFTER_RUN: dict[str, Any] = {
     "derep_stock": lambda p: getattr(p, "action", None) == "unpack",
+    "metadata": lambda p: getattr(p, "nodownload", False),
 }
 
 # Query modes keyed on a value rather than a flag.

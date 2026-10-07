@@ -347,3 +347,46 @@ def test_metadata_nodownload_reruns_when_the_reused_table_is_replaced(
     assert log.count("already completed") == 1
     ctx = WorkdirContext(wd)
     assert ctx.config.stages["metadata"].params["selected_count"] == 2
+
+
+def test_metadata_nodownload_first_run_that_downloads_skips_next_time(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """With no table yet, --nodownload downloads it; the inputs are digested after
+    the run, so the next identical run skips instead of seeing a new input."""
+    from repgenr.core import http
+    from repgenr.stages.metadata import MetadataParams
+
+    wd = tmp_path / "wd"
+    wd.mkdir()
+    downloads: list[str] = []
+
+    def fake_download(url, dest, logger=None, **kwargs):
+        downloads.append(url)
+        _write_gtdb_table(dest, ["tularensis", "philomiragia"])
+
+    monkeypatch.setattr(http, "download", fake_download)
+    monkeypatch.setattr(http, "verify_md5_manifest", lambda *a, **k: None)
+
+    def build_params() -> MetadataParams:
+        return MetadataParams(
+            dataset="all",
+            level="species",
+            release="232.0",
+            version="bac120",
+            target_genus="Francisella",
+            target_species="tularensis",
+            nodownload=True,
+        )
+
+    def read_log() -> str:
+        for h in logging.getLogger("repgenr").handlers:
+            h.flush()
+        return (wd / "repgenr.log").read_text(encoding="utf-8")
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(cli._RUN_STATE, "log_level", logging.INFO)
+    cli._run("metadata", wd, build_params, create=True)
+    cli._run("metadata", wd, build_params, create=True)
+    assert len(downloads) == 1
+    assert read_log().count("already completed") == 1
