@@ -354,6 +354,7 @@ parser), so they also apply to commands other than the one named.
 | run, phylo | The `--mask` help on `run` did not mention `--with-snptype`; the bootstrap help said ">=1000" although smaller values are accepted | 3c087a7 |
 | status | The "no run found" hint named only `metadata` and `vmetadata`; it now names all four starting points | 3c087a7 |
 | versions | A nonexistent workdir printed nothing and exited 0; it now exits 3 and writes no fragment | 3608ad9 |
+| status, doctor | A nonexistent workdir exited 0 (status printed the no-run hint, doctor a warning); both now exit 3 with the shared message, fixed after the audit at the maintainer's request | follow-up |
 | list-tools | A rejected version flag (sibeliaz) was recorded as the tool's error line; it is now recorded as unknown | f1905d7 |
 | metadata | The tsv source named `--version` (the global flag) instead of `--gtdb-version` when the version was missing | 5bb9f0c |
 | metadata | Replacing the `--metadata-path` table was skipped on resume and kept a stale selection | 4337fab |
@@ -391,7 +392,6 @@ they are recorded here and not fixed.
 |---|---|
 | Resume | The resume fingerprint covers parameters, inputs and the environment, not outputs, so a stage whose output was deleted by hand is skipped and `--force` is needed. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3, while the exit-code table reserves 6 for a failed external tool. |
-| Exit codes | `status` and `doctor` exit 0 on a nonexistent workdir, so a script that uses `doctor` as a health gate passes on a mistyped path. |
 | Errors | A stage that fails cleanly leaves no record in `repgenr.yaml`, so `status` shows it as next and not interrupted, and `doctor` reports no failure while `tree/` holds partial files. |
 | Errors | Exit 6 messages carry the command line and an output tail, so they span several lines. |
 | Errors | `phylo --treebuilder mashtree` on a single-representative set fails inside mashtree, and `snptype` with no variable sites exits 3; a genome-count check would give a clearer message. |

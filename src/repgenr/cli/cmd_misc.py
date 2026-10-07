@@ -23,6 +23,7 @@ from .base import (
     _require_choice,
     _run,
     app,
+    require_existing_workdir,
 )
 
 
@@ -62,9 +63,14 @@ def versions(
 def status(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
 ) -> None:
-    """Show which pipeline stages have completed in a working directory."""
+    """Show which pipeline stages have completed in a working directory.
+
+    A -wd that does not exist exits 3; an existing directory without
+    repgenr.yaml prints which entry stage to run first and exits 0.
+    """
     from ..core.config import CONFIG_FILENAME, Config
 
+    require_existing_workdir(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
         typer.echo(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
         typer.echo(
@@ -130,9 +136,11 @@ def doctor(
     against the filesystem and the manifest: interrupted stages, missing or
     corrupt genomes, manifest drift, representative/cluster mismatches,
     truncated deliverables, and stages whose inputs changed since completion.
-    Exits 1 when any failure is found.
+    Exits 1 when any failure is found and 3 when the workdir does not exist.
     """
     from ..core.doctor import diagnose
+
+    require_existing_workdir(workdir)
 
     findings = diagnose(workdir)
     label = {"ok": "OK  ", "warn": "WARN", "fail": "FAIL"}

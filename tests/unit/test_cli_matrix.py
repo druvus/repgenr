@@ -242,6 +242,9 @@ GLOBAL_WIRED = [
 @pytest.mark.parametrize(("flag", "rec"), GLOBAL_WIRED, ids=[f for f, _ in GLOBAL_WIRED])
 def test_global_flag_reaches_process_state(monkeypatch, tmp_path: Path, flag, rec) -> None:
     ph = _placeholders(tmp_path)
+    # The probe runs `status`, which exits 3 on a missing -wd and 0 on an
+    # existing directory without repgenr.yaml.
+    Path(ph["{wd}"]).mkdir(exist_ok=True)
     monkeypatch.setattr(containers, "_CONFIG", containers.ContainerConfig())
     monkeypatch.setitem(cli_base._RUN_STATE, "force", False)
 
