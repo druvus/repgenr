@@ -104,3 +104,12 @@ def test_bsd_wrapper_skips_appledouble_files(monkeypatch, tmp_path: Path) -> Non
     _run_bsd_wrapper(monkeypatch, tmp_path, work)
     assert (work / "out.maf").read_bytes() == b"a\ns x 0 4 + 4 ACGT\n"
     assert (work / "tmp_list.txt").read_text().split() == [str(work / "a.tmp")]
+
+
+def test_bsd_wrapper_leaves_no_block_temp_files(monkeypatch, tmp_path: Path) -> None:
+    """BSD mktemp has no --suffix; the substitute must not leave the bare
+    ``block.XXXXX`` file behind for every block it aligns."""
+    work = tmp_path / "work"
+    work.mkdir()
+    _run_bsd_wrapper(monkeypatch, tmp_path, work)
+    assert not list(work.glob("block.*"))

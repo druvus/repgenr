@@ -41,9 +41,13 @@ _BSD_PATCHES: tuple[tuple[str, str], ...] = (
     ('find $outdir -name "*.tmp" -printf "%p\\n"', 'find $outdir -name "*.tmp" ! -name "._*"'),
     ('find $outdir -name "*.msa"  -print0', 'find $outdir -name "*.msa" ! -name "._*" -print0'),
     ('stat -c "%s" $i', "stat -f%z $i"),
-    # BSD mktemp has no --suffix; append .fa after the call (spoa needs a known
-    # FASTA extension). Patch the whole $(...) so the result still ends in .fa.
-    ("$(mktemp --suffix=.fa $outdir/block.XXXXX)", "$(mktemp $outdir/block.XXXXX).fa"),
+    # BSD mktemp has no --suffix, and spoa needs a known FASTA extension: rename
+    # the reserved file to <name>.fa, so the bare name is not left behind for
+    # every block. Patch the whole $(...) so the result still ends in .fa.
+    (
+        "$(mktemp --suffix=.fa $outdir/block.XXXXX)",
+        '$(t=$(mktemp $outdir/block.XXXXX) && mv "$t" "$t.fa" && echo "$t.fa")',
+    ),
     ("ulimit $memory_min", ":"),
 )
 
