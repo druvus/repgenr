@@ -350,6 +350,7 @@ def build_tree(
     logger.info("Phylogenetic tree written to %s", final)
     expected = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
     check_tree_leaves(final, [g.stem for g in expected], treebuilder)
+    restore_leaf_names(final, [g.stem for g in expected], logger)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
     )
@@ -409,6 +410,40 @@ def check_tree_leaves(tree: Path, expected: Sequence[str], treebuilder: str) -> 
         + f"). The tree is kept at {tree} for inspection; the stage is not recorded "
         "as completed."
     )
+
+
+def restore_leaf_names(tree: Path, expected: Sequence[str], logger: logging.Logger) -> int:
+    """Rename leaves a tool rewrote back to the input genome names.
+
+    check_tree_leaves accepts a leaf that differs from its genome only in the
+    way tools rewrite names (a FASTA extension, '.ref', characters replaced by
+    '_'). tree2tax and genomes_map.tsv read the leaves as genome names, so the
+    tree is rewritten with the input names. A name that two inputs would share
+    is left as written. Returns the number of leaves renamed.
+    """
+    import dendropy
+
+    keys: dict[str, list[str]] = {}
+    for name in expected:
+        keys.setdefault(_leaf_key(name), []).append(name)
+    parsed = dendropy.Tree.get(path=str(tree), schema="newick", preserve_underscores=True)
+    renamed = 0
+    for node in parsed.leaf_node_iter():
+        if node.taxon is None or not node.taxon.label:
+            continue
+        label = node.taxon.label
+        names = keys.get(_leaf_key(label), [])
+        if len(names) == 1 and names[0] != label:
+            node.taxon.label = names[0]
+            renamed += 1
+    if renamed:
+        text = parsed.as_string(
+            schema="newick", suppress_rooting=True, unquoted_underscores=True
+        ).strip()
+        with atomic_path(tree) as tmp:
+            tmp.write_text(text + "\n", encoding="utf-8")
+        logger.info("Renamed %d tree leaf/leaves back to the input genome names", renamed)
+    return renamed
 
 
 def _listed(names: list[str]) -> str:

@@ -578,6 +578,65 @@ def test_tree_leaf_check_tolerates_renamed_dots(workdir: Path, fake_phylo_tools)
     assert ctx.config.stages["phylo"].completed
 
 
+class _RenamingLengthTreeBuilder(TreeBuilder):
+    """A rooted tree with lengths and a support, its leaves renamed as cactus
+    (dots to '_') and harvesttools ('.fasta', '.ref') name them."""
+
+    capabilities = ToolCapabilities(name="faketree_rename_len")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "tree.nwk"
+        a, b, c = (Path(g).stem for g in msa_or_genomes)
+        a, b = a.replace(".", "_"), f"{b}.fasta.ref"
+        tree.write_text(f"(({a}:0.1,{b}:0.2)0.95:0.3,{c}.fasta:0.4);\n")
+        return tree
+
+
+def test_renamed_leaves_are_restored_to_the_input_names(workdir: Path, fake_phylo_tools) -> None:
+    """tree2tax reads leaves as genome names, so phylo writes them back as the
+    inputs were named, keeping branch lengths and supports."""
+    import dendropy
+
+    from repgenr.stages.tree2tax import Tree2taxParams
+    from repgenr.stages.tree2tax import run as tree2tax_run
+
+    tb_registry.register("faketree_rename_len", _RenamingLengthTreeBuilder, replace=True)
+    try:
+        reps = workdir / "derep" / "representatives"
+        reps.mkdir(parents=True)
+        stems = [f"Fam_gen_sp_GCA_00000{i}.1" for i in range(1, 4)]
+        for stem in stems:
+            (reps / f"{stem}.fasta").write_text(">s\nACGTACGT\n")
+        ctx = WorkdirContext(workdir, create=True)
+        tree = run(ctx, PhyloParams(treebuilder="faketree_rename_len", no_outgroup=True))
+    finally:
+        tb_registry._classes.pop("faketree_rename_len", None)
+    parsed = dendropy.Tree.get(path=str(tree), schema="newick", preserve_underscores=True)
+    assert sorted(n.taxon.label for n in parsed.leaf_node_iter()) == stems
+    lengths = sorted(e.length for e in parsed.postorder_edge_iter() if e.length is not None)
+    assert lengths == [0.1, 0.2, 0.3, 0.4]
+    assert [n.label for n in parsed.internal_nodes() if n.label] == ["0.95"]
+    # The taxonomy maps every accession to a leaf of the same name.
+    _, gmap = tree2tax_run(WorkdirContext(workdir), Tree2taxParams())
+    rows = dict(ln.split("\t") for ln in gmap.read_text().splitlines())
+    assert rows == {stem.removeprefix("Fam_gen_sp_"): stem for stem in stems}
+
+
+def test_restore_leaf_names_leaves_ambiguous_names_alone(tmp_path: Path) -> None:
+    """Two inputs that a tool would write as one name are not guessed between."""
+    from repgenr.stages.phylo import restore_leaf_names
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(x_1,y,z);\n")
+    assert restore_leaf_names(tree, ["x.1", "x_1", "y", "z"], logging.getLogger("t")) == 0
+    assert tree.read_text() == "(x_1,y,z);\n"
+
+
 def test_leaf_key_matches_tool_rewritten_names() -> None:
     from repgenr.stages.phylo import _leaf_key
 
