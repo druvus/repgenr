@@ -312,6 +312,7 @@ def list_tools(
 
     A tool that declares a recommended scale is shown as 'name (up to N
     genomes)'; auto-selection and the scale warnings use the same limit.
+    The last line names the dereplicators that glance can run.
     With --check, every adapter's required binaries are looked up (version
     floors included) and reported per tool, so an environment can be
     verified before a run without a working directory.
@@ -341,6 +342,12 @@ def list_tools(
             continue
         for name in reg.names():
             typer.echo(f"  {name}: {_preflight_summary(reg, name)}")
+    from ..dereplicators.base import compare_supporters
+
+    # glance is not a family of its own: it runs any dereplicator with compare().
+    typer.echo(
+        f"glance (dereplicators with compare): {', '.join(compare_supporters()) or '(none)'}"
+    )
 
 
 def _one_line(exc: Exception) -> str:

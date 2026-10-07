@@ -162,5 +162,8 @@ def compare_supporters(reg: Registry[Dereplicator] | None = None) -> list[str]:
     return sorted(
         name
         for name in reg.names()
-        if not reg.is_broken(name) and reg.get(name).compare is not Dereplicator.compare
+        if not reg.is_broken(name)
+        # A third-party adapter need not subclass Dereplicator; without a
+        # compare attribute it has no comparison support.
+        and getattr(reg.get(name), "compare", Dereplicator.compare) is not Dereplicator.compare
     )
