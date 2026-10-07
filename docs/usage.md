@@ -22,11 +22,18 @@ consumes. There is no shared working directory; results are published under
 `--outdir`. Nextflow owns the fan-out (scatter-gather dereplication).
 
 This page covers the command line first, then the Nextflow layer, running the
-tools in containers, and troubleshooting. Every command and option is listed in
+tools in containers, and troubleshooting. [install.md](install.md) explains how
+to install the package and the external tools. [choosing-tools.md](choosing-tools.md)
+explains which dereplicator, phylogeny route and tree builder suit a dataset. Every command and option is listed in
 [cli-reference.md](cli-reference.md); the files each stage writes are described
 in [output.md](output.md).
 
 ## Command line
+
+Every stage command takes the working directory with `-wd` (long form
+`--workdir`). Stages read and write inside it, and `repgenr.yaml` there records
+what ran. Large run-time data (scratch, downloads, the Cactus job store) also
+lives under the working directory and `TMPDIR`, so put it on a disk with room.
 
 ### Bacteria
 
@@ -115,7 +122,9 @@ run (`--all-runs` keeps every run); `--max-runs` caps the selection to the
 largest runs. At assembly, a paired run that ENA lists with a third, orphan
 FASTQ file is given to skesa as the pair plus the orphan file, and to shovill
 as the pair only. Each run is labelled with the family, genus and species of
-its NCBI taxid, in the same filename tokens the GTDB path uses.
+its NCBI taxid, in the same filename tokens the GTDB path uses. Which assembler
+and polisher suit each sequencing platform is in
+[choosing-tools.md](choosing-tools.md#7-assemblers-and-polishers).
 
 ```bash
 repgenr reads -wd $WD -ts "Francisella tularensis" --platform illumina --max-runs 20
@@ -268,7 +277,8 @@ entirely and `--length-all` disables the filter.
 
 ### Alignment-free and SNP-based phylogenies
 
-Two alternatives to the whole-genome alignment in the bacterial example:
+Two alternatives to the whole-genome alignment in the bacterial example (see
+[choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
 
 ```bash
 # Scalable dereplication then an alignment-free tree
@@ -686,55 +696,9 @@ repgenr --container singularity --container-cache /Volumes/LaCie/repgenr_sif \
 | `--platform <plat>` | `REPGENR_CONTAINER_PLATFORM` | e.g. `linux/amd64` to emulate BioContainers on Apple Silicon |
 | `--wave / --no-wave` | `REPGENR_WAVE` | resolve multi-tool/arm64 images via the Seqera Wave CLI |
 
-### Image sources
-
-Each adapter declares its container metadata in `ToolCapabilities`:
-- `container` — a pinned image URI, used as-is when Wave is off. The
-  single-package adapters pin a BioContainer (galah, sourmash, dRep, snippy,
-  ska2, Gubbins, IQ-TREE, FastTree, RAxML-NG, mashtree), progressiveMauve
-  pins a BioContainer with a compatible boost, and cactus pins its project
-  image. Four adapters have no pin and run in an image only under `--wave`
-  (on the host otherwise, which the log states for each): the `simple` SNP
-  typer (minimap2, samtools, bcftools) and parsnp (parsnp, harvesttools)
-  span several packages, and the skder and SibeliaZ BioContainers are
-  BusyBox-based, where the GNU-only calls in their shell wrappers (`sort
-  --parallel` in skder's greedy mode, `mktemp --suffix` in SibeliaZ) fail
-  and the run silently yields nothing.
-- `conda` — a conda spec (e.g. `bioconda::skder`). With `--wave`, RepGenR mints
-  an image for it via the Wave CLI (arm64-native, and the only route for the
-  multi-package adapters) and uses it instead of the pin; the pin stays the
-  default without Wave.
-
-The pinned tags are listed in each adapter's `capabilities`
-(`repgenr list-tools` names the adapters). BioContainers are `linux/amd64`;
-on Apple Silicon pass `--platform linux/amd64` (Docker Desktop with Rosetta)
-or use `--wave`.
-
-### Storage location
-
-- **Singularity/Apptainer:** `--container-cache` sets `APPTAINER_CACHEDIR` /
-  `SINGULARITY_CACHEDIR` (+ `*_TMPDIR`); `docker://` images are pulled once to
-  `<cache>/<name>.sif` and reused. Put this on a large/external disk.
-- **Docker:** image storage is managed by the Docker daemon (Docker Desktop's
-  disk-image location) and is set there, not per-run.
-- Large run-time data (Cactus jobstore, scratch, downloads) lives under
-  `--workdir` / `TMPDIR`.
-
-### Notes
-
-- Docker runs as the host UID/GID so outputs are owned by you; the workdir and
-  `TMPDIR` are bind-mounted at identical paths.
-- Symlinked inputs (a `genomes/` directory staged by `repgenr ingest`) are
-  followed: the directory each link points to is bound as well, so the tool
-  sees the same paths inside the container.
-- On Apple Silicon most BioContainers are `linux/amd64` (run via Docker
-  emulation, or use `--wave` for arm64-native images).
-- The macOS SibeliaZ BSD-wrapper workaround is skipped automatically when running
-  in a (Linux) container.
-- dRep's CheckM needs its reference DB at run time — mount it via
-  `CHECKM_DATA_PATH`, or run dRep with `--ignoreGenomeQuality`.
-- The bioconda `mauve` (progressiveMauve) build is broken upstream (boost ABI
-  `undefined symbol`); pin a known-good image or run that tool natively on Linux.
+Image sources, the storage location, Apple Silicon and Rosetta setup, and the
+notes on bind mounts and known image problems are in
+[install.md](install.md#3-containers).
 
 ### Container profiles in Nextflow
 
@@ -746,7 +710,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
 ## Troubleshooting
 
 - **`MissingBinaryError` / a tool is not found.** The Python package does not
-  install the bioinformatics tools. Use the conda environment
+  install the bioinformatics tools (see [install.md](install.md)). Use the conda environment
   (`mamba env create -f environment.yml`) or put the tool on `PATH`. Run
   `repgenr list-tools` to see the adapters and each tool's declared genome
   limit (`list-tools --check` also runs every adapter's preflight and reports

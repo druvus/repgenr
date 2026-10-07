@@ -41,6 +41,7 @@ global_flags:
     docs:
     - docs/usage.md
     - docs/developing.md
+    - docs/install.md
     - docs/cli-reference.md
     - docs/audit/scaling-audit.md
     - docs/audit/cli-matrix.md
@@ -52,6 +53,7 @@ global_flags:
     value: podman
     validated: none
     docs:
+    - docs/install.md
     - docs/cli-reference.md
     - docs/usage.md
     - docs/audit/cli-matrix.md
@@ -63,6 +65,7 @@ global_flags:
     value: '{alt_dir}'
     validated: none
     docs:
+    - docs/install.md
     - docs/cli-reference.md
     - docs/usage.md
     - docs/audit/cli-matrix.md
@@ -75,6 +78,7 @@ global_flags:
     validated: none
     docs:
     - docs/usage.md
+    - docs/install.md
     - docs/cli-reference.md
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
@@ -87,6 +91,7 @@ global_flags:
     validated: none
     docs:
     - docs/developing.md
+    - docs/install.md
     - docs/cli-reference.md
     - docs/usage.md
     - docs/audit/scaling-audit.md
@@ -249,6 +254,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -411,6 +417,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
@@ -452,6 +459,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -548,6 +556,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
@@ -608,6 +617,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -704,6 +714,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
@@ -873,6 +884,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -1057,6 +1069,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.metadata_args
@@ -1192,6 +1205,7 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -1203,6 +1217,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1213,6 +1228,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1225,6 +1241,7 @@ commands:
         - snptype
         validated: registry
         docs:
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1301,6 +1318,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
@@ -1372,6 +1390,7 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -1383,6 +1402,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1393,6 +1413,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1405,6 +1426,7 @@ commands:
         - snptype
         validated: registry
         docs:
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1504,6 +1526,7 @@ commands:
         - snptype
         validated: registry
         docs:
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.phylo_args
@@ -1533,6 +1556,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1589,6 +1613,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1680,6 +1705,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -1829,6 +1855,7 @@ commands:
         validated: range
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.reads_args
@@ -1840,6 +1867,7 @@ commands:
         validated: none
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.reads_args
@@ -1956,6 +1984,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2226,6 +2255,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -2267,6 +2297,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/scaling-audit.md
         - docs/audit/cli-matrix.md
@@ -2278,6 +2309,7 @@ commands:
         validated: registry
         docs:
         - README.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/cli-matrix.md
@@ -2289,6 +2321,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2299,6 +2332,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2311,6 +2345,7 @@ commands:
         - snptype
         validated: registry
         docs:
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2509,6 +2544,7 @@ commands:
         - snptype
         validated: registry
         docs:
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
@@ -2572,6 +2608,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/usage.md
         - docs/audit/scaling-audit.md
@@ -2605,6 +2642,7 @@ commands:
         docs:
         - README.md
         - docs/developing.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/output.md
         - docs/usage.md
@@ -3132,6 +3170,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.vmetadata_args
@@ -3231,6 +3270,7 @@ commands:
         validated: registry
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.assembler
@@ -3273,6 +3313,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: params.assemble_args
@@ -3381,6 +3422,7 @@ commands:
         validated: choice
         docs:
         - docs/usage.md
+        - docs/choosing-tools.md
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: sourmash when params.gtdb_sketch is set'

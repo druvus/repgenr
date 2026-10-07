@@ -185,7 +185,10 @@ capabilities = ToolCapabilities(
   `--container`/`--wave` (the run falls back to the host with a warning).
 * `recommended_max_genomes` feeds `--tool auto` (tightest fitting limit wins)
   and the over-scale warnings; unbounded (`None`) tools are picked when
-  nothing bounded fits.
+  nothing bounded fits. The selection rule is described in
+  [choosing-tools.md](choosing-tools.md#9-how-auto-chooses), whose limits
+  table `tests/unit/test_docs_tool_limits.py` checks against the registries:
+  update the table when an adapter's limit changes or a new adapter is added.
 * `accepted_extras` names the `params.extra` keys the adapter reads. Users set
   them with `--tool-arg key=value` (dereplicate/snptype and the data-channel
   steps) or `--aligner-arg key=value` (phylo). Every stage warns, by name,

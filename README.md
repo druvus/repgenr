@@ -7,14 +7,22 @@ phylogenetic trees, and emits taxonomy files for downstream tools such as
 FlexTaxD.
 
 Version 2 is a modular, importable Python package (Python 3.12+) with eight
-pluggable tool families and an optional Nextflow pipeline for scaling to
-thousands of genomes.
+pluggable tool families and an optional Nextflow pipeline for scatter-gather
+runs on HPC and cloud. The largest end-to-end runs recorded are 1157
+bacterial genomes (one genus, 12 minutes) and 1256 viral genomes
+(Hepeviridae). Larger sizes are measured per tool in the
+[scaling audit](docs/audit/scaling-audit.md).
 
 ## Pipeline
 
 ```
-metadata -> genome -> dereplicate -> phylo -> tree2tax
+bacterial:         metadata -> genome -> dereplicate -> phylo -> tree2tax
+viral:             vmetadata -> vgenome -> dereplicate -> phylo -> tree2tax
+local genomes:     ingest -> dereplicate -> phylo -> tree2tax
+sequencing reads:  reads -> assemble -> dereplicate -> phylo -> tree2tax
 ```
+
+`repgenr run` chains a whole row; `repgenr status -wd WD` says what comes next.
 
 `phylo` builds its tree from an alignment it produces with an aligner or a
 SNP typer, or directly from the genomes with an alignment-free builder;
@@ -44,15 +52,13 @@ the core (see [docs/developing.md](docs/developing.md)).
 ## Installation
 
 ```bash
-# Tools + Python environment (conda/mamba)
-mamba env create -f environment.yml
-mamba activate repgenr
-
-# Or just the Python package (tools must be on PATH separately)
-pip install .
+pip install .                          # the package (Python 3.12+); tools are separate
+mamba env create -f environment.yml    # or: one conda environment with the tools (single-environment route)
+repgenr list-tools --check             # which tools are found, with versions
 ```
 
-Cactus is distributed separately (containers/binaries); see its documentation.
+Several environments, containers (including Apple Silicon) and the databases
+some tools need are described in [docs/install.md](docs/install.md).
 
 ## Quick start
 
@@ -83,6 +89,8 @@ per run) select the other two front ends. Nextflow 26.04 or later is required.
 
 | Page | What it covers |
 |------|----------------|
+| [docs/install.md](docs/install.md) | Installing the package and the external tools: conda, several environments, containers, per-tool requirements and databases. |
+| [docs/choosing-tools.md](docs/choosing-tools.md) | Which dereplicator, phylogeny route and tree builder to use for a dataset and size, with the measured runs and declared limits behind each. |
 | [docs/usage.md](docs/usage.md) | Running the pipeline: CLI stages, local genomes, viruses, resume, representative selection, SNP typing and masking, Nextflow parameters and profiles, containers, troubleshooting. |
 | [docs/cli-reference.md](docs/cli-reference.md) | Every command and option, generated from the command tree. |
 | [docs/output.md](docs/output.md) | The files each stage writes. |

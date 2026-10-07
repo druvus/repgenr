@@ -1,0 +1,264 @@
+# Choosing tools
+
+RepGenR has eight tool families, and most stages work with the defaults. This
+page helps when the defaults do not fit: it goes from the kind of dataset, to
+its size, to the individual families. Measurements come from
+[verification.md](verification.md) and
+[audit/scaling-audit.md](audit/scaling-audit.md). Where a figure is a declared
+limit and not a measurement, the text says so.
+
+## 1. Decide by dataset first
+
+| Dataset | Entry path | Dereplicator | Phylogeny route | Masking | Tree builder |
+|---|---|---|---|---|---|
+| Genus or wider (diverse) | `metadata` (GTDB), or `--source api` for one taxon | `skder`, or `sourmash` for large sets | Alignment-free | No | `mashtree` |
+| One species | `metadata`, or `ingest` for local genomes | `skder` or `galah` | Core-SNP with `--reference` set to a genome of that species, or whole-genome MSA for small sets | `--mask gubbins` when under 10% of alignment columns vary | `iqtree` |
+| Outbreak or clonal set | `ingest`, or `reads` and `assemble` | `skder` or `galah`, with the clone-block caveat in section 4 | Core-SNP with `ska2` (reference-free) or a mapping typer | `gubbins` with a mapping typer only; `ska2` cannot be masked | `iqtree` or `fasttree` |
+| Viral | `vmetadata` and `vgenome` (NCBI Virus) | `skder --virus` or `sourmash` | Alignment-free | No | `mashtree` |
+
+What each row rests on:
+
+- **Genus.** One `run` over all 1157 GTDB Francisella genomes with `skder` and
+  `mashtree` took 12 minutes end to end and gave 68 representatives (genus
+  run, 2026-09-10, in `verification.md`). On the 68 representatives plus the
+  outgroup, `ska2` with IQ-TREE took 7.4 minutes and gave a tree that shared 15
+  of 66 splits with the mashtree tree. `simple` with Gubbins failed in
+  Gubbins' recombination scan on the genus alignment, which is 39% variable.
+- **One species.** Gubbins ran on 9 F. tularensis genomes (1.0% variable
+  columns, 1.9 minutes) and on 18 F. philomiragia genomes (8.3%, 4.4 minutes).
+  It failed from 13.2% variable columns upward. Masking changed the topology:
+  the masked and unmasked IQ-TREE trees on 9 representatives share no internal
+  split. These are the only species-level measurements, on one genus.
+- **Outbreak or clonal.** The dereplicators were measured on synthetic clonal
+  sets in the scaling audit (all recovered the true clustering). The SNP typers
+  were run on a synthetic within-species set and on the Francisella data
+  (`verification.md`). There is no measured run on a real outbreak. The
+  reasons to prefer `ska2` here are design reasons from the audit: it is
+  reference-free, so no reference assembly biases the distances, and Mash
+  distances saturate near identity, which makes `mashtree` weak on clonal sets.
+- **Viral.** The live suite runs the viral chain on Hepatovirus records from
+  NCBI Virus with `sourmash` and `mashtree` (`test_run_viral_chain_end_to_end`,
+  21 seconds). The largest viral run recorded is 1256 Hepeviridae (hepatitis E)
+  genomes from BV-BRC: `skder` gave 799 representatives, followed by `mashtree`
+  and `tree2tax` (recorded in `docs/verification.md` before #150, commit 7309fe7; the scaling audit keeps the 1256 figure). Other viral scaling is not measured.
+
+## 2. Then by size
+
+| Genomes | What was measured | What `auto` picks |
+|---|---|---|
+| Under 100 | `mashtree` 9 s at 100 genomes; sourmash tree 25 s at 100. progressiveMauve about 10 minutes at 20 genomes and about 22 minutes at 50, per build. | Tree builder: `iqtree` (limit 500). |
+| 100 to 1000 | `skder` about 7 min and 1.1 to 1.5 GB at 1000; `galah` 4 to 6 min; `sourmash` about 1 min and 0.2 GB. `mashtree` 117 s; sourmash tree 142 s. | Tree builder: `iqtree` up to 500, then `raxmlng` (limit 1000). |
+| 1000 to 5000 | `skder` about 69 min and 6.4 to 8.2 GB at 5000 in one pass, about 15 min chunked; `galah` about 63 min; `sourmash` about 5.5 min sparse. `mashtree` 53 min and 7.6 GB at 5000. | Tree builder: `sourmash` (limit 2000), then `fasttree` (limit 5000). |
+| Over 5000 | Not measured. Single-pass `skder` or `galah` at 10000 would be memory-risky on the 18 GB audit machine. Chunked `skder` or sparse `sourmash` are the safer choices. | Tree builder: `mashtree` (limit 10000). |
+
+Notes on the table:
+
+- Times are from one machine (11 cores, 18 GB). Treat them as orders of
+  magnitude.
+- The sourmash tree builder uses a pure-Python neighbour-joining step. A fit to
+  the measured times gives about 1.6 hours at 5000 genomes. Its declared limit
+  is 2000, and it refuses input above 5000.
+- **Most limits are declared, not benchmarked.** The audit found the declared
+  `recommended_max_genomes` values to be round numbers with no recorded
+  measurement behind them (500, 1000, 2000, 5000, 10000). The scaling audit
+  later measured some of them (for example the sourmash tree builder, whose
+  limit was lowered after the measurement). The aligners and SNP typers have not
+  been run at scale. In the audit, SibeliaZ did not finish within an hour at 20
+  genomes, so its declared limit of 2000 is not supported by a run. The largest
+  recorded end-to-end runs are the 1157-genome Francisella set (bacterial) and
+  1256 Hepeviridae genomes (viral).
+- Past a few thousand genomes, dereplicate in chunks (`--process-size` on the
+  CLI, `--derep_process_size` in Nextflow). Chunking changes which genome
+  represents a cluster, not the clustering (scaling audit, finding 3).
+
+## 3. Entry points
+
+| Situation | Use |
+|---|---|
+| Bacteria or archaea in GTDB, many taxa or a whole release | `metadata` with the default `--source tsv`, which downloads the release table once. |
+| One taxon only | `metadata --source api`, which asks the GTDB API for the target taxon and also fetches each genome's quality values. |
+| Genomes already on disk | `ingest --genomes-dir DIR`. Add a `selection.tsv` for taxonomy and quality. |
+| Sequencing runs, no assembly yet | `reads`, then `assemble`. Runs come from ENA, which mirrors SRA. |
+| Viruses | `vmetadata` and `vgenome`. NCBI Virus is the default source. Use `--source bvbrc` only for the legacy BV-BRC path. |
+
+`run` chains the stages for the GTDB path, and takes `--viral`, `--reads` or
+`--genomes-dir` for the others (see [usage.md](usage.md)).
+
+## 4. Dereplicators
+
+| Tool | Scaling shape | Representative criterion | Clone-block behaviour | Needs CheckM data | Verified |
+|---|---|---|---|---|---|
+| `skder` (default) | Superlinear in practice: 5 times the genomes cost about 10 times the wall time and 6 times the memory. Single pass: about 7 min at 1000 and 69 min at 5000, memory up to 8.2 GB. Chunked: about 15 min at 5000. | Its own aggregate score. Not quality-aware. | One representative per block. Which member is arbitrary. | No | Native and container (Wave) |
+| `galah` | Built for large sets. About 4 to 6 min at 1000 and 63 min at 5000. | Filename sort position within a clone block. | The alphabetically first member in the three orderings tested. | No | Native and container |
+| `sourmash` | Sparse back-end close to linear in close pairs. About 5.5 min at 5000, 0.3 to 0.7 GB. Dense back-end is capped at 5000. | Most-connected genome, alphabetical tie-break. | Biased toward the most-sequenced genotype. The sparse and dense back-ends can pick different members. | No | Native and container |
+| `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes, or `--ignoreGenomeQuality` | Container only |
+
+Guidance:
+
+- Use `skder`, the default, for most sets.
+- Use `sourmash` with `--derep_process_size 2000` (Nextflow) or `--process-size
+  2000` for 10000 genomes or more (not measured at this size).
+- Use `drep` only when CheckM data are available, and keep it under about 2000
+  genomes.
+- The representative inside a clone block depends on the tool, its back-end and
+  the accession names, not on genome quality. The default `--keeper quality`
+  re-picks each cluster's representative by completeness minus 5 times
+  contamination, using the values in the manifest, whichever tool clustered.
+  `--keeper tool` keeps the adapter's choice.
+
+## 5. Phylogeny routes
+
+`phylo` combines three independent choices: the genome set (representatives or
+all genomes), the source of the alignment (`--msa-source aligner|snptype`) and
+the tree builder (`--treebuilder`). The alignment source is skipped for
+alignment-free tree builders.
+
+| Route | Tools | Use it for | Limits and costs |
+|---|---|---|---|
+| Alignment-free | `--treebuilder mashtree` or `sourmash` | Diverse sets, large sets, a quick tree. | Distances compress near identity, so clonal sets resolve poorly. No bootstrap supports. |
+| Whole-genome MSA | `--aligner progressivemauve`, `sibeliaz` or `cactus`, then an MSA tree builder | Small sets of related genomes when a whole-genome alignment is wanted. | Declared limits 500, 2000 and 2000. progressiveMauve about 10 to 22 minutes per build at 20 to 50 genomes. SibeliaZ timed out at 20 genomes in the audit. Cactus needs its container and is for same-species sets. |
+| Core-SNP | `--msa-source snptype` with `--snptyper simple`, `snippy`, `parsnp` or `ska2` | One species or a clonal set. | `simple`, `snippy` and `parsnp` map every genome to one reference, so the reference biases the result. `ska2` is reference-free. |
+
+Reference bias. The mapping typers use the alphabetically first genome as the
+reference unless `--reference` is given. On the F. tularensis set the
+alphabetically first genome of the whole genus was another species, and 5.1% of
+its columns varied inside a species usually described as clonal. For a species
+run, set `--reference` to a genome of that species. The stage warns when it
+falls back to the default.
+
+Masking. `--mask gubbins` needs `--msa-source snptype` (in `run`, `--with-snptype` also accepts `--mask`) and a typer that writes a
+whole-genome alignment, which `simple`, `snippy` and `parsnp` do. It replaces
+the core-SNP alignment with Gubbins' filtered polymorphic sites. `ska2` writes
+variable sites only, so it cannot be masked. Gubbins is for isolates of one
+species. The masker estimates the variable fraction of the alignment, warns
+above 10%, and repeats the figure if Gubbins fails. Gubbins needs a
+multi-threaded RAxML build when given more than one thread; see
+[usage.md](usage.md#snp-typing-and-masking).
+
+## 6. Tree builders
+
+| Builder | Input | Scaling | Resolution | Rooting |
+|---|---|---|---|---|
+| `iqtree` | MSA | Declared 500. Poor beyond that. | Good on both diverse and clonal sets. Use at least 1000 ultrafast bootstrap replicates for supports. | Roots on the outgroup. |
+| `raxmlng` | MSA | Declared 1000. Slow beyond that. | Supports from its own bootstrap procedure. | Roots on the outgroup. |
+| `fasttree` | MSA | Declared 5000. Good to about 5000. | Approximate. Weaker resolution on clonal sets. | Unrooted. |
+| `mashtree` | Genomes | Declared 10000. 53 min and 7.6 GB measured at 5000. | Poor on clonal sets. No supports. | Unrooted. |
+| `sourmash` | Genomes | Declared 2000. Cubic in the neighbour-joining step. | Poor on clonal sets. No supports. | Unrooted. |
+
+The stage adds the outgroup to the input and passes it to builders that can
+root. `tree2tax` then roots every tree on the outgroup edge, so the taxonomy
+always separates the outgroup from one ingroup clade.
+
+`tree2tax` can collapse weak splits before it names nodes:
+`--collapse-length L` merges a node whose branch is shorter than `L` in the
+tree's own units, and `--collapse-support S` merges a node whose support is
+below the fraction `S`. IQ-TREE and RAxML-NG supports are normalised
+automatically. `mashtree` and the sourmash builder write no supports, so
+`--collapse-support` does nothing for them and the stage warns. The root, the
+outgroup split and the leaves never collapse. See
+[usage.md](usage.md#collapsing-weak-splits-in-tree2tax).
+
+## 7. Assemblers and polishers
+
+These apply to the reads chain only (`reads`, `assemble`).
+
+| Sequencing platform | Assembler (`--assembler auto`) | Polisher (`--polisher auto`) |
+|---|---|---|
+| Illumina | `skesa`. `shovill` (SPAdes) is the alternative for paired reads. | None |
+| Oxford Nanopore | `flye` | `medaka` |
+| PacBio CLR | `flye` | `racon` with minimap2 overlaps (`--polish-rounds`) |
+| PacBio HiFi | `flye` | None |
+
+Notes:
+
+- Medaka needs the basecaller model. Dorado names it in the read headers. Reads
+  mirrored through SRA have rewritten headers, so the adapter assumes ONT's
+  bacterial R10.4.1 model and records that. Give another with `--tool-arg
+  model=...`.
+- On one ONT run (SRR28800588) polishing did not change the CheckM2 scores,
+  because the Flye draft was already gene-complete at that resolution.
+  Unpolished long-read assemblies still carry indel errors that matter for SNP
+  typing and alignment.
+- The ENA selection filters that matter most are `--max-bases`, which drops
+  whole-host libraries above a size, and `--drop-selection`, which drops
+  libraries by ENA library selection. Its default is `MDA`: amplified libraries
+  assemble into chimeric, uneven contigs. The 12% contamination seen on one
+  library came from MDA amplification, which the default now drops.
+- `--classifier auto` (the default) verifies each assembly's organism with
+  sourmash gather against a GTDB sketch when one is given; without a sketch the
+  check is skipped and the log says so.
+- `--one-per-sample` (the default) keeps one run per sample. A long-read run is
+  preferred when it has at least 100 Mb and a tenth of the largest short-read
+  run.
+
+## 8. CLI `run` or Nextflow
+
+| | `repgenr run` | `nextflow run nextflow/main.nf` |
+|---|---|---|
+| Best for | One machine, up to about a thousand genomes (measured). | Scatter-gather dereplication above a few thousand genomes (a design recommendation, not a measurement), HPC, cloud. |
+| Parallelism | Threads within a stage. | Tasks per chunk and per assembled run. |
+| Resume | Per stage, from parameter and input fingerprints. `--force` overrides. | Nextflow's `-resume` and task cache. |
+| Representative choice | `--keeper quality\|tool` | `--derep_keeper quality\|tool` |
+| Options | Forwards the stage options it shares a name with. | `--metadata_args`, `--phylo_args` and the other `*_args` strings, plus typed `--derep_*` parameters. |
+| Inspection | `status` and `doctor` are available. | Not available. They are CLI commands that read a working directory. |
+
+The Nextflow layer has no shared working directory, so `status` and `doctor`
+have nothing to read there. Parameters and profiles are in
+[usage.md](usage.md#nextflow). Installation for each environment is in
+[install.md](install.md).
+
+## 9. How `auto` chooses
+
+Each adapter declares `recommended_max_genomes`, an integer or none. `--tool
+auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
+
+1. Prefer tools that can run here. Under a container backend, a declared image
+   or conda spec counts as available. Natively, the binaries must be on `PATH`.
+2. Prefer tools whose limit fits the number of genomes. Among those, the
+   tightest limit wins, so the more careful but limited tool is chosen for
+   small inputs. Tools without a limit come last among the fitting ones.
+3. Break ties with the documented defaults (`skder`, `iqtree`,
+   `progressivemauve`, `simple`, `skesa`, `shovill`, `flye`, `medaka`,
+   `racon`), then alphabetically.
+4. If nothing fits, choose the tool with the largest limit.
+
+The default for `--tool` on `dereplicate` is `skder`, not `auto`. With `auto`
+and all tools available, `drep` (limit 2000) would be preferred for up to 2000
+genomes, and it needs CheckM data.
+
+Passing a tool by name past its limit logs a warning and runs anyway. Adapter
+authors set the limit in `ToolCapabilities` (see
+[developing.md](developing.md)).
+
+`repgenr list-tools` prints the declared limits. The table below is checked
+against the registered adapters by `tests/unit/test_docs_tool_limits.py`.
+
+| Family | Tool | Declared limit |
+|---|---|---|
+| dereplicator | drep | 2000 |
+| dereplicator | galah | unbounded |
+| dereplicator | skder | unbounded |
+| dereplicator | sourmash | unbounded |
+| aligner | cactus | 2000 |
+| aligner | progressivemauve | 500 |
+| aligner | sibeliaz | 2000 |
+| snptyper | parsnp | 2000 |
+| snptyper | simple | 2000 |
+| snptyper | ska2 | 5000 |
+| snptyper | snippy | 1000 |
+| masker | gubbins | unbounded |
+| treebuilder | fasttree | 5000 |
+| treebuilder | iqtree | 500 |
+| treebuilder | mashtree | 10000 |
+| treebuilder | raxmlng | 1000 |
+| treebuilder | sourmash | 2000 |
+| assembler | flye | unbounded |
+| assembler | shovill | unbounded |
+| assembler | skesa | unbounded |
+| classifier | sourmash | unbounded |
+| polisher | medaka | unbounded |
+| polisher | racon | unbounded |
+
+These limits count genomes only. They do not model genome size, memory or
+thread count. Aligners and SNP typers declare limits that the scale warnings
+use, but limit-based `auto` selection applies only to dereplicators and tree builders.
