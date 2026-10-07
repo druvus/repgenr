@@ -77,6 +77,9 @@ Nextflow steps), and from the canonical filename
 with neither adds no species. In a cluster of one
 species `n_species` is 1. A larger value means the cluster joins several
 species, or, for names such as the synthetic benchmark sets, that every genome
+has its own species token. With no quality in the manifest (for example after
+`ingest` without `--selection` columns) the four quality columns and
+`best_member` are blank and the command logs that it left them blank.
 
 To list the members of a cluster, see "Finding the members of a cluster" in
 [usage.md](usage.md#inspecting-a-dereplication).
