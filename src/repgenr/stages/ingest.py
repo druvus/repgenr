@@ -153,6 +153,13 @@ def _resolve_outgroup(
 
     candidate = Path(flag).expanduser()
     if candidate.is_file():
+        # A path to a genome under --genomes-dir is that genome's row, so its
+        # selection accession is kept rather than one parsed from the filename.
+        resolved = candidate.resolve()
+        for row in rows:
+            if by_name[row.filename].resolve() == resolved:
+                _refuse_conflict(from_selection, row, flag)
+                return replace(row, is_outgroup=True), by_name[row.filename]
         row = replace(_row_from_filename(candidate.name), is_outgroup=True)
         _refuse_conflict(from_selection, row, flag)
         return row, candidate

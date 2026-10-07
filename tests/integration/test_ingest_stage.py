@@ -230,7 +230,12 @@ def test_ingest_outgroup_flag_conflicting_with_selection_row_is_an_error(
         run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup=flag))
 
 
-def test_ingest_outgroup_flag_agreeing_with_selection_row(tmp_path: Path, workdir: Path) -> None:
+@pytest.mark.parametrize("by", ["accession", "path"])
+def test_ingest_outgroup_flag_agreeing_with_selection_row(
+    tmp_path: Path, workdir: Path, by: str
+) -> None:
+    """--outgroup naming the selection's outgroup, by accession or by its file path,
+    is no conflict; the selection row (and its accession) is kept."""
     src = _source(tmp_path, ["a.fasta", "og.fasta"])
     selection = tmp_path / "sel.tsv"
     write_selection(
@@ -241,5 +246,7 @@ def test_ingest_outgroup_flag_agreeing_with_selection_row(tmp_path: Path, workdi
         ],
     )
     ctx = WorkdirContext(workdir, create=True)
-    run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup="OG1"))
+    flag = "OG1" if by == "accession" else str(src / "og.fasta")
+    run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup=flag))
     assert (workdir / "outgroup_accession.txt").read_text().strip() == "OG1"
+    assert (ctx.outgroup_dir / "og.fasta").exists()
