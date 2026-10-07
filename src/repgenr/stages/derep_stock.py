@@ -1,24 +1,30 @@
 """derep_stock stage: store/load named dereplication runs.
 
 Ports ``derep_stocker.py`` to the new ``derep/`` contract. A packed run keeps
-``clusters.tsv`` + ``genome_status.tsv`` and symlinks the representative genome
-files; unpacking restores them into the working directory.
+``clusters.tsv`` + ``genome_status.tsv``, symlinks to the representative genome
+files and ``record.json``, the ``dereplicate`` stage record (tool, parameters,
+tool versions) that described the run when it was packed; unpacking restores
+them into the working directory.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from ..core.config import StageRecord
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    atomic_replace,
     list_fasta,
     read_clusters,
     read_genome_status,
@@ -30,6 +36,9 @@ from ..dereplicators.base import DerepResult
 from .dereplicate import _update_manifest
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV, CLUSTER_SUMMARY_TSV)
+# The dereplicate record of the stored run, written by pack.
+_RECORD_JSON = "record.json"
+_RECORD_FIELDS = ("tool", "params", "tool_versions", "completed")
 # Params key on the dereplicate record while an unpack replaces its outputs;
 # removed when the record is re-stamped, so a later interrupted dereplicate
 # run is told apart from an interrupted unpack.
@@ -145,7 +154,64 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
     reps_dir.mkdir()
     for rep in reps:
         (reps_dir / rep.name).symlink_to((ctx.genomes_dir / rep.name).resolve())
+    _store_record(ctx, run_path)
     ctx.logger.info("Packed run to %s", run_path)
+
+
+def _store_record(ctx: WorkdirContext, run_path: Path) -> None:
+    """Write the live dereplicate record into the stored run.
+
+    Only a completed record describes the outputs being packed; an incomplete
+    one (an interrupted dereplicate or unpack) or none at all is not stored,
+    and unpack then falls back to the record that is live at unpack time.
+    """
+    record = ctx.config.stages.get("dereplicate")
+    if record is None or not record.completed:
+        ctx.logger.warning(
+            "No completed dereplicate record to store with run '%s'; unpack will "
+            "attribute it to the dereplicate record current at that time",
+            run_path.name,
+        )
+        return
+    data = {key: record.to_dict()[key] for key in _RECORD_FIELDS}
+    with atomic_replace(run_path / _RECORD_JSON) as fo:
+        fo.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def _check_record(data: Any) -> None:
+    """Raise ValueError unless ``data`` has the shape pack writes."""
+    if not isinstance(data, dict):
+        raise ValueError("not a JSON object")
+    tool = data.get("tool")
+    if tool is not None and not isinstance(tool, str):
+        raise ValueError("'tool' is not a string")
+    if not isinstance(data.get("params", {}), dict):
+        raise ValueError("'params' is not an object")
+    versions = data.get("tool_versions", {})
+    if not isinstance(versions, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in versions.items()
+    ):
+        raise ValueError("'tool_versions' is not an object of strings")
+
+
+def _stored_record(ctx: WorkdirContext, run_path: Path) -> StageRecord | None:
+    """The dereplicate record kept with a stored run, or None.
+
+    Runs packed before the record was stored have no ``record.json``; an
+    unreadable file is reported and treated the same way.
+    """
+    path = run_path / _RECORD_JSON
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        _check_record(data)
+        return StageRecord.from_dict(data)
+    except (ValueError, TypeError, OSError) as exc:
+        ctx.logger.warning(
+            "Ignoring unreadable %s (%s); the dereplicate record is carried over", path, exc
+        )
+        return None
 
 
 def _check_unpackable(ctx: WorkdirContext, run_path: Path) -> list[str]:
@@ -183,7 +249,18 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         # it. An interrupted unpack leaves the in-progress marker in the
         # params (set below), and a repeat keeps what that unpack carried.
         prior = None
-    carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
+    stored = _stored_record(ctx, run_path)
+    if stored is not None:
+        # The run keeps its own record: the restored record names the tool,
+        # parameters and versions that produced it.
+        carried: tuple[str | None, dict[str, Any], dict[str, str]] | None = (
+            stored.tool,
+            stored.params,
+            stored.tool_versions,
+        )
+    else:
+        # Runs packed without a record: carry over the live record, as before.
+        carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
     if carried is not None:
         carried[1].pop(_UNPACKING, None)
     if prior is not None:

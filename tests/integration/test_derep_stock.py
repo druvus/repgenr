@@ -295,9 +295,21 @@ def test_an_interrupted_unpack_leaves_the_dereplicate_record_incomplete(
     assert record.params == {"tool": "skder", "stock": "run1"}
 
     # A dereplicate run interrupted after that unpack is a different case:
-    # its record carries nothing over, although it still names the run.
+    # its record is not carried over; the stored run's own record applies.
     record.completed = None
     record.fingerprint = None
+    record.tool = "sourmash"
+    ctx.config.stages["dereplicate"] = record
+    ctx.save_config()
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.completed and record.tool == "skder"
+    assert record.params == {"tool": "skder", "stock": "run1"}
+
+    # Without a stored record (a run packed before records were stored) the
+    # interrupted dereplicate record still carries nothing over.
+    (ctx.derep_dir / "stock" / "run1" / "record.json").unlink()
+    record.completed = None
     record.tool = "sourmash"
     ctx.config.stages["dereplicate"] = record
     ctx.save_config()
@@ -316,3 +328,125 @@ def test_unpack_links_the_representatives_like_dereplicate(workdir: Path) -> Non
     for name in _REPS:
         restored = (ctx.representatives_dir / name).stat()
         assert restored.st_ino == (ctx.genomes_dir / name).stat().st_ino
+
+
+def _record_dereplicate(ctx: WorkdirContext, tool: str, ani: float) -> None:
+    ctx.config.record_stage(
+        "dereplicate",
+        tool=tool,
+        params={"tool": tool, "secondary_ani": ani},
+        tool_versions={tool: "1.0"},
+        completed=f"t-{tool}",
+        fingerprint=f"fp-{tool}",
+    )
+    ctx.save_config()
+
+
+def test_pack_stores_the_dereplicate_record(workdir: Path) -> None:
+    import json
+
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    stored = json.loads((ctx.derep_dir / "stock" / "run1" / "record.json").read_text())
+    assert stored == {
+        "tool": "sourmash",
+        "params": {"tool": "sourmash", "secondary_ani": 0.95},
+        "tool_versions": {"sourmash": "1.0"},
+        "completed": "t-sourmash",
+    }
+
+
+def test_pack_without_a_completed_record_stores_none(workdir: Path, capsys) -> None:
+    ctx = _setup_contract(workdir)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="bare"))
+    assert not (ctx.derep_dir / "stock" / "bare" / "record.json").exists()
+    assert "No completed dereplicate record" in capsys.readouterr().err
+    assert not (ctx.derep_dir / "stock" / "bare" / "record.json.tmp").exists()
+    ctx.config.record_stage("dereplicate", tool="skder")  # interrupted, no timestamp
+    ctx.save_config()
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="partial"))
+    assert not (ctx.derep_dir / "stock" / "partial" / "record.json").exists()
+
+
+def test_unpack_restores_the_tool_of_a_run_made_with_another_tool(workdir: Path) -> None:
+    """A sourmash run restored after a skDER run is reported as sourmash."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="sm"))
+    _record_dereplicate(ctx, "skder", 0.99)
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="sm"))
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.tool == "sourmash"
+    assert record.params == {"tool": "sourmash", "secondary_ani": 0.95, "stock": "sm"}
+    assert record.tool_versions == {"sourmash": "1.0"}
+    assert record.completed not in (None, "t-sourmash", "t-skder")
+    assert record.fingerprint is None
+
+    runner = CliRunner()
+    status = runner.invoke(app, ["status", "-wd", str(workdir)])
+    assert status.exit_code == 0, status.output
+    assert "[sourmash]" in status.output and "skder" not in status.output
+    versions = runner.invoke(app, ["versions", "-wd", str(workdir)])
+    assert versions.exit_code == 0, versions.output
+    assert "sourmash" in versions.output and "skder" not in versions.output
+
+
+def test_unpack_of_a_store_without_record_carries_the_live_record(workdir: Path) -> None:
+    # Runs packed before the record was stored fall back to the record that
+    # is live at unpack time, as before.
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="old"))
+    (ctx.derep_dir / "stock" / "old" / "record.json").unlink()
+    _record_dereplicate(ctx, "skder", 0.99)
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="old"))
+    record = ctx.config.stages["dereplicate"]
+    assert record.tool == "skder"
+    assert record.params == {"tool": "skder", "secondary_ani": 0.99, "stock": "old"}
+
+
+def test_unpack_with_an_unreadable_record_falls_back_and_warns(workdir: Path, capsys) -> None:
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    (ctx.derep_dir / "stock" / "run1" / "record.json").write_text("{not json", "utf-8")
+    _record_dereplicate(ctx, "skder", 0.99)
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    assert ctx.config.stages["dereplicate"].tool == "skder"
+    assert "Ignoring unreadable" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '["sourmash"]',
+        '{"tool": 3, "params": {}, "tool_versions": {}}',
+        '{"tool": "sourmash", "params": [1], "tool_versions": {}}',
+        '{"tool": "sourmash", "params": {}, "tool_versions": ["1.0"]}',
+        '{"tool": "sourmash", "params": {}, "tool_versions": {"sourmash": 1.0}}',
+    ],
+    ids=["list", "tool-int", "params-list", "versions-list", "version-float"],
+)
+def test_unpack_with_a_malformed_record_falls_back_and_warns(
+    workdir: Path, capsys, content: str
+) -> None:
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    (ctx.derep_dir / "stock" / "run1" / "record.json").write_text(content, "utf-8")
+    _record_dereplicate(ctx, "skder", 0.99)
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = ctx.config.stages["dereplicate"]
+    assert record.tool == "skder"
+    assert record.tool_versions == {"skder": "1.0"}
+    assert "Ignoring unreadable" in capsys.readouterr().err
