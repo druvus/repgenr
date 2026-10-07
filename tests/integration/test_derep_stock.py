@@ -357,10 +357,12 @@ def test_pack_stores_the_dereplicate_record(workdir: Path) -> None:
     }
 
 
-def test_pack_without_a_completed_record_stores_none(workdir: Path) -> None:
+def test_pack_without_a_completed_record_stores_none(workdir: Path, capsys) -> None:
     ctx = _setup_contract(workdir)
     derep_stock_run(ctx, DerepStockParams(action="pack", name="bare"))
     assert not (ctx.derep_dir / "stock" / "bare" / "record.json").exists()
+    assert "No completed dereplicate record" in capsys.readouterr().err
+    assert not (ctx.derep_dir / "stock" / "bare" / "record.json.tmp").exists()
     ctx.config.record_stage("dereplicate", tool="skder")  # interrupted, no timestamp
     ctx.save_config()
     derep_stock_run(ctx, DerepStockParams(action="pack", name="partial"))
@@ -420,4 +422,31 @@ def test_unpack_with_an_unreadable_record_falls_back_and_warns(workdir: Path, ca
 
     derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
     assert ctx.config.stages["dereplicate"].tool == "skder"
+    assert "Ignoring unreadable" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '["sourmash"]',
+        '{"tool": 3, "params": {}, "tool_versions": {}}',
+        '{"tool": "sourmash", "params": [1], "tool_versions": {}}',
+        '{"tool": "sourmash", "params": {}, "tool_versions": ["1.0"]}',
+        '{"tool": "sourmash", "params": {}, "tool_versions": {"sourmash": 1.0}}',
+    ],
+    ids=["list", "tool-int", "params-list", "versions-list", "version-float"],
+)
+def test_unpack_with_a_malformed_record_falls_back_and_warns(
+    workdir: Path, capsys, content: str
+) -> None:
+    ctx = _setup_contract(workdir)
+    _record_dereplicate(ctx, "sourmash", 0.95)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    (ctx.derep_dir / "stock" / "run1" / "record.json").write_text(content, "utf-8")
+    _record_dereplicate(ctx, "skder", 0.99)
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = ctx.config.stages["dereplicate"]
+    assert record.tool == "skder"
+    assert record.tool_versions == {"skder": "1.0"}
     assert "Ignoring unreadable" in capsys.readouterr().err

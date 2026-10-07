@@ -24,6 +24,7 @@ from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    atomic_replace,
     list_fasta,
     read_clusters,
     read_genome_status,
@@ -166,11 +167,31 @@ def _store_record(ctx: WorkdirContext, run_path: Path) -> None:
     """
     record = ctx.config.stages.get("dereplicate")
     if record is None or not record.completed:
+        ctx.logger.warning(
+            "No completed dereplicate record to store with run '%s'; unpack will "
+            "attribute it to the dereplicate record current at that time",
+            run_path.name,
+        )
         return
     data = {key: record.to_dict()[key] for key in _RECORD_FIELDS}
-    (run_path / _RECORD_JSON).write_text(
-        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    with atomic_replace(run_path / _RECORD_JSON) as fo:
+        fo.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def _check_record(data: Any) -> None:
+    """Raise ValueError unless ``data`` has the shape pack writes."""
+    if not isinstance(data, dict):
+        raise ValueError("not a JSON object")
+    tool = data.get("tool")
+    if tool is not None and not isinstance(tool, str):
+        raise ValueError("'tool' is not a string")
+    if not isinstance(data.get("params", {}), dict):
+        raise ValueError("'params' is not an object")
+    versions = data.get("tool_versions", {})
+    if not isinstance(versions, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in versions.items()
+    ):
+        raise ValueError("'tool_versions' is not an object of strings")
 
 
 def _stored_record(ctx: WorkdirContext, run_path: Path) -> StageRecord | None:
@@ -184,8 +205,7 @@ def _stored_record(ctx: WorkdirContext, run_path: Path) -> StageRecord | None:
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            raise ValueError("not a JSON object")
+        _check_record(data)
         return StageRecord.from_dict(data)
     except (ValueError, TypeError, OSError) as exc:
         ctx.logger.warning(

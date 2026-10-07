@@ -402,7 +402,7 @@ parser), so they also apply to commands other than the one named.
 | derep-stock | An unpack killed half-way left `status` reporting `dereplicate` as done with `phylo` next | #218 |
 | derep-stock | Packing under a stored name replaced that run without notice; it now warns | #218 |
 | derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | #218 |
-| derep-stock | Unpack re-stamped the `dereplicate` record from the record live at unpack time, so a sourmash run restored after a skDER run was shown as `[skder]` by `status` and `versions`; a stored run now keeps its own record (`record.json`), and runs stored without one fall back as before | (this PR) |
+| derep-stock | Unpack re-stamped the `dereplicate` record from the record live at unpack time, so a sourmash run restored after a skDER run was shown as `[skder]` by `status` and `versions`; a stored run now keeps its own record (`record.json`), and runs stored without one fall back as before | #220 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

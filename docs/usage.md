@@ -414,9 +414,11 @@ quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack rep
 removed, and it takes the representatives by name from `genomes/`. The
 re-stamped record takes the tool, parameters and tool versions from the
 stored `record.json` and adds `stock: <run>`, so `status` and `versions`
-name the tool that produced the stored run. A run stored without
+name the tool that produced the stored run; its completion time is that of
+the unpack. A run stored without
 `record.json` (packed before this file was written, or packed while no
-completed `dereplicate` record existed) keeps the tool and parameters of the
+completed `dereplicate` record existed, which pack reports with a warning)
+keeps the tool and parameters of the
 `dereplicate` record current at unpack time instead. In that case a record
 left incomplete by an interrupted `dereplicate` run carries nothing over (no
 tool), and one left by an interrupted unpack keeps what that unpack was
