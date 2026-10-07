@@ -22,7 +22,7 @@ from repgenr.stages.glance import run as glance_run  # noqa: E402
 _MDB = (
     "genome1,genome2,similarity\n"
     "a.fasta,b.fasta,0.95\n"
-    "b.fasta,a.fasta,0.80\n"
+    "b.fasta,a.fasta,0.95\n"
     "a.fasta,a.fasta,1.00\n"  # self-comparison, must be skipped
 )
 
@@ -151,3 +151,47 @@ def test_a_drep_failure_prints_one_line_and_logs_the_tail(workdir: Path, monkeyp
     assert len(errors) == 1 and "drep failed (exit 1)" in errors[0]
     log = (workdir / "repgenr.log").read_text(encoding="utf-8")
     assert "OSError: [Errno 22]" in log and "dRep compare" in log
+
+
+def test_glance_counts_each_genome_pair_once(tmp_path: Path) -> None:
+    # dRep's Mdb.csv lists every pair in both orders; the plots count a pair once.
+    from repgenr.stages.glance import _pair_similarities
+
+    mdb = tmp_path / "Mdb.csv"
+    mdb.write_text(
+        "genome1,genome2,dist,similarity\n"
+        "a.fasta,a.fasta,0.0,1.0\n"
+        "a.fasta,b.fasta,0.05,0.95\n"
+        "b.fasta,a.fasta,0.05,0.95\n"
+        "a.fasta,c.fasta,0.10,0.90\n"
+        "c.fasta,a.fasta,0.10,0.90\n"
+        "b.fasta,c.fasta,0.02,0.98\n"
+        "c.fasta,b.fasta,0.02,0.98\n"
+        "c.fasta,c.fasta,0.0,1.0\n"
+    )
+    assert sorted(_pair_similarities(mdb, 0.0, 1.0)) == [0.90, 0.95, 0.98]
+    assert sorted(_pair_similarities(mdb, 0.92, 1.0)) == [0.95, 0.98]
+
+
+def test_glance_histogram_axes_name_ani_and_pair_counts(workdir: Path, monkeypatch) -> None:
+    # The histogram's x axis carries the ANI values and its y axis the pair
+    # counts; the box plot's single box has no meaningless "1" tick.
+    from matplotlib.figure import Figure
+
+    labels: dict[str, tuple[str, str, list[str]]] = {}
+
+    def _capture(self, fname, *args, **kwargs):
+        ax = self.axes[0]
+        ticks = [t.get_text() for t in ax.get_xticklabels()]
+        labels[Path(fname).name] = (ax.get_xlabel(), ax.get_ylabel(), ticks)
+
+    ctx = _setup(workdir)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
+    monkeypatch.setattr(Figure, "savefig", _capture)
+    glance_run(ctx, GlanceParams(threads=2))
+
+    hist_x, hist_y, _ = labels["glance_MASH_ANI_similarity_histogram.png"]
+    assert hist_x == "MASH ANI" and hist_y == "Genome pairs"
+    box_x, box_y, box_ticks = labels["glance_MASH_ANI_similarity_boxplot.png"]
+    assert box_y == "MASH ANI" and box_ticks == [""] * len(box_ticks)

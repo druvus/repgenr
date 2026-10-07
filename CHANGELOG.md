@@ -241,6 +241,11 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `glance` plots count each genome pair once. dRep's `Mdb.csv` lists every
+  pair in both orders, so the histogram counts and the number in the plot
+  titles were twice the number of pairs. The histogram's x axis is now
+  labelled "MASH ANI" and its y axis "Genome pairs" (the y axis was labelled
+  "MASH ANI"), and the box plot no longer shows a "1" tick.
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
