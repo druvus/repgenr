@@ -197,7 +197,12 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
 
     ctx.config.record_stage(
         "vmetadata",
-        params={"target": target, "filter": tag, "taxids": len(all_taxids)},
+        params={
+            "source": "bvbrc",
+            "target": target,
+            "filter": tag,
+            "taxids": len(all_taxids),
+        },
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

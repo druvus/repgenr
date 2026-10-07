@@ -4,7 +4,8 @@
 claims against the filesystem and the manifest -- interrupted stages, missing or
 corrupt genomes, manifest drift, representative/cluster mismatches, truncated
 deliverables, unresolvable outgroups, leftover temp files, and stages whose
-recorded input digests no longer match reality (they will re-run).
+recorded input digests no longer match reality or whose declared deliverables
+are missing (they will re-run).
 
 Strictly read-only: no file, log, or manifest is created in the workdir.
 """
@@ -65,6 +66,7 @@ def diagnose(workdir: Path) -> list[Finding]:
         _check_tree,
         _check_tree2tax_pair,
         _check_stale_inputs,
+        _check_deliverables,
         _check_leftovers,
     )
     for check in checks:
@@ -277,11 +279,9 @@ def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
     ]
 
 
-def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
-    """Completed stages whose recorded input digests no longer match reality."""
-    from ..cli.base import _MANIFEST_INPUT_STAGES, STAGE_INPUTS  # deferred: core<-cli
-
-    ctx = SimpleNamespace(
+def _layout(workdir: Path) -> SimpleNamespace:
+    """Stand-in for WorkdirContext's path layout (no manifest is opened)."""
+    return SimpleNamespace(
         workdir=workdir,
         genomes_dir=workdir / "genomes",
         outgroup_dir=workdir / "outgroup",
@@ -290,6 +290,39 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
         snp_dir=workdir / "snp",
         tree_dir=workdir / "tree",
     )
+
+
+def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose declared deliverables are missing (they will re-run).
+
+    Uses the same table (STAGE_DELIVERABLES) and the same workdir-relative
+    names as the resume check in the stage harness.
+    """
+    from ..cli.base import deliverable_label, missing_deliverables  # deferred: core<-cli
+
+    ctx = _layout(workdir)
+    out: list[Finding] = []
+    for name, record in config.stages.items():
+        if not record.completed:
+            continue
+        params = SimpleNamespace(**record.params)
+        for path in missing_deliverables(ctx, name, params):
+            out.append(
+                Finding(
+                    "warn",
+                    name,
+                    f"deliverable {deliverable_label(workdir, path)} missing; "
+                    "the stage will re-run on its next invocation.",
+                )
+            )
+    return out
+
+
+def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose recorded input digests no longer match reality."""
+    from ..cli.base import _MANIFEST_INPUT_STAGES, STAGE_INPUTS  # deferred: core<-cli
+
+    ctx = _layout(workdir)
     out: list[Finding] = []
     for name, record in config.stages.items():
         if not record.completed or not record.inputs:

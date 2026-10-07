@@ -252,7 +252,10 @@ A stage's skip decision digests its declared inputs (`STAGE_INPUTS` in
 `repgenr/cli/base.py`) plus its parameters and the container identity. An
 adapter therefore needs no resume logic of its own -- but it must only read
 the inputs the stage declares; a tool that reads undeclared files would
-resume incorrectly. Defaults for stage parameters live on the params
+resume incorrectly. Outputs are not part of the fingerprint; instead a
+matching stage is skipped only when every path its entry in
+`STAGE_DELIVERABLES` (same module) lists exists, a directory being non-empty.
+A new stage adds an entry to both tables. Defaults for stage parameters live on the params
 dataclasses and are built through `repgenr/cli/param_builders.py`, which both
 the manual commands and `repgenr run` share -- add new options there, not in
 one entry point only.
