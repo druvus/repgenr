@@ -433,8 +433,9 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 # stage -> callable(ctx, params) raising UserInputError/WorkdirError. Called
 # only when the stage will run (after the resume skip check), never on a skip.
 # Used where one record serves several invocations (derep-stock's named runs) or
-# where a refused re-run would otherwise dirty a finished record that later
-# stages build on (ingest), so the record of the last finished run stays clean.
+# where a refused re-run would otherwise dirty a finished record (ingest, and
+# dereplicate with a selected genome missing), so the record of the last
+# finished run stays clean.
 def _derep_stock_precheck(ctx: WorkdirContext, params: Any) -> None:
     from ..stages.derep_stock import precheck
 
@@ -447,8 +448,15 @@ def _ingest_precheck(ctx: WorkdirContext, params: Any) -> None:
     precheck(ctx, params)
 
 
+def _dereplicate_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.dereplicate import precheck
+
+    precheck(ctx, params)
+
+
 _STAGE_PRECHECKS: dict[str, Any] = {
     "derep_stock": _derep_stock_precheck,
+    "dereplicate": _dereplicate_precheck,
     "ingest": _ingest_precheck,
 }
 

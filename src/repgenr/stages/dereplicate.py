@@ -72,6 +72,23 @@ class DereplicateParams:
     keeper: str = "quality"  # quality | tool
 
 
+def precheck(ctx: WorkdirContext, params: DereplicateParams) -> None:
+    """Refusals checked before the harness marks the stage record incomplete.
+
+    A missing selected genome or an empty genomes/ changes nothing on disk, so
+    the record of the last finished dereplication must stay complete; the
+    stage body repeats these checks for callers that bypass the harness.
+    """
+    if not params.allow_incomplete:
+        check_genome_completeness(
+            ctx.genomes_dir, ctx.workdir, logger=ctx.logger, allow_incomplete=False
+        )
+    if not _list_genomes(ctx.genomes_dir):
+        raise WorkdirError(
+            f"No genome FASTAs found under {ctx.genomes_dir}. Run the genome stage first."
+        )
+
+
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     logger = ctx.logger
     check_genome_completeness(

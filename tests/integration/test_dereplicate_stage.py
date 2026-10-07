@@ -342,3 +342,25 @@ def test_representatives_link_the_genome_not_the_tool_copy(
     (rep,) = ctx.representatives_dir.iterdir()
     genome = ctx.genomes_dir / rep.name
     assert rep.stat().st_ino == genome.stat().st_ino
+
+
+def test_refused_rerun_keeps_the_finished_record(workdir: Path, genome_files, fake_tool) -> None:
+    """A selected genome gone from genomes/ refuses the rerun (exit 3) before the
+    record of the finished dereplication is marked incomplete."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    rows = ["accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\tcompleteness\tcontamination"]
+    for i, g in enumerate(genome_files):
+        rows.append(f"GCA_00000{i + 1}\tFrancisellaceae\tfrancisella\ttularensis\t0\t{g.name}\t\t")
+    (workdir / "selection.tsv").write_text("\n".join(rows) + "\n")
+
+    args = ["dereplicate", "-wd", str(workdir), "--tool", "fake"]
+    first = CliRunner().invoke(app, args)
+    assert first.exit_code == 0, first.output
+    genome_files[1].unlink()
+    second = CliRunner().invoke(app, args)
+    assert second.exit_code == 3, second.output
+    assert Config.load(workdir).stages["dereplicate"].completed
