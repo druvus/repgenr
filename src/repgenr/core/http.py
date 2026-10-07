@@ -38,6 +38,25 @@ _RETRY = Retry(
 )
 
 
+class HTTPStatusError(WorkdirError):
+    """The server answered with an error status (4xx/5xx after retries).
+
+    ``status`` lets a caller tell "this resource does not exist" (404) from a
+    network or server failure, e.g. to report an unknown taxon as user input.
+    """
+
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
+def _request_error(prefix: str, url: str, exc: requests.RequestException) -> WorkdirError:
+    response = getattr(exc, "response", None)
+    if isinstance(exc, requests.HTTPError) and response is not None:
+        return HTTPStatusError(f"{prefix}: {url} ({exc})", response.status_code)
+    return WorkdirError(f"{prefix}: {url} ({exc})")
+
+
 @lru_cache(maxsize=1)
 def session() -> requests.Session:
     """Process-wide session with the retry policy mounted on http(s)."""
@@ -55,7 +74,7 @@ def _get(url: str, *, params: dict | None, timeout: int) -> requests.Response:
         resp.raise_for_status()
         return resp
     except requests.RequestException as exc:
-        raise WorkdirError(f"HTTP request failed: {url} ({exc})") from exc
+        raise _request_error("HTTP request failed", url, exc) from exc
 
 
 def get_json(url: str, *, params: dict | None = None, timeout: int = _DEFAULT_TIMEOUT) -> dict:
@@ -99,7 +118,7 @@ def download(
                     written += len(chunk)
     except requests.RequestException as exc:
         tmp.unlink(missing_ok=True)
-        raise WorkdirError(f"Download failed: {url} ({exc})") from exc
+        raise _request_error("Download failed", url, exc) from exc
 
     if expected and written != expected:
         tmp.unlink(missing_ok=True)
