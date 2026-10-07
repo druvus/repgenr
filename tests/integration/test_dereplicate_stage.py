@@ -309,3 +309,36 @@ def test_missing_workdir_exits_3_without_creating_it(tmp_path: Path, unreachable
     assert result.exit_code == 3, result.output
     assert "Traceback" not in result.output
     assert not missing.exists()
+
+
+class _ScratchCopyDereplicator(_FakeDereplicator):
+    """Returns its representative as a copy in its own scratch dir, as skDER does."""
+
+    capabilities = ToolCapabilities(name="scratchcopy", supports_native_scaling=True)
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:
+        import shutil
+
+        result = super().dereplicate(genomes, out_dir, params, logger)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        copies = []
+        for rep in result.representatives:
+            dest = out_dir / rep.name
+            shutil.copy2(rep, dest)
+            copies.append(dest)
+        result.representatives = copies
+        return result
+
+
+def test_representatives_link_the_genome_not_the_tool_copy(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    registry.register("scratchcopy", _ScratchCopyDereplicator, replace=True)
+    try:
+        ctx = WorkdirContext(workdir, create=True)
+        run(ctx, DereplicateParams(tool="scratchcopy"))
+    finally:
+        registry._classes.pop("scratchcopy", None)
+    (rep,) = ctx.representatives_dir.iterdir()
+    genome = ctx.genomes_dir / rep.name
+    assert rep.stat().st_ino == genome.stat().st_ino

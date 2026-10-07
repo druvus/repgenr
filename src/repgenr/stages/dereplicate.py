@@ -592,7 +592,12 @@ def _write_contract(
     rep_dir.mkdir(parents=True, exist_ok=True)
 
     for rep in result.representatives:
-        source = rep if rep.exists() else ctx.genomes_dir / rep.name
+        # Link from genomes/ when the genome is there: adapters may return a
+        # copy in their scratch directory (skDER's output, dRep's staged
+        # genomes), and linking that copy would hold a second full copy of
+        # every representative on disk.
+        staged = ctx.genomes_dir / rep.name
+        source = staged if staged.exists() else rep
         if not source.exists():
             raise WorkdirError(f"Representative genome file missing: {rep.name}")
         if source.stat().st_size == 0:

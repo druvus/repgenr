@@ -237,6 +237,17 @@ def test_drep_virus_mode_passes_one_secondary_algorithm(genomes, recorded, tmp_p
     assert cmd[cmd.index("--S_algorithm") + 1] == "ANIn"
 
 
+def test_galah_returns_the_input_genomes_without_copying(genomes, recorded, tmp_path) -> None:
+    """galah's representatives are the input files; no copy is written to out_dir."""
+    import repgenr.dereplicators.galah as galah_mod
+
+    out = tmp_path / "out"
+    result = galah_mod.GalahDereplicator().dereplicate(genomes, out, DerepParams(), _LOG)
+    assert result.representatives
+    assert set(result.representatives) <= set(genomes)
+    assert not (out / "representatives").exists()
+
+
 def test_galah_empty_clusters_yields_empty_result(genomes, recorded, tmp_path, monkeypatch) -> None:
     """Pinned as-is: an empty galah clusters.tsv produces an empty DerepResult."""
     import repgenr.dereplicators.galah as galah_mod
