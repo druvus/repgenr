@@ -233,7 +233,9 @@ call, `--force` included, reuses a finished run only while these agree. A
 higher `--min-contig-length` filters the finished contigs again, which gives
 the same result as filtering the raw assembly. Any other change assembles
 the run again, and the log names the change. To assemble a run again under
-the same settings, delete `assemblies/<run>/`. A run without an ENA FASTQ
+the same settings, delete `assemblies/<run>/`. A marker written before
+the settings were recorded is reused as it is, filtered at the requested
+floor. A run without an ENA FASTQ
 mirror, one whose download fails its checksum, one no assembler accepts
 (`unsupported_platform`), one whose assembler is not installed under
 `--assembler auto` (`assembler_not_installed`, with a warning naming the
