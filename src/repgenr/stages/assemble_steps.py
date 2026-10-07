@@ -96,12 +96,15 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     )
     out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    [outcome] = stage._plan(rows, stage_params, out_dir.parent)
+    # An excuse from an earlier attempt no longer applies to this one.
+    (out_dir / EXCUSED_RUNS_TSV).unlink(missing_ok=True)
+    [outcome] = stage._plan(rows, stage_params, out_dir.parent, logger=logger)
     if stage_params.assembler == "auto":
         stage._excuse_missing_assemblers([outcome], logger)
     if stage_params.polisher == "auto":
         stage._warn_missing_polishers([outcome], logger)
-    versions = stage._preflight([outcome], logger)
+    versions = dict(outcome.versions)
+    versions.update(stage._preflight([outcome], logger))
     if outcome.excused is None and outcome.stats is None:
         scratch = out_dir.parent / f"{out_dir.name}.scratch"
         outcome = stage._fetch_and_assemble(
@@ -112,6 +115,10 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     if params.versions_out is not None:
         write_versions_fragment(params.versions_out, versions)
     if outcome.excused is not None:
+        # A finished run excused by a higher floor keeps its contigs for the
+        # stage's later reuse, but here the marker would make genome-qc and
+        # reads-gather take it as finished.
+        (out_dir / _MARKER).unlink(missing_ok=True)
         write_excused_runs(out_dir / EXCUSED_RUNS_TSV, [outcome.excused])
         logger.info("assemble-run: %s excused (%s)", params.run, outcome.excused.reason)
         return False
@@ -159,12 +166,17 @@ def genome_qc(params: GenomeQcParams, logger: logging.Logger) -> int:
             "genome-qc needs a CheckM2 database (--checkm2-db or CHECKM2DB) and/or a "
             f"reference sketch (--gtdb-sketch or {stage.GTDB_SKETCH_ENV})."
         )
+    versions = stage.check_quality_inputs(
+        checkm2_db=checkm2_db,
+        classifier=classifier,
+        gtdb_sketch=params.gtdb_sketch,
+        gtdb_lineages=params.gtdb_lineages,
+    )
     contigs = _assembled_contigs(params.assemblies_dir.resolve())
     out = params.out_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     scratch = out / "scratch"
     named = stage.named_links(contigs, scratch / "named")
-    versions: dict[str, str] = {}
     quality, classified = stage.assess(
         named,
         checkm2_db=checkm2_db,
@@ -259,7 +271,7 @@ def reads_gather(params: ReadsGatherParams, logger: logging.Logger) -> int:
     # Rebuild the per-run outcomes from the markers and the excuse files. The
     # directory is resolved so the genome links point at absolute paths.
     assemblies_dir = params.assemblies_dir.resolve()
-    outcomes = stage._plan(rows, AssembleParams(), assemblies_dir)
+    outcomes = stage._plan(rows, AssembleParams(), assemblies_dir, check_settings=False)
     for o in outcomes:
         excuse_file = assemblies_dir / o.row.run_accession / EXCUSED_RUNS_TSV
         if o.stats is None and excuse_file.exists():

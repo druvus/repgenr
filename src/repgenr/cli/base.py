@@ -462,10 +462,18 @@ def _dereplicate_precheck(ctx: WorkdirContext, params: Any) -> None:
     precheck(ctx, params)
 
 
+def _assemble_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.assemble import precheck
+
+    precheck(ctx, params)
+
+
 _STAGE_PRECHECKS: dict[str, Any] = {
     "derep_stock": _derep_stock_precheck,
     "dereplicate": _dereplicate_precheck,
     "ingest": _ingest_precheck,
+    # A wrong database path on a rerun must not leave the finished record dirty.
+    "assemble": _assemble_precheck,
 }
 
 # Query modes keyed on a value rather than a flag.

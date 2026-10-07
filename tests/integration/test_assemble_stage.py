@@ -49,6 +49,12 @@ def fake_assembler():
     unregister_fake_assembler()
 
 
+def _db(path: Path) -> str:
+    """A stand-in database file: the stage refuses database paths that do not exist."""
+    path.write_text("db\n", encoding="utf-8")
+    return str(path)
+
+
 def _prepare(workdir: Path, rows: list[ReadRow]) -> WorkdirContext:
     ctx = WorkdirContext(workdir, create=True)
     write_reads(workdir / READS_TSV, rows)
@@ -272,7 +278,7 @@ def test_checkm2_quality_gates_and_feeds_the_selection(
         ),
     )
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
-    n = run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "db")))
+    n = run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=_db(tmp_path / "db")))
     assert n == 1
     rows = read_selection(workdir / SELECTION_TSV)
     assert [(r.accession, r.completeness, r.contamination) for r in rows] == [("SRR1", 98.5, 0.4)]
@@ -285,6 +291,25 @@ def test_checkm2_quality_gates_and_feeds_the_selection(
     stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
     assert stats["SRR1"].completeness == 98.5 and "SRR2" not in stats
     assert ctx.config.stages["assemble"].params["checkm2_db"] == str(tmp_path / "db")
+
+
+def test_checkm2_gate_and_missing_results_are_warned_about(
+    workdir, tmp_path, fake_assembler, monkeypatch, caplog
+) -> None:
+    """Both reach the console under --quiet: an excused assembly and one kept unscored."""
+    from repgenr.stages import assemble as stage
+
+    monkeypatch.setattr(stage, "preflight_checkm2", lambda: {"checkm2": "1.1.0"})
+    monkeypatch.setattr(stage, "run_checkm2", _fake_checkm2({"SRR2.fasta": (40.0, 15.0)}))
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=_db(tmp_path / "db")))
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(
+        "SRR1" in w and "no quality" in w and "kept without quality values" in w for w in warnings
+    )
+    assert any("SRR2" in w and "qc_failed" in w and "completeness 40.0" in w for w in warnings)
 
 
 def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
@@ -306,8 +331,8 @@ def test_classifier_agreement_names_the_genome_with_gtdb_tokens(
         AssembleParams(
             assembler="fakeasm",
             classifier="fakecls",
-            gtdb_sketch=str(tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"),
-            gtdb_lineages=str(tmp_path / "lineages.csv"),
+            gtdb_sketch=_db(tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"),
+            gtdb_lineages=_db(tmp_path / "lineages.csv"),
         ),
     )
     rows = {r.accession: r for r in read_selection(workdir / SELECTION_TSV)}
@@ -411,6 +436,7 @@ def test_databases_from_the_environment_are_recorded(
 ) -> None:
     sketch = tmp_path / "gtdb-rs226-reps.k31-sc10k.sig.zip"
     lineages = tmp_path / "lineages.csv"
+    _db(sketch), _db(lineages)
     monkeypatch.setenv("REPGENR_GTDB_SKETCH", str(sketch))
     monkeypatch.setenv("REPGENR_GTDB_LINEAGES", str(lineages))
     _FakeClassifier.lineages = {
@@ -435,7 +461,7 @@ def test_finished_runs_do_not_need_the_assembler_again(workdir, tmp_path, fake_a
 
     _FakeAssembler.preflight = spy  # type: ignore[method-assign]
     try:
-        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=400))
+        run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0))
     finally:
         _FakeAssembler.preflight = original  # type: ignore[method-assign]
     assert calls == []
@@ -452,7 +478,7 @@ def test_disagreement_warning_names_the_compared_genera(
     run(
         ctx,
         AssembleParams(
-            assembler="fakeasm", classifier="fakecls", gtdb_sketch=str(tmp_path / "db.sig.zip")
+            assembler="fakeasm", classifier="fakecls", gtdb_sketch=_db(tmp_path / "db.sig.zip")
         ),
     )
     messages = [r.getMessage() for r in caplog.records if "classifier_disagrees" in r.getMessage()]
@@ -539,3 +565,286 @@ def test_auto_polisher_warns_when_the_accepting_polisher_is_not_installed(
     assert "--container" in polish[0] and "--polisher none" in polish[0]
     stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
     assert stats["ONT1"].polisher == ""
+
+
+# --- reuse of finished runs ------------------------------------------------------------
+
+
+def test_a_lower_contig_floor_assembles_finished_runs_again(
+    workdir, tmp_path, fake_assembler, caplog
+) -> None:
+    """The finished contigs were filtered at the old floor; a lower one needs the raw
+    assembly again, so the marker is not reused."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+    genome = next(ctx.genomes_dir.iterdir()).read_text(encoding="utf-8")
+    assert genome.count(">") == 2  # the 4 bp contig now passes
+    assert any("min_contig_length 500 -> 2" in r.getMessage() for r in caplog.records)
+
+
+def test_a_higher_contig_floor_refilters_finished_runs(workdir, tmp_path, fake_assembler) -> None:
+    """Raising the floor needs no new assembly: the kept contigs are filtered again."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    with pytest.raises(WorkdirError, match="None of the 2 runs"):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=5000))
+    assert sorted(_FakeAssembler.calls) == ["SRR1", "SRR2"]  # not assembled again
+    excused = read_excused_runs(workdir / EXCUSED_RUNS_TSV)
+    assert [e.reason for e in excused] == ["assembly_failed: no contig of 5000 bp or more"] * 2
+    # The refused floor left the finished contigs in place, so 1000 refilters them too.
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=1000))
+    assert sorted(_FakeAssembler.calls) == ["SRR1", "SRR2"]
+    marker = json.loads((workdir / "assemblies" / "SRR1" / "assembly.ok").read_text())
+    assert marker["settings"]["min_contig_length"] == 1000
+
+
+def test_a_different_assembler_or_tool_arg_assembles_again(
+    workdir, tmp_path, fake_assembler, fake_polisher
+) -> None:
+    from assemble_fakes import FakePolisher
+
+    ctx = _prepare(workdir, [_ont_row(tmp_path)])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol"))
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol", polish_rounds=3))
+    assert FakePolisher.calls == ["ONT1", "ONT1"]
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="none"))
+    assert _FakeAssembler.calls == ["ONT1", "ONT1", "ONT1"]
+    # A tool argument no adapter of the run reads (a classifier's) changes nothing.
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="none", extra={"ksize": "21"}))
+    assert _FakeAssembler.calls == ["ONT1", "ONT1", "ONT1"]
+    stats = read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)[0]
+    assert stats.polisher == "" and stats.total_length == 1200
+
+
+def test_a_resumed_run_keeps_the_tool_versions_and_names_the_assembler(
+    workdir, tmp_path, fake_assembler, fake_polisher
+) -> None:
+    ctx = _prepare(workdir, [_ont_row(tmp_path), _row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol"))
+    first = ctx.config.stages["assemble"]
+    assert first.tool == "fakeasm" and first.params["assembler"] == "fakeasm"
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol", max_contamination=5.0))
+    record = ctx.config.stages["assemble"]
+    assert record.tool_versions == {"fakeasm": "1.0", "fakepol": "0.1"}
+    assert record.tool == "fakeasm"
+
+
+def test_auto_records_the_assemblers_used(workdir, tmp_path, fake_assembler, monkeypatch) -> None:
+    from repgenr.assemblers import base as assemblers_base
+
+    monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: caps.name == "fakeasm")
+    monkeypatch.setattr(assemblers_base, "_PREFERENCE", ("fakeasm",))
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="auto"))
+    record = ctx.config.stages["assemble"]
+    assert record.tool == "fakeasm" and record.params["assembler"] == "auto"
+
+
+def test_an_unreadable_marker_is_assembled_again(workdir, tmp_path, fake_assembler) -> None:
+    """A marker cut short by a kill is not a finished run (no JSON traceback)."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    (workdir / "assemblies" / "SRR1" / "assembly.ok").write_text('{"assem', encoding="utf-8")
+    run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+
+
+def test_a_run_without_long_enough_contigs_leaves_no_reads(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    with pytest.raises(WorkdirError):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=5000))
+    assert not (ctx.scratch_dir / "assemble" / "SRR1").exists()
+    assert not (workdir / "assemblies" / "SRR1" / "contigs.fasta").exists()
+
+
+def test_a_rerun_with_nothing_to_fetch_needs_no_free_disk(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """A QC or classification rerun over finished runs downloads nothing."""
+    import shutil as _shutil
+    from collections import namedtuple
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(_shutil, "disk_usage", lambda path: usage(1, 1, 1))
+    assert run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0)) == 1
+
+
+# --- quality inputs are checked before any assembly ------------------------------------
+
+
+def test_a_missing_checkm2_database_is_refused_before_assembling(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    from repgenr.core.errors import UserInputError
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(UserInputError, match="--checkm2-db"):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(tmp_path / "nope.dmnd")))
+    assert _FakeAssembler.calls == []
+
+
+def test_a_missing_checkm2_binary_is_found_before_assembling(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    from repgenr.core.errors import MissingBinaryError
+    from repgenr.stages import assemble as stage
+
+    def absent():
+        raise MissingBinaryError("checkm2 not found")
+
+    monkeypatch.setattr(stage, "preflight_checkm2", absent)
+    db = tmp_path / "db.dmnd"
+    db.write_text("x", encoding="utf-8")
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(MissingBinaryError):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=str(db)))
+    assert _FakeAssembler.calls == []
+
+
+def test_sourmash_without_lineages_is_refused_before_assembling(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    from repgenr.core.errors import UserInputError
+
+    monkeypatch.delenv("REPGENR_GTDB_LINEAGES", raising=False)
+    sketch = tmp_path / "gtdb.sig.zip"
+    sketch.write_text("x", encoding="utf-8")
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    with pytest.raises(UserInputError, match="lineages"):
+        run(ctx, AssembleParams(assembler="fakeasm", gtdb_sketch=str(sketch)))
+    with pytest.raises(UserInputError, match="--gtdb-lineages"):
+        run(
+            ctx,
+            AssembleParams(
+                assembler="fakeasm", gtdb_sketch=str(sketch), gtdb_lineages=str(tmp_path / "no")
+            ),
+        )
+    assert _FakeAssembler.calls == []
+
+
+def test_verified_reads_of_an_interrupted_run_are_not_fetched_again(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """A kill during assembly leaves the checksummed FASTQ files in scratch; the
+    rerun keeps them and fetches only a file that is missing or fails its checksum."""
+    from repgenr.stages import assemble as stage
+
+    row = _row(tmp_path, "SRR1")
+    ctx = _prepare(workdir, [row])
+    run_scratch = ctx.scratch_dir / "assemble" / "SRR1"
+    run_scratch.mkdir(parents=True)
+    kept = run_scratch / Path(row.fastq_urls[0]).name
+    kept.write_bytes(Path(row.fastq_urls[0]).read_bytes())
+    (run_scratch / Path(row.fastq_urls[1]).name).write_bytes(b"truncated")
+    (run_scratch / "asm").mkdir()
+    (run_scratch / "asm" / "partial.fa").write_text(">x\nA\n", encoding="utf-8")
+    copied: list[str] = []
+    original = stage.shutil.copy2
+    monkeypatch.setattr(
+        stage.shutil, "copy2", lambda src, dst: (copied.append(Path(src).name), original(src, dst))
+    )
+    assert run(ctx, AssembleParams(assembler="fakeasm")) == 1
+    assert copied == [Path(row.fastq_urls[1]).name]
+
+
+def test_scratch_clearing_tolerates_files_that_vanish(tmp_path, monkeypatch) -> None:
+    """On exFAT, macOS removes the AppleDouble twin '._asm' along with 'asm'."""
+    from repgenr.stages import assemble as stage
+
+    row = _row(tmp_path, "SRR1")
+    scratch = tmp_path / "scratch" / "SRR1"
+    (scratch / "asm").mkdir(parents=True)
+    (scratch / "._asm").write_bytes(b"x")
+    original = stage.remove_tree
+
+    def remove_with_twin(path):
+        original(path)
+        (path.parent / f"._{path.name}").unlink(missing_ok=True)
+
+    monkeypatch.setattr(stage, "remove_tree", remove_with_twin)
+    entries = sorted(scratch.iterdir(), key=lambda p: p.name != "asm")  # 'asm' first
+    monkeypatch.setattr(type(scratch), "iterdir", lambda self: iter(entries))
+    stage._clear_scratch(row, scratch)
+    assert not (scratch / "asm").exists() and not (scratch / "._asm").exists()
+
+
+def test_failed_downloads_are_named_with_how_to_retry(
+    workdir, tmp_path, fake_assembler, caplog
+) -> None:
+    """A repeat with the same settings skips the stage, so the log says how to retry."""
+    rows = [_row(tmp_path, "SRR1"), _row(tmp_path, "BADSUM", fastq_md5=("0" * 32, "0" * 32))]
+    ctx = _prepare(workdir, rows)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, AssembleParams(assembler="fakeasm"))
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("1 run(s) could not be fetched" in w and "--force" in w for w in warnings)
+
+
+def test_a_marker_without_settings_still_gets_a_higher_floor(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    """Markers written before the settings were recorded are reused, at the requested floor."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    marker_path = workdir / "assemblies" / "SRR1" / "assembly.ok"
+    marker = json.loads(marker_path.read_text())
+    del marker["settings"]
+    marker_path.write_text(json.dumps(marker), encoding="utf-8")
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert _FakeAssembler.calls == ["SRR1"]
+    assert next(ctx.genomes_dir.iterdir()).read_text(encoding="utf-8").count(">") == 1
+    assert "settings" not in json.loads(marker_path.read_text())
+
+
+def test_a_kill_during_a_refilter_never_leaves_a_marker_over_other_contigs(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """The marker goes first: a kill after the contigs are replaced leaves no marker,
+    so the run is assembled again instead of reused with the wrong statistics."""
+    from repgenr.stages import assemble as stage
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    marker = workdir / "assemblies" / "SRR1" / "assembly.ok"
+    seen: list[bool] = []
+    original = stage._write_marker
+
+    def killed(path, data):
+        seen.append(path.exists())
+        raise KeyboardInterrupt  # the kill, after the contigs were replaced
+
+    monkeypatch.setattr(stage, "_write_marker", killed)
+    with pytest.raises(KeyboardInterrupt):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert seen == [False] and not marker.exists()
+    monkeypatch.setattr(stage, "_write_marker", original)
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+
+
+def test_a_rerun_with_a_wrong_database_leaves_the_finished_record(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    """The precheck refuses before the harness dirties the record (exit 2)."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _prepare(workdir, [_row(tmp_path, "SRR1")])
+    runner = CliRunner()
+    args = ["assemble", "-wd", str(workdir), "--assembler", "fakeasm"]
+    assert runner.invoke(app, args).exit_code == 0
+    refused = runner.invoke(app, [*args, "--checkm2-db", str(tmp_path / "nope.dmnd")])
+    assert refused.exit_code == 2
+    record = WorkdirContext(workdir).config.stages["assemble"]
+    assert record.completed and record.fingerprint
+    assert _FakeAssembler.calls == ["SRR1"]

@@ -11,11 +11,13 @@ HiFi). Selected via ``--polisher <name>`` on the assemble command, or ``auto``.
 from __future__ import annotations
 
 import logging
+import shutil
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from ..assemblers.base import ReadSet
+from ..core.errors import UserInputError
 from ..core.plugins import Registry, ToolCapabilities, preflight, tool_available
 
 registry: Registry[Polisher] = Registry("repgenr.polishers")
@@ -92,6 +94,31 @@ def accepting_polishers(reg: Registry[Polisher], reads: ReadSet) -> list[str]:
         if cls.__new__(cls).accepts(reads):
             names.append(name)
     return names
+
+
+def one_read_file(reads: ReadSet, out_dir: Path) -> ReadSet:
+    """``reads`` with its FASTQ files joined into one, for tools that take one input.
+
+    ENA lists some long-read runs as several files (and labels them PAIRED);
+    every file holds reads of the run, so they are polished together. Gzip
+    members concatenate into a valid gzip file, so compressed files are joined
+    byte for byte.
+    """
+    if len(reads.files) <= 1:
+        return reads
+    gz = [Path(f).name.endswith(".gz") for f in reads.files]
+    if any(gz) and not all(gz):
+        raise UserInputError(
+            f"Run {reads.run_accession} mixes compressed and uncompressed FASTQ files; "
+            "they cannot be joined for polishing."
+        )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    joined = out_dir / (f"{reads.run_accession}.reads.fastq" + (".gz" if all(gz) else ""))
+    with open(joined, "wb") as fo:
+        for f in reads.files:
+            with open(f, "rb") as fi:
+                shutil.copyfileobj(fi, fo)
+    return replace(reads, files=(joined,))
 
 
 def read_dirs(reads: ReadSet, *paths: Path) -> list[str]:

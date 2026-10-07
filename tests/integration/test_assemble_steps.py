@@ -183,7 +183,7 @@ def test_genome_qc_scores_and_classifies_every_assembly(tmp_path, fakes, monkeyp
         GenomeQcParams(
             assemblies_dir=assemblies,
             out_dir=out,
-            checkm2_db="/db/checkm2",
+            checkm2_db=str(sketch),  # any existing path; CheckM2 is faked
             classifier="fakecls",
             gtdb_sketch=str(sketch),
             versions_out=tmp_path / "v.yml",
@@ -272,7 +272,7 @@ def test_reads_gather_applies_the_quality_gate_and_gtdb_names(tmp_path, fakes, m
         GenomeQcParams(
             assemblies_dir=assemblies,
             out_dir=qc,
-            checkm2_db="/db",
+            checkm2_db=str(sketch),  # any existing path; CheckM2 is faked
             classifier="fakecls",
             gtdb_sketch=str(sketch),
         ),
@@ -345,3 +345,72 @@ def test_reads_gather_links_resolve_from_relative_inputs(tmp_path: Path, fakes, 
     )
     [genome] = list((tmp_path / "out" / "genomes").iterdir())
     assert genome.read_text(encoding="utf-8").startswith(">SRR1_contig1")  # the link resolves
+
+
+def test_genome_qc_takes_the_sketch_and_lineages_from_the_environment(
+    tmp_path, fakes, monkeypatch
+) -> None:
+    """--help promises REPGENR_GTDB_SKETCH / REPGENR_GTDB_LINEAGES; the early check
+    must resolve them like the classifier does, and refuse cleanly when one is missing."""
+    reads = _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1")])
+    assemblies = _assembled(tmp_path, ["SRR1"], reads)
+    monkeypatch.setattr(FakeClassifier, "needs_lineages", True, raising=False)
+    FakeClassifier.lineages = {"SRR1.fasta": "d__Bacteria;g__Francisella;s__Francisella x"}
+    sketch = tmp_path / "gtdb.sig.zip"
+    lineages = tmp_path / "lineages.csv"
+    sketch.write_bytes(b"x")
+    lineages.write_text("ident,lineage\n", encoding="utf-8")
+
+    def qc(out: str, **kw):
+        return genome_qc(
+            GenomeQcParams(
+                assemblies_dir=assemblies, out_dir=tmp_path / out, classifier="fakecls", **kw
+            ),
+            _LOG,
+        )
+
+    monkeypatch.setenv("REPGENR_GTDB_SKETCH", str(sketch))
+    monkeypatch.delenv("REPGENR_GTDB_LINEAGES", raising=False)
+    with pytest.raises(UserInputError, match="lineages"):
+        qc("qc0")
+    monkeypatch.setenv("REPGENR_GTDB_LINEAGES", str(lineages))
+    assert qc("qc1") == 1  # both from the environment
+    monkeypatch.delenv("REPGENR_GTDB_SKETCH")
+    assert qc("qc2", gtdb_sketch=str(sketch)) == 1  # flag sketch, lineages from the environment
+
+
+def test_assemble_run_excused_by_a_higher_floor_is_not_gathered_or_scored(tmp_path, fakes) -> None:
+    """A rerun of assemble-run whose higher floor keeps no contig must not leave the
+    run looking finished to genome-qc and reads-gather."""
+    reads = _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1"), read_row(tmp_path, "SRR2")])
+    assemblies = _assembled(tmp_path, ["SRR1", "SRR2"], reads)
+    assert not assemble_run(
+        AssembleRunParams(
+            reads_tsv=reads,
+            run="SRR1",
+            out_dir=assemblies / "SRR1",
+            assembler="fakeasm",
+            min_contig_length=5000,
+        ),
+        _LOG,
+    )
+    from repgenr.stages.assemble_steps import _assembled_contigs
+
+    assert list(_assembled_contigs(assemblies)) == ["SRR2"]
+    out = tmp_path / "out"
+    assert (
+        reads_gather(
+            ReadsGatherParams(reads_tsv=reads, assemblies_dir=assemblies, out_dir=out), _LOG
+        )
+        == 1
+    )
+    excused = {e.run_accession: e.reason for e in read_excused_runs(out / "excused_runs.tsv")}
+    assert "5000 bp" in excused["SRR1"]
+    # Assembled again under the old floor, the run is gathered and its excuse is gone.
+    assert assemble_run(
+        AssembleRunParams(
+            reads_tsv=reads, run="SRR1", out_dir=assemblies / "SRR1", assembler="fakeasm"
+        ),
+        _LOG,
+    )
+    assert not (assemblies / "SRR1" / "excused_runs.tsv").exists()

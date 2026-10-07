@@ -148,6 +148,11 @@ def test_select_assembler_by_platform_and_layout(monkeypatch) -> None:
     )
     assert select_assembler(registry, ReadSet("r", "PACBIO_SMRT", "Revio", "SINGLE", ())) == "flye"
     assert select_assembler(registry, ReadSet("r", "ION_TORRENT", "S5", "SINGLE", ())) is None
+    # ENA labels some long-read runs PAIRED; the layout means nothing for them.
+    assert (
+        select_assembler(registry, ReadSet("r", "OXFORD_NANOPORE", "GridION", "PAIRED", ()))
+        == "flye"
+    )
 
 
 def test_adapters_declare_read_types_and_layouts() -> None:

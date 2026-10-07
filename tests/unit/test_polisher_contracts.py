@@ -107,11 +107,37 @@ def test_medaka_takes_an_explicit_model(recorded, tmp_path):
     assert result.tool_stats["model_source"] == "--tool-arg"
 
 
-def test_medaka_needs_a_single_read_file(recorded, tmp_path):
+def _two_files(tmp_path: Path) -> tuple[ReadSet, Path]:
+    """An ONT run that ENA lists as two FASTQ files (labelled PAIRED)."""
     reads, draft = _ont(tmp_path)
-    two = ReadSet("SRR1", "OXFORD_NANOPORE", "GridION", "PAIRED", reads.files * 2, 4)
-    with pytest.raises(UserInputError, match="one read file"):
-        registry.create("medaka").polish(two, draft, tmp_path / "pol", PolishParams(), _LOG)
+    second = tmp_path / "SRR1_2.fastq.gz"
+    with gzip.open(second, "wt", encoding="utf-8") as fo:
+        fo.write("@read2\nTTTT\n+\nIIII\n")
+    return ReadSet("SRR1", "OXFORD_NANOPORE", "GridION", "PAIRED", (*reads.files, second), 8), draft
+
+
+@pytest.mark.parametrize("name", ["medaka", "racon"])
+def test_polishers_use_every_read_file_of_a_run(recorded, tmp_path, name):
+    """A long-read run listed as several files is polished with all of them, in one file."""
+    reads, draft = _two_files(tmp_path)
+    registry.create(name).polish(reads, draft, tmp_path / "pol", PolishParams(), _LOG)
+    cmd = recorded[0]["cmd"]
+    query = Path(_flag(cmd, "-i")) if name == "medaka" else Path(cmd[-1])
+    assert query not in reads.files
+    with gzip.open(query, "rt", encoding="utf-8") as fi:
+        assert [line for line in fi.read().splitlines() if line.startswith("@")] == [
+            "@read1 ch=1",
+            "@read2",
+        ]
+
+
+def test_read_files_of_mixed_compression_are_refused(recorded, tmp_path):
+    reads, draft = _ont(tmp_path)
+    plain = tmp_path / "SRR1_2.fastq"
+    plain.write_text("@r\nA\n+\nI\n", encoding="utf-8")
+    mixed = ReadSet("SRR1", "OXFORD_NANOPORE", "GridION", "SINGLE", (*reads.files, plain), 4)
+    with pytest.raises(UserInputError, match="compressed"):
+        registry.create("medaka").polish(mixed, draft, tmp_path / "pol", PolishParams(), _LOG)
 
 
 def test_racon_alternates_minimap2_and_racon_for_each_round(recorded, tmp_path):

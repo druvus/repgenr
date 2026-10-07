@@ -432,6 +432,36 @@ All notable changes to RepGenR are documented here. The format follows
 - A repeat `dereplicate` rebuilds a deleted `genome_status.tsv` or
   `cluster_summary.tsv`. Only `clusters.tsv` and `representatives/` were
   deliverables, so `doctor` asked for a rerun and the rerun skipped.
+- `assemble` reused a finished run whatever the settings, so a rerun with
+  another `--min-contig-length`, `--assembler`, `--polisher`,
+  `--polish-rounds` or `--tool-arg` kept the old contigs. The `assembly.ok`
+  marker now records the settings; a higher contig floor filters the finished
+  contigs again and any other change assembles the run again.
+- `assemble` recorded no tool versions when it reused finished runs, and its
+  record named the tool `auto`; the marker keeps the assembler and polisher
+  versions and the record names the assemblers used.
+- An unreadable `assembly.ok` (cut short by a kill) stopped `assemble` with a
+  JSON traceback; the marker is written atomically and an unreadable one
+  means the run is assembled again. A run with no contig above the floor no
+  longer leaves its reads in scratch.
+- A run interrupted during assembly fetched its FASTQ files again; files
+  that still match their checksum are kept.
+- Long-read runs that ENA labels PAIRED were excused as
+  `unsupported_platform`; Flye now takes any layout. racon polished a run
+  listed as several FASTQ files with the first file only and medaka refused
+  it after the assembly; both now join the files.
+- A wrong `--checkm2-db`, `--gtdb-sketch` or `--gtdb-lineages` path, or an
+  absent checkm2 or sourmash binary, was found only after every assembly; it
+  is now refused before any download (exit 2 or 4), also in `genome-qc`,
+  which reads both from `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`
+  as well. A rerun refused this way leaves the finished record as it was.
+- `assemble` refused to rerun over finished runs on a nearly full disk
+  although it had nothing to download.
+- An assembly excused by the CheckM2 gate was not logged; it is now warned
+  about, and so is a run whose download failed, with how to retry it.
+- `reads` took runs found by accession whatever their library strategy, so
+  an RNA-Seq run could be assembled as a genome; they now pass the WGS
+  genomic filter of the taxon query, and dropped runs are named.
 - `status` lists an interrupted optional stage (for example a `glance` run
   killed mid-way) as `[interrupted]` with the same hint as a stage of the
   chain. It showed `(incomplete)`, a word the documentation does not use.

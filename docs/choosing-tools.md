@@ -180,7 +180,7 @@ These apply to the reads chain only (`reads`, `assemble`).
 | Sequencing platform | Assembler (`--assembler auto`) | Polisher (`--polisher auto`) |
 |---|---|---|
 | Illumina | `skesa`. `shovill` (SPAdes) is the alternative for paired reads. | None |
-| Oxford Nanopore | `flye` | `medaka` |
+| Oxford Nanopore | `flye` | `medaka` (`racon` when medaka is not installed) |
 | PacBio CLR | `flye` | `racon` with minimap2 overlaps (`--polish-rounds`) |
 | PacBio HiFi | `flye` | None |
 

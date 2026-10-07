@@ -191,7 +191,10 @@ assembles into chimeric and uneven contigs; repeat the flag for more values,
 keeps the best run of each sample: a long-read run when it carries at least
 100 Mb and a tenth of the sample's largest short-read run, else the largest
 run (`--all-runs` keeps every run); `--max-runs` caps the selection to the
-largest runs. At assembly, a paired run that ENA lists with a third, orphan
+largest runs. Runs found by accession pass the same filter as the taxon
+query, whole-genome sequencing of genomic DNA: RNA-Seq, amplicon or
+metagenomic runs of a named study or sample are dropped with a warning that
+names them. At assembly, a paired run that ENA lists with a third, orphan
 FASTQ file is given to skesa as the pair plus the orphan file, and to shovill
 as the pair only. Each run is labelled with the family, genus and species of
 its NCBI taxid, in the same filename tokens the GTDB path uses. Which assembler
@@ -221,14 +224,30 @@ is pending. `--memory-gb` is the RAM cap passed to SKESA and shovill (shovill
 accepts no less than 8). Each finished run leaves a marker under
 `assemblies/<run>/`, so an interrupted stage resumes without refetching;
 reads are deleted after a successful assembly unless `--keep-reads`, and the
-assembler's scratch unless `--keep-files`. A run without an ENA FASTQ
+assembler's scratch unless `--keep-files`. A run interrupted during its
+assembly keeps the FASTQ files that still match their checksum, so the
+resume does not download them again. The marker records the settings the
+run was built with (`--assembler`, `--polisher`, `--polish-rounds`,
+`--min-contig-length` and the `--tool-arg` keys its tools read). A later
+call, `--force` included, reuses a finished run only while these agree. A
+higher `--min-contig-length` filters the finished contigs again, which gives
+the same result as filtering the raw assembly. Any other change assembles
+the run again, and the log names the change. To assemble a run again under
+the same settings, delete `assemblies/<run>/`. A marker written before
+the settings were recorded is reused as it is, filtered at the requested
+floor. A run without an ENA FASTQ
 mirror, one whose download fails its checksum, one no assembler accepts
 (`unsupported_platform`), one whose assembler is not installed under
 `--assembler auto` (`assembler_not_installed`, with a warning naming the
 adapters that would take it), or one whose assembly fails is written to
 `excused_runs.tsv` with the reason and the rest proceed; the completeness
 guard of later stages excuses those runs. When no run can be assembled
-because no assembler is installed, the stage exits 4 instead.
+because no assembler is installed, the stage exits 4 instead. A repeat with
+the same settings skips the stage, so a run whose download failed is
+retried only with `--force`; the closing warning names such runs. Long-read
+runs are assembled whatever layout ENA gives them (some ONT runs are
+labelled PAIRED), and the polishers join a run listed as several FASTQ
+files into one.
 `--outgroup FASTA` sets a genome aside for rooting, as `ingest --outgroup`
 does. Per-assembly metrics (contigs, total length, N50, coverage from the
 sequenced bases) are in `assembly_stats.tsv`.
@@ -244,8 +263,8 @@ longer lists, both refuse to re-run while appended genomes are present;
 them back afterwards.
 
 Long-read assemblies are polished with the run's own reads before the
-contig filter: `--polisher auto` (the default) runs medaka for ONT runs and
-racon (minimap2 overlaps, `--polish-rounds` rounds) for PacBio CLR runs, and
+contig filter: `--polisher auto` (the default) runs medaka for ONT runs
+(racon when medaka is not installed) and racon (minimap2 overlaps, `--polish-rounds` rounds) for PacBio CLR runs, and
 nothing for PacBio HiFi or Illumina; `--polisher none` turns it off. medaka
 needs the basecaller model. Reads basecalled with Dorado name it in their
 FASTQ headers and medaka resolves it from there; reads mirrored through SRA
@@ -278,7 +297,12 @@ submitted organism, the GTDB family, genus and species name the genome file,
 so a reads-derived genome groups with GTDB-downloaded ones; otherwise the
 submitted name stays and `assembly_stats.tsv` flags the genome
 `classifier_disagrees`. Both lineages are kept in that table, and the sketch
-release is recorded in provenance next to the metadata release. Without a
+release is recorded in provenance next to the metadata release. The database
+paths and the checkm2 and sourmash binaries are checked before any run is
+fetched, so a wrong path exits 2 and a missing tool exits 4 at once rather
+than after the assemblies. sourmash runs one gather per assembly, as many at
+once as `--threads`; with the GTDB rs226 representatives sketch each holds
+about 0.6 GB of memory (eight at once peaked at 4.3 GB). Without a
 database the checks are skipped and the log says so. `run --reads` forwards
 `--accession-file`, `--platform`, `--max-runs`, `--assembler`, `--threads`
 and `--outgroup`; the rest is available on the stage commands.
