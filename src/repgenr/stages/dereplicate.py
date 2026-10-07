@@ -83,10 +83,22 @@ def precheck(ctx: WorkdirContext, params: DereplicateParams) -> None:
         check_genome_completeness(
             ctx.genomes_dir, ctx.workdir, logger=ctx.logger, allow_incomplete=False
         )
-    if not _list_genomes(ctx.genomes_dir):
+    genomes = _list_genomes(ctx.genomes_dir)
+    if not genomes:
         raise WorkdirError(
             f"No genome FASTAs found under {ctx.genomes_dir}. Run the genome stage first."
         )
+    tool = params.tool
+    if tool == "auto":
+        tool = auto_select(registry, len(genomes)) or "skder"
+    if tool == "skder":
+        from ..dereplicators.skder import check_secondary_ani
+
+        # --target-reps searches the threshold itself, from 0.80 upwards.
+        if not params.target_reps:
+            check_secondary_ani(params.secondary_ani)
+        if params.pre_secondary_ani is not None:
+            check_secondary_ani(params.pre_secondary_ani, "--pre-secondary-ani")
 
 
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:

@@ -78,15 +78,8 @@ class SkderDereplicator(Dereplicator):
         params: DerepParams,
         logger: logging.Logger,
     ) -> DerepResult:
+        check_secondary_ani(params.secondary_ani)
         ani_pct = _as_percent(params.secondary_ani)
-        if float(ani_pct) < _MIN_ANI_PCT:
-            # skDER stops at an interactive question below 80 percent (skani's
-            # estimates are unreliable there); refuse before it runs.
-            raise UserInputError(
-                f"skDER does not cluster below {_MIN_ANI_PCT:g} percent ANI "
-                f"(--secondary-ani {params.secondary_ani:g}); skani's estimates are "
-                "unreliable there. Use a higher --secondary-ani or --tool sourmash."
-            )
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Run skDER on a local temp filesystem to avoid exFAT/NTFS ._* breakage,
@@ -130,6 +123,22 @@ class SkderDereplicator(Dereplicator):
             shutil.rmtree(local_tmp, ignore_errors=True)
 
         return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
+
+
+def check_secondary_ani(value: float, label: str = "--secondary-ani") -> None:
+    """Refuse an ANI cutoff below skDER's floor (80 percent).
+
+    skDER stops at an interactive question below it (skani's estimates are
+    unreliable there). The dereplicate stage calls this from its precheck, so
+    a refused rerun leaves the finished record intact; the adapter calls it
+    again as a backstop for callers that bypass the stage.
+    """
+    if float(_as_percent(value)) < _MIN_ANI_PCT:
+        raise UserInputError(
+            f"skDER does not cluster below {_MIN_ANI_PCT:g} percent ANI "
+            f"({label} {value:g}); skani's estimates are unreliable there. "
+            "Use a higher value or --tool sourmash."
+        )
 
 
 def _as_percent(value: float) -> str:

@@ -402,3 +402,22 @@ def test_a_deleted_secondary_output_is_rebuilt_without_force(
     again = CliRunner().invoke(app, args)
     assert again.exit_code == 0, again.output
     assert (workdir / "derep" / name).exists()
+
+
+@pytest.mark.parametrize("tool", ["skder", "auto"])
+def test_skder_ani_floor_refusal_keeps_the_finished_record(
+    workdir: Path, genome_files, fake_tool, tool: str
+) -> None:
+    """skDER's 80 percent floor is refused in the precheck (exit 2), before the
+    harness marks the finished record incomplete; auto resolves to skDER here."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    wd = str(workdir)
+    assert CliRunner().invoke(app, ["dereplicate", "-wd", wd, "--tool", "fake"]).exit_code == 0
+    refused = CliRunner().invoke(app, ["dereplicate", "-wd", wd, "--tool", tool, "-sani", "0.78"])
+    assert refused.exit_code == 2, refused.output
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.completed and record.tool == "fake"
