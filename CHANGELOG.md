@@ -222,8 +222,9 @@ All notable changes to RepGenR are documented here. The format follows
 - A stage's first run writes a provisional record to `repgenr.yaml` before its
   body starts, so a stage that fails or is killed shows as `[interrupted]` in
   `status` and as a failure in `doctor`, where it previously looked as if it
-  had never started. A successful run replaces the record; a failure in
-  parameter validation and a query-only invocation write nothing.
+  had never started. A successful run replaces the record. A failure in
+  parameter validation, a query-only invocation, and a stage that refuses its
+  input (exit 2 or 3) without changing its main outputs write nothing.
 - `phylo` and `phylo-build` compare the leaves of the built tree with the
   input genomes and exit 3, naming the missing or unexpected leaves and the
   tree builder, when they differ; mashtree can drop a degenerate genome and

@@ -803,10 +803,31 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
             params=_provisional_params(params),
         )
         ctx.save_config()
+    # The incomplete record now on file (provisional, dirtied, or left by an
+    # earlier failure). A stage writes a new record object when it finishes.
+    pending = ctx.config.stages.get(stage_name)
+    missing_before = (
+        set(missing_deliverables(ctx, stage_name, params)) if provisional is not None else set()
+    )
     module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
-    module.run(ctx, params)
-    if provisional is not None and ctx.config.stages.get(stage_name) is provisional:
-        # The stage finished without a record of its own: leave none behind.
+    try:
+        module.run(ctx, params)
+    except (UserInputError, WorkdirError):
+        # A clean refusal that changed none of the stage's deliverables (for
+        # example phylo with too few genomes) did not start: drop the
+        # provisional record so `status` does not report it as interrupted.
+        # A tool failure (exit 4/6) or a crash keeps the record.
+        if (
+            provisional is not None
+            and ctx.config.stages.get(stage_name) is provisional
+            and set(missing_deliverables(ctx, stage_name, params)) == missing_before
+        ):
+            del ctx.config.stages[stage_name]
+            ctx.save_config()
+        raise
+    if pending is not None and ctx.config.stages.get(stage_name) is pending:
+        # The stage finished without a record of its own: leave no incomplete
+        # record behind, or `status` would report it as interrupted.
         del ctx.config.stages[stage_name]
         ctx.save_config()
         return

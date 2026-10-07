@@ -605,3 +605,80 @@ def test_msa_stamped_by_an_earlier_version_is_not_reused(
     assert len(calls) == 1
     run(ctx, PhyloParams(no_outgroup=True, **base))
     assert len(calls) == 2, "a stamp from an earlier version is not trusted"
+
+
+# -- the stage harness: which failures leave an [interrupted] record ---------
+
+
+def _phylo_record_via_cli(workdir: Path, params: PhyloParams) -> dict | None:
+    import typer
+    import yaml
+
+    from repgenr.cli import base as cli
+    from repgenr.core.config import CONFIG_FILENAME
+
+    with pytest.raises(typer.Exit):
+        cli._run("phylo", workdir, lambda: params)
+    config = workdir / CONFIG_FILENAME
+    if not config.exists():
+        return None
+    data = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
+    return (data.get("stages") or {}).get("phylo")
+
+
+class _FailingTreeBuilder(TreeBuilder):
+    capabilities = ToolCapabilities(name="faketree_fail")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        from repgenr.core.errors import ToolExecutionError
+
+        raise ToolExecutionError(["faketree", "build"], 1, "boom")
+
+
+def test_clean_refusal_writing_nothing_leaves_no_record(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, 3):
+        (reps / f"Fam_gen_sp_GCA_00000{i}.fasta").write_text(f">s{i}\nACGTACGT\n")
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True)
+    )
+    assert record is None
+
+
+def test_tool_failure_leaves_an_interrupted_record(
+    workdir: Path, fake_phylo_tools, monkeypatch, register_tool
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    register_tool(tb_registry, "faketree_fail", _FailingTreeBuilder)
+    _make_reps(workdir)
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_fail", no_outgroup=True)
+    )
+    assert record is not None and not record.get("completed")
+
+
+def test_leaf_check_failure_leaves_an_interrupted_record(
+    workdir: Path, fake_phylo_tools, monkeypatch, register_tool
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    register_tool(tb_registry, "faketree_drop", _DroppingTreeBuilder)
+    _make_reps(workdir)
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_drop", no_outgroup=True)
+    )
+    assert record is not None and not record.get("completed")
+    assert (workdir / "tree" / "tree.nwk").exists()
