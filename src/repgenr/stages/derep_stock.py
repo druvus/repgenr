@@ -1,19 +1,24 @@
 """derep_stock stage: store/load named dereplication runs.
 
 Ports ``derep_stocker.py`` to the new ``derep/`` contract. A packed run keeps
-``clusters.tsv`` + ``genome_status.tsv`` and symlinks the representative genome
-files; unpacking restores them into the working directory.
+``clusters.tsv`` + ``genome_status.tsv``, symlinks to the representative genome
+files and ``record.json``, the ``dereplicate`` stage record (tool, parameters,
+tool versions) that described the run when it was packed; unpacking restores
+them into the working directory.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from ..core.config import StageRecord
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
@@ -30,6 +35,9 @@ from ..dereplicators.base import DerepResult
 from .dereplicate import _update_manifest
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV, CLUSTER_SUMMARY_TSV)
+# The dereplicate record of the stored run, written by pack.
+_RECORD_JSON = "record.json"
+_RECORD_FIELDS = ("tool", "params", "tool_versions", "completed")
 # Params key on the dereplicate record while an unpack replaces its outputs;
 # removed when the record is re-stamped, so a later interrupted dereplicate
 # run is told apart from an interrupted unpack.
@@ -145,7 +153,45 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
     reps_dir.mkdir()
     for rep in reps:
         (reps_dir / rep.name).symlink_to((ctx.genomes_dir / rep.name).resolve())
+    _store_record(ctx, run_path)
     ctx.logger.info("Packed run to %s", run_path)
+
+
+def _store_record(ctx: WorkdirContext, run_path: Path) -> None:
+    """Write the live dereplicate record into the stored run.
+
+    Only a completed record describes the outputs being packed; an incomplete
+    one (an interrupted dereplicate or unpack) or none at all is not stored,
+    and unpack then falls back to the record that is live at unpack time.
+    """
+    record = ctx.config.stages.get("dereplicate")
+    if record is None or not record.completed:
+        return
+    data = {key: record.to_dict()[key] for key in _RECORD_FIELDS}
+    (run_path / _RECORD_JSON).write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _stored_record(ctx: WorkdirContext, run_path: Path) -> StageRecord | None:
+    """The dereplicate record kept with a stored run, or None.
+
+    Runs packed before the record was stored have no ``record.json``; an
+    unreadable file is reported and treated the same way.
+    """
+    path = run_path / _RECORD_JSON
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")
+        return StageRecord.from_dict(data)
+    except (ValueError, TypeError, OSError) as exc:
+        ctx.logger.warning(
+            "Ignoring unreadable %s (%s); the dereplicate record is carried over", path, exc
+        )
+        return None
 
 
 def _check_unpackable(ctx: WorkdirContext, run_path: Path) -> list[str]:
@@ -183,7 +229,18 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         # it. An interrupted unpack leaves the in-progress marker in the
         # params (set below), and a repeat keeps what that unpack carried.
         prior = None
-    carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
+    stored = _stored_record(ctx, run_path)
+    if stored is not None:
+        # The run keeps its own record: the restored record names the tool,
+        # parameters and versions that produced it.
+        carried: tuple[str | None, dict[str, Any], dict[str, str]] | None = (
+            stored.tool,
+            stored.params,
+            stored.tool_versions,
+        )
+    else:
+        # Runs packed without a record: carry over the live record, as before.
+        carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
     if carried is not None:
         carried[1].pop(_UNPACKING, None)
     if prior is not None:
