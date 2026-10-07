@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -128,7 +129,8 @@ class PhyloOutcome:
 # builder (or the bootstrap) can reuse it instead of aligning or SNP-calling
 # again. The stage fingerprint cannot do this: it covers the whole stage.
 MSA_STAMP = "msa_source.json"
-_MSA_STAMP_VERSION = 1
+# 2: the snippy typer names its reference record by genome (was "Reference").
+_MSA_STAMP_VERSION = 2
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
@@ -176,7 +178,7 @@ def _read_msa_stamp(artifact: Path, key: str) -> dict | None:
         stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if stamp.get("key") != key:
+    if stamp.get("v") != _MSA_STAMP_VERSION or stamp.get("key") != key:
         return None
     if stamp.get("artifact_digest") != file_digest(artifact):
         return None
@@ -346,9 +348,74 @@ def build_tree(
         with atomic_path(final) as tmp:
             shutil.copy2(tree, tmp)
     logger.info("Phylogenetic tree written to %s", final)
+    expected = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
+    check_tree_leaves(final, [g.stem for g in expected], treebuilder)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
     )
+
+
+_LEAF_UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
+_LEAF_FILE_SUFFIX = re.compile(r"(\.(fasta|fas|fna|fa|ffn))?(\.gz)?(\.ref)?$", re.IGNORECASE)
+_MAX_LEAVES_LISTED = 10
+
+
+def _leaf_key(label: str) -> str:
+    """Compare leaf names the way tools may rewrite them.
+
+    ParSNP names sequences by file name and marks the reference with '.ref',
+    so a FASTA extension and that marker are dropped. Tools also replace
+    characters they do not accept in a name (cactus turns '.' into '_',
+    IQ-TREE rewrites others), so every character outside letters, digits,
+    '_' and '-' compares as '_'.
+    """
+    return _LEAF_UNSAFE.sub("_", _LEAF_FILE_SUFFIX.sub("", label, count=1))
+
+
+def check_tree_leaves(tree: Path, expected: Sequence[str], treebuilder: str) -> None:
+    """Raise WorkdirError when the leaves of ``tree`` differ from ``expected``.
+
+    A tree builder can drop a genome it considers degenerate and still exit 0
+    (mashtree does). The tree stays on disk for inspection; the caller records
+    nothing, so the stage is not marked completed.
+    """
+    import dendropy
+    from dendropy.utility.error import DataParseError
+
+    try:
+        parsed = dendropy.Tree.get(path=str(tree), schema="newick", preserve_underscores=True)
+    except DataParseError as exc:
+        raise WorkdirError(
+            f"Tree builder '{treebuilder}' wrote an unreadable tree {tree}: {exc}"
+        ) from exc
+    leaves = {
+        _leaf_key(node.taxon.label): node.taxon.label
+        for node in parsed.leaf_node_iter()
+        if node.taxon is not None and node.taxon.label
+    }
+    wanted = {_leaf_key(name): name for name in expected}
+    missing = sorted(wanted[k] for k in wanted.keys() - leaves.keys())
+    extra = sorted(leaves[k] for k in leaves.keys() - wanted.keys())
+    if not missing and not extra:
+        return
+    parts = []
+    if missing:
+        parts.append(f"missing {len(missing)} genome(s): {_listed(missing)}")
+    if extra:
+        parts.append(f"{len(extra)} unexpected leaf/leaves: {_listed(extra)}")
+    raise WorkdirError(
+        f"The tree from '{treebuilder}' does not match its input genomes ("
+        + "; ".join(parts)
+        + f"). The tree is kept at {tree} for inspection; the stage is not recorded "
+        "as completed."
+    )
+
+
+def _listed(names: list[str]) -> str:
+    shown = ", ".join(names[:_MAX_LEAVES_LISTED])
+    if len(names) > _MAX_LEAVES_LISTED:
+        shown += f" (+{len(names) - _MAX_LEAVES_LISTED} more)"
+    return shown
 
 
 def _clear_previous_builder_files(tree_dir: Path) -> None:

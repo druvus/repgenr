@@ -287,6 +287,16 @@ entirely and `--length-all` disables the filter.
 
 `phylo` and `phylo-build` need at least three ingroup genomes (the outgroup is not
 counted) and exit 3 with a message before any tool runs when the set is smaller.
+After the tree is built, its leaves are compared with the input genomes
+(ingroup and outgroup). A tree builder can drop a genome it considers
+degenerate and still exit 0, as mashtree does; a missing or unexpected leaf
+then exits 3 with the names and the builder. The tree is kept in `tree/` for
+inspection, and `phylo` is not recorded as completed. Leaf names are compared
+without a FASTA extension or ParSNP's `.ref` reference marker, and with
+characters other than letters, digits, `_` and `-` read as `_`, since some
+tools rewrite them. This matching is looser than `tree2tax`, which uses leaf
+names as written, so a tree that passes the check can still leave leaves that
+`tree2tax` does not map to a genome.
 
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
@@ -309,7 +319,13 @@ three are unchanged (it logs that it skipped). Re-running an upstream stage
 (e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
 downstream stage re-runs automatically the next time it is invoked. Change a
 parameter, switch `--container`, or pass `--force` to re-run explicitly. A
-stage that crashed mid-run has no completion stamp and so always re-runs.
+stage writes its record without a completion stamp before it starts, so one
+that failed or crashed mid-run is listed as `[interrupted]` by `status`,
+reported as a failure by `doctor`, and always re-runs; a successful run
+stamps the record. A failure in parameter validation writes no record, and
+neither does a stage that refuses its input (exit 2 or 3) without changing
+any of its main outputs, for example `phylo` with fewer than three genomes.
+A failed external tool (exit 4 or 6) always leaves the record.
 Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
@@ -756,7 +772,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   line naming the tool and its exit status; the command line and the output
   tail are in the same log. Re-run with `--verbose` to see them on the console
   (a data-channel step has no log and always prints the tail).
-  `repgenr status -wd <WD>` shows what completed and what is next.
+  `repgenr status -wd <WD>` shows what completed and what is next; a stage
+  that failed is listed as `[interrupted]` and its outputs may be partial
+  until it is re-run.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).

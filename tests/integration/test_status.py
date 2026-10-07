@@ -91,4 +91,4 @@ def test_status_marks_interrupted_stage(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
     assert result.exit_code == 0
     assert "[interrupted] genome" in result.stdout
-    assert "crashed mid-run" in result.stdout
+    assert "did not finish; outputs may be partial" in result.stdout

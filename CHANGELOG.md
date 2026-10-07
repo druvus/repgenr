@@ -219,6 +219,17 @@ All notable changes to RepGenR are documented here. The format follows
   record under `docs/audit/`. `docs/README.md` indexes the pages. The
   executed plans under `docs/superpowers/` and the unreferenced legacy figures
   under `docs/images/` are removed; git history keeps them.
+- A stage's first run writes a provisional record to `repgenr.yaml` before its
+  body starts, so a stage that fails or is killed shows as `[interrupted]` in
+  `status` and as a failure in `doctor`, where it previously looked as if it
+  had never started. A successful run replaces the record. A failure in
+  parameter validation, a query-only invocation, and a stage that refuses its
+  input (exit 2 or 3) without changing its main outputs write nothing.
+- `phylo` and `phylo-build` compare the leaves of the built tree with the
+  input genomes and exit 3, naming the missing or unexpected leaves and the
+  tree builder, when they differ; mashtree can drop a degenerate genome and
+  exit 0. The tree is kept for inspection and the stage is not recorded as
+  completed.
 
 ### Fixed
 - The `reads` no-match message names every active filter, including
@@ -255,6 +266,9 @@ All notable changes to RepGenR are documented here. The format follows
   before the workdir is created, so a rejected call leaves no directory or
   log; entry stages in general build their parameters before creating the
   workdir.
+- The `snippy` SNP typer names the reference record by its genome instead of
+  snippy-core's `Reference`, so the tree has a leaf for the reference genome
+  that `tree2tax` can map to an accession.
 - `genome --accession-list-only` writes `ncbi_acc_download_list.txt` with a
   newline after the last accession, so `wc -l` and `while read` loops see
   every accession.

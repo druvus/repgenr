@@ -33,6 +33,13 @@ class _GenomesTreeBuilder(TreeBuilder):
         return tree
 
 
+def _tree_from_msa(msa: Path) -> str:
+    """A star tree over the MSA's sequence names, as a real builder would label it."""
+    lines = msa.read_text(encoding="utf-8").splitlines()
+    names = [line[1:].split()[0] for line in lines if line.startswith(">")]
+    return "(" + ",".join(names) + ");\n"
+
+
 class _MsaTreeBuilder(TreeBuilder):
     capabilities = ToolCapabilities(name="faketree_msa")
     input_kind = InputKind.MSA_FASTA
@@ -45,7 +52,7 @@ class _MsaTreeBuilder(TreeBuilder):
         type(self).seen_extra = dict(params.extra)
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
-        tree.write_text("(from_msa);\n")
+        tree.write_text(_tree_from_msa(Path(msa_or_genomes)))
         return tree
 
 
@@ -129,7 +136,8 @@ def test_aligner_msa_path(workdir: Path, fake_phylo_tools) -> None:
             no_outgroup=True,
         ),
     )
-    assert tree.read_text().strip() == "(from_msa);"
+    leaves = ",".join(f"Fam_gen_sp_GCA_00000{i}" for i in range(1, 4))
+    assert tree.read_text().strip() == f"({leaves});"
     assert (ctx.align_dir / "msa.fasta").exists()
 
 
@@ -289,7 +297,8 @@ class _SideFileTreeBuilder(TreeBuilder):
     def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "builder_output.treefile"
-        tree.write_text("(new);\n", encoding="utf-8")
+        leaves = ",".join(Path(g).stem for g in msa_or_genomes)
+        tree.write_text(f"({leaves});\n", encoding="utf-8")
         return tree
 
 
@@ -311,7 +320,7 @@ def test_tree_published_through_atomic_path(workdir: Path, monkeypatch, register
 
     monkeypatch.setattr(phylo_mod, "atomic_path", spy)
     tree = run(ctx, PhyloParams(treebuilder="faketree_sidefile", no_outgroup=True))
-    assert tree.read_text(encoding="utf-8") == "(new);\n"
+    assert tree.read_text(encoding="utf-8").startswith("(Fam_gen_sp_GCA_000001,")
     assert published_via == [ctx.tree_dir / "tree.nwk"]
     assert not list(ctx.tree_dir.glob("*.part")) and not list(ctx.tree_dir.glob(".*tmp*"))
 
@@ -497,3 +506,179 @@ def test_phylo_accepts_exactly_three_genomes(workdir: Path, fake_phylo_tools) ->
     _make_n_reps(workdir, 3)
     ctx = WorkdirContext(workdir, create=True)
     assert run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True)).exists()
+
+
+class _DroppingTreeBuilder(TreeBuilder):
+    """Writes a tree without the last genome, as mashtree can for a degenerate one."""
+
+    capabilities = ToolCapabilities(name="faketree_drop")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "tree.nwk"
+        leaves = [Path(g).stem for g in msa_or_genomes][:-1]
+        tree.write_text("(" + ",".join(leaves) + ",extra_leaf);\n")
+        return tree
+
+
+class _RenamingTreeBuilder(TreeBuilder):
+    """Writes leaves with '.' replaced by '_', as cactus names its samples."""
+
+    capabilities = ToolCapabilities(name="faketree_rename")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "tree.nwk"
+        leaves = [Path(g).stem.replace(".", "_") for g in msa_or_genomes]
+        tree.write_text("(" + ",".join(leaves) + ");\n")
+        return tree
+
+
+def test_tree_missing_a_genome_is_refused(workdir: Path, fake_phylo_tools) -> None:
+    from repgenr.core.errors import WorkdirError
+
+    tb_registry.register("faketree_drop", _DroppingTreeBuilder, replace=True)
+    try:
+        _make_reps(workdir)
+        ctx = WorkdirContext(workdir, create=True)
+        with pytest.raises(WorkdirError) as excinfo:
+            run(ctx, PhyloParams(treebuilder="faketree_drop", no_outgroup=True))
+    finally:
+        tb_registry._classes.pop("faketree_drop", None)
+    message = str(excinfo.value)
+    assert "faketree_drop" in message
+    assert "Fam_gen_sp_GCA_000003" in message
+    assert "extra_leaf" in message
+    assert excinfo.value.exit_code == 3
+    # the tree stays on disk for inspection; the stage is not recorded
+    assert (workdir / "tree" / "tree.nwk").exists()
+    assert "phylo" not in ctx.config.stages
+
+
+def test_tree_leaf_check_tolerates_renamed_dots(workdir: Path, fake_phylo_tools) -> None:
+    tb_registry.register("faketree_rename", _RenamingTreeBuilder, replace=True)
+    try:
+        reps = workdir / "derep" / "representatives"
+        reps.mkdir(parents=True)
+        for i in range(1, 4):
+            (reps / f"Fam_gen_sp_GCA_00000{i}.1.fasta").write_text(f">s{i}\nACGTACGT\n")
+        ctx = WorkdirContext(workdir, create=True)
+        tree = run(ctx, PhyloParams(treebuilder="faketree_rename", no_outgroup=True))
+    finally:
+        tb_registry._classes.pop("faketree_rename", None)
+    assert tree.exists()
+    assert ctx.config.stages["phylo"].completed
+
+
+def test_leaf_key_matches_tool_rewritten_names() -> None:
+    from repgenr.stages.phylo import _leaf_key
+
+    stem = "Fam_gen_sp_GCA_000001.1"
+    for label in (stem, "Fam_gen_sp_GCA_000001_1", f"{stem}.fasta", f"{stem}.fna.ref"):
+        assert _leaf_key(label) == _leaf_key(stem)
+    assert _leaf_key("Fam_gen_sp_GCA_000002.1") != _leaf_key(stem)
+
+
+def test_msa_stamped_by_an_earlier_version_is_not_reused(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """An alignment from before the stamp version changed (for example a snippy
+    alignment that still names the reference 'Reference') is rebuilt."""
+    from repgenr.stages import phylo as phylo_mod
+
+    assert phylo_mod._MSA_STAMP_VERSION >= 2
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+    with monkeypatch.context() as m:
+        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 1)
+        run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 2, "a stamp from an earlier version is not trusted"
+
+
+# -- the stage harness: which failures leave an [interrupted] record ---------
+
+
+def _phylo_record_via_cli(workdir: Path, params: PhyloParams) -> dict | None:
+    import typer
+    import yaml
+
+    from repgenr.cli import base as cli
+    from repgenr.core.config import CONFIG_FILENAME
+
+    with pytest.raises(typer.Exit):
+        cli._run("phylo", workdir, lambda: params)
+    config = workdir / CONFIG_FILENAME
+    if not config.exists():
+        return None
+    data = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
+    return (data.get("stages") or {}).get("phylo")
+
+
+class _FailingTreeBuilder(TreeBuilder):
+    capabilities = ToolCapabilities(name="faketree_fail")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        from repgenr.core.errors import ToolExecutionError
+
+        raise ToolExecutionError(["faketree", "build"], 1, "boom")
+
+
+def test_clean_refusal_writing_nothing_leaves_no_record(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, 3):
+        (reps / f"Fam_gen_sp_GCA_00000{i}.fasta").write_text(f">s{i}\nACGTACGT\n")
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True)
+    )
+    assert record is None
+
+
+def test_tool_failure_leaves_an_interrupted_record(
+    workdir: Path, fake_phylo_tools, monkeypatch, register_tool
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    register_tool(tb_registry, "faketree_fail", _FailingTreeBuilder)
+    _make_reps(workdir)
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_fail", no_outgroup=True)
+    )
+    assert record is not None and not record.get("completed")
+
+
+def test_leaf_check_failure_leaves_an_interrupted_record(
+    workdir: Path, fake_phylo_tools, monkeypatch, register_tool
+) -> None:
+    from repgenr.cli import base as cli
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    register_tool(tb_registry, "faketree_drop", _DroppingTreeBuilder)
+    _make_reps(workdir)
+    record = _phylo_record_via_cli(
+        workdir, PhyloParams(treebuilder="faketree_drop", no_outgroup=True)
+    )
+    assert record is not None and not record.get("completed")
+    assert (workdir / "tree" / "tree.nwk").exists()
