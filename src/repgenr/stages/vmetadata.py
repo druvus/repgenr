@@ -21,6 +21,7 @@ from statistics import mean, median
 from Bio import SeqIO
 
 from ..core.context import WorkdirContext
+from ..core.contracts import atomic_path
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import looks_like_fasta
 from ..viral.entrez import TAXNAMES_ORDERED, get_taxon_data_from_entrez
@@ -249,12 +250,17 @@ def _download_group(target: str, dest: Path, logger) -> None:
             raise WorkdirError(f"Could not size '{remote}' at BV-BRC: {exc}") from exc
         # Binary transfer with an exact size check: ASCII mode + a 1000-byte
         # tolerance previously let a silently-truncated FASTA pass as complete.
-        with open(dest, "wb") as fo:
-            ftp.retrbinary("RETR " + remote, fo.write)
-    local_size = dest.stat().st_size if dest.exists() else 0
-    if remote_size and local_size != remote_size:
-        dest.unlink(missing_ok=True)
-        raise WorkdirError(f"Incomplete BV-BRC download: got {local_size} of {remote_size} bytes.")
+        # The transfer goes to a temporary sibling that replaces ``dest`` only
+        # after the size check, so an interrupted run never leaves a partial
+        # download.fa for the next run to reuse.
+        with atomic_path(dest) as tmp:
+            with open(tmp, "wb") as fo:
+                ftp.retrbinary("RETR " + remote, fo.write)
+            local_size = tmp.stat().st_size
+            if remote_size and local_size != remote_size:
+                raise WorkdirError(
+                    f"Incomplete BV-BRC download: got {local_size} of {remote_size} bytes."
+                )
     logger.info("Download finished (%d bytes)", local_size)
 
 
