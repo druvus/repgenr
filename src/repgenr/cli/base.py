@@ -24,7 +24,7 @@ from typer.core import TyperGroup
 from .. import __version__
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
-from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
+from ..core.errors import RepGenRError, ToolExecutionError, UserInputError, WorkdirError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
 
@@ -58,7 +58,9 @@ HELP_LIMIT = "Keep at most N GTDB genomes, round-robin over species by CheckM qu
 HELP_DATASET = "GTDB dataset: all or rep."
 HELP_LEVEL = "family, genus or species."
 HELP_ALL_GENOMES = "Use all genomes, not only the representatives."
-HELP_BOOTSTRAP = "Bootstrap replicates (0 = off; IQ-TREE needs >=1000)."
+HELP_BOOTSTRAP = (
+    "Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on."
+)
 HELP_REFERENCE = "Reference genome filename."
 HELP_MSA_SOURCE = "aligner or snptype."
 HELP_ALIGNER_ARG = (
@@ -194,7 +196,13 @@ def _derep_stock_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     if action == "pack":
         return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
     if action == "unpack":
-        return [ctx.derep_dir / "stock" / name]
+        # The live derep outputs are inputs too: unpack replaces them, so a
+        # repeat unpack after a new dereplicate must restore the run again.
+        return [
+            ctx.derep_dir / "stock" / name,
+            ctx.derep_dir / CLUSTERS_TSV,
+            ctx.representatives_dir,
+        ]
     return []
 
 
@@ -211,7 +219,9 @@ def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
 # --msa-source snptype, --include-dereplicated) live in the helpers above.
 # Stages not listed digest no inputs and fingerprint on params alone.
 STAGE_INPUTS: dict[str, Any] = {
-    "metadata": lambda ctx, p: [],  # network-only
+    # metadata downloads its table unless --metadata-path names a local one,
+    # which is then its one file input.
+    "metadata": lambda ctx, p: [Path(p.metadata_path)] if getattr(p, "metadata_path", None) else [],
     # ingest reads paths outside the workdir; they are keyed absolute.
     "ingest": _ingest_inputs,
     # reads is network-only; an accession list is its one file input.
@@ -263,6 +273,13 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Invocations that rewrite their own declared inputs (derep-stock unpack
+# restores derep/): the record is stamped with digests taken after the run,
+# so an identical repeat matches the restored state and skips.
+_REDIGEST_AFTER_RUN: dict[str, Any] = {
+    "derep_stock": lambda p: getattr(p, "action", None) == "unpack",
+}
+
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
     "derep_stock": lambda p: getattr(p, "action", None) == "list",
@@ -282,7 +299,9 @@ def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> d
     if spec is None:
         return {}
     digests = inputs_digest(ctx.workdir, spec(ctx, params))
-    if stage_name in _MANIFEST_INPUT_STAGES:
+    # Opening the manifest creates it; a missing workdir has none to digest,
+    # and the stage itself then reports the missing input.
+    if stage_name in _MANIFEST_INPUT_STAGES and ctx.workdir.is_dir():
         digests["manifest"] = manifest_digest_for_stage(stage_name, ctx.manifest)
     return digests
 
@@ -568,6 +587,13 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
 
 def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> None:
     params = build_params()
+    if not ctx.workdir.is_dir():
+        # Only entry stages (create=True) start a workdir; any other stage
+        # would otherwise create it as a side effect of opening the manifest.
+        raise WorkdirError(
+            f"Workdir not found: {ctx.workdir}. Create it with an entry stage "
+            "(metadata, ingest, reads or vmetadata) first."
+        )
     # Stages that cache an intermediate of their own (phylo's MSA) must not
     # reuse it under --force, which means "recompute this stage".
     ctx.force = bool(_RUN_STATE["force"])
@@ -590,14 +616,26 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
                 stage_name,
             )
             return
-        changed = sorted(
-            key for key in {*prior.inputs, *digests} if prior.inputs.get(key) != digests.get(key)
-        )
+        # A key present on one side only means the stage now reads a different
+        # set of inputs (a flag such as --include-dereplicated, or an outgroup
+        # added), not that a file's content changed; say which.
+        shared = prior.inputs.keys() & digests.keys()
+        changed = sorted(key for key in shared if prior.inputs[key] != digests[key])
+        added = sorted(digests.keys() - prior.inputs.keys())
+        dropped = sorted(prior.inputs.keys() - digests.keys())
         if changed and prior.inputs:
             logger.info(
                 "Stage '%s': input %s changed since last completion; re-running.",
                 stage_name,
                 ", ".join(f"'{c}'" for c in changed),
+            )
+        if (added or dropped) and prior.inputs:
+            logger.info(
+                "Stage '%s': reads a different input set than at last completion "
+                "(added: %s; no longer read: %s); re-running.",
+                stage_name,
+                ", ".join(f"'{c}'" for c in added) or "none",
+                ", ".join(f"'{c}'" for c in dropped) or "none",
             )
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage
@@ -610,6 +648,10 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
     # Stamp fingerprint + input digests on the record the stage just wrote,
     # so the next invocation can skip.
     record = ctx.config.stages.get(stage_name)
+    redigest = _REDIGEST_AFTER_RUN.get(stage_name)
+    if record is not None and redigest is not None and redigest(params):
+        digests = _stage_input_digests(ctx, stage_name, params)
+        fingerprint = _stage_fingerprint(stage_name, params, digests, _env_fragment())
     if record is not None:
         record.fingerprint = fingerprint
         record.inputs = digests

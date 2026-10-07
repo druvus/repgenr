@@ -63,7 +63,7 @@ from .base import (
     _aligner_help,
     _assembler_help,
     _derep_help,
-    _mask_help_msa,
+    _mask_help,
     _parse_key_values,
     _require_choice,
     _run,
@@ -286,7 +286,9 @@ def run(
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
-    mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
+    mask: str = typer.Option(
+        "none", "--mask", help=_mask_help() + " Needs --msa-source snptype or --with-snptype."
+    ),
     # --- taxonomy output ---
     node_basename: str | None = typer.Option(
         None,
@@ -364,9 +366,12 @@ def run(
             **_parse_key_values(tool_arg, "--tool-arg"),
             **_virus_extra(derep_tool, viral),
         }
+        # With --with-snptype and the aligner MSA source, --mask belongs to the
+        # standalone snptype stage only; phylo would reject it there.
+        mask_for_phylo = mask != "none" and (msa_source == "snptype" or not with_snptype)
         phylo_extra = {
             **_parse_key_values(aligner_arg, "--aligner-arg"),
-            **({"mask": mask} if mask != "none" else {}),
+            **({"mask": mask} if mask_for_phylo else {}),
         }
         dereplicate_params(
             tool=derep_tool,
@@ -386,6 +391,7 @@ def run(
             aligner=aligner,
             snptyper=snptyper,
             extra=phylo_extra,
+            on_run=True,
         )
         local = genomes_dir is not None
         if local and viral:
@@ -401,6 +407,11 @@ def run(
             reads_params(platform=platform)
             assemble_params(assembler=assembler)
         if with_snptype:
+            # The standalone snptype stage uses --snptyper whatever the MSA
+            # source; check the name here so a typo fails before any stage.
+            from ..snptypers.base import registry as _snp_registry
+
+            _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
             require_mask(mask)
         if not viral and not local and not reads and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")

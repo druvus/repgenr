@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..assemblers.base import AssembleParams as AdapterParams
-from ..assemblers.base import ReadSet, registry, select_assembler
+from ..assemblers.base import ReadSet, accepting_assemblers, registry, select_assembler
 from ..assemblers.contigs import ContigStats, filter_contigs
 from ..classifiers.base import Classification, ClassifyParams
 from ..classifiers.base import registry as classifier_registry
@@ -45,7 +45,7 @@ from ..core.contracts import (
     write_excused_runs,
     write_selection,
 )
-from ..core.errors import RepGenRError, UserInputError, WorkdirError
+from ..core.errors import MissingBinaryError, RepGenRError, UserInputError, WorkdirError
 from ..core.executors import parallel_map
 from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
@@ -131,6 +131,9 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     scratch.mkdir(parents=True, exist_ok=True)
 
     plan = _plan(rows, params, assemblies)
+    if params.assembler == "auto":
+        _excuse_missing_assemblers(plan, logger)
+        _require_something_to_assemble(plan)
     versions = _preflight(plan, logger)
     pending = [o for o in plan if o.excused is None and o.stats is None]
     check_free_disk(
@@ -320,6 +323,73 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
                     outcome.polisher = params.polisher
         plan.append(outcome)
     return plan
+
+
+ASSEMBLER_NOT_INSTALLED = "assembler_not_installed"
+
+
+def _excuse_missing_assemblers(plan: list[_Outcome], logger: logging.Logger) -> None:
+    """Re-excuse runs an adapter accepts but whose tool is not installed.
+
+    Under ``auto``, ``_plan`` excuses every run without an available adapter
+    as ``unsupported_platform``. That is right when no adapter takes the
+    platform; when one would, the tool is missing, so the run is excused as
+    ``assembler_not_installed`` and one warning per platform names the
+    adapters. The planner itself is unchanged because ``reads-gather`` calls
+    it on hosts without assemblers.
+    """
+    needed: dict[str, list[str]] = {}
+    for o in plan:
+        if o.excused is None or o.excused.reason != "unsupported_platform":
+            continue
+        row = o.row
+        reads = ReadSet(
+            row.run_accession, row.platform, row.instrument_model, row.layout, (), row.bases
+        )
+        names = accepting_assemblers(registry, reads)
+        if names:
+            o.excused = ExcusedRun(row.run_accession, "assemble", ASSEMBLER_NOT_INSTALLED)
+            needed.setdefault(row.platform, names)
+    for platform, names in sorted(needed.items()):
+        n = sum(
+            1
+            for o in plan
+            if o.excused is not None
+            and o.excused.reason == ASSEMBLER_NOT_INSTALLED
+            and o.row.platform == platform
+        )
+        logger.warning(
+            "%d %s run(s) excused as %s: none of %s is installed. Put one on PATH, run "
+            "with --container, or narrow the runs with reads --platform, then rerun "
+            "assemble with --force.",
+            n,
+            platform,
+            ASSEMBLER_NOT_INSTALLED,
+            ", ".join(names),
+        )
+
+
+def _require_something_to_assemble(plan: list[_Outcome]) -> None:
+    """Exit 4 when nothing can be assembled and a missing assembler is the cause."""
+    missing = [
+        o for o in plan if o.excused is not None and o.excused.reason == ASSEMBLER_NOT_INSTALLED
+    ]
+    if not missing or any(o.excused is None for o in plan):
+        return
+    by_platform: dict[str, list[str]] = {}
+    for o in missing:
+        reads = ReadSet(
+            o.row.run_accession, o.row.platform, o.row.instrument_model, o.row.layout, (), 0
+        )
+        by_platform.setdefault(o.row.platform, accepting_assemblers(registry, reads))
+    detail = "; ".join(
+        f"{platform} runs need one of {', '.join(names)}"
+        for platform, names in sorted(by_platform.items())
+    )
+    raise MissingBinaryError(
+        f"No run can be assembled: no assembler is installed for --assembler auto ({detail}). "
+        "Put one on PATH or run with --container."
+    )
 
 
 def _preflight(plan: list[_Outcome], logger: logging.Logger) -> dict[str, str]:

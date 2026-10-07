@@ -41,6 +41,7 @@ from ..core.errors import UserInputError, WorkdirError
 from ..core.inputs import file_digest, paths_stat_digest
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import ToolCapabilities, auto_select, scale_warning, warn_ignored_params
+from ..core.process import remove_tree
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
@@ -322,6 +323,7 @@ def build_tree(
             treebuilder,
             len(inputs),
         )
+        _clear_previous_builder_files(dirs.tree_dir)
         tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
     else:
         if msa is not None:
@@ -334,6 +336,7 @@ def build_tree(
         versions = {**versions, **source_versions}
         _warn_low_diversity(msa, logger)
         logger.info("Building tree with %s from MSA %s", treebuilder, msa)
+        _clear_previous_builder_files(dirs.tree_dir)
         tree = builder.build(msa, dirs.tree_dir, tree_params, logger)
 
     final = dirs.tree_dir / TREE_NWK
@@ -346,6 +349,24 @@ def build_tree(
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
     )
+
+
+def _clear_previous_builder_files(tree_dir: Path) -> None:
+    """Remove an earlier build's side files from ``tree_dir``.
+
+    ``tree/`` holds the current tree builder's own files; a matrix or a set of
+    bootstrap trees left by another builder would describe a different run.
+    ``tree.nwk`` stays until the new tree replaces it atomically. An entry may
+    vanish after listing (macOS drops a file's ``._`` AppleDouble sibling on
+    non-HFS volumes when the file is removed), so missing entries are skipped.
+    """
+    for entry in list(tree_dir.iterdir()):
+        if entry.name == TREE_NWK:
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            remove_tree(entry)
+        else:
+            entry.unlink(missing_ok=True)
 
 
 @dataclass

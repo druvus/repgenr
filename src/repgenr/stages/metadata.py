@@ -112,7 +112,7 @@ def _validate(params: MetadataParams) -> None:
         if not params.release or "." not in params.release:
             raise UserInputError("tsv source needs --release like '232.0' (major.minor).")
         if not params.version:
-            raise UserInputError("tsv source needs --version (bac120 or ar53).")
+            raise UserInputError("tsv source needs --gtdb-version (bac120 or ar53).")
     if not (params.target_genus or params.target_family):
         raise UserInputError("Supply --target-genus or --target-family.")
     if params.level == "species" and not params.target_species:

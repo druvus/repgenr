@@ -129,3 +129,37 @@ def test_masker_preflight_runs_before_the_typer(workdir, genome_files, register_
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(MissingBinaryError, match="absentmask"):
         run(ctx, SnptypeParams(tool="eagertyper", all_genomes=True, mask="absentmask"))
+
+
+class _AllOutputsTyper(_FullTyper):
+    """Writes every optional output: VCF, distance matrix and full alignment."""
+
+    def call(self, genomes, reference, out_dir, params, logger) -> SnpResult:  # noqa: ANN001
+        base = super().call(genomes, reference, out_dir, params, logger)
+        vcf = out_dir / "calls.vcf"
+        vcf.write_text("##fileformat=VCFv4.2\n")
+        matrix = out_dir / "dist.tsv"
+        matrix.write_text("\ta\na\t0\n")
+        return SnpResult(
+            core_snp_fasta=base.core_snp_fasta,
+            full_alignment=base.full_alignment,
+            vcf=vcf,
+            snp_distance_matrix=matrix,
+        )
+
+
+def test_rerun_with_another_typer_drops_stale_optional_outputs(
+    workdir, genome_files, register_tool, fake_typer
+):
+    """A typer that writes no VCF, matrix or full alignment must not leave the
+    previous typer's files in snp/, where they would describe another run."""
+    register_tool(registry, "alltyper", _AllOutputsTyper)
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, SnptypeParams(tool="alltyper", all_genomes=True))
+    for name in ("variants.vcf", "snp_distance_matrix.tsv", "full_alignment.fasta"):
+        assert (ctx.snp_dir / name).exists()
+
+    result = run(ctx, SnptypeParams(tool="faketyper", all_genomes=True))
+    assert result.vcf is None and result.snp_distance_matrix is None
+    for name in ("variants.vcf", "snp_distance_matrix.tsv", "full_alignment.fasta"):
+        assert not (ctx.snp_dir / name).exists(), name

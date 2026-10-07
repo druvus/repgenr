@@ -257,8 +257,50 @@ All notable changes to RepGenR are documented here. The format follows
   `csv` module's default, so the last column of every row carried a stray
   `\r`: `awk -F'\t' '$2=="x"'` on `clusters.tsv` never matched. They now
   end with `\n`. Readers were unaffected either way.
+- Command audit (2026-10-07): `run --with-snptype --snptyper <unknown>` is
+  rejected with exit 2 before any stage starts, and `run --with-snptype
+  --mask gubbins` reaches the snptype stage instead of exiting 2.
+- `versions` on a workdir without `repgenr.yaml` exits 3 and writes no
+  fragment. `status` names `metadata`, `vmetadata`, `ingest` and `reads` as
+  starting points, and the `-B/--bootstrap` help says what IQ-TREE needs.
+- `list-tools` and the version records no longer store a tool's error line
+  when the tool rejects its version flag (sibeliaz); the version is recorded
+  as unknown.
+- A missing workdir exits 3 on `dereplicate`, `tree2tax`, `glance`,
+  `derep-unpack`, `cluster-summary`, `derep-stock`, `genome`, `vgenome` and
+  `assemble`, instead of a traceback or a silently created workdir. `glance`
+  reports a workdir without genomes before it checks for dRep, and records
+  the dRep version.
+- `genome-fetch` runs the `datasets` preflight without `--versions-out`
+  (exit 4 instead of a traceback). A `selection.tsv` or `reads.tsv` that lacks
+  required columns exits 3 and names them, instead of a KeyError.
+- `excused_runs.tsv` keeps each excused run on one line; a multi-line failure
+  reason no longer spans several physical lines.
+- `snptype` drops optional outputs (`full_alignment.fasta`,
+  `snp_distance_matrix.tsv`, `variants.vcf`) that the current typer does not write, and
+  `phylo` clears the previous tree builder's files from `tree/` before a
+  rebuild.
+- The SibeliaZ wrapper on macOS skips AppleDouble `._*` files and leaves no
+  empty block temp files in `align/`.
+- `tree2tax` maps a dereplicated member that is also a leaf once, and does
+  not log `--include-dereplicated` as a changed input file. A malformed Newick
+  tree (`tree2tax`, `tree2tax-relations`) and a nonexistent `--clusters` path
+  exit 3.
+- `derep-stock`: `pack` refuses a workdir without dereplication outputs,
+  `unpack` checks the stored run before it replaces anything, a repeat
+  `unpack` reruns when the live dereplication changed, and every action exits
+  3 on a nonexistent workdir.
+- `docs/output.md` and `docs/usage.md` agree with the runs: `scratch/` is
+  written by five stages, tool intermediates of `dereplicate` are under
+  `scratch/`, and `glance` compares all genomes.
+- `metadata` with a local GTDB table names `--gtdb-version` when it is missing
+  (it named `--version`) and reruns when the `--metadata-path` table changes.
+  `vmetadata --source bvbrc` reports an unreachable FTP server as exit 3.
 
 ### Changed
+- A run whose assembler is not installed is excused as
+  `assembler_not_installed` with a warning, and the other runs proceed. With
+  `--assembler auto`, `assemble` exits 4 only when no run can be assembled.
 - The `simple` SNP typer's core-SNP reduction is vectorised. It compared every
   pair of genomes character by character in Python, which cost about 8 ms per
   pair at 200000 sites and made the adapter's advertised limit of 2000 genomes

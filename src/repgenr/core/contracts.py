@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
+from .errors import WorkdirError
+
 CLUSTERS_TSV = "clusters.tsv"
 GENOME_STATUS_TSV = "genome_status.tsv"
 CLUSTER_SUMMARY_TSV = "cluster_summary.tsv"
@@ -148,6 +150,18 @@ class SelectionRow:
     contamination: float | None = None
 
 
+def _require_columns(reader: csv.DictReader, path: Path, required: list[str]) -> None:
+    """Raise WorkdirError naming the file when its header lacks a required column.
+
+    An empty file (no header) passes; the caller reads it as holding no rows.
+    """
+    if reader.fieldnames is None:
+        return
+    missing = [c for c in required if c not in reader.fieldnames]
+    if missing:
+        raise WorkdirError(f"{path} lacks the column(s) {', '.join(missing)}.")
+
+
 def _tsv_writer(fo: IO) -> Any:
     """A TSV writer with Unix line endings. ``csv.writer`` defaults to
     ``\\r\\n``, which leaves a stray ``\\r`` on the last column of every row
@@ -237,6 +251,7 @@ def read_selection(path: Path) -> list[SelectionRow]:
     rows: list[SelectionRow] = []
     with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo, delimiter="\t")
+        _require_columns(reader, path, ["accession", "filename"])
         for row in reader:
             rows.append(
                 SelectionRow(
@@ -488,7 +503,10 @@ def write_reads(path: Path, rows: list[ReadRow]) -> None:
 def read_reads(path: Path) -> list[ReadRow]:
     rows: list[ReadRow] = []
     with open(path, encoding="utf-8", newline="") as fo:
-        for rec in csv.DictReader(fo, delimiter="\t"):
+        reader = csv.DictReader(fo, delimiter="\t")
+        # library_selection is optional: tables written before it existed lack it.
+        _require_columns(reader, path, [c for c in _READS_COLUMNS if c != "library_selection"])
+        for rec in reader:
             split = lambda s: tuple(x for x in s.split(";") if x)  # noqa: E731
             rows.append(
                 ReadRow(
@@ -622,7 +640,9 @@ def write_excused_runs(path: Path, rows: list[ExcusedRun]) -> None:
         writer = _tsv_writer(fo)
         writer.writerow(["run_accession", "step", "reason"])
         for r in rows:
-            writer.writerow([r.run_accession, r.step, r.reason])
+            # A tool failure's reason carries the output tail on further lines;
+            # fold it onto one line so each run stays one TSV row.
+            writer.writerow([r.run_accession, r.step, " ".join(r.reason.split())])
 
 
 def read_excused_runs(path: Path) -> list[ExcusedRun]:

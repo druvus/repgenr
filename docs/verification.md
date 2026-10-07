@@ -297,6 +297,131 @@ The old scratch was 8.3 GB of uncompressed pileup VCF, which twice filled a
 disk during this audit. What remains is the whole-genome alignment the stage
 publishes for maskers.
 
+## Command audit (2026-10-07)
+
+Every `repgenr` subcommand was checked against its help text, argument
+validation, an offline run on small local data, resume, the error surface
+and the matching offline tests. The checks used the offline test suite and the
+live offline subset (`-m "live and not network and not container"`), with no
+network access and no Docker. Audit data lived on an external volume. The 28
+commands were audited in six batches, one per help panel. In the first table a
+cell is `ok` (agrees with the documentation), `fixed` (a defect was found and
+corrected), `open` (a finding was left for the maintainer), `n/a` (the check
+does not apply, for example resume for a stateless step or a live test that
+does not exist) or `not run` (a live test exists but needs the network or a
+container). The Result column takes the worst cell, in the order open, fixed,
+ok, and also counts the docs agreement check.
+
+| Command | Help | Validation | Offline run | Resume | Errors | Live subset | Result |
+|---|---|---|---|---|---|---|---|
+| run | ok | fixed | fixed | ok | ok | ok | fixed |
+| status | ok | ok | ok | n/a | n/a | ok | fixed |
+| metadata | ok | fixed | ok | fixed | fixed | not run | open |
+| genome | ok | ok | ok | not run | open | not run | open |
+| vmetadata | ok | ok | ok | ok | open | not run | open |
+| vgenome | open | ok | ok | ok | ok | not run | open |
+| ingest | ok | ok | ok | ok | ok | ok | ok |
+| reads | ok | ok | ok | ok | ok | not run | ok |
+| assemble | ok | ok | fixed | ok | fixed | not run | open |
+| dereplicate | ok | fixed | fixed | ok | ok | ok | fixed |
+| snptype | ok | ok | fixed | ok | ok | n/a | fixed |
+| phylo | fixed | ok | fixed | ok | ok | ok | fixed |
+| tree2tax | ok | fixed | fixed | fixed | ok | n/a | fixed |
+| glance | ok | fixed | fixed | ok | open | not run | open |
+| cluster-summary | ok | fixed | ok | open | ok | ok | open |
+| derep-unpack | ok | ok | ok | open | ok | ok | open |
+| derep-stock | ok | fixed | fixed | fixed | fixed | ok | open |
+| list-tools | ok | n/a | fixed | n/a | ok | ok | fixed |
+| doctor | ok | ok | ok | n/a | n/a | ok | ok |
+| versions | ok | fixed | ok | n/a | n/a | ok | fixed |
+| genome-fetch | ok | ok | fixed | n/a | fixed | n/a | fixed |
+| dereplicate-chunk | ok | ok | ok | n/a | ok | ok | ok |
+| dereplicate-merge | ok | ok | ok | n/a | ok | ok | ok |
+| phylo-build | fixed | ok | ok | n/a | ok | ok | fixed |
+| tree2tax-relations | ok | ok | fixed | n/a | fixed | ok | fixed |
+| assemble-run | ok | ok | fixed | n/a | fixed | n/a | fixed |
+| genome-qc | ok | ok | ok | n/a | ok | n/a | ok |
+| reads-gather | ok | ok | fixed | n/a | ok | n/a | fixed |
+
+Defects found and fixed, with the commit that fixed each. Several commits
+change shared code (the stage runner, the contract readers and the Newick
+parser), so they also apply to commands other than the one named.
+
+| Command | Defect | Commit |
+|---|---|---|
+| run | `--with-snptype --snptyper bogus` passed a dry run and failed the real run with exit 5; it now exits 2 at once | 2722386 |
+| run | `--with-snptype --mask gubbins` was rejected with exit 2; the mask now reaches the snptype stage | d16afbd |
+| run, phylo | The `--mask` help on `run` did not mention `--with-snptype`; the bootstrap help said ">=1000" although smaller values are accepted | 3c087a7 |
+| status | The "no run found" hint named only `metadata` and `vmetadata`; it now names all four starting points | 3c087a7 |
+| versions | A nonexistent workdir printed nothing and exited 0; it now exits 3 and writes no fragment | 3608ad9 |
+| list-tools | A rejected version flag (sibeliaz) was recorded as the tool's error line; it is now recorded as unknown | f1905d7 |
+| metadata | The tsv source named `--version` (the global flag) instead of `--gtdb-version` when the version was missing | 5bb9f0c |
+| metadata | Replacing the `--metadata-path` table was skipped on resume and kept a stale selection | 4337fab |
+| vmetadata | An unreachable BV-BRC FTP server gave a traceback with exit 1; it now exits 3 with a named error | cbf839b |
+| docs/usage.md | Exit code 3 was described only as workdir state; it also covers a failed remote request | 8e93630 |
+| docs/output.md | `scratch/` was attributed to snptype only; it is written by five stages | 2a9f38e |
+| genome-fetch | The `datasets` preflight was skipped without `--versions-out`, giving a traceback; it now exits 4 | 2762f39 |
+| genome-fetch | A `selection.tsv` without the needed columns raised KeyError; it now exits 3 and names the columns | faef47b |
+| assemble-run, reads-gather | A `reads.tsv` without the needed columns raised KeyError; it now exits 3 and names the columns | 6e7efc6 |
+| assemble, assemble-run | A failure reason spanned several lines in `excused_runs.tsv`; each excused run now stays on one line | c091e9f |
+| assemble, assemble-run | With `--assembler auto` and no assembler installed, runs were excused as `unsupported_platform`; they are now excused as `assembler_not_installed` with a warning, and the stage exits 4 only when nothing can be assembled | e7afca7, 68bef93 |
+| dereplicate, tree2tax | A missing workdir gave a traceback or was created silently; the stage runner now exits 3 (it also covers glance, derep-unpack, cluster-summary, derep-stock, genome, vgenome and assemble) | c04fc22 |
+| dereplicate | docs/output.md placed tool intermediates under `derep/`; they are under `scratch/` | 02f44ec |
+| snptype | Switching typers left the previous typer's optional outputs (`full_alignment.fasta`, `snp_distance_matrix.tsv`, `variants.vcf`) in `snp/`; they are now dropped | 1429100 |
+| phylo | Switching tree builders left the previous builder's files in `tree/`; they are now cleared | d2dfbb1 |
+| phylo | The SibeliaZ macOS wrapper concatenated AppleDouble `._*` files into the alignment | a09ede2 |
+| phylo | The SibeliaZ macOS wrapper left thousands of empty block temp files | 82dc1c0 |
+| tree2tax | Toggling `--include-dereplicated` was logged as a changed input file | 2e01791 |
+| tree2tax | A dereplicated member that is also a leaf was mapped twice in `genomes_map.tsv` | 4ffd3ee |
+| tree2tax, tree2tax-relations | A malformed Newick tree gave a dendropy traceback; it now exits 3 | ddf48c6 |
+| tree2tax-relations | A nonexistent `--clusters` path was skipped silently; it now exits 3 | a66b8ef |
+| glance | A workdir without genomes exited 4 (dRep absent) instead of 3 | 645feaa |
+| glance | The stage record held no dRep version | e003775 |
+| glance | docs/usage.md said glance compares the representatives; it compares all genomes | 8cab3b7 |
+| cluster-summary | A missing workdir created a manifest, or raised an OSError traceback | 50194c6 |
+| derep-stock | `pack` of a workdir without dereplication outputs stored an empty run | f84e11f |
+| derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
+| derep-stock | A repeat `unpack` after a new dereplication was skipped and restored nothing | fde2eb9 |
+| derep-stock | `list` and `pack` on a nonexistent workdir exited 0 or created the workdir | bec185a |
+
+Observations left for the maintainer. None changed a documented behaviour, so
+they are recorded here and not fixed.
+
+| Area | Observation |
+|---|---|
+| Resume | The resume fingerprint covers parameters, inputs and the environment, not outputs, so a stage whose output was deleted by hand is skipped and `--force` is needed. |
+| Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3, while the exit-code table reserves 6 for a failed external tool. |
+| Exit codes | `status` and `doctor` exit 0 on a nonexistent workdir, so a script that uses `doctor` as a health gate passes on a mistyped path. |
+| Errors | A stage that fails cleanly leaves no record in `repgenr.yaml`, so `status` shows it as next and not interrupted, and `doctor` reports no failure while `tree/` holds partial files. |
+| Errors | Exit 6 messages carry the command line and an output tail, so they span several lines. |
+| Errors | `phylo --treebuilder mashtree` on a single-representative set fails inside mashtree, and `snptype` with no variable sites exits 3; a genome-count check would give a clearer message. |
+| Phylogeny | mashtree can drop degenerate genomes and exit 0, and no check compares the leaves of the tree with the input genomes. |
+| Phylogeny | A `tree.nwk` with text after the final `;` is accepted by `tree2tax` but flagged as truncated by `doctor`. |
+| Phylogeny | `tree2tax-relations` with an outgroup that is not a leaf logs a warning and leaves the tree unrooted, with exit 0. |
+| Phylogeny | FastTree on the variable-site-only alignment of the `simple` typer gives branch lengths above one substitution per site, because there is no ascertainment correction; usage.md could say so. |
+| Phylogeny | `phylo-build --msa-only` leaves `snp/` beside `msa.fasta`, and a ska2 run keeps its k-mer files in `scratch/snptype/`. |
+| Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
+| Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
+| Docs | docs/output.md does not list `derep/unpacked/`, `derep/stock/<run>/`, the glance plots and `glance_wd/`, or the result directories of the stateless steps. |
+| Help text | `glance --tool` lists four dereplicators but only dRep supports comparison; `reads -tf/-tg/-ts` are not combined, since only the most specific is used; `tree2tax --node-basename` does not say that internal nodes otherwise get hash names. |
+| Help text | The `reads --drop-selection` default is rendered as a Python list in the reference, and the no-match message of `reads` does not mention `--max-bases`. |
+| reads | `--accession-file` treats only a `#` in column 1 as a comment, and a rejected invocation still creates the workdir and a log. |
+| assemble | A missing CheckM2 result is kept with a warning and not excused, and `--polisher auto` with no polisher installed leaves ONT assemblies unpolished without a warning. |
+| derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
+| derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
+| glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
+| Entry stages | `ncbi_acc_download_list.txt` has no trailing newline, so `wc -l` undercounts and a `while read` loop drops the last accession. |
+| Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
+| Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
+| Network | A BV-BRC group download writes `download.fa` in place, so an interrupted transfer can leave a partial file that the next run reuses. |
+| Network | The BV-BRC path uses FTPS directly, so proxy variables do not block it, and `vmetadata --list` needs the network whatever `--source` says. |
+| Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
+| Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table, and `vgenome --outgroup-treebuilder` does not name its accepted values (mashtree only). |
+| Docs | docs/output.md does not list `ncbi_acc_download_list.txt`, the deliverable of `genome --accession-list-only`. |
+| Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
+| Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
+| Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
+
 ## Platform notes (macOS / Apple Silicon)
 
 - Several tools lack osx-arm64 builds; some run via an osx-64 (Rosetta) conda env

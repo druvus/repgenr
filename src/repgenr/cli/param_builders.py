@@ -365,6 +365,7 @@ def phylo_params(
     threads: Any = _UNSET,
     extra: Any = _UNSET,
     allow_incomplete: Any = _UNSET,
+    on_run: bool = False,
 ) -> PhyloParams:
     from ..aligners.base import registry as _aln_registry
     from ..core.errors import UserInputError
@@ -387,7 +388,8 @@ def phylo_params(
     if mask is not None:
         require_mask(mask)
         if effective_source != "snptype":
-            raise UserInputError("--mask applies only with --msa-source snptype.")
+            hint = ", or on run with --with-snptype" if on_run else ""
+            raise UserInputError(f"--mask applies only with --msa-source snptype{hint}.")
     return _build(
         PhyloParams,
         treebuilder=treebuilder,

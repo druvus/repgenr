@@ -425,3 +425,42 @@ def test_provenance_records_reference_mask_and_extras(workdir: Path, fake_phylo_
     assert params["reference"] == "Fam_gen_sp_GCA_000002.fasta"
     assert params["mask"] is None
     assert params["extra"] == {"kmer": "15"}
+
+
+def test_rebuild_with_another_builder_drops_the_previous_builders_files(
+    workdir: Path, fake_phylo_tools, register_tool
+) -> None:
+    """tree/ holds the current builder's own files: a rebuild with another builder
+    must not leave the previous one's side files (matrices, bootstrap trees)."""
+    register_tool(tb_registry, "faketree_sidefile", _SideFileTreeBuilder)
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, PhyloParams(treebuilder="faketree_sidefile", no_outgroup=True))
+    assert (ctx.tree_dir / "builder_output.treefile").exists()
+    (ctx.tree_dir / "signatures").mkdir()
+    (ctx.tree_dir / "signatures" / "a.sig").write_text("x")
+
+    tree = run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True))
+    assert tree.exists()
+    assert sorted(p.name for p in ctx.tree_dir.iterdir()) == ["tree.nwk"]
+
+
+def test_builder_file_cleanup_tolerates_entries_that_vanish(tmp_path: Path, monkeypatch) -> None:
+    """On non-HFS volumes macOS removes a file's ``._`` sibling with it, so a
+    listed entry can be gone by the time the cleanup reaches it."""
+    from repgenr.stages import phylo as phylo_mod
+
+    tree_dir = tmp_path / "tree"
+    tree_dir.mkdir()
+    (tree_dir / "tree.nwk").write_text("(a);\n")
+    (tree_dir / "matrix.tsv").write_text("x")
+    real_iterdir = Path.iterdir
+
+    def iterdir_with_ghost(self: Path):
+        yield from real_iterdir(self)
+        if self == tree_dir:
+            yield tree_dir / "._matrix.tsv"  # listed, already gone
+
+    monkeypatch.setattr(Path, "iterdir", iterdir_with_ghost)
+    phylo_mod._clear_previous_builder_files(tree_dir)
+    assert sorted(p.name for p in real_iterdir(tree_dir)) == ["tree.nwk"]

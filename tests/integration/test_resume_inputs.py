@@ -261,3 +261,18 @@ def test_genome_inputs_track_selection_tsv(tmp_path: Path) -> None:
 def test_metadata_has_no_local_inputs(tmp_path: Path) -> None:
     ctx = WorkdirContext(tmp_path, create=True)
     assert _digests(ctx, "metadata", SimpleNamespace()) == {}
+
+
+def test_metadata_inputs_track_a_local_metadata_path(tmp_path: Path) -> None:
+    """--metadata-path is a local file the selection is computed from; replacing
+    the table must invalidate a prior metadata resume, as an accession list
+    does for reads."""
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    table = tmp_path / "bac120_metadata_r232.tsv"
+    table.write_text("accession\nRS_GCF_1\n", encoding="utf-8")
+    params = SimpleNamespace(metadata_path=str(table))
+    before = _digests(ctx, "metadata", params)
+    assert before
+    table.write_text("accession\nRS_GCF_1\nRS_GCF_2\n", encoding="utf-8")
+    after = _digests(ctx, "metadata", params)
+    assert after != before

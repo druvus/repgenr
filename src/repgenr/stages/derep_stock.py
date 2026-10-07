@@ -22,7 +22,7 @@ from ..core.contracts import (
     read_clusters,
     read_genome_status,
 )
-from ..core.errors import UserInputError
+from ..core.errors import UserInputError, WorkdirError
 from ..core.process import remove_tree
 from ..dereplicators.base import DerepResult
 from .dereplicate import _update_manifest
@@ -38,6 +38,8 @@ class DerepStockParams:
 
 
 def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
+    if not ctx.workdir.is_dir():
+        raise WorkdirError(f"Working directory not found: {ctx.workdir}")
     store = ctx.derep_dir / "stock"
     if params.action == "list":
         _list(store, ctx.logger)
@@ -76,6 +78,17 @@ def _list(store: Path, logger) -> None:
 
 
 def _pack(ctx: WorkdirContext, run_path: Path) -> None:
+    # Check before touching the store: a workdir without a dereplication
+    # would otherwise be stored as an empty run.
+    clusters = ctx.derep_dir / CLUSTERS_TSV
+    if not clusters.is_file():
+        raise WorkdirError(f"Missing {clusters}. Run the dereplicate stage first.")
+    reps = list_fasta(ctx.representatives_dir)
+    if not reps:
+        raise WorkdirError(
+            f"No representative genomes under {ctx.representatives_dir}. "
+            "Run the dereplicate stage first."
+        )
     if run_path.exists():
         remove_tree(run_path)
     run_path.mkdir(parents=True)
@@ -83,16 +96,31 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
         src = ctx.derep_dir / name
         if src.exists():
             shutil.copy2(src, run_path / name)
-    reps = run_path / "representatives"
-    reps.mkdir()
-    for rep in list_fasta(ctx.representatives_dir):
-        (reps / rep.name).symlink_to((ctx.genomes_dir / rep.name).resolve())
+    reps_dir = run_path / "representatives"
+    reps_dir.mkdir()
+    for rep in reps:
+        (reps_dir / rep.name).symlink_to((ctx.genomes_dir / rep.name).resolve())
     ctx.logger.info("Packed run to %s", run_path)
 
 
 def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     if not run_path.exists():
         raise UserInputError(f"No stored run named '{run_path.name}'")
+    # Validate the stored run in full before the current dereplication is
+    # replaced, so an incomplete run leaves the workdir unchanged.
+    stored_clusters = run_path / CLUSTERS_TSV
+    if not stored_clusters.is_file():
+        raise WorkdirError(f"Stored run '{run_path.name}' is incomplete: missing {stored_clusters}")
+    stored_reps = run_path / "representatives"
+    if not stored_reps.is_dir():
+        raise WorkdirError(f"Stored run '{run_path.name}' is incomplete: missing {stored_reps}")
+    rep_names = [rep.name for rep in list_fasta(stored_reps)]
+    absent = [name for name in rep_names if not (ctx.genomes_dir / name).is_file()]
+    if absent:
+        raise WorkdirError(
+            f"Stored run '{run_path.name}' names {len(absent)} representative(s) "
+            f"not found under {ctx.genomes_dir}, e.g. {absent[0]}"
+        )
     for name in _FLAT_FILES:
         src = run_path / name
         if src.exists():
@@ -100,8 +128,8 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     if ctx.representatives_dir.exists():
         remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
-    for rep in (run_path / "representatives").iterdir():
-        shutil.copy2(ctx.genomes_dir / rep.name, ctx.representatives_dir / rep.name)
+    for name in rep_names:
+        shutil.copy2(ctx.genomes_dir / name, ctx.representatives_dir / name)
     # The derep contract now describes the stored run: bring the manifest's
     # per-genome status in line with it and re-stamp the dereplicate record
     # without a fingerprint, so `status` reports the run on disk and the next

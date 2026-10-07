@@ -40,8 +40,11 @@ def genome_fetch(params: GenomeFetchParams, logger: logging.Logger) -> int:
     """
     if not params.selection_tsv.exists():
         raise WorkdirError(f"genome-fetch: selection file not found: {params.selection_tsv}")
+    # Always check the downloader, so a missing datasets binary is reported as
+    # such (exit 4) rather than surfacing from the first download.
+    versions = preflight(DATASETS_CAPS)
     if params.versions_out is not None:
-        write_versions_fragment(params.versions_out, preflight(DATASETS_CAPS))
+        write_versions_fragment(params.versions_out, versions)
     rows = read_selection(params.selection_tsv)
     if not rows:
         raise WorkdirError(f"genome-fetch: selection file is empty: {params.selection_tsv}")

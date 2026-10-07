@@ -83,7 +83,7 @@ SHARED_FLAGS: list[tuple[str, str, str]] = (
     + [("snptype", "phylo", f) for f in ("--all-genomes", "--reference")]
     + [("snptype", "phylo", "--allow-incomplete")]
     + [("phylo", "run", f) for f in ("--all-genomes", "--no-outgroup", "--bootstrap")]
-    + [("phylo", "run", f) for f in ("--reference", "--msa-source", "--aligner-arg", "--mask")]
+    + [("phylo", "run", f) for f in ("--reference", "--msa-source", "--aligner-arg")]
     + [("phylo", "run", "--allow-incomplete")]
     + [("phylo", "phylo-build", f) for f in ("--no-outgroup", "--bootstrap", "--reference")]
     + [("phylo", "phylo-build", f) for f in ("--msa-source", "--aligner-arg", "--mask")]

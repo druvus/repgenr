@@ -10,9 +10,11 @@ stage consumes these files.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from ftplib import FTP, FTP_TLS
+from ftplib import FTP, FTP_TLS, all_errors
 from pathlib import Path
 from statistics import mean, median
 
@@ -50,6 +52,18 @@ def _bvbrc_connect(timeout: int = 120) -> _ReuseFTP_TLS:
     ftp.login(user="anonymous", passwd="anonymous")
     ftp.prot_p()
     return ftp
+
+
+@contextmanager
+def _bvbrc_session() -> Iterator[_ReuseFTP_TLS]:
+    """Open a BV-BRC FTPS session; a connection or protocol failure raises
+    :class:`WorkdirError` naming the server, like an HTTP failure in core.http,
+    instead of a bare OSError that the CLI would report as unexpected."""
+    try:
+        with _bvbrc_connect() as ftp:
+            yield ftp
+    except all_errors as exc:
+        raise WorkdirError(f"BV-BRC FTP request failed: {BVBRC_FTP} ({exc})") from exc
 
 
 @dataclass
@@ -192,7 +206,7 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
 
 
 def _list_targets(logger) -> None:
-    with _bvbrc_connect() as ftp:
+    with _bvbrc_session() as ftp:
         ftp.cwd(BVBRC_FTP_DIR)
         targets = sorted(f.replace(".fna", "") for f in ftp.nlst() if f.endswith(".fna"))
     logger.info("Available targets:\n%s", "\n".join(targets))
@@ -213,7 +227,7 @@ def resolve_group_name(target: str, listing: list[str]) -> str | None:
 
 
 def _download_group(target: str, dest: Path, logger) -> None:
-    with _bvbrc_connect() as ftp:
+    with _bvbrc_session() as ftp:
         ftp.cwd(BVBRC_FTP_DIR)
         group = resolve_group_name(target, ftp.nlst())
         if group is None:

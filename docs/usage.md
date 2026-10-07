@@ -141,9 +141,13 @@ accepts no less than 8). Each finished run leaves a marker under
 `assemblies/<run>/`, so an interrupted stage resumes without refetching;
 reads are deleted after a successful assembly unless `--keep-reads`, and the
 assembler's scratch unless `--keep-files`. A run without an ENA FASTQ
-mirror, one whose download fails its checksum, one no assembler accepts, or
-one whose assembly fails is written to `excused_runs.tsv` with the reason and
-the rest proceed; the completeness guard of later stages excuses those runs.
+mirror, one whose download fails its checksum, one no assembler accepts
+(`unsupported_platform`), one whose assembler is not installed under
+`--assembler auto` (`assembler_not_installed`, with a warning naming the
+adapters that would take it), or one whose assembly fails is written to
+`excused_runs.tsv` with the reason and the rest proceed; the completeness
+guard of later stages excuses those runs. When no run can be assembled
+because no assembler is installed, the stage exits 4 instead.
 `--outgroup FASTA` sets a genome aside for rooting, as `ingest --outgroup`
 does. Per-assembly metrics (contigs, total length, N50, coverage from the
 sequenced bases) are in `assembly_stats.tsv`.
@@ -323,13 +327,15 @@ and from the canonical genome filenames otherwise.
 
 ### Inspecting a dereplication
 
-Four commands read a dereplicated working directory without rerunning the
-dereplicator. `repgenr cluster-summary` regenerates
+Three commands read a dereplicated working directory without rerunning the
+dereplicator, and a fourth inspects the genomes before dereplication.
+`repgenr cluster-summary` regenerates
 `derep/cluster_summary.tsv`, one row per representative (see `output.md`).
 `repgenr derep-unpack` lays the clusters out as one directory per
 representative with its members inside (`--no-representant` leaves the
-representative out). `repgenr glance` runs dRep's comparison over the
-representatives and writes its plots (dRep only). `repgenr derep-stock
+representative out). `repgenr glance` runs dRep's comparison over all genomes
+in `genomes/` and writes its dendrogram and plots (dRep only; it does not need
+a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
 representatives under `derep/stock/<run>`; `--action unpack` restores a
 stored run, refreshes the manifest and re-stamps the `dereplicate` record so
@@ -766,7 +772,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 0 | Success. |
   | 1 | An unexpected error (traceback in the run log), or `doctor` found failures. |
   | 2 | Invalid or missing user input (also Typer's own usage errors). |
-  | 3 | The working directory is missing files or is in a bad state. |
+  | 3 | The working directory is missing files or is in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. |
   | 4 | A required external tool is absent or below its version floor. |
   | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed. Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |
