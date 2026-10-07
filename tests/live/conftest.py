@@ -327,7 +327,10 @@ def tsv_cache(cached_workdir) -> Path:
 def viral_cache(cached_workdir) -> Path:
     return cached_workdir(
         "hepatovirus_ncbi_virus",
-        [["vmetadata", "-t", "hepatovirus", "--complete-only"], ["vgenome", "-tg", "Hepatovirus"]],
+        [
+            ["vmetadata", "--target", "hepatovirus", "--complete-only"],
+            ["vgenome", "-tg", "Hepatovirus"],
+        ],
         "vgenome",
     )
 
