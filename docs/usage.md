@@ -91,9 +91,14 @@ repgenr status -wd $WD     # which stages are done, and what to run next
 the stage command by hand (`repgenr status` says which comes next). Two
 worth knowing: `--with-snptype` adds the standalone `snptype` stage after
 dereplication, so the SNP tables under `snp/` are produced even when the tree
-is built another way (with `--msa-source snptype`, `phylo` still runs its own
-typing pass into the same directory, and reuses it afterwards), and
-`--genomes-dir` starts the chain from local genomes.
+is built another way, and `--genomes-dir` starts the chain from local genomes.
+With `--msa-source snptype`, `phylo` runs its own typing pass, outgroup
+included, into the same directory; `run` then places `snptype` after `phylo`,
+so `snp/` holds the tables the `snptype` record describes, and a later `phylo`
+run that changes only the tree builder types again. When a `phylo` typing pass
+replaces tables the `snptype` stage wrote, `phylo` removes the `snptype` record
+and says so in the log; `status` then no longer lists the stage, and a repeat
+`snptype` rebuilds the tables.
 
 ### Starting from local genomes
 

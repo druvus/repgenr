@@ -274,7 +274,8 @@ def run(
         False,
         "--with-snptype",
         help="Run the standalone snptype stage (with --snptyper, --mask, --reference) after "
-        "dereplication, so the SNP tables are produced whatever builds the tree.",
+        "dereplication, so the SNP tables are produced whatever builds the tree. With "
+        "--msa-source snptype it runs after phylo, whose typing pass also writes snp/.",
     ),
     # --- phylogeny ---
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
@@ -434,7 +435,7 @@ def run(
             else PIPELINE_BACTERIAL
         )
         if with_snptype:
-            i = chain.index("phylo")
+            i = chain.index("phylo") + (1 if msa_source == "snptype" else 0)
             chain = (*chain[:i], "snptype", *chain[i:])
         lineage = "reads" if reads else "local" if local else "viral" if viral else "bacterial"
         typer.echo(f"[dry-run] {lineage} pipeline in {workdir}:")
@@ -571,7 +572,8 @@ def run(
             allow_incomplete=allow_incomplete,
         ),
     )
-    if with_snptype:
+
+    def _snptype_stage() -> None:
         from ..stages.snptype import SnptypeParams
 
         _run(
@@ -587,6 +589,13 @@ def run(
                 extra=_parse_key_values(aligner_arg, "--aligner-arg"),
             ),
         )
+
+    # With --msa-source snptype, phylo types into snp/ as well; the standalone
+    # stage then runs after it, so the SNP tables left in snp/ are the ones
+    # its record describes.
+    snptype_after_phylo = with_snptype and msa_source == "snptype"
+    if with_snptype and not snptype_after_phylo:
+        _snptype_stage()
     _run(
         "phylo",
         workdir,
@@ -604,6 +613,8 @@ def run(
             allow_incomplete=allow_incomplete,
         ),
     )
+    if snptype_after_phylo:
+        _snptype_stage()
     _run(
         "tree2tax",
         workdir,
