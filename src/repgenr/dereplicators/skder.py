@@ -32,7 +32,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import FASTA_SUFFIXES, list_fasta
-from ..core.errors import ToolExecutionError, WorkdirError
+from ..core.errors import ToolExecutionError, UserInputError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy, remove_tree
 from .base import (
@@ -44,6 +44,8 @@ from .base import (
 )
 
 _ARGV_WARN_GENOMES = 5000
+# skDER asks for confirmation below this ANI (percent); skani is unreliable there.
+_MIN_ANI_PCT = 80.0
 
 
 class SkderDereplicator(Dereplicator):
@@ -76,6 +78,15 @@ class SkderDereplicator(Dereplicator):
         params: DerepParams,
         logger: logging.Logger,
     ) -> DerepResult:
+        ani_pct = _as_percent(params.secondary_ani)
+        if float(ani_pct) < _MIN_ANI_PCT:
+            # skDER stops at an interactive question below 80 percent (skani's
+            # estimates are unreliable there); refuse before it runs.
+            raise UserInputError(
+                f"skDER does not cluster below {_MIN_ANI_PCT:g} percent ANI "
+                f"(--secondary-ani {params.secondary_ani:g}); skani's estimates are "
+                "unreliable there. Use a higher --secondary-ani or --tool sourmash."
+            )
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Run skDER on a local temp filesystem to avoid exFAT/NTFS ._* breakage,
@@ -90,7 +101,6 @@ class SkderDereplicator(Dereplicator):
                 len(genomes),
             )
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
-        ani_pct = _as_percent(params.secondary_ani)
         af_pct = _as_percent(params.aligned_fraction)
         cmd = [
             "skder",

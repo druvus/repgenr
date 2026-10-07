@@ -116,3 +116,20 @@ def test_representative_aligned_fraction_does_not_admit_a_member(tmp_path: Path)
         log.removeHandler(handler)
     assert result.clusters["repA.fasta"] == ["memX.fasta"]
     assert any("memX.fasta" in r.getMessage() for r in records if r.levelno == logging.WARNING)
+
+
+def test_skder_refuses_ani_below_80_percent_before_running(tmp_path, monkeypatch) -> None:
+    import pytest
+
+    from repgenr.core.errors import UserInputError
+    from repgenr.dereplicators import skder as skder_mod
+    from repgenr.dereplicators.base import DerepParams
+    from repgenr.dereplicators.skder import SkderDereplicator
+
+    def must_not_run(caps, cmd, **kwargs):
+        raise AssertionError("skDER was started")
+
+    monkeypatch.setattr(skder_mod, "run_tool", must_not_run)
+    params = DerepParams(secondary_ani=0.78, threads=1)
+    with pytest.raises(UserInputError, match="80 percent"):
+        SkderDereplicator().dereplicate([tmp_path / "g.fasta"], tmp_path / "out", params, _LOG)
