@@ -168,7 +168,9 @@ class DrepDereplicator(Dereplicator):
                 tool="dRep",
             )
         result = _parse_drep_output(drep_wd, logger)
-        result = _restore_input_names(result, {st.name: src for st, src in zip(staged, genomes)})
+        result = _restore_input_names(
+            result, {st.name: src for st, src in zip(staged, genomes, strict=True)}
+        )
         # dRep's filter step (--length, CheckM completeness/contamination)
         # drops genomes from every table it writes; those are QC failures.
         dropped = sorted(g.name for g in genomes if g.name not in result.genome_status)
@@ -198,7 +200,9 @@ def _restore_input_names(result: DerepResult, source_by_staged: dict[str, Path])
 
     return DerepResult(
         representatives=[source_by_staged.get(p.name, p) for p in result.representatives],
-        clusters={name(rep): [name(m) for m in members] for rep, members in result.clusters.items()},
+        clusters={
+            name(rep): [name(m) for m in members] for rep, members in result.clusters.items()
+        },
         genome_status={name(g): state for g, state in result.genome_status.items()},
         genome_information=[
             {**row, "genome": name(str(row.get("genome", "")))}
