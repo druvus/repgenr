@@ -263,6 +263,13 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `derep-stock --action pack` stores the completed `dereplicate` record
+  (tool, parameters, tool versions, completion time) as
+  `derep/stock/<name>/record.json`, and `--action unpack` re-stamps the
+  `dereplicate` record from it. Before, unpack took the tool and parameters
+  of the record live at unpack time, so a sourmash run restored after a skDER
+  run was reported as skDER by `status` and `versions`. Runs stored without
+  `record.json` fall back to the previous behaviour.
 - `status` lists an interrupted optional stage (for example a `glance` run
   killed mid-way) as `[interrupted]` with the same hint as a stage of the
   chain. It showed `(incomplete)`, a word the documentation does not use.

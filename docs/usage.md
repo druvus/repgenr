@@ -402,8 +402,9 @@ a `derep-stock --action unpack`, run `derep-unpack` again (it reruns because
 `clusters.tsv` changed, and `doctor` warns until then). `repgenr glance` runs dRep's comparison over all genomes
 in `genomes/` (at least two) and writes its dendrogram and plots (dRep
 only; it does not need a dereplication). `repgenr derep-stock
---action pack --name <run>` stores the current clusters, statuses and
-representatives under `derep/stock/<run>`; a run already stored under that
+--action pack --name <run>` stores the current clusters, statuses,
+representatives and the completed `dereplicate` record (tool, parameters,
+tool versions, as `record.json`) under `derep/stock/<run>`; a run already stored under that
 name is replaced, with a warning. `--action unpack` restores a stored run,
 refreshes the manifest and re-stamps the `dereplicate` record so that the
 next `dereplicate`, also inside `repgenr run`, recomputes. Unpack rebuilds
@@ -411,11 +412,15 @@ next `dereplicate`, also inside `repgenr run`, recomputes. Unpack rebuilds
 quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack replaces
 `derep/representatives/` as a whole, so other files placed there are
 removed, and it takes the representatives by name from `genomes/`. The
-re-stamped record keeps the tool and parameters of the `dereplicate` record
-that was current at unpack time and adds `stock: <run>`, so it names the
-stored run's own tool only when that run was the current one. A record left
-incomplete by an interrupted `dereplicate` run carries nothing over (no
-tool); one left by an interrupted unpack keeps what that unpack was carrying. `--action
+re-stamped record takes the tool, parameters and tool versions from the
+stored `record.json` and adds `stock: <run>`, so `status` and `versions`
+name the tool that produced the stored run. A run stored without
+`record.json` (packed before this file was written, or packed while no
+completed `dereplicate` record existed) keeps the tool and parameters of the
+`dereplicate` record current at unpack time instead. In that case a record
+left incomplete by an interrupted `dereplicate` run carries nothing over (no
+tool), and one left by an interrupted unpack keeps what that unpack was
+carrying. `--action
 list` prints the stored run names on stdout, one per line in name order, and
 `--action delete` removes one. Deleting a run that is not stored exits 3 and
 lists the stored runs.
@@ -467,7 +472,8 @@ an APFS or ext4 working directory (see `verification.md`).
 #### Comparing two dereplications
 
 Pack each result under its own name, then compare the stored files. Check
-with `status` that `dereplicate` finished before each pack.
+with `status` that `dereplicate` finished before each pack; each stored run's
+`record.json` then names the tool and parameters that produced it.
 
 ```bash
 repgenr dereplicate -wd $WD --tool sourmash
