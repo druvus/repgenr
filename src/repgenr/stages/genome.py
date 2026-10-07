@@ -80,7 +80,7 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     )
 
     acc_list = ctx.workdir / "ncbi_acc_download_list.txt"
-    acc_list.write_text("\n".join(to_download))
+    acc_list.write_text("".join(f"{acc}\n" for acc in to_download))
     if params.accession_list_only:
         logger.info("Accession list written; stopping (--accession-list-only)")
         return 0
