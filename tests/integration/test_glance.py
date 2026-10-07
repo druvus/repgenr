@@ -236,3 +236,16 @@ def test_glance_rejects_inverted_or_out_of_range_plot_bounds(workdir: Path, monk
         assert result.exit_code == 2, (bounds, result.output)
         assert "--plot-m" in result.output
     assert not called
+
+
+def test_glance_help_names_the_bound_units_and_the_kept_directory() -> None:
+    import re
+
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    result = CliRunner().invoke(app, ["glance", "--help"], terminal_width=200)
+    text = " ".join(re.sub(r"\x1b\[[0-9;]*[A-Za-z]|[│╭╮╰╯─]", " ", result.output).split())
+    assert "Mash ANI values plotted, as a fraction from 0 to 1" in text
+    assert "Keep glance_wd/" in text

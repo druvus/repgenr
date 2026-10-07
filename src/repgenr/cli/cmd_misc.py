@@ -10,7 +10,6 @@ import typer
 from ..core.errors import UserInputError
 from .base import (
     DEFAULT_THREADS,
-    HELP_KEEP_FILES,
     HELP_THREADS,
     HELP_WORKDIR,
     PANEL_ENV,
@@ -176,12 +175,14 @@ def glance(
     tool: str = typer.Option("drep", "--tool", help=_glance_tool_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     plot_max: float = typer.Option(
-        1.0, "--plot-max", help="Upper similarity bound of the values plotted."
+        1.0, "--plot-max", help="Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1."
     ),
     plot_min: float = typer.Option(
-        0.0, "--plot-min", help="Lower similarity bound of the values plotted."
+        0.0, "--plot-min", help="Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1."
     ),
-    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep glance_wd/, the comparison tool's working files."
+    ),
 ) -> None:
     """Quick all-vs-all ANI overview (dRep compare dendrogram + plots)."""
     from ..dereplicators.base import registry as _derep_registry

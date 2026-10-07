@@ -912,7 +912,7 @@ commands:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
-        live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
+        live: 'n/a: plot bounds only change the two plots; the PDF is checked for existence (test_glance_drep_compare)'
       --plot-min:
         param: GlanceParams.plot_min
         value: '0.5'
@@ -922,7 +922,7 @@ commands:
         - docs/cli-reference.md
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
-        live: 'n/a: plot bounds only change the histogram; the PDF is checked for existence (test_glance_drep_compare)'
+        live: 'n/a: plot bounds only change the two plots; the PDF is checked for existence (test_glance_drep_compare)'
       --keep-files:
         param: GlanceParams.keep_files
         validated: none

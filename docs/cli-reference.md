@@ -339,9 +339,9 @@ Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
 | `-wd`, `--workdir` | required | Working directory. |
 | `--tool` | `drep` | Dereplicator with comparison support: drep. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--plot-max` | `1.0` | Upper similarity bound of the values plotted. |
-| `--plot-min` | `0.0` | Lower similarity bound of the values plotted. |
-| `--keep-files` | off | Keep download and scratch intermediates. |
+| `--plot-max` | `1.0` | Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
+| `--plot-min` | `0.0` | Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
+| `--keep-files` | off | Keep glance_wd/, the comparison tool's working files. |
 
 ### cluster-summary
 

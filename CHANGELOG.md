@@ -115,6 +115,9 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
+  fractions from 0 to 1, and that `--keep-files` keeps `glance_wd/` (it
+  used the shared "download and scratch intermediates" wording).
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
