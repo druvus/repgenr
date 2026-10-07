@@ -314,7 +314,12 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     # glance writes its dendrogram and plots only when the comparison tool
     # returns the matching tables, so no output is guaranteed to exist.
     "glance": lambda ctx, p: [],
-    "derep_unpack": lambda ctx, p: [ctx.derep_dir / "unpacked"],
+    # With --no-representant and only singleton clusters, unpacked/ is
+    # legitimately left empty, so it is checked only when representatives
+    # are unpacked too (every cluster then yields a subdirectory).
+    "derep_unpack": lambda ctx, p: (
+        [] if getattr(p, "no_representant", False) else [ctx.derep_dir / "unpacked"]
+    ),
     "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTER_SUMMARY_TSV],
     "derep_stock": _derep_stock_deliverables,
 }

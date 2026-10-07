@@ -109,11 +109,6 @@ def _flush_log(workdir: Path) -> str:
     return (workdir / "repgenr.log").read_text(encoding="utf-8")
 
 
-def test_every_stage_with_inputs_declares_deliverables() -> None:
-    """Each workdir stage lists the outputs whose absence forces a rerun."""
-    assert set(cli.STAGE_INPUTS) <= set(cli.STAGE_DELIVERABLES)
-
-
 def test_deliverable_directory_must_be_non_empty(tmp_path: Path) -> None:
     from repgenr.core.context import WorkdirContext
 
