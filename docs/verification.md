@@ -409,7 +409,7 @@ parser), so they also apply to commands other than the one named.
 | ingest | Empty files and dangling links were staged and failed inside the dereplication tool; they now exit 2 before anything is staged | #222 |
 | ingest | Files without a supported suffix (`x.fna.gz`, `X.FASTA`) were skipped without a message; they are now listed in a warning, and an empty source holding subdirectories says they are not searched | #222 |
 | ingest | A malformed `--selection` exited 3 or crashed with exit 1, and `is_outgroup` `true` was read as 0 (the outgroup went into the ingroup); now exit 2 with file and line, and true/false, yes/no are accepted | #222 |
-| ingest | A refused re-ingest marked the finished ingest as interrupted; the checks now run before the record is touched | #222 |
+| ingest | A refused re-ingest marked the finished ingest as interrupted; the checks now run when the stage will run, before the record is touched, so a refused first ingest leaves no record and no empty manifest, and a skipped ingest is not checked | #222 |
 | ingest | Relative paths were recorded as given, so `doctor` run from another directory reported the source as changed; they are now recorded absolute | #222 |
 | ingest, metadata | `repgenr --force ingest` on an unchanged set cleared the manifest's dereplication status while `dereplicate` was skipped as up to date; an unchanged genome now keeps it | #222 |
 | doctor | Every `.fasta.gz` genome was reported as not FASTA (to be deleted); gzip files are now judged by their decompressed content | #222 |
@@ -436,7 +436,6 @@ they are recorded here and not fixed.
 | derep-stock | A stored run keeps links to the representative files, but unpack restores by name from `genomes/`; a genome replaced under the same name since the pack is restored in its current form. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
 | ingest | `status` shows `dereplicate` as done after the genome set changed; only `doctor` and the next run detect the stale input. |
-| ingest | A refused first ingest in a new workdir leaves an `[interrupted]` record (no earlier record exists to keep clean). |
 | ingest | Only `.fasta.gz` is accepted among compressed suffixes; `.fna.gz` and `.fa.gz` (the NCBI FTP default) are skipped with a warning. Widening the suffix list changes the genome contract of every stage and is left as a proposal. |
 | ingest | Any name with four or more `_`-separated tokens is read as Family_genus_species_ACCESSION (`sample_1_run_A.fasta` gives accession `A`); documented, with `--selection` as the remedy. |
 | Resume | `metadata --metadata-path`, `reads --accession-file` and `assemble --outgroup` record relative paths as given, as ingest did before this audit. |

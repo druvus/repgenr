@@ -311,10 +311,14 @@ All notable changes to RepGenR are documented here. The format follows
   the `is_outgroup` column accepts `true`/`false` and `yes`/`no`; other
   values are an error rather than read as 0.
 - A refused `ingest` leaves the record of an earlier finished ingest
-  complete; `status` and `doctor` reported it as interrupted.
+  complete; `status` and `doctor` reported it as interrupted. A refused first
+  ingest leaves no record and no empty manifest. The check runs only when the
+  stage will run, so an unchanged ingest still skips.
 - `ingest` records `--genomes-dir`, `--selection` and an outgroup file as
   absolute paths, so `doctor` run from another directory no longer reports
-  the source as changed.
+  the source as changed. This changes the ingest fingerprint of a workdir
+  made with a relative `--genomes-dir` or `--selection`, so such a workdir
+  reruns ingest once after the upgrade.
 - A re-selection that leaves a genome unchanged (`repgenr --force ingest` on
   the same directory) keeps its dereplication status in the manifest; it was
   cleared while `dereplicate` was skipped as up to date.
