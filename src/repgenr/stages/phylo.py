@@ -431,32 +431,113 @@ def restore_leaf_names(tree: Path, expected: Sequence[str], logger: logging.Logg
     check_tree_leaves accepts a leaf that differs from its genome only in the
     way tools rewrite names (a FASTA extension, '.ref', characters replaced by
     '_'). tree2tax and genomes_map.tsv read the leaves as genome names, so the
-    tree is rewritten with the input names. A name that two inputs would share
-    is left as written. Returns the number of leaves renamed.
+    tree is rewritten with the input names. Only the renamed leaf labels change
+    in the text; every other byte (rooting tags, comments, quoting, lengths,
+    supports) stays as the tool wrote it. A name that two inputs would share is
+    left as written. Returns the number of leaves renamed.
     """
-    import dendropy
-
     keys: dict[str, list[str]] = {}
     for name in expected:
         keys.setdefault(_leaf_key(name), []).append(name)
-    parsed = dendropy.Tree.get(path=str(tree), schema="newick", preserve_underscores=True)
-    renamed = 0
-    for node in parsed.leaf_node_iter():
-        if node.taxon is None or not node.taxon.label:
-            continue
-        label = node.taxon.label
+
+    def target(label: str) -> str | None:
         names = keys.get(_leaf_key(label), [])
         if len(names) == 1 and names[0] != label:
-            node.taxon.label = names[0]
-            renamed += 1
+            return names[0]
+        return None
+
+    text = tree.read_text(encoding="utf-8")
+    new_text, renamed = _rename_newick_leaves(text, target)
     if renamed:
-        text = parsed.as_string(
-            schema="newick", suppress_rooting=True, unquoted_underscores=True
-        ).strip()
         with atomic_path(tree) as tmp:
-            tmp.write_text(text + "\n", encoding="utf-8")
+            tmp.write_text(new_text, encoding="utf-8")
         logger.info("Renamed %d tree leaf/leaves back to the input genome names", renamed)
     return renamed
+
+
+_NEWICK_LABEL_END = set("():,;[") | set(" \t\r\n")
+_NEWICK_NEEDS_QUOTES = re.compile(r"[\s():,;\[\]']")
+
+
+def _rename_newick_leaves(text: str, target) -> tuple[str, int]:  # noqa: ANN001
+    """Replace leaf labels in Newick ``text`` for which ``target(label)`` gives a name.
+
+    A leaf label is the label that follows '(' or ','; labels after ')' are
+    internal (supports or names) and are never touched. Quoted labels are read
+    with '' as an escaped quote; [comments] are skipped. A new name is written
+    bare when it holds no character that Newick reserves, and quoted otherwise.
+    """
+    out: list[str] = []
+    renamed = 0
+    i, n = 0, len(text)
+    expect_leaf = False
+    while i < n:
+        char = text[i]
+        if char == "[":
+            close = text.find("]", i)
+            close = n - 1 if close < 0 else close
+            out.append(text[i : close + 1])
+            i = close + 1
+            continue
+        if char in "(,":
+            out.append(char)
+            expect_leaf = True
+            i += 1
+            continue
+        if char.isspace():
+            out.append(char)
+            i += 1
+            continue
+        if expect_leaf and char not in "():;":
+            # Read one label, quoted or bare.
+            if char == "'":
+                j = i + 1
+                parts: list[str] = []
+                while j < n:
+                    if text[j] == "'":
+                        if j + 1 < n and text[j + 1] == "'":
+                            parts.append("'")
+                            j += 2
+                            continue
+                        break
+                    parts.append(text[j])
+                    j += 1
+                label, raw_end = "".join(parts), j + 1
+            else:
+                j = i
+                while j < n and text[j] not in _NEWICK_LABEL_END:
+                    j += 1
+                label, raw_end = text[i:j], j
+            new = target(label)
+            if new is None:
+                out.append(text[i:raw_end])
+            else:
+                if _NEWICK_NEEDS_QUOTES.search(new):
+                    new = "'" + new.replace("'", "''") + "'"
+                out.append(new)
+                renamed += 1
+            i = raw_end
+            expect_leaf = False
+            continue
+        if char == "'":
+            # A quoted internal label: copy it whole, so a ',' or '(' inside
+            # it is not read as structure.
+            j = i + 1
+            while j < n:
+                if text[j] == "'":
+                    if j + 1 < n and text[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(text[i : j + 1])
+            i = j + 1
+            expect_leaf = False
+            continue
+        expect_leaf = False
+        out.append(char)
+        i += 1
+    return "".join(out), renamed
 
 
 def _listed(names: list[str]) -> str:

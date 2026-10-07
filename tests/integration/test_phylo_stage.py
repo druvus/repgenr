@@ -704,6 +704,29 @@ def test_restore_leaf_names_leaves_ambiguous_names_alone(tmp_path: Path) -> None
     assert tree.read_text() == "(x_1,y,z);\n"
 
 
+def test_restore_leaf_names_changes_only_the_renamed_labels(tmp_path: Path) -> None:
+    """Review of #223: the rewrite kept neither a leading [&R] nor a quoted label
+    with a space that was not renamed. Only matched leaf labels change now."""
+    from repgenr.stages.phylo import restore_leaf_names
+
+    tree = tmp_path / "tree.nwk"
+    original = "[&R] (('GCF 3':0.1,x_GCF_1_1.fasta.ref:0.2)'node, a':0.3,[c;m] x_GCF_2_1:0.4)0.9;\n"
+    tree.write_text(original)
+    expected = ["GCF 3", "x_GCF_1.1", "x_GCF_2.1"]
+    assert restore_leaf_names(tree, expected, logging.getLogger("t")) == 2
+    assert tree.read_text() == (
+        "[&R] (('GCF 3':0.1,x_GCF_1.1:0.2)'node, a':0.3,[c;m] x_GCF_2.1:0.4)0.9;\n"
+    )
+
+
+def test_rename_quotes_a_new_name_that_needs_it() -> None:
+    from repgenr.stages.phylo import _rename_newick_leaves
+
+    text, n = _rename_newick_leaves("(a_b,'c''d',e);", {"a_b": "a b", "c'd": "c'e"}.get)
+    assert n == 2
+    assert text == "('a b','c''e',e);"
+
+
 def test_leaf_key_matches_tool_rewritten_names() -> None:
     from repgenr.stages.phylo import _leaf_key
 
