@@ -38,6 +38,8 @@ class DerepStockParams:
 
 
 def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
+    if not ctx.workdir.is_dir():
+        raise WorkdirError(f"Working directory not found: {ctx.workdir}")
     store = ctx.derep_dir / "stock"
     if params.action == "list":
         _list(store, ctx.logger)

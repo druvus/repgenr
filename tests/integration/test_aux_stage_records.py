@@ -124,3 +124,12 @@ def test_derep_stock_unpack_reruns_after_the_dereplication_changed(
     )
     stock("unpack")
     assert clusters.read_text(encoding="utf-8") == stored
+
+
+def test_derep_stock_on_missing_workdir_exits_3(tmp_path: Path) -> None:
+    # A mistyped -wd must not read as an empty store.
+    wd = tmp_path / "absent"
+    for args in (["--action", "list"], ["--action", "delete", "--name", "r1"]):
+        result = _runner.invoke(app, ["derep-stock", "-wd", str(wd), *args])
+        assert result.exit_code == 3, result.output
+    assert not wd.exists()
