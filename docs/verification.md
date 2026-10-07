@@ -379,13 +379,13 @@ parser), so they also apply to commands other than the one named.
 | glance | A workdir without genomes exited 4 (dRep absent) instead of 3 | 645feaa |
 | glance | The stage record held no dRep version | e003775 |
 | glance | docs/usage.md said glance compares the representatives; it compares all genomes | 8cab3b7 |
-| glance | The plots counted each genome pair twice (dRep lists both orders), and the histogram's y axis was labelled MASH ANI instead of a pair count | 589e9a0 |
-| glance | One genome failed inside dRep with exit 6; it now exits 3 before dRep runs | 1df673a |
-| glance | `--plot-min` above `--plot-max`, or a bound outside 0-1, was accepted and removed the earlier plots; it now exits 2 | 699236e |
-| glance | `--help` did not give the plot bound units or say that `--keep-files` keeps `glance_wd/` | ac41913 |
-| glance | A missing dendrogram was not reported | c76d743 |
-| glance | A deleted dendrogram was not rebuilt by a repeat run (no deliverable declared) | 0c5b592 |
-| status | An interrupted optional stage was shown as `(incomplete)` instead of `[interrupted]` | 92b5725 |
+| glance | The plots counted each genome pair twice (dRep lists both orders), and the histogram's y axis was labelled MASH ANI instead of a pair count | 05f3cea |
+| glance | One genome failed inside dRep with exit 6; it now exits 3 before dRep runs | 3c3fd84 |
+| glance | `--plot-min` above `--plot-max`, or a bound outside 0-1, was accepted and removed the earlier plots; it now exits 2 | 27ddeea |
+| glance | `--help` did not give the plot bound units or say that `--keep-files` keeps `glance_wd/` | 6825439 |
+| glance | A missing dendrogram was not reported | 793d9d0 |
+| glance | A deleted dendrogram was not rebuilt by a repeat run (no deliverable declared) | 6ba057d |
+| status | An interrupted optional stage was shown as `(incomplete)` instead of `[interrupted]` | c7ba749 |
 | cluster-summary | A missing workdir created a manifest, or raised an OSError traceback | 50194c6 |
 | derep-stock | `pack` of a workdir without dereplication outputs stored an empty run | f84e11f |
 | derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
