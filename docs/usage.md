@@ -323,13 +323,15 @@ and from the canonical genome filenames otherwise.
 
 ### Inspecting a dereplication
 
-Four commands read a dereplicated working directory without rerunning the
-dereplicator. `repgenr cluster-summary` regenerates
+Three commands read a dereplicated working directory without rerunning the
+dereplicator, and a fourth inspects the genomes before dereplication.
+`repgenr cluster-summary` regenerates
 `derep/cluster_summary.tsv`, one row per representative (see `output.md`).
 `repgenr derep-unpack` lays the clusters out as one directory per
 representative with its members inside (`--no-representant` leaves the
-representative out). `repgenr glance` runs dRep's comparison over the
-representatives and writes its plots (dRep only). `repgenr derep-stock
+representative out). `repgenr glance` runs dRep's comparison over all genomes
+in `genomes/` and writes its dendrogram and plots (dRep only; it does not need
+a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
 representatives under `derep/stock/<run>`; `--action unpack` restores a
 stored run, refreshes the manifest and re-stamps the `dereplicate` record so
