@@ -401,6 +401,19 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
     "metadata": lambda p: getattr(p, "nodownload", False),
 }
 
+
+# Refusals a stage can check before the harness marks its record incomplete:
+# stage -> callable(ctx, params) raising UserInputError/WorkdirError. Used
+# where one record serves several invocations (derep-stock's named runs), so
+# a refused call must not leave the record of the last finished one dirty.
+def _derep_stock_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.derep_stock import precheck
+
+    precheck(ctx, params)
+
+
+_STAGE_PRECHECKS: dict[str, Any] = {"derep_stock": _derep_stock_precheck}
+
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
     # delete is never skipped: a repeat delete must report the unknown run.
@@ -761,6 +774,9 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
         module.run(ctx, params)
         return
+    precheck = _STAGE_PRECHECKS.get(stage_name)
+    if precheck is not None:
+        precheck(ctx, params)
     # Digested once: upstream inputs are stable while this stage executes,
     # so the same digests are stamped onto the record after the run.
     digests = _stage_input_digests(ctx, stage_name, params)

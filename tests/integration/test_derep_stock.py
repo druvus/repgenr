@@ -86,7 +86,19 @@ def test_error_paths(workdir: Path) -> None:
         derep_stock_run(ctx, DerepStockParams(action="bogus", name="run1"))
 
 
-@pytest.mark.parametrize("bad_name", ["../escape", "/abs/path", "a/b", "..", ".hidden"])
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "../escape",
+        "/abs/path",
+        "a/b",
+        "..",
+        ".hidden",
+        "-x",
+        "with space",
+        pytest.param("x" * 300, id="too-long"),
+    ],
+)
 def test_traversal_names_rejected(workdir: Path, bad_name: str) -> None:
     # --name becomes a directory under the stock store and is passed to rmtree
     # on delete, so separators and dot-prefixes must be rejected outright.
@@ -184,6 +196,42 @@ def test_unpack_of_a_run_without_summary_rebuilds_the_summary(workdir: Path) -> 
     assert {r.representative for r in rows} == set(_REPS)
 
 
+def test_unpack_rebuilds_the_summary_from_the_live_manifest(workdir: Path) -> None:
+    # The stored summary carries the quality of pack time. After unpack the
+    # live derep/cluster_summary.tsv must reflect the manifest as it is now,
+    # as `cluster-summary` would write it (it skips, since its inputs match).
+    from repgenr.core.contracts import read_cluster_summary
+    from repgenr.core.manifest import GenomeRecord
+    from repgenr.stages.cluster_summary import ClusterSummaryParams
+    from repgenr.stages.cluster_summary import run as cluster_summary_run
+
+    ctx = _setup_contract(workdir)
+
+    def set_quality(completeness: float) -> None:
+        ctx.manifest.replace_genomes(
+            [
+                GenomeRecord(
+                    accession=f"GCA_00000{i}.1",
+                    filename=name,
+                    completeness=completeness,
+                    contamination=1.0,
+                )
+                for i, name in enumerate(_GENOMES, start=1)
+            ]
+        )
+
+    set_quality(97.5)
+    cluster_summary_run(ctx, ClusterSummaryParams())
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    set_quality(50.0)
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    rows = read_cluster_summary(ctx.derep_dir / "cluster_summary.tsv")
+    assert {r.rep_completeness for r in rows} == {50.0}
+    # The stored copy keeps the pack-time view.
+    stored = read_cluster_summary(ctx.derep_dir / "stock" / "run1" / "cluster_summary.tsv")
+    assert {r.rep_completeness for r in stored} == {97.5}
+
+
 def test_deleting_an_unknown_run_exits_3_and_lists_the_stored_runs(workdir: Path) -> None:
     from typer.testing import CliRunner
 
@@ -213,3 +261,43 @@ def test_unpack_ignores_an_incomplete_dereplicate_record(workdir: Path) -> None:
     assert record.completed
     assert record.tool is None
     assert record.params == {"stock": "run1"}
+
+
+def test_an_interrupted_unpack_leaves_the_dereplicate_record_incomplete(
+    workdir: Path, monkeypatch
+) -> None:
+    """Unpack replaces the dereplicate stage's outputs; if it stops half-way,
+    `status` must not keep reporting the replaced dereplication as done."""
+    from repgenr.core.config import Config
+    from repgenr.stages import derep_stock
+
+    ctx = _setup_contract(workdir)
+    ctx.config.record_stage(
+        "dereplicate", tool="skder", params={"tool": "skder"}, completed="t0", fingerprint="fp0"
+    )
+    ctx.save_config()
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+
+    def killed(path):  # noqa: ANN001
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(derep_stock, "remove_tree", killed)
+    with pytest.raises(KeyboardInterrupt):
+        derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.completed is None and record.fingerprint is None
+
+    monkeypatch.undo()
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    assert Config.load(workdir).stages["dereplicate"].completed
+
+
+def test_unpack_links_the_representatives_like_dereplicate(workdir: Path) -> None:
+    # dereplicate hardlinks representatives to genomes/ where it can; unpack
+    # does the same instead of copying every genome again.
+    ctx = _setup_contract(workdir)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    for name in _REPS:
+        restored = (ctx.representatives_dir / name).stat()
+        assert restored.st_ino == (ctx.genomes_dir / name).stat().st_ino

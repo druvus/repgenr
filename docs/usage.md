@@ -403,13 +403,20 @@ a `derep-stock --action unpack`, run `derep-unpack` again (it reruns because
 in `genomes/` (at least two) and writes its dendrogram and plots (dRep
 only; it does not need a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
-representatives under `derep/stock/<run>`; `--action unpack` restores a
-stored run, refreshes the manifest and re-stamps the `dereplicate` record so
-the next `dereplicate` recomputes (a stored run without
-`cluster_summary.tsv` gets one rebuilt from its clusters, and a live
-`genome_status.tsv` the stored run lacks is removed); `--action list` and `--action delete`
-manage the store. Deleting a run that is not stored exits 3 and lists the
-stored runs.
+representatives under `derep/stock/<run>`; a run already stored under that
+name is replaced, with a warning. `--action unpack` restores a stored run,
+refreshes the manifest and re-stamps the `dereplicate` record so that the
+next `dereplicate`, also inside `repgenr run`, recomputes. Unpack rebuilds
+`cluster_summary.tsv` from the restored clusters and the current manifest
+quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack replaces
+`derep/representatives/` as a whole, so other files placed there are
+removed, and it takes the representatives by name from `genomes/`. The
+re-stamped record keeps the tool and parameters of the `dereplicate` record
+that was current at unpack time and adds `stock: <run>`, so it names the
+stored run's own tool only when that run was the current one. `--action
+list` prints the stored run names on stdout, one per line in name order, and
+`--action delete` removes one. Deleting a run that is not stored exits 3 and
+lists the stored runs.
 
 #### Which command answers which question
 

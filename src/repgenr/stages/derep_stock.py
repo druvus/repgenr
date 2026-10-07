@@ -7,6 +7,7 @@ files; unpacking restores them into the working directory.
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 from dataclasses import asdict, dataclass
@@ -24,12 +25,14 @@ from ..core.contracts import (
     write_cluster_summary,
 )
 from ..core.errors import UserInputError, WorkdirError
-from ..core.process import remove_tree
+from ..core.process import link_or_copy, remove_tree
 from ..dereplicators.base import DerepResult
 from .dereplicate import _update_manifest
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV, CLUSTER_SUMMARY_TSV)
-_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+# One path component, well below the 255-byte file-name limit.
+_NAME_MAX = 100
+_NAME_RE = re.compile(rf"[A-Za-z0-9][A-Za-z0-9._-]{{0,{_NAME_MAX - 1}}}")
 
 
 @dataclass
@@ -38,23 +41,30 @@ class DerepStockParams:
     name: str | None = None
 
 
+def precheck(ctx: WorkdirContext, params: DerepStockParams) -> None:
+    """Refuse a pack or unpack that cannot proceed, before anything is changed.
+
+    The CLI harness calls this before it marks the stage record incomplete:
+    one ``derep_stock`` record serves every stored run, so a mistyped name or
+    an unknown run must not leave the record of the last finished pack or
+    unpack looking interrupted.
+    """
+    if params.action not in ("pack", "unpack"):
+        return
+    run_path = _run_path(ctx, params)
+    if params.action == "pack":
+        _check_packable(ctx)
+    else:
+        _check_unpackable(ctx, run_path)
+
+
 def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
     if not ctx.workdir.is_dir():
         raise WorkdirError(f"Working directory not found: {ctx.workdir}")
-    store = ctx.derep_dir / "stock"
     if params.action == "list":
-        _list(store, ctx.logger)
+        _list(ctx.derep_dir / "stock", ctx.logger)
         return
-    if not params.name:
-        raise UserInputError("pack/unpack/delete require --name")
-    # The name becomes a directory under the store and is passed to rmtree on
-    # pack/delete, so it must be a plain single-component name.
-    if not _NAME_RE.fullmatch(params.name):
-        raise UserInputError(
-            f"Invalid run name '{params.name}': use letters, digits, '.', '_' or '-' "
-            "(no leading '.', no path separators)"
-        )
-    run_path = store / params.name
+    run_path = _run_path(ctx, params)
     match params.action:
         case "pack":
             _pack(ctx, run_path)
@@ -64,6 +74,7 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
             # Not recorded: a delete leaves nothing to resume, and the CLI runs
             # it as a query so a repeat delete is checked instead of skipped.
             _delete(run_path)
+            ctx.logger.info("Deleted stored run '%s'", params.name)
             return
         case _:
             raise UserInputError(f"Unknown action '{params.action}'")
@@ -73,16 +84,34 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
     ctx.save_config()
 
 
-def _list(store: Path, logger) -> None:
-    if not store.exists() or not any(store.iterdir()):
+def _run_path(ctx: WorkdirContext, params: DerepStockParams) -> Path:
+    """The stored run's directory, after checking that --name is a safe name."""
+    if not params.name:
+        raise UserInputError("pack/unpack/delete require --name")
+    # The name becomes a directory under the store and is passed to rmtree on
+    # pack/delete, so it must be a plain single-component name.
+    if not _NAME_RE.fullmatch(params.name):
+        raise UserInputError(
+            f"Invalid run name '{params.name}': use up to {_NAME_MAX} letters, digits, "
+            "'.', '_' or '-', starting with a letter or digit (no path separators)"
+        )
+    return ctx.derep_dir / "stock" / params.name
+
+
+def _list(store: Path, logger: logging.Logger) -> None:
+    # The names are the command's result, so they go to stdout (one per line,
+    # also under --quiet); the empty case is only a log message.
+    runs = _stored_runs(store)
+    if not runs:
         logger.info("No stored runs")
         return
-    for run_dir in _stored_runs(store):
-        logger.info(run_dir)
+    for name in runs:
+        print(name)
 
 
-def _pack(ctx: WorkdirContext, run_path: Path) -> None:
-    # Check before touching the store: a workdir without a dereplication
+def _check_packable(ctx: WorkdirContext) -> list[Path]:
+    """The live representatives, or an error when there is no dereplication."""
+    # Checked before touching the store: a workdir without a dereplication
     # would otherwise be stored as an empty run.
     clusters = ctx.derep_dir / CLUSTERS_TSV
     if not clusters.is_file():
@@ -93,7 +122,15 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
             f"No representative genomes under {ctx.representatives_dir}. "
             "Run the dereplicate stage first."
         )
+    return reps
+
+
+def _pack(ctx: WorkdirContext, run_path: Path) -> None:
+    reps = _check_packable(ctx)
     if run_path.exists():
+        ctx.logger.warning(
+            "Replacing stored run '%s' with the current dereplication", run_path.name
+        )
         remove_tree(run_path)
     run_path.mkdir(parents=True)
     for name in _FLAT_FILES:
@@ -107,9 +144,14 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
     ctx.logger.info("Packed run to %s", run_path)
 
 
-def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
+def _check_unpackable(ctx: WorkdirContext, run_path: Path) -> list[str]:
+    """The stored run's representative names, or an error when it is incomplete."""
     if not run_path.exists():
-        raise UserInputError(f"No stored run named '{run_path.name}'")
+        stored = _stored_runs(run_path.parent)
+        raise UserInputError(
+            f"No stored run named '{run_path.name}'; stored runs: "
+            f"{', '.join(stored) if stored else 'none'}."
+        )
     # Validate the stored run in full before the current dereplication is
     # replaced, so an incomplete run leaves the workdir unchanged.
     stored_clusters = run_path / CLUSTERS_TSV
@@ -125,19 +167,39 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
             f"Stored run '{run_path.name}' names {len(absent)} representative(s) "
             f"not found under {ctx.genomes_dir}, e.g. {absent[0]}"
         )
-    for name in _FLAT_FILES:
+    return rep_names
+
+
+def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
+    rep_names = _check_unpackable(ctx, run_path)
+    prior = ctx.config.stages.get("dereplicate")
+    if prior is not None and not prior.completed:
+        # An incomplete record describes a run that did not finish, not the
+        # stored run being restored: carry nothing over from it.
+        prior = None
+    carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
+    if prior is not None:
+        # The dereplicate stage's outputs are replaced below: mark its record
+        # incomplete first, so an unpack that stops half-way is not reported
+        # as a finished dereplication.
+        prior.completed = None
+        prior.fingerprint = None
+        ctx.save_config()
+    # The summary is not restored: it is rebuilt below from the restored
+    # clusters and the live manifest.
+    for name in (CLUSTERS_TSV, GENOME_STATUS_TSV):
         src = run_path / name
         if src.exists():
             shutil.copy2(src, ctx.derep_dir / name)
         elif (ctx.derep_dir / name).exists():
             # Do not leave a file of the replaced dereplication beside the
-            # restored ones; the summary is rebuilt below.
+            # restored ones.
             (ctx.derep_dir / name).unlink()
     if ctx.representatives_dir.exists():
         remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
     for name in rep_names:
-        shutil.copy2(ctx.genomes_dir / name, ctx.representatives_dir / name)
+        link_or_copy(ctx.genomes_dir / name, ctx.representatives_dir / name)
     # The derep contract now describes the stored run: bring the manifest's
     # per-genome status in line with it and re-stamp the dereplicate record
     # without a fingerprint, so `status` reports the run on disk and the next
@@ -148,29 +210,23 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     _update_manifest(
         ctx, DerepResult(representatives=[], clusters=clusters, genome_status=genome_status)
     )
-    summary = ctx.derep_dir / CLUSTER_SUMMARY_TSV
-    if not summary.exists():
-        # A run packed before the summary existed: rebuild it from the
-        # restored clusters, as the dereplicate stage would have written it.
-        from .cluster_summary import summarise_clusters
-        from .dereplicate import quality_lookup
+    # Rebuild the summary rather than restore the stored copy: the stored one
+    # carries the manifest quality of pack time (or is absent for runs packed
+    # before the summary existed), while derep/cluster_summary.tsv describes
+    # the live manifest, as `cluster-summary` writes it. The stored copy stays
+    # in the store as the pack-time view.
+    from .cluster_summary import summarise_clusters
+    from .dereplicate import quality_lookup
 
-        write_cluster_summary(summary, summarise_clusters(clusters, quality_lookup(ctx)))
-        ctx.logger.info(
-            "Stored run '%s' has no %s; rebuilt it from the restored clusters",
-            run_path.name,
-            CLUSTER_SUMMARY_TSV,
-        )
-    prior = ctx.config.stages.get("dereplicate")
-    if prior is not None and not prior.completed:
-        # An incomplete record describes a run that did not finish, not the
-        # stored run being restored: carry nothing over from it.
-        prior = None
+    write_cluster_summary(
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(clusters, quality_lookup(ctx))
+    )
+    tool, params, versions = carried if carried else (None, {}, None)
     ctx.config.record_stage(
         "dereplicate",
-        tool=prior.tool if prior else None,
-        params={**(prior.params if prior else {}), "stock": run_path.name},
-        tool_versions=prior.tool_versions if prior else None,
+        tool=tool,
+        params={**params, "stock": run_path.name},
+        tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.logger.info("Unpacked run from %s", run_path)
