@@ -391,12 +391,12 @@ parser), so they also apply to commands other than the one named.
 | derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
 | derep-stock | A repeat `unpack` after a new dereplication was skipped and restored nothing | fde2eb9 |
 | derep-stock | `list` and `pack` on a nonexistent workdir exited 0 or created the workdir | bec185a |
-| derep-stock | `list` wrote the run names to the log on stderr, so `--quiet` hid them; they now go to stdout, and delete logs the removed run | 487b33e |
-| derep-stock | A `--name` past the file-name limit ended in an unexpected error (exit 1); names are limited to 100 characters (exit 2) | 52eee82 |
-| derep-stock | A refused pack or unpack (bad or unknown name) marked the last finished pack as interrupted and `doctor` failed | 94e4a4b |
-| derep-stock | An unpack killed half-way left `status` reporting `dereplicate` as done with `phylo` next | bff0d27 |
-| derep-stock | Packing under a stored name replaced that run without notice; it now warns | c834275 |
-| derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | ff6c6a2 |
+| derep-stock | `list` wrote the run names to the log on stderr, so `--quiet` hid them; they now go to stdout, and delete logs the removed run | #218 |
+| derep-stock | A `--name` past the file-name limit ended in an unexpected error (exit 1); names are limited to 100 characters (exit 2) | #218 |
+| derep-stock | A refused pack or unpack (bad or unknown name) marked the last finished pack as interrupted and `doctor` failed | #218 |
+| derep-stock | An unpack killed half-way left `status` reporting `dereplicate` as done with `phylo` next | #218 |
+| derep-stock | Packing under a stored name replaced that run without notice; it now warns | #218 |
+| derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | #218 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

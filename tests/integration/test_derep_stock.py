@@ -289,7 +289,10 @@ def test_an_interrupted_unpack_leaves_the_dereplicate_record_incomplete(
 
     monkeypatch.undo()
     derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
-    assert Config.load(workdir).stages["dereplicate"].completed
+    record = Config.load(workdir).stages["dereplicate"]
+    # The repeat keeps what the interrupted unpack was carrying over.
+    assert record.completed and record.tool == "skder"
+    assert record.params == {"tool": "skder", "stock": "run1"}
 
 
 def test_unpack_links_the_representatives_like_dereplicate(workdir: Path) -> None:

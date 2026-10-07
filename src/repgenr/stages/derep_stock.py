@@ -173,9 +173,11 @@ def _check_unpackable(ctx: WorkdirContext, run_path: Path) -> list[str]:
 def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     rep_names = _check_unpackable(ctx, run_path)
     prior = ctx.config.stages.get("dereplicate")
-    if prior is not None and not prior.completed:
-        # An incomplete record describes a run that did not finish, not the
-        # stored run being restored: carry nothing over from it.
+    if prior is not None and not prior.completed and "stock" not in prior.params:
+        # An incomplete record describes a dereplicate run that did not
+        # finish, not the stored run being restored: carry nothing over from
+        # it. An interrupted unpack leaves ``stock`` in the params (set
+        # below), and a repeat keeps what that unpack was carrying.
         prior = None
     carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
     if prior is not None:
@@ -184,6 +186,7 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         # as a finished dereplication.
         prior.completed = None
         prior.fingerprint = None
+        prior.params = {**prior.params, "stock": run_path.name}
         ctx.save_config()
     # The summary is not restored: it is rebuilt below from the restored
     # clusters and the live manifest.

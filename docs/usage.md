@@ -413,7 +413,9 @@ quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack rep
 removed, and it takes the representatives by name from `genomes/`. The
 re-stamped record keeps the tool and parameters of the `dereplicate` record
 that was current at unpack time and adds `stock: <run>`, so it names the
-stored run's own tool only when that run was the current one. `--action
+stored run's own tool only when that run was the current one. A record left
+incomplete by an interrupted `dereplicate` carries nothing over (no tool);
+one left by an interrupted unpack keeps what that unpack was carrying. `--action
 list` prints the stored run names on stdout, one per line in name order, and
 `--action delete` removes one. Deleting a run that is not stored exits 3 and
 lists the stored runs.
