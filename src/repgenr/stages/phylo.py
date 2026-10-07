@@ -317,6 +317,17 @@ def build_tree(
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 
     if builder.input_kind == InputKind.GENOMES:
+        unused = []
+        if params.msa_source == "snptype":
+            unused.append(f"--msa-source snptype (--snptyper {params.snptyper})")
+        if str(params.extra.get("mask", "none")) not in ("none", ""):
+            unused.append(f"--mask {params.extra['mask']}")
+        if unused:
+            logger.warning(
+                "Tree builder '%s' builds from the genomes without an alignment; %s has no effect.",
+                treebuilder,
+                " and ".join(unused),
+            )
         inputs = list(genomes)
         if outgroup_file is not None:
             inputs.append(outgroup_file)

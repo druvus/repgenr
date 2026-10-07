@@ -389,6 +389,28 @@ def test_aligner_source_keeps_the_snptype_record(workdir: Path, fake_phylo_tools
     assert (snp / "core_snp.fasta").read_text() == ">from_snptype\nACGT\n"
 
 
+def test_alignment_free_builder_warns_that_msa_options_have_no_effect(
+    workdir: Path, fake_phylo_tools, caplog
+) -> None:
+    """--msa-source snptype and --mask are dropped by a builder that reads genomes."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_genomes",
+                msa_source="snptype",
+                no_outgroup=True,
+                extra={"mask": "gubbins"},
+            ),
+        )
+    warned = [r.getMessage() for r in caplog.records if "has no effect" in r.getMessage()]
+    assert len(warned) == 1
+    assert "--msa-source snptype" in warned[0] and "--mask gubbins" in warned[0]
+    assert not (workdir / "snp").exists()
+
+
 def _align_calls(monkeypatch) -> list[int]:
     """Count aligner invocations across phylo runs."""
     calls: list[int] = []
