@@ -89,3 +89,46 @@ def test_run_unexpected_exception_is_clean_exit(tmp_path: Path, monkeypatch) -> 
     assert ei.value.exit_code == 1
     # the workdir log holds the traceback for diagnosis
     assert "Traceback" in (tmp_path / "repgenr.log").read_text()
+
+
+def _fail(logger: logging.Logger) -> None:
+    exc = ToolExecutionError(["/opt/bin/faketool", "--in", "x"], 1, "line one\nline two boom")
+    with pytest.raises(typer.Exit) as ei:  # noqa: PT012
+        with cli.stage_errors(logger):
+            raise exc
+    assert ei.value.exit_code == 6
+
+
+def test_tool_failure_prints_one_console_line_and_logs_the_rest(
+    workdir: Path, capsys, monkeypatch
+) -> None:
+    monkeypatch.delenv("REPGENR_PROPAGATE_TOOL_EXIT", raising=False)
+    workdir.mkdir(parents=True)
+    logger = configure_logging(workdir, level=logging.INFO)
+    _fail(logger)
+    err = capsys.readouterr().err
+    lines = [ln for ln in err.splitlines() if ln.strip()]
+    assert len(lines) == 1
+    assert "faketool" in lines[0] and "exit 1" in lines[0] and "repgenr.log" in lines[0]
+    assert "boom" not in err
+    log = (workdir / "repgenr.log").read_text(encoding="utf-8")
+    assert "/opt/bin/faketool --in x" in log and "line two boom" in log
+
+
+def test_tool_failure_tail_is_on_the_console_with_verbose(
+    workdir: Path, capsys, monkeypatch
+) -> None:
+    monkeypatch.delenv("REPGENR_PROPAGATE_TOOL_EXIT", raising=False)
+    workdir.mkdir(parents=True)
+    logger = configure_logging(workdir, level=logging.DEBUG)
+    _fail(logger)
+    err = capsys.readouterr().err
+    assert "line two boom" in err and "/opt/bin/faketool --in x" in err
+
+
+def test_tool_failure_in_a_data_channel_step_keeps_the_tail(capsys, monkeypatch) -> None:
+    monkeypatch.delenv("REPGENR_PROPAGATE_TOOL_EXIT", raising=False)
+    logger = configure_logging(None, level=logging.INFO)
+    _fail(logger)
+    err = capsys.readouterr().err
+    assert "faketool failed (exit 1)" in err and "line two boom" in err

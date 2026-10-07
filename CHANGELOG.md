@@ -115,6 +115,10 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- A failed external tool prints one console line that names the tool and its
+  exit status and points to `repgenr.log`. The command line and the output
+  tail are written to the run log and shown on the console under `--verbose`;
+  a data-channel step, which has no run log, still prints the tail.
 - One help string per shared flag: duplicated option texts are now shared
   constants, so `run` and the single commands read the same. `--mask` lists
   the registered maskers on snptype, phylo, run and phylo-build, and the three

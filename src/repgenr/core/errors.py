@@ -8,6 +8,8 @@ without a process exit.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 
 class RepGenRError(Exception):
     """Base class for all expected, user-facing RepGenR failures.
@@ -51,11 +53,19 @@ class ToolExecutionError(RepGenRError):
         self.command = command
         self.returncode = returncode
         self.output = output
-        rendered = " ".join(command)
-        msg = f"command failed (exit {returncode}): {rendered}"
-        if output:
-            msg += f"\n--- output tail ---\n{output}"
-        super().__init__(msg)
+        self.tool = Path(command[0]).name if command else "tool"
+        super().__init__(f"{self.tool} failed (exit {returncode})")
+
+    @property
+    def output_tail(self) -> str:
+        return self.output or ""
+
+    def details(self) -> str:
+        """The command line and the output tail, for the run log."""
+        text = "command: " + " ".join(self.command)
+        if self.output:
+            text += f"\n--- output tail ---\n{self.output}"
+        return text
 
 
 class PluginError(RepGenRError):

@@ -16,12 +16,13 @@ _LOG = logging.getLogger("test")
 
 def test_timeout_kills_and_raises() -> None:
     start = time.monotonic()
-    with pytest.raises(ToolExecutionError, match="timeout"):
+    with pytest.raises(ToolExecutionError) as ei:
         process.run(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             logger=_LOG,
             timeout=0.5,
         )
+    assert "timeout" in ei.value.details()
     # killed promptly, nowhere near the 30s sleep
     assert time.monotonic() - start < 10
 
@@ -33,8 +34,9 @@ def test_no_timeout_completes() -> None:
 
 def test_env_default_timeout(monkeypatch) -> None:
     monkeypatch.setenv("REPGENR_SUBPROCESS_TIMEOUT", "0.5")
-    with pytest.raises(ToolExecutionError, match="timeout"):
+    with pytest.raises(ToolExecutionError) as ei:
         process.run([sys.executable, "-c", "import time; time.sleep(30)"], logger=_LOG)
+    assert "timeout" in ei.value.details()
 
 
 def test_env_default_unset_means_no_timeout(monkeypatch) -> None:

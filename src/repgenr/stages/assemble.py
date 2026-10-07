@@ -45,7 +45,13 @@ from ..core.contracts import (
     write_excused_runs,
     write_selection,
 )
-from ..core.errors import MissingBinaryError, RepGenRError, UserInputError, WorkdirError
+from ..core.errors import (
+    MissingBinaryError,
+    RepGenRError,
+    ToolExecutionError,
+    UserInputError,
+    WorkdirError,
+)
 from ..core.executors import parallel_map
 from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
@@ -273,6 +279,13 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
 _LONG_READ_PLATFORMS = frozenset({"OXFORD_NANOPORE", "PACBIO_SMRT"})
 
 
+def _why(exc: RepGenRError) -> str:
+    """The failure for excused_runs.tsv: a tool failure keeps its output tail."""
+    if isinstance(exc, ToolExecutionError) and exc.output:
+        return f"{exc}: {exc.output}"
+    return str(exc)
+
+
 def _default_jobs(pending: list[_Outcome]) -> int:
     """Two short-read assemblies fit side by side; a long-read one wants the machine."""
     return 1 if any(o.row.platform in _LONG_READ_PLATFORMS for o in pending) else 2
@@ -443,7 +456,7 @@ def _fetch_and_assemble(
         )
     except RepGenRError as exc:
         logger.warning("%s: assembly failed (%s)", row.run_accession, exc)
-        outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {exc}")
+        outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {_why(exc)}")
         if not params.keep_files:
             remove_tree(run_scratch)
         return outcome
@@ -462,7 +475,9 @@ def _fetch_and_assemble(
             )
         except RepGenRError as exc:
             logger.warning("%s: polishing failed (%s)", row.run_accession, exc)
-            outcome.excused = ExcusedRun(row.run_accession, "assemble", f"polish_failed: {exc}")
+            outcome.excused = ExcusedRun(
+                row.run_accession, "assemble", f"polish_failed: {_why(exc)}"
+            )
             if not params.keep_files:
                 remove_tree(run_scratch)
             return outcome
@@ -478,7 +493,7 @@ def _fetch_and_assemble(
         )
     except RepGenRError as exc:
         logger.warning("%s: contig filtering failed (%s)", row.run_accession, exc)
-        outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {exc}")
+        outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {_why(exc)}")
         if not params.keep_files:
             remove_tree(run_scratch)
         return outcome

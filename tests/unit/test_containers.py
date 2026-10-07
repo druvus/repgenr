@@ -176,8 +176,9 @@ def test_wave_timeout_raises_tool_error(monkeypatch, _wave_env) -> None:
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     cfg = ContainerConfig(backend="docker", wave_enabled=True)
-    with pytest.raises(containers.ToolExecutionError, match="timed out"):
+    with pytest.raises(containers.ToolExecutionError) as ei:
         resolve_image(_wave_caps(), cfg)
+    assert "timed out" in ei.value.details()
 
 
 def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
@@ -189,8 +190,9 @@ def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     cfg = ContainerConfig(backend="docker", wave_enabled=True)
-    with pytest.raises(containers.ToolExecutionError, match="no image"):
+    with pytest.raises(containers.ToolExecutionError) as ei:
         resolve_image(_wave_caps(), cfg)
+    assert "no image" in ei.value.details()
 
 
 # --- retrying tool runner -----------------------------------------------------
