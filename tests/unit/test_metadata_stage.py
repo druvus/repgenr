@@ -635,13 +635,50 @@ def test_tsv_outgroup_accession_inside_the_selection_is_refused(tmp_path, gtdb_t
         metadata.run(ctx, _params(gtdb_tsv, outgroup_accession="GCF_000001.1"))
 
 
-def test_rep_dataset_named_non_rep_outgroup_does_not_join_the_selection(tmp_path, gtdb_tsv) -> None:
-    # GCF_000002.1 is a non-representative tularensis genome: kept only to
-    # resolve the named outgroup, never selected beside it.
+def test_named_outgroup_inside_the_target_taxon_is_refused(tmp_path, gtdb_tsv) -> None:
+    """GCF_000002.1 is a non-representative tularensis genome: under -d rep it is
+    not selected, but it lies inside the target species, so it is no outgroup."""
     ctx = WorkdirContext(tmp_path / "wd", create=True)
-    metadata.run(ctx, _params(gtdb_tsv, dataset="rep", outgroup_accession="GCF_000002.1"))
+    with pytest.raises(UserInputError, match="inside the target species tularensis"):
+        metadata.run(ctx, _params(gtdb_tsv, dataset="rep", outgroup_accession="GCF_000002.1"))
+
+
+def test_named_outgroup_left_out_by_limit_is_refused(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="inside the target"):
+        metadata.run(ctx, _params(gtdb_tsv, limit=1, outgroup_accession="GCF_000003.1"))
+
+
+def test_named_outgroup_of_a_sister_species_is_accepted(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(gtdb_tsv, dataset="rep", outgroup_accession="GCF_000010.1"))
     rows = _read_selection(ctx.workdir)
-    assert [r["is_outgroup"] for r in rows if r["accession"] == "GCF_000002.1"] == ["1"]
+    assert [r["accession"] for r in rows if r["is_outgroup"] == "1"] == ["GCF_000010.1"]
+
+
+def test_api_named_outgroup_inside_the_target_taxon_is_refused(tmp_path, monkeypatch) -> None:
+    rows = [_api_row("GCF_000001.1", "Francisella", "tularensis")]
+    cards = _cards_for(rows)
+    cards["GCF_000002.1"] = {
+        "metadataTaxonomy": {
+            "gtdbFamily": "f__Francisellaceae",
+            "gtdbGenus": "g__Francisella",
+            "gtdbSpecies": "s__Francisella tularensis",
+        },
+        "metadata_gene": {},
+    }
+    monkeypatch.setattr(metadata, "_api_get", _fake_api_with_cards(rows, rows, cards))
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(
+        dataset="rep",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
+        outgroup_accession="GCF_000002.1",
+    )
+    with pytest.raises(UserInputError, match="inside the target species"):
+        metadata.run(ctx, params)
 
 
 def test_api_outgroup_accession_inside_the_selection_is_refused(tmp_path, monkeypatch) -> None:

@@ -509,7 +509,14 @@ def _pick_outgroup(accessions, selected, target_levels, params):
                 f"Outgroup accession {params.outgroup_accession} not in GTDB metadata."
             )
         _refuse_outgroup_in_selection(params.outgroup_accession, selected)
-        return params.outgroup_accession, accessions[params.outgroup_accession]
+        data = accessions[params.outgroup_accession]
+        _refuse_outgroup_in_target(
+            params.outgroup_accession,
+            params.level,
+            target_levels[params.level],
+            data["tax"][params.level],
+        )
+        return params.outgroup_accession, data
 
     # A representative one level above the selection level, outside the target
     # taxon itself: under --limit, genomes of the target that the cap left out
@@ -531,6 +538,19 @@ def _refuse_outgroup_in_selection(accession: str, selected) -> None:
         raise UserInputError(
             f"--outgroup-accession {accession} is part of the selection itself; "
             "an outgroup must lie outside it."
+        )
+
+
+def _refuse_outgroup_in_target(accession: str, level: str, target: str, value: str) -> None:
+    """A named outgroup obeys the automatic rule: it lies outside the target taxon.
+
+    Under --dataset rep or --limit a target genome can be left out of the
+    selection; it is still not an outgroup.
+    """
+    if value and value == target:
+        raise UserInputError(
+            f"--outgroup-accession {accession} lies inside the target {level} {target}; "
+            "an outgroup must lie outside the target taxon."
         )
 
 
@@ -785,6 +805,13 @@ def _select_outgroup_via_api(
                 f"Outgroup accession {params.outgroup_accession} not found in the GTDB API."
             ) from exc
         tax_row = card.get("metadataTaxonomy", {})
+        field = _rank_field(params.level)
+        _refuse_outgroup_in_target(
+            params.outgroup_accession,
+            params.level,
+            rows[0].get(field, ""),
+            tax_row.get(field, ""),
+        )
         completeness, contamination = _api_quality(card)
         return _record_from_tax(
             params.outgroup_accession,
