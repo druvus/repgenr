@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from repgenr.core.context import WorkdirContext
 from repgenr.stages.tree2tax import Tree2taxParams, run
 
@@ -50,3 +52,22 @@ def test_tree2tax_outputs(workdir: Path) -> None:
     assert mapping["GCA_000001"] == "Fam_gen_sp_GCA_000001"
     # redundant genome maps to the representative leaf
     assert mapping["GCA_000003"] == "Fam_gen_sp_GCA_000001"
+
+
+@pytest.mark.parametrize("unreachable", [False, True])
+def test_missing_workdir_exits_3_without_creating_it(tmp_path: Path, unreachable: bool) -> None:
+    """A nonexistent -wd is a workdir error (exit 3), not a traceback or a new directory."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    if unreachable:
+        blocker = tmp_path / "a_file"
+        blocker.write_text("")
+        missing = blocker / "wd"  # mkdir under a regular file fails
+    else:
+        missing = tmp_path / "missing_wd"
+    result = CliRunner().invoke(app, ["tree2tax", "-wd", str(missing)])
+    assert result.exit_code == 3, result.output
+    assert "Traceback" not in result.output
+    assert not missing.exists()

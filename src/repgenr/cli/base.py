@@ -23,7 +23,7 @@ import typer
 from .. import __version__
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
-from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
+from ..core.errors import RepGenRError, ToolExecutionError, UserInputError, WorkdirError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
 
@@ -458,6 +458,13 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
 
 def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> None:
     params = build_params()
+    if not ctx.workdir.is_dir():
+        # Only entry stages (create=True) start a workdir; any other stage
+        # would otherwise create it as a side effect of opening the manifest.
+        raise WorkdirError(
+            f"Workdir not found: {ctx.workdir}. Create it with an entry stage "
+            "(metadata, ingest, reads or vmetadata) first."
+        )
     # Stages that cache an intermediate of their own (phylo's MSA) must not
     # reuse it under --force, which means "recompute this stage".
     ctx.force = bool(_RUN_STATE["force"])
