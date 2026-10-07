@@ -77,7 +77,7 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
         )
         records += ena.search_runs(ena.taxon_query(taxid))
     if accessions:
-        records += ena.search_runs(ena.accession_query(accessions))
+        records += _whole_genome(ena.search_runs(ena.accession_query(accessions)), logger)
     rows = _dedupe(ena.to_read_rows(records))
     candidates = len(rows)
     logger.info("ENA returned %d whole-genome sequencing runs", candidates)
@@ -109,6 +109,31 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     ctx.save_config()
     logger.info("Selected %d sequencing runs; wrote %s", len(rows), READS_TSV)
     return len(rows)
+
+
+def _whole_genome(records: list[dict], logger: logging.Logger) -> list[dict]:
+    """The WGS runs of genomic source among runs found by accession.
+
+    The taxon query selects these on the server; a study or sample named by
+    accession can also hold RNA-Seq, amplicon or metagenomic runs, which
+    would assemble into something other than the organism's genome.
+    """
+    kept = [r for r in records if ena.is_whole_genome(r)]
+    other = [r for r in records if not ena.is_whole_genome(r)]
+    if other:
+        kinds = sorted(
+            {f"{r.get('library_strategy') or '?'}/{r.get('library_source') or '?'}" for r in other}
+        )
+        names = ", ".join(r["run_accession"] for r in other[:5])
+        logger.warning(
+            "Dropping %d run(s) found by accession that are not whole-genome sequencing of "
+            "genomic DNA (%s): %s%s",
+            len(other),
+            ", ".join(kinds),
+            names,
+            " ..." if len(other) > 5 else "",
+        )
+    return kept
 
 
 def _active_filters(params: ReadsParams) -> str:

@@ -59,6 +59,14 @@ class TaxonHit:
     rank: str
 
 
+def is_whole_genome(record: dict) -> bool:
+    """Whether a portal record is WGS of genomic source (what _WGS_FILTER selects)."""
+    return (
+        str(record.get("library_strategy", "")).upper() == "WGS"
+        and str(record.get("library_source", "")).upper() == "GENOMIC"
+    )
+
+
 def taxon_query(taxid: str) -> str:
     """Every WGS run under a taxon subtree."""
     return f"tax_tree({taxid}) AND {_WGS_FILTER}"

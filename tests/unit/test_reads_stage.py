@@ -228,3 +228,34 @@ def test_accession_file_accepts_indented_and_trailing_comments(tmp_path: Path) -
         "SRR1  # the ONT run\n   # an indented comment\n\tSRR2\n#SRR3\n", encoding="utf-8"
     )
     assert reads_mod.read_accession_file(str(listing)) == ["SRR1", "SRR2"]
+
+
+def test_accessions_keep_only_whole_genome_runs(workdir: Path, ena_fake, monkeypatch, caplog):
+    """A study or run named by accession may hold RNA-Seq or amplicon runs; like the
+    taxon query, only WGS runs of genomic source are kept, and the rest are named."""
+    import logging
+
+    records = _records("ena_read_run_accessions.json")
+    records[0] = {**records[0], "library_strategy": "RNA-Seq", "library_source": "TRANSCRIPTOMIC"}
+    records[1] = {**records[1], "library_source": "METAGENOMIC"}
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: records)
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, ReadsParams(accessions=["PRJNA954307"], one_per_sample=False, drop_selection=[]))
+    kept = {r.run_accession for r in read_reads(workdir / READS_TSV)}
+    dropped = {records[0]["run_accession"], records[1]["run_accession"]}
+    assert not kept & dropped and len(kept) == len(records) - 2
+    warning = next(r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+    assert "2 run(s)" in warning and records[0]["run_accession"] in warning
+    assert "RNA-Seq/TRANSCRIPTOMIC" in warning
+
+
+def test_an_accession_with_no_whole_genome_run_is_refused(workdir: Path, ena_fake, monkeypatch):
+    records = [
+        {**r, "library_strategy": "AMPLICON"} for r in _records("ena_read_run_accessions.json")
+    ]
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: records)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="No sequencing runs selected"):
+        run(ctx, ReadsParams(accessions=["PRJNA954307"]))
