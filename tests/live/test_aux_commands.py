@@ -131,3 +131,22 @@ def test_logging_flags_and_env(run_repgenr, derep_wd: Path) -> None:
         env={"REPGENR_LOG_LEVEL": "DEBUG"},
     )
     assert "DEBUG" in log.read_text(encoding="utf-8")[size_before:]
+
+
+def test_glance_sourmash(synthetic_set, ingested_workdir, run_repgenr) -> None:
+    """glance --tool sourmash: dendrogram over every genome, one value per pair."""
+    from repgenr.stages.glance import GLANCE_OUTPUTS, _pair_similarities
+
+    genomes = synthetic_set("clonal", n=8, length=50_000)
+    wd = ingested_workdir(genomes, copy=True)
+    run_repgenr("glance", "-wd", wd, "--tool", "sourmash", "-t", "2", "--keep-files")
+    for name in GLANCE_OUTPUTS:
+        assert (wd / name).is_file(), name
+    names = {p.name for p in (wd / "genomes").iterdir()}
+    leaves = (wd / "glance_wd" / "dendrogram_leaves.txt").read_text(encoding="utf-8").split()
+    assert sorted(leaves) == sorted(names)
+    values = _pair_similarities(wd / "glance_wd" / "pairwise_ani.csv", 0.0, 1.0)
+    assert len(values) == len(names) * (len(names) - 1) // 2
+    record = Config.load(wd).stages["glance"]
+    assert record.tool == "sourmash" and record.completed
+    assert "sourmash" in record.tool_versions

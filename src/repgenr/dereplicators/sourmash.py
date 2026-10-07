@@ -22,6 +22,10 @@ Two back-ends compute the pairwise similarities, picked automatically:
   the full N x N similarity matrix. Used when the plugin is absent (e.g. inside a
   stock BioContainer). For the same threshold both back-ends pick the same
   representatives on well-separated inputs.
+
+``compare`` (used by ``repgenr glance``) always takes the dense path, since it
+reports every genome pair; it converts to ANI the same way, so the glance plots
+use the scale of the dereplication threshold.
 """
 
 from __future__ import annotations
@@ -45,14 +49,19 @@ from ..core.process import write_fofn
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
+    CompareResult,
     Dereplicator,
     DerepParams,
     DerepResult,
 )
+from .compare_io import write_dendrogram, write_pairwise_csv
 
 # Above this, the dense N x N float64 matrix is too large to hold in memory
 # (~0.2 GB at 5k, ~20 GB at 50k); require the sparse branchwater path instead.
 _DENSE_MAX_GENOMES = 5000
+
+# Axis label for the glance plots: sourmash's ANI estimate from k-mer sketches.
+_MEASURE = "ANI"
 
 
 class SourmashDereplicator(Dereplicator):
@@ -133,12 +142,77 @@ class SourmashDereplicator(Dereplicator):
         threads: int = 1,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Stock sourmash sketch + N x N compare (no plugin needed)."""
+        labels, ani, name_by_label = self._dense_ani_matrix(
+            genomes,
+            out_dir,
+            ksize,
+            scaled,
+            logger,
+            sketch_cache,
+            threads,
+            too_large_hint="Install the branchwater plugin "
+            "(pip install sourmash_plugin_branchwater) for the sparse path, or use a "
+            "tool that scales better at this size (e.g. --tool skder).",
+        )
+        return _greedy_cluster(labels, ani, name_by_label, threshold)
+
+    def compare(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        threads: int,
+        logger: logging.Logger,
+    ) -> CompareResult:
+        """All-vs-all ANI estimates for ``repgenr glance`` (dense compare).
+
+        Uses the same sketches (default ksize/scaled) and the same
+        Jaccard-to-ANI conversion as the dense dereplication path, so the
+        glance plots are on the scale the ``--secondary-ani`` threshold of
+        ``dereplicate --tool sourmash`` applies to. Writes a pairwise CSV (one
+        row per unordered pair) and an average-linkage dendrogram on 1 - ANI.
+        """
+        out_dir.mkdir(parents=True, exist_ok=True)
+        defaults = self.capabilities.default_params
+        labels, ani, name_by_label = self._dense_ani_matrix(
+            genomes,
+            out_dir,
+            int(defaults["ksize"]),
+            int(defaults["scaled"]),
+            logger,
+            None,
+            threads,
+            too_large_hint="glance plots every genome pair and needs the full matrix; "
+            "compare a subset of the genomes instead.",
+        )
+        names = [name_by_label[label] for label in labels]
+        pairwise = write_pairwise_csv(names, ani, out_dir / "pairwise_ani.csv")
+        pdf = out_dir / "dendrogram.pdf"
+        leaves = write_dendrogram(names, ani, pdf, measure=_MEASURE)
+        # The leaf order in plain text, for checking the figure (kept with --keep-files).
+        (out_dir / "dendrogram_leaves.txt").write_text("\n".join(leaves) + "\n", encoding="utf-8")
+        return CompareResult(similarity_csv=pairwise, dendrogram=pdf, measure=_MEASURE)
+
+    def _dense_ani_matrix(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        logger: logging.Logger,
+        sketch_cache: Path | None,
+        threads: int,
+        *,
+        too_large_hint: str,
+    ) -> tuple[list[str], npt.NDArray[np.float64], dict[str, str]]:
+        """Sketch (reusing cached signatures) and compare all genomes.
+
+        Returns the column labels, the N x N ANI-estimate matrix and the map
+        from label to genome basename.
+        """
         if len(genomes) > _DENSE_MAX_GENOMES:
             raise WorkdirError(
                 f"sourmash dense compare needs an N x N matrix for {len(genomes)} genomes "
-                f"(~{len(genomes) ** 2 * 8 / 1e9:.1f} GB). Install the branchwater plugin "
-                "(pip install sourmash_plugin_branchwater) for the sparse path, or use a "
-                "tool that scales better at this size (e.g. --tool skder)."
+                f"(~{len(genomes) ** 2 * 8 / 1e9:.1f} GB). {too_large_hint}"
             )
         sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
         sig_dir.mkdir(parents=True, exist_ok=True)
@@ -219,7 +293,7 @@ class SourmashDereplicator(Dereplicator):
         labels, sim = _read_compare_csv(matrix_csv)
         ani = _jaccard_to_ani_matrix(np.asarray(sim, dtype=float), ksize)
         name_by_label = _match_labels_to_genomes(labels, genomes)
-        return _greedy_cluster(labels, ani, name_by_label, threshold)
+        return labels, ani, name_by_label
 
     def _sparse_dereplicate(
         self,

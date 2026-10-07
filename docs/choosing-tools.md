@@ -111,6 +111,14 @@ Guidance:
   clusters, and each kept a different representative. To check this on your own
   data, see "Comparing two dereplications" in
   [usage.md](usage.md#inspecting-a-dereplication).
+- `repgenr glance` (an all-against-all overview before choosing thresholds)
+  runs on `drep` or `sourmash`; the other dereplicators have no comparison
+  mode. `--tool auto`, the default, uses dRep when it can run and sourmash
+  otherwise. sourmash needs no container on most systems and plots the ANI
+  estimate that `dereplicate --tool sourmash` thresholds; it holds the full
+  N x N matrix and refuses sets above 5000 genomes. On `pureclone_20` and
+  `clonal_50_clustered` a sourmash glance took about 22 to 24 s, most of it
+  sketching.
 
 ## 5. Phylogeny routes
 

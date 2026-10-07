@@ -399,9 +399,9 @@ elsewhere, for example on exFAT or across volumes, they are copies, which for
 1000 genomes took minutes rather than under a second. The directories
 describe the dereplication they were made from: after a new `dereplicate` or
 a `derep-stock --action unpack`, run `derep-unpack` again (it reruns because
-`clusters.tsv` changed, and `doctor` warns until then). `repgenr glance` runs dRep's comparison over all genomes
-in `genomes/` (at least two) and writes its dendrogram and plots (dRep
-only; it does not need a dereplication). `repgenr derep-stock
+`clusters.tsv` changed, and `doctor` warns until then). `repgenr glance` compares all genomes
+in `genomes/` (at least two) with dRep or sourmash and writes a dendrogram
+and two plots; it does not need a dereplication. `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses,
 representatives and the completed `dereplicate` record (tool, parameters,
 tool versions, as `record.json`) under `derep/stock/<run>`; a run already stored under that
@@ -459,15 +459,34 @@ representative's filename without its extension.
 
 #### Reading `glance`
 
-`glance` needs dRep on the `PATH` and does not need a dereplication. It sets
-no thresholds. The Mash ANI histogram shows how the pairwise values are
+`glance` does not need a dereplication and sets no thresholds. `--tool`
+chooses the comparison tool:
+
+- `auto` (the default) uses dRep when it can run, on the `PATH` or through
+  the container backend, and sourmash otherwise. The log names the tool it
+  picked, and the stage record holds that tool, not `auto`. With neither
+  available, glance exits 4 and names the tools that can compare.
+- `drep` runs `dRep compare` (Mash, primary clustering only) and plots Mash
+  ANI. The dendrogram is dRep's own.
+- `sourmash` sketches the genomes with the parameters `dereplicate --tool
+  sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts
+  the values to the same ANI estimate the dereplication threshold applies
+  to. The dendrogram is average-linkage clustering on 1 - ANI. The full N x N
+  matrix is held in memory, so sets above 5000 genomes are refused.
+
+The plot axes name the measure, Mash ANI or ANI; the file names stay the
+same for both tools. The two estimates differ slightly, so compare plots made
+with the same tool. The histogram shows how the pairwise values are
 spread: when they fall into separate groups with an empty gap between them,
 a threshold placed in the gap separates them. On the synthetic set
 `clonal_50_clustered` (three groups of 20, 15 and 15 genomes) the
 between-group values lie at about 0.95 to 0.96, the within-group values at
-0.995 or higher, and nothing lies between 0.96 and 0.995. If the values are
+0.995 or higher, and nothing lies between 0.96 and 0.995 (Mash ANI from dRep
+and the sourmash ANI estimate agree on this). If the values are
 spread evenly across the range, the threshold decides the cluster sizes, so
-check `cluster_summary.tsv` afterwards. dRep writes
+check `cluster_summary.tsv` afterwards. With `--tool sourmash` and
+`--keep-files`, `glance_wd/pairwise_ani.csv` holds the value of every pair
+and `glance_wd/dendrogram_leaves.txt` the dendrogram's leaf order. dRep writes
 into its cache with names beginning `._` on exFAT volumes and fails there; use
 an APFS or ext4 working directory (see `verification.md`).
 

@@ -46,11 +46,15 @@ class CompareResult:
 
     ``similarity_csv`` holds pairwise rows with at least the columns
     ``genome1``, ``genome2``, ``similarity``; ``dendrogram`` is an optional
-    pre-rendered clustering figure.
+    pre-rendered clustering figure. ``measure`` names the similarity for the
+    plot axes (for example "MASH ANI" for dRep, "ANI" for sourmash's
+    sketch-based estimate). The helpers in :mod:`.compare_io` write both files
+    from a dense similarity matrix.
     """
 
     similarity_csv: Path | None = None
     dendrogram: Path | None = None
+    measure: str = "ANI"
 
 
 @dataclass
@@ -152,10 +156,14 @@ class Dereplicator(ABC):
         raise NotImplementedError
 
 
-def compare_supporters() -> list[str]:
+def compare_supporters(reg: Registry[Dereplicator] | None = None) -> list[str]:
     """Registered, loadable dereplicators that implement ``compare`` (glance)."""
+    reg = registry if reg is None else reg
     return sorted(
         name
-        for name in registry.names()
-        if not registry.is_broken(name) and registry.get(name).compare is not Dereplicator.compare
+        for name in reg.names()
+        if not reg.is_broken(name)
+        # A third-party adapter need not subclass Dereplicator; without a
+        # compare attribute it has no comparison support.
+        and getattr(reg.get(name), "compare", Dereplicator.compare) is not Dereplicator.compare
     )

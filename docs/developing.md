@@ -156,7 +156,11 @@ default deliberately:
   chosen typer leaves it None.
 * Optional capability hooks: `Dereplicator.compare(...)` (all-vs-all
   similarity for `repgenr glance`; return a `CompareResult` whose CSV has
-  `genome1`/`genome2`/`similarity` columns) and
+  `genome1`/`genome2`/`similarity` columns, and set its `measure` to the
+  label for the plot axes; an adapter with a dense similarity matrix can
+  write both files with `dereplicators/compare_io.py`, as sourmash does; a
+  compare-capable adapter ranks after dRep and sourmash for `glance --tool
+  auto`) and
   `TreeBuilder.distance_matrix(...)` (pairwise matrix for the viral outgroup
   step). Tools without an override are cleanly rejected when a user selects
   them for those features.

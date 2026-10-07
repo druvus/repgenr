@@ -363,3 +363,14 @@ def test_list_tools_shows_declared_genome_limits() -> None:
     assert "mashtree (up to 10000 genomes)" in lines["treebuilders"]
     entries = lines["dereplicators"].split(": ", 1)[1].split(", ")
     assert "skder" in entries
+
+
+def test_list_tools_names_the_glance_backends() -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    result = CliRunner().invoke(app, ["list-tools"])
+    assert result.exit_code == 0
+    line = next(ln for ln in result.output.splitlines() if ln.startswith("glance"))
+    assert "drep" in line and "sourmash" in line and "skder" not in line

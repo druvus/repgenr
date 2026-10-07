@@ -7,6 +7,17 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `glance --tool sourmash`: sourmash is a second comparison backend for
+  `glance`. It sketches every genome with the parameters `dereplicate --tool
+  sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts the
+  values to the ANI estimate the dereplication threshold applies to, so the
+  plots show the scale of that threshold. The dendrogram is average-linkage
+  clustering on 1 - ANI, computed with numpy (no new dependency). With
+  `--keep-files`, `glance_wd/` holds `pairwise_ani.csv` and the dendrogram's
+  leaf order. Sets above 5000 genomes are refused (dense matrix). The plot
+  axes name the measure, Mash ANI for dRep and ANI for sourmash; the output
+  file names are unchanged. `list-tools` ends with a line naming the glance
+  backends.
 - `cluster_summary.tsv` gains a last column, `n_genomes`, which counts the
   genomes in the cluster including the keeper (`n_members` excludes it).
 - `repgenr --help` groups the commands into panels (pipeline, entry points,
@@ -117,6 +128,14 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `glance --tool` defaults to `auto`: dRep when it can run (on the `PATH` or
+  through the container backend, the test `dereplicate --tool auto` uses),
+  sourmash otherwise. The log names the tool picked, and the stage record and
+  resume fingerprint hold the concrete tool, so `auto` and naming the same
+  tool resume each other. With neither tool available, glance exits 4 and
+  names the tools that can compare, after the workdir and genome checks
+  (which still exit 3); under an active container backend the message says
+  that none of them declares a container image. Before, the default was `drep`.
 - `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
   fractions from 0 to 1, and that `--keep-files` keeps the dRep working
   directory `glance_wd/` (it used the shared "download and scratch

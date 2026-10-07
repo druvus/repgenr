@@ -49,7 +49,7 @@ def test_glance_happy_path(workdir: Path, monkeypatch) -> None:
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
 
-    out_pdf = glance_run(ctx, GlanceParams(threads=2))
+    out_pdf = glance_run(ctx, GlanceParams(tool="drep", threads=2))
 
     assert out_pdf.exists()  # dendrogram copied out
     assert (ctx.workdir / "glance_MASH_ANI_similarity_boxplot.png").exists()
@@ -62,7 +62,7 @@ def test_glance_keep_files(workdir: Path, monkeypatch) -> None:
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
 
-    glance_run(ctx, GlanceParams(threads=2, keep_files=True))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2, keep_files=True))
     assert (ctx.workdir / "glance_wd").exists()  # scratch retained
 
 
@@ -76,7 +76,7 @@ def test_glance_passes_fofn(workdir: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", fake)
-    glance_run(ctx, GlanceParams())
+    glance_run(ctx, GlanceParams(tool="drep"))
 
     parts = captured["cmd"]
     gidx = parts.index("-g")
@@ -90,7 +90,7 @@ def test_glance_records_tool_version(workdir: Path, monkeypatch) -> None:
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {"dRep": "3.7.1"})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
 
-    glance_run(ctx, GlanceParams(threads=2))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2))
 
     record = ctx.config.stages["glance"]
     assert record.tool == "drep"
@@ -110,19 +110,19 @@ def test_glance_reports_missing_genomes_before_the_tool_check(workdir: Path, mon
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", _absent)
     ctx = WorkdirContext(workdir / "absent")
     with pytest.raises(WorkdirError):
-        glance_run(ctx, GlanceParams(threads=2))
+        glance_run(ctx, GlanceParams(tool="drep", threads=2))
 
 
 def test_glance_removes_plots_of_an_earlier_run(workdir: Path, monkeypatch) -> None:
     ctx = _setup(workdir)
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
-    glance_run(ctx, GlanceParams(threads=2))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2))
     boxplot = ctx.workdir / "glance_MASH_ANI_similarity_boxplot.png"
     histogram = ctx.workdir / "glance_MASH_ANI_similarity_histogram.png"
     assert boxplot.exists() and histogram.exists()
     # No similarity falls in this range, so no plot is drawn this time.
-    glance_run(ctx, GlanceParams(threads=2, plot_min=0.99, plot_max=0.999))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2, plot_min=0.99, plot_max=0.999))
     assert not boxplot.exists() and not histogram.exists()
 
 
@@ -144,7 +144,7 @@ def test_a_drep_failure_prints_one_line_and_logs_the_tail(workdir: Path, monkeyp
     _setup(workdir)
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _failing)
-    result = CliRunner().invoke(app, ["glance", "-wd", str(workdir)])
+    result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), "--tool", "drep"])
     assert result.exit_code == 6, result.output
     assert "Traceback" not in result.output
     errors = [line for line in result.output.splitlines() if "ERROR" in line]
@@ -199,7 +199,7 @@ def test_glance_histogram_axes_name_ani_and_pair_counts(workdir: Path, monkeypat
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
     monkeypatch.setattr(Figure, "savefig", _capture)
-    glance_run(ctx, GlanceParams(threads=2))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2))
 
     hist_x, hist_y, _ = labels["glance_MASH_ANI_similarity_histogram.png"]
     assert hist_x == "MASH ANI" and hist_y == "Genome pairs"
@@ -221,7 +221,7 @@ def test_glance_with_one_genome_exits_3_before_the_tool_runs(workdir: Path, monk
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", lambda *a, **k: called.append(a))
     with pytest.raises(WorkdirError, match="at least two genomes"):
-        glance_run(ctx, GlanceParams(threads=2))
+        glance_run(ctx, GlanceParams(tool="drep", threads=2))
     assert not called
 
     # Through the CLI: exit 3 and no glance record left in repgenr.yaml.
@@ -230,7 +230,7 @@ def test_glance_with_one_genome_exits_3_before_the_tool_runs(workdir: Path, monk
     from repgenr.cli.main import app
     from repgenr.core.config import Config
 
-    result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), "-t", "2"])
+    result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), "--tool", "drep", "-t", "2"])
     assert result.exit_code == 3, result.output
     assert "glance" not in Config.load(workdir).stages
     assert not called
@@ -253,7 +253,7 @@ def test_glance_rejects_inverted_or_out_of_range_plot_bounds(workdir: Path, monk
         ["--plot-max", "99"],
         ["--plot-min", "-0.1"],
     ):
-        result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), *bounds])
+        result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), "--tool", "drep", *bounds])
         assert result.exit_code == 2, (bounds, result.output)
         assert "--plot-m" in result.output
     assert not called
@@ -270,10 +270,10 @@ def test_glance_help_names_the_bound_units_and_the_kept_directory() -> None:
     # Strip colour codes and the rich panel border characters (ASCII escapes).
     noise = r"\x1b\[[0-9;]*[A-Za-z]|[\u2500\u2502\u256d\u256e\u256f\u2570]"
     text = " ".join(re.sub(noise, " ", result.output).split())
-    assert "Mash ANI values plotted, as a fraction from 0 to 1" in text
-    assert "Keep the dRep working directory glance_wd/." in text
+    assert "ANI values plotted, as a fraction from 0 to 1" in text
+    assert "Keep the comparison tool's working directory glance_wd/." in text
     # The description says what glance needs and what it writes.
-    assert "Needs dRep (on the PATH, or via the container backend)" in text
+    assert "Needs dRep or sourmash (on the PATH, or via the container backend)" in text
     assert "no dereplication" in text
     assert "glance_clustering_dendrogram.pdf" in text
 
@@ -287,7 +287,7 @@ def test_glance_warns_when_the_tool_returns_no_dendrogram(workdir: Path, monkeyp
     ctx = _setup(workdir)
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _no_dendrogram)
-    glance_run(ctx, GlanceParams(threads=2))
+    glance_run(ctx, GlanceParams(tool="drep", threads=2))
     assert not (ctx.workdir / "glance_clustering_dendrogram.pdf").exists()
     log = (ctx.workdir / "repgenr.log").read_text(encoding="utf-8")
     assert "WARNING The comparison returned no dendrogram" in log
@@ -303,9 +303,12 @@ def test_a_deleted_dendrogram_is_rebuilt_without_force(workdir: Path, monkeypatc
     monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
     monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
     runner = CliRunner()
-    assert runner.invoke(app, ["glance", "-wd", str(workdir), "-t", "2"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["glance", "-wd", str(workdir), "--tool", "drep", "-t", "2"]).exit_code
+        == 0
+    )
     pdf = workdir / "glance_clustering_dendrogram.pdf"
     pdf.unlink()
-    result = runner.invoke(app, ["glance", "-wd", str(workdir), "-t", "2"])
+    result = runner.invoke(app, ["glance", "-wd", str(workdir), "--tool", "drep", "-t", "2"])
     assert result.exit_code == 0, result.output
     assert pdf.exists()
