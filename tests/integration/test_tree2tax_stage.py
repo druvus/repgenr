@@ -90,3 +90,18 @@ def test_flag_change_is_not_reported_as_a_changed_input(workdir: Path) -> None:
     log = (workdir / "repgenr.log").read_text()
     assert log.count("Wrote tree2tax.tsv") == 3  # each flag change re-ran
     assert "'derep/clusters.tsv' changed" not in log
+
+
+def test_member_that_is_a_leaf_maps_only_to_its_own_leaf(workdir: Path) -> None:
+    """A tree built with --all-genomes has every genome as a leaf; a contained
+    genome must not be listed a second time under its representative."""
+    ctx = _setup(workdir)
+    (workdir / "tree" / "tree.nwk").write_text(
+        "(((Fam_gen_sp_GCA_000001:0.1,Fam_gen_sp_GCA_000003:0.1):0.1,"
+        "Fam_gen_sp_GCA_000002:0.1):0.2,Out_gen_sp_GCA_000099:0.5);\n"
+    )
+    _t2t, gmap = run(ctx, Tree2taxParams(include_dereplicated=True))
+    rows = [tuple(line.split("\t")) for line in gmap.read_text().splitlines()]
+    accessions = [acc for acc, _ in rows]
+    assert len(accessions) == len(set(accessions)), rows
+    assert ("GCA_000003", "Fam_gen_sp_GCA_000003") in rows
