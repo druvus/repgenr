@@ -290,3 +290,22 @@ def test_stage1_uses_pre_thresholds(workdir: Path, genome_files, fake_tool) -> N
     stage1 = [s for s in calls[:-1]]
     assert stage1 and all(sec == 0.95 for _, sec in stage1)
     assert calls[-1][1] == 0.99
+
+
+@pytest.mark.parametrize("unreachable", [False, True])
+def test_missing_workdir_exits_3_without_creating_it(tmp_path: Path, unreachable: bool) -> None:
+    """A nonexistent -wd is a workdir error (exit 3), not a traceback or a new directory."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    if unreachable:
+        blocker = tmp_path / "a_file"
+        blocker.write_text("")
+        missing = blocker / "wd"  # mkdir under a regular file fails
+    else:
+        missing = tmp_path / "missing_wd"
+    result = CliRunner().invoke(app, ["dereplicate", "-wd", str(missing)])
+    assert result.exit_code == 3, result.output
+    assert "Traceback" not in result.output
+    assert not missing.exists()

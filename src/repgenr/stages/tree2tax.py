@@ -433,7 +433,10 @@ def _genome_map(
     for leaf in leaves_nodes:
         _add(leaf, leaf)
         for red in redundant.get(leaf, []):
-            _add(red, leaf)
+            # A member that is a leaf itself (a tree built with --all-genomes)
+            # already maps to its own leaf.
+            if red not in leaves_nodes:
+                _add(red, leaf)
     return mapping
 
 

@@ -156,6 +156,15 @@ def snptype_core(
         with atomic_path(core) as tmp:
             shutil.copy2(result.core_snp_fasta, tmp)
 
+    # Optional outputs this typer does not produce are removed: left from an
+    # earlier run with another typer or genome set, they would describe that run.
+    for name, produced in (
+        ("variants.vcf", result.vcf),
+        ("snp_distance_matrix.tsv", result.snp_distance_matrix),
+        ("full_alignment.fasta", result.full_alignment),
+    ):
+        if produced is None:
+            (snp_dir / name).unlink(missing_ok=True)
     if result.vcf is not None:
         with atomic_path(snp_dir / "variants.vcf") as tmp:
             shutil.copy2(result.vcf, tmp)
