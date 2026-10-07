@@ -375,3 +375,23 @@ def test_ingest_selection_outgroup_flag_accepts_true(tmp_path: Path, workdir: Pa
     ctx = WorkdirContext(workdir, create=True)
     assert run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel))) == 1
     assert (workdir / "outgroup_accession.txt").read_text().strip() == "B"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "accession\tfilename\nA\t\n",  # blank filename
+        "accession\tfilename\nA\n",  # short row: DictReader gives None
+        "accession\tfilename\n\ta.fasta\n",  # blank accession
+    ],
+)
+def test_ingest_selection_row_without_filename_or_accession(
+    tmp_path: Path, workdir: Path, body: str
+) -> None:
+    """A row without a filename crashed with exit 1 on the join of missing names."""
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text(body)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"line 2: the (filename|accession) column is empty"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))

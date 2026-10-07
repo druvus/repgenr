@@ -294,6 +294,9 @@ def read_selection(path: Path) -> list[SelectionRow]:
             _require_columns(reader, path, ["accession", "filename"])
             for row in reader:
                 try:
+                    for column in ("accession", "filename"):
+                        if not (row.get(column) or "").strip():
+                            raise ValueError(f"the {column} column is empty")
                     rows.append(
                         SelectionRow(
                             accession=row["accession"],
