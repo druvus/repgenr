@@ -246,3 +246,29 @@ def test_tree2tax_warns_when_the_last_phylo_run_did_not_finish(workdir: Path, ca
     with caplog.at_level(logging.WARNING, logger="test-t2t"):
         tree2tax_run(ctx, Tree2taxParams())
     assert not any("did not finish" in r.getMessage() for r in caplog.records)
+
+
+def test_unmatched_outgroup_accession_names_the_outgroup_directory(tmp_path: Path, caplog) -> None:
+    """An accession no outgroup file matches is reported as such, not as a
+    missing leaf; the tree is left unrooted as phylo-build leaves it."""
+    import logging
+
+    from repgenr.stages.tree2tax import Tree2taxStepParams, tree2tax_relations
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text(_NWK + "\n")
+    og = tmp_path / "og"
+    og.mkdir()
+    (og / "Fam_Gen_sp_GCA_000004.1.fasta").write_text(">x\nACGT\n")
+    acc = tmp_path / "acc.txt"
+    acc.write_text("GCA_999999.1\n")
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_relations(
+            Tree2taxStepParams(
+                tree=tree, out_dir=tmp_path / "out", outgroup_dir=og, outgroup_accession=acc
+            ),
+            logging.getLogger("test-t2t"),
+        )
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("No file in" in m and "GCA_999999.1" in m for m in messages), messages
+    assert not any("among tree leaves" in m for m in messages)

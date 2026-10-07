@@ -273,7 +273,11 @@ def _resolve_outgroup_leaf_from(
         if accession in f.name:
             logger.info("Outgroup resolved by substring match: %s", f.name)
             return f.stem
-    logger.warning("Outgroup accession %s not present among tree leaves", accession)
+    logger.warning(
+        "No file in %s matches outgroup accession %s; tree is left unrooted",
+        outgroup_dir,
+        accession,
+    )
     return None
 
 
