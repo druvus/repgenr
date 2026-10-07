@@ -374,7 +374,7 @@ Store, load, list or delete named dereplication runs.
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 | `--action` | required | list, pack, unpack or delete. |
-| `--name` |  | Run name for pack/unpack/delete. |
+| `--name` |  | Run name for pack/unpack/delete: up to 100 letters, digits, '.', '_' or '-', starting with a letter or digit. |
 
 ## Environment and diagnostics
 

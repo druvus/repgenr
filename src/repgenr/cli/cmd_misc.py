@@ -246,7 +246,12 @@ def cluster_summary(
 def derep_stock(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     action: str = typer.Option(..., "--action", help="list, pack, unpack or delete."),
-    name: str | None = typer.Option(None, "--name", help="Run name for pack/unpack/delete."),
+    name: str | None = typer.Option(
+        None,
+        "--name",
+        help="Run name for pack/unpack/delete: up to 100 letters, digits, '.', '_' or '-', "
+        "starting with a letter or digit.",
+    ),
 ) -> None:
     """Store, load, list or delete named dereplication runs."""
     from ..stages.derep_stock import DerepStockParams

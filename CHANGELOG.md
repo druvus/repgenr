@@ -125,6 +125,10 @@ All notable changes to RepGenR are documented here. The format follows
   are copied (about 4.5 minutes and 2.1 GB for 1000 genomes on exFAT, against
   under a second with hard links on APFS), and its closing line counts the
   genome files and cluster directories written rather than the clusters read.
+- `derep-stock --action unpack` hardlinks the representatives from `genomes/`
+  as `dereplicate` does, copying only where the file system cannot link. At
+  1000 representatives on one volume the unpack took 0.5 s instead of 5 s
+  and no extra disk instead of 1.9 GB.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
@@ -278,6 +282,29 @@ All notable changes to RepGenR are documented here. The format follows
 - `derep-unpack` failed with exit 1 and left a partial `derep/unpacked/` when
   two representatives shared a file stem (`x.fasta` and `x.fna`); such
   clusters are now named by the full file name.
+- `derep-stock --name` help states the accepted run names.
+- `derep-stock --action pack` under a name already in the store warns that
+  it replaces the stored run; the run was replaced without notice.
+- `derep-stock --action unpack` marks the `dereplicate` record incomplete
+  before it replaces the derep outputs, so an unpack that is killed half-way
+  shows as an interrupted dereplication in `status` instead of a finished
+  one with `phylo` suggested next.
+- A refused `derep-stock` pack or unpack (invalid or unknown `--name`, a
+  workdir without a dereplication, an incomplete stored run) no longer marks
+  the record of the last finished pack or unpack as interrupted, which made
+  `doctor` report a failure. The checks now run before the resume harness
+  touches the record, and an unknown run on unpack lists the stored runs.
+- `derep-stock` refuses a `--name` longer than 100 characters with exit 2;
+  a name past the file-system limit ended in an unexpected error (exit 1).
+- `derep-stock --action list` prints the stored run names on stdout, one per
+  line, so the list can be read by a script and also appears under
+  `--quiet`; it was a log message on stderr. `--action delete` logs the run
+  it removed.
+- `derep-stock --action unpack` rebuilds `derep/cluster_summary.tsv` from
+  the restored clusters and the current manifest instead of restoring the
+  stored copy. The stored copy carried the CheckM quality of pack time, and
+  `cluster-summary` skipped afterwards (its inputs had not changed), so the
+  live summary could disagree with the manifest.
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.

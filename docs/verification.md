@@ -391,6 +391,12 @@ parser), so they also apply to commands other than the one named.
 | derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
 | derep-stock | A repeat `unpack` after a new dereplication was skipped and restored nothing | fde2eb9 |
 | derep-stock | `list` and `pack` on a nonexistent workdir exited 0 or created the workdir | bec185a |
+| derep-stock | `list` wrote the run names to the log on stderr, so `--quiet` hid them; they now go to stdout, and delete logs the removed run | #218 |
+| derep-stock | A `--name` past the file-name limit ended in an unexpected error (exit 1); names are limited to 100 characters (exit 2) | #218 |
+| derep-stock | A refused pack or unpack (bad or unknown name) marked the last finished pack as interrupted and `doctor` failed | #218 |
+| derep-stock | An unpack killed half-way left `status` reporting `dereplicate` as done with `phylo` next | #218 |
+| derep-stock | Packing under a stored name replaced that run without notice; it now warns | #218 |
+| derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | #218 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -409,6 +415,8 @@ they are recorded here and not fixed.
 | glance | For 1000 genomes the dendrogram PDF is one page about 3.9 m tall; it is readable only when zoomed. |
 | glance | The genomes in `outgroup/` are not part of the comparison; glance compares `genomes/` only, as documented. |
 | Resume | The skip message says "use --force to re-run", but `--force` is a global option and must come before the command (`repgenr --force glance ...`); `repgenr glance --force` exits 2 with "No such option". |
+| derep-stock | Unpack re-stamps the `dereplicate` record with the tool, parameters and tool versions of the record that was live at unpack time, plus `stock: <run>`. When that record belongs to another run, `status` and `versions` name the wrong tool (a sourmash run restored after a skDER run shows `[skder]` and secondary ANI 0.99). A stored run does not keep its own record; see the proposal in the deep-audit report. |
+| derep-stock | A stored run keeps links to the representative files, but unpack restores by name from `genomes/`; a genome replaced under the same name since the pack is restored in its current form. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
 
 ## Platform notes (macOS / Apple Silicon)

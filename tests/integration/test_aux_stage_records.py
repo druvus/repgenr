@@ -133,3 +133,65 @@ def test_derep_stock_on_missing_workdir_exits_3(tmp_path: Path) -> None:
         result = _runner.invoke(app, ["derep-stock", "-wd", str(wd), *args])
         assert result.exit_code == 3, result.output
     assert not wd.exists()
+
+
+def test_derep_stock_list_prints_the_runs_on_stdout_under_quiet(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The list is the command's result, not a log message: it must reach
+    # stdout, one name per line, also with --quiet. Delete says what it removed.
+    import logging
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(cli._RUN_STATE, "log_level", logging.INFO)
+    wd = _derep_workdir(tmp_path)
+    args = ["derep-stock", "-wd", str(wd)]
+    for name in ("r2", "r1", "r3"):
+        assert _runner.invoke(app, [*args, "--action", "pack", "--name", name]).exit_code == 0
+    deleted = _runner.invoke(app, [*args, "--action", "delete", "--name", "r3"])
+    assert deleted.exit_code == 0 and "Deleted stored run 'r3'" in deleted.output
+    listed = _runner.invoke(app, ["--quiet", *args, "--action", "list"])
+    assert listed.exit_code == 0, listed.output
+    assert listed.stdout.splitlines() == ["r1", "r2"]
+
+
+def test_a_refused_derep_stock_call_leaves_the_last_record_complete(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # One derep_stock record serves every stored run, so a mistyped name or
+    # an unknown run must be refused before the harness marks the record of
+    # the last (finished) pack as interrupted; doctor then reports no failure.
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    args = ["derep-stock", "-wd", str(wd)]
+    assert _runner.invoke(app, [*args, "--action", "pack", "--name", "r1"]).exit_code == 0
+    stamp = Config.load(wd).stages["derep_stock"].completed
+    refusals = [
+        (["--action", "pack", "--name", "a/b"], 2),
+        (["--action", "unpack", "--name", "a/b"], 2),
+        (["--action", "unpack", "--name", "missing"], 2),
+    ]
+    for extra, code in refusals:
+        result = _runner.invoke(app, [*args, *extra])
+        assert result.exit_code == code, (extra, result.output)
+        assert Config.load(wd).stages["derep_stock"].completed == stamp, extra
+    (wd / "derep" / CLUSTERS_TSV).unlink()
+    result = _runner.invoke(app, [*args, "--action", "pack", "--name", "r2"])
+    assert result.exit_code == 3, result.output
+    assert Config.load(wd).stages["derep_stock"].completed == stamp
+
+
+def test_derep_stock_pack_over_a_stored_name_warns(tmp_path: Path, monkeypatch) -> None:
+    # Packing under a name already in the store replaces that run; say so.
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    args = ["derep-stock", "-wd", str(wd), "--action", "pack", "--name", "r1"]
+    first = _runner.invoke(app, args)
+    assert first.exit_code == 0 and "Replacing" not in first.output
+    (wd / "derep" / CLUSTERS_TSV).write_text(
+        "representative\tmember\nFam_Gen_sp1_GCA_000001.1.fasta\tFam_Gen_sp1_GCA_000001.1.fasta\n",
+        encoding="utf-8",
+    )
+    second = _runner.invoke(app, args)
+    assert second.exit_code == 0, second.output
+    assert "Replacing stored run 'r1'" in second.output
