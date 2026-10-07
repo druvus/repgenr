@@ -22,7 +22,7 @@ import shlex
 import shutil
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -468,19 +468,22 @@ def run_tool_with_retries(
     logger: logging.Logger,
     attempts: int = 3,
     retry_delay: float = 5.0,
+    permanent: Callable[[ToolExecutionError], bool] | None = None,
     **kwargs,
 ) -> int:
     """Run a network-dependent tool with exponential-backoff retries.
 
     For tools like the NCBI datasets CLI that perform their own transfers and
     have no built-in retry: a transient failure is retried (backoff doubles per
-    attempt); the last failure propagates unchanged.
+    attempt); the last failure propagates unchanged. ``permanent`` marks a
+    failure that a retry cannot fix (e.g. "no such accession"), which then
+    propagates at once.
     """
     for attempt in range(1, attempts + 1):
         try:
             return run_tool(caps, command, logger=logger, **kwargs)
         except ToolExecutionError as exc:
-            if attempt == attempts:
+            if attempt == attempts or (permanent is not None and permanent(exc)):
                 raise
             delay = retry_delay * 2 ** (attempt - 1)
             logger.warning(
