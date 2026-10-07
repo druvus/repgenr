@@ -372,7 +372,7 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
         # window is their whole span widened by the tolerance; a
         # single-record selection uses its midpoint plus/minus the tolerance.
         tolerance = _outgroup.RECORDS_LENGTH_TOLERANCE
-        if params.group_segments:
+        if getattr(params, "group_segments", False):
             return lo * (1 - tolerance) <= length <= hi * (1 + tolerance)
         return _outgroup.within_length_tolerance(length, mid, tolerance)
 
