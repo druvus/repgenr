@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
+from .errors import WorkdirError
+
 CLUSTERS_TSV = "clusters.tsv"
 GENOME_STATUS_TSV = "genome_status.tsv"
 CLUSTER_SUMMARY_TSV = "cluster_summary.tsv"
@@ -146,6 +148,18 @@ class SelectionRow:
     filename: str
     completeness: float | None = None
     contamination: float | None = None
+
+
+def _require_columns(reader: csv.DictReader, path: Path, required: list[str]) -> None:
+    """Raise WorkdirError naming the file when its header lacks a required column.
+
+    An empty file (no header) passes; the caller reads it as holding no rows.
+    """
+    if reader.fieldnames is None:
+        return
+    missing = [c for c in required if c not in reader.fieldnames]
+    if missing:
+        raise WorkdirError(f"{path} lacks the column(s) {', '.join(missing)}.")
 
 
 def _tsv_writer(fo: IO) -> Any:
@@ -488,7 +502,10 @@ def write_reads(path: Path, rows: list[ReadRow]) -> None:
 def read_reads(path: Path) -> list[ReadRow]:
     rows: list[ReadRow] = []
     with open(path, encoding="utf-8", newline="") as fo:
-        for rec in csv.DictReader(fo, delimiter="\t"):
+        reader = csv.DictReader(fo, delimiter="\t")
+        # library_selection is optional: tables written before it existed lack it.
+        _require_columns(reader, path, [c for c in _READS_COLUMNS if c != "library_selection"])
+        for rec in reader:
             split = lambda s: tuple(x for x in s.split(";") if x)  # noqa: E731
             rows.append(
                 ReadRow(

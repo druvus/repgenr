@@ -116,3 +116,12 @@ def test_completeness_guard_excuses_failed_runs(tmp_path: Path) -> None:
         check_genome_completeness(genomes, tmp_path, logger=_LOG)
     write_excused_runs(tmp_path / EXCUSED_RUNS_TSV, [ExcusedRun("SRR2", "assemble", "failed")])
     assert check_genome_completeness(genomes, tmp_path, logger=_LOG) == []
+
+
+def test_read_reads_names_missing_columns(tmp_path: Path) -> None:
+    # A table that is not a reads.tsv is an input error naming the file and
+    # the absent columns (exit 3), not a KeyError traceback (exit 1).
+    path = tmp_path / "reads.tsv"
+    path.write_text("a\tb\nx\ty\n", encoding="utf-8")
+    with pytest.raises(WorkdirError, match=r"reads\.tsv.*run_accession"):
+        read_reads(path)
