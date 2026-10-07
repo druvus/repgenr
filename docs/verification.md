@@ -414,22 +414,22 @@ parser), so they also apply to commands other than the one named.
 | ingest, metadata | `repgenr --force ingest` on an unchanged set cleared the manifest's dereplication status while `dereplicate` was skipped as up to date; an unchanged genome now keeps it | #222 |
 | doctor | Every `.fasta.gz` genome was reported as not FASTA (to be deleted); gzip files are now judged by their decompressed content | #222 |
 | doctor | Links left dangling by a moved source were reported as not FASTA with advice to re-run the genome stage; they are now named as dangling links with advice to re-run ingest | #222 |
-| metadata | A malformed `--release` (`abc.def`) ended in an unexpected error (exit 1), and an unknown `--gtdb-version` made two failed downloads (exit 3); both now exit 2 | (this PR) |
-| metadata | A `--metadata-path` that does not exist silently downloaded the full GTDB table instead; it now exits 2 | (this PR) |
-| metadata | With `--limit`, the automatic outgroup could be a target genome the cap left out (r232, genus Francisella, `--limit 5`: F. guangzhouensis); it now lies outside the target taxon | (this PR) |
-| metadata | `--outgroup-accession` naming a selected genome wrote it twice to `selection.tsv`; it now exits 2 (tsv and API) | (this PR) |
-| metadata | `--source api` lowered GTDB suffixes (`Bacillus_A`) and kept a capitalised epithet (`-ts Tularensis`), and an unknown taxon or outgroup was an HTTP error with exit 3; names are spelled as GTDB does and unknown names exit 2 | (this PR) |
-| metadata | A failed table download (network or checksum) was retried on the legacy layout and reported as "check release/version"; only a 404 tries the next layout and other failures name their cause | (this PR) |
-| metadata | `--nodownload -r 232.1` reused the 232.0 table and recorded release 232.1 (table names carry the major release only); the exact release is now recorded beside the table and checked | (this PR) |
-| metadata, vmetadata | Through an unreachable proxy a GTDB request waited 481 s before exit 3; a 15 s connect timeout reports it in 120 s | (this PR) |
-| genome | A download batch made only of accessions NCBI no longer serves failed with exit 6 after three attempts; they are recorded in `missing_accessions.txt` | (this PR) |
-| genome | Rehydrated genomes were not checked against the package's `md5sum.txt` (`datasets rehydrate` does not check it); a mismatch is now discarded and recorded missing | (this PR) |
-| genome | An outgroup package without a FASTA completed the stage without an outgroup, an unserved outgroup exited 6, and a present outgroup was downloaded again on every run | (this PR) |
-| genome | A genome or the outgroup deleted by hand was skipped on resume because `genomes/` was not empty; every promised file is now a deliverable | (this PR) |
-| vmetadata | `--source bvbrc` reused any `download.fa`: a second target was recorded with the first target's sequences (picornaviridae after Hepatitis E), and a workdir switched from NCBI Virus failed with exit 1; reuse now requires the same source and target | (this PR) |
-| vgenome | `--group-segments` concatenated every record of an isolate name (Lassa Josiah: three L and three S segments, 21 kb) and joined isolates of different species that share a name; isolates now group per species with one record per segment | (this PR) |
-| vgenome | The grouped outgroup search admitted no segment of a two-segment virus (span midpoint plus/minus 15 percent); it uses the span widened by 15 percent, as documented | (this PR) |
-| vgenome | A run without an outgroup left an earlier run's `outgroup/` file and `outgroup_accession.txt` behind (both back-ends), and mashtree was recorded as the tool when it never ran | (this PR) |
+| metadata | A malformed `--release` (`abc.def`) ended in an unexpected error (exit 1), and an unknown `--gtdb-version` made two failed downloads (exit 3); both now exit 2 | #224 |
+| metadata | A `--metadata-path` that does not exist silently downloaded the full GTDB table instead; it now exits 2 | #224 |
+| metadata | With `--limit`, the automatic outgroup could be a target genome the cap left out (r232, genus Francisella, `--limit 5`: F. guangzhouensis); it now lies outside the target taxon | #224 |
+| metadata | `--outgroup-accession` naming a selected genome wrote it twice to `selection.tsv`; it now exits 2 (tsv and API) | #224 |
+| metadata | `--source api` lowered GTDB suffixes (`Bacillus_A`) and kept a capitalised epithet (`-ts Tularensis`), and an unknown taxon or outgroup was an HTTP error with exit 3; names are spelled as GTDB does and unknown names exit 2 | #224 |
+| metadata | A failed table download (network or checksum) was retried on the legacy layout and reported as "check release/version"; only a 404 tries the next layout and other failures name their cause | #224 |
+| metadata | `--nodownload -r 232.1` reused the 232.0 table and recorded release 232.1 (table names carry the major release only); the exact release is now recorded beside the table and checked | #224 |
+| metadata, vmetadata | Through an unreachable proxy a GTDB request waited 481 s before exit 3; a 15 s connect timeout reports it in 120 s | #224 |
+| genome | A download batch made only of accessions NCBI no longer serves failed with exit 6 after three attempts; they are recorded in `missing_accessions.txt` | #224 |
+| genome | Rehydrated genomes were not checked against the package's `md5sum.txt` (`datasets rehydrate` does not check it); a mismatch is now discarded and recorded missing | #224 |
+| genome | An outgroup package without a FASTA completed the stage without an outgroup, an unserved outgroup exited 6, and a present outgroup was downloaded again on every run | #224 |
+| genome | A genome or the outgroup deleted by hand was skipped on resume because `genomes/` was not empty; every promised file is now a deliverable | #224 |
+| vmetadata | `--source bvbrc` reused any `download.fa`: a second target was recorded with the first target's sequences (picornaviridae after Hepatitis E), and a workdir switched from NCBI Virus failed with exit 1; reuse now requires the same source and target | #224 |
+| vgenome | `--group-segments` concatenated every record of an isolate name (Lassa Josiah: three L and three S segments, 21 kb) and joined isolates of different species that share a name; isolates now group per species with one record per segment | #224 |
+| vgenome | The grouped outgroup search admitted no segment of a two-segment virus (span midpoint plus/minus 15 percent); it uses the span widened by 15 percent, as documented | #224 |
+| vgenome | A run without an outgroup left an earlier run's `outgroup/` file and `outgroup_accession.txt` behind (both back-ends), and mashtree was recorded as the tool when it never ran | #224 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
