@@ -150,3 +150,12 @@ class Dereplicator(ABC):
     ) -> DerepResult:
         """Cluster ``genomes`` and return representatives + membership."""
         raise NotImplementedError
+
+
+def compare_supporters() -> list[str]:
+    """Registered, loadable dereplicators that implement ``compare`` (glance)."""
+    return sorted(
+        name
+        for name in registry.names()
+        if not registry.is_broken(name) and registry.get(name).compare is not Dereplicator.compare
+    )

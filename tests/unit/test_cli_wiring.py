@@ -720,14 +720,10 @@ def _help_of(command: str, option: str) -> str:
 
 
 def test_glance_tool_help_lists_only_comparison_capable_dereplicators() -> None:
-    from repgenr.dereplicators.base import Dereplicator, registry
+    from repgenr.dereplicators.base import compare_supporters, registry
 
     text = _help_of("glance", "--tool")
-    supporters = [
-        n
-        for n in registry.names()
-        if not registry.is_broken(n) and registry.get(n).compare is not Dereplicator.compare
-    ]
+    supporters = compare_supporters()
     assert supporters
     for name in registry.names():
         assert (name in text) == (name in supporters)

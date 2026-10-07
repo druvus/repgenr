@@ -35,16 +35,11 @@ class GlanceParams:
 
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
-    from ..dereplicators.base import Dereplicator, registry
+    from ..dereplicators.base import compare_supporters, registry
 
     adapter = registry.create(params.tool)
-    if type(adapter).compare is Dereplicator.compare:
-        supporters = sorted(
-            name
-            for name in registry.names()
-            if not registry.is_broken(name)
-            and registry.get(name).compare is not Dereplicator.compare
-        )
+    supporters = compare_supporters()
+    if params.tool not in supporters:
         raise UserInputError(
             f"Dereplicator '{params.tool}' does not support glance comparisons. "
             f"Tools with compare support: {', '.join(supporters) or 'none'}."
