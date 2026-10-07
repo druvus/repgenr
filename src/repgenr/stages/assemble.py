@@ -55,7 +55,7 @@ from ..core.errors import (
 from ..core.executors import parallel_map
 from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
-from ..polishers.base import PolishParams, select_polisher
+from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
 from .assemble_qc import checkm2_db_from_env, preflight_checkm2, run_checkm2
 from .ingest import OUTGROUP_ACCESSION_TXT
@@ -140,6 +140,8 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if params.assembler == "auto":
         _excuse_missing_assemblers(plan, logger)
         _require_something_to_assemble(plan)
+    if params.polisher == "auto":
+        _warn_missing_polishers(plan, logger)
     versions = _preflight(plan, logger)
     pending = [o for o in plan if o.excused is None and o.stats is None]
     check_free_disk(
@@ -378,6 +380,38 @@ def _excuse_missing_assemblers(plan: list[_Outcome], logger: logging.Logger) -> 
             n,
             platform,
             ASSEMBLER_NOT_INSTALLED,
+            ", ".join(names),
+        )
+
+
+def _warn_missing_polishers(plan: list[_Outcome], logger: logging.Logger) -> None:
+    """Warn when ``--polisher auto`` leaves runs unpolished for want of a tool.
+
+    A run to be assembled with no polisher chosen is either one no adapter
+    takes (Illumina, HiFi) or one an adapter would take whose tool is not
+    installed. The latter is still assembled, unpolished, and one warning per
+    platform names the adapters, as for a missing assembler.
+    """
+    needed: dict[str, list[str]] = {}
+    counts: dict[str, int] = {}
+    for o in plan:
+        if o.excused is not None or o.stats is not None or o.polisher is not None:
+            continue
+        row = o.row
+        reads = ReadSet(
+            row.run_accession, row.platform, row.instrument_model, row.layout, (), row.bases
+        )
+        names = accepting_polishers(polisher_registry, reads)
+        if names:
+            needed.setdefault(row.platform, names)
+            counts[row.platform] = counts.get(row.platform, 0) + 1
+    for platform, names in sorted(needed.items()):
+        logger.warning(
+            "%d %s run(s) will be assembled without polishing: none of %s is installed. "
+            "Put one on PATH or run with --container to polish them, or pass "
+            "--polisher none to assemble unpolished without this warning.",
+            counts[platform],
+            platform,
             ", ".join(names),
         )
 

@@ -288,7 +288,9 @@ def _derep_stock_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
         return [ctx.derep_dir / "stock" / (getattr(params, "name", None) or "") / CLUSTERS_TSV]
     if action == "unpack":
         return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
-    # delete leaves nothing behind by design.
+    # delete runs as a query and is never fingerprinted, so the resume check
+    # never reaches it; a delete record from an older version (read by
+    # doctor) has nothing to check.
     return []
 
 
@@ -381,7 +383,8 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
-    "derep_stock": lambda p: getattr(p, "action", None) == "list",
+    # delete is never skipped: a repeat delete must report the unknown run.
+    "derep_stock": lambda p: getattr(p, "action", None) in ("list", "delete"),
 }
 
 
@@ -708,19 +711,23 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
     automatically. A stage that crashed before recording completion has no
     ``completed`` stamp and so always re-runs.
     """
-    logger = configure_logging(
-        workdir if (create or workdir.exists()) else None, level=_RUN_STATE["log_level"]
-    )
+    existed = workdir.exists()
+    logger = configure_logging(workdir if existed else None, level=_RUN_STATE["log_level"])
+    with stage_errors(logger):
+        # Parameters are built and validated before an entry stage creates
+        # its workdir, so a rejected invocation leaves no directory or log.
+        params = build_params()
+    if create and not existed:
+        logger = configure_logging(workdir, level=_RUN_STATE["log_level"])
     with stage_errors(logger):
         ctx = WorkdirContext(workdir, logger=logger, create=create)
         try:
-            _run_stage(stage_name, ctx, build_params, logger)
+            _run_stage(stage_name, ctx, params, logger)
         finally:
             ctx.close()
 
 
-def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> None:
-    params = build_params()
+def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     if not ctx.workdir.is_dir():
         # Only entry stages (create=True) start a workdir; any other stage
         # would otherwise create it as a side effect of opening the manifest.

@@ -1941,6 +1941,8 @@ commands:
         value: '{file}'
         with_args:
         - --reads
+        - -tg
+        - Francisella
         validated: none
         docs:
         - docs/usage.md
@@ -1954,6 +1956,8 @@ commands:
         value: ont
         with_args:
         - --reads
+        - -tg
+        - Francisella
         validated: choice
         docs:
         - docs/usage.md
@@ -1967,6 +1971,8 @@ commands:
         value: '3'
         with_args:
         - --reads
+        - -tg
+        - Francisella
         validated: range
         docs:
         - docs/usage.md
@@ -1981,6 +1987,8 @@ commands:
         value: flye
         with_args:
         - --reads
+        - -tg
+        - Francisella
         validated: registry
         docs:
         - docs/usage.md

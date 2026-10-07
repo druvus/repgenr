@@ -99,6 +99,8 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     [outcome] = stage._plan(rows, stage_params, out_dir.parent)
     if stage_params.assembler == "auto":
         stage._excuse_missing_assemblers([outcome], logger)
+    if stage_params.polisher == "auto":
+        stage._warn_missing_polishers([outcome], logger)
     versions = stage._preflight([outcome], logger)
     if outcome.excused is None and outcome.stats is None:
         scratch = out_dir.parent / f"{out_dir.name}.scratch"

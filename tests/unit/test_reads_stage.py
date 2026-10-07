@@ -220,3 +220,11 @@ def test_no_match_message_omits_inactive_filters(workdir: Path, monkeypatch, ena
         run(ctx, params)
     assert "--max-bases" not in str(exc.value)
     assert "--platform" not in str(exc.value)
+
+
+def test_accession_file_accepts_indented_and_trailing_comments(tmp_path: Path) -> None:
+    listing = tmp_path / "runs.txt"
+    listing.write_text(
+        "SRR1  # the ONT run\n   # an indented comment\n\tSRR2\n#SRR3\n", encoding="utf-8"
+    )
+    assert reads_mod.read_accession_file(str(listing)) == ["SRR1", "SRR2"]

@@ -82,6 +82,18 @@ def select_polisher(reg: Registry[Polisher], reads: ReadSet) -> str | None:
     return None
 
 
+def accepting_polishers(reg: Registry[Polisher], reads: ReadSet) -> list[str]:
+    """Registered adapters that accept a run, whether or not their tool is installed."""
+    names = []
+    for name in sorted(reg.names()):
+        if reg.is_broken(name):
+            continue
+        cls = reg.get(name)
+        if cls.__new__(cls).accepts(reads):
+            names.append(name)
+    return names
+
+
 def read_dirs(reads: ReadSet, *paths: Path) -> list[str]:
     """Directories the container backend must mount: the reads and any drafts."""
     return sorted({str(Path(f).resolve().parent) for f in (*reads.files, *paths)})

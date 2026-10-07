@@ -113,8 +113,8 @@ tree2tax`. Runs are chosen by taxon
 (`--target-family`/`-tf`, `--target-genus`/`-tg` or `--target-species`/`-ts`,
 resolved through the ENA taxonomy, synonyms included) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
 (SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
-lists them one per line. `--platform illumina|ont|pacbio` keeps one
-platform, `--min-bases` drops small runs, `--max-bases` drops runs above a
+lists them one per line (text from a `#` to the end of the line is a
+comment). `--platform illumina|ont|pacbio` keeps one platform, `--min-bases` drops small runs, `--max-bases` drops runs above a
 size (an unenriched whole-host library, tens of Gb for a 1 Mb endosymbiont,
 would assemble into a host-dominated genome), `--drop-selection` drops runs
 by ENA library selection (default `MDA`, whole-genome amplification, which
@@ -189,7 +189,9 @@ public bacterial ONT runs since 2023 (`--tool-arg bacteria=false` uses
 medaka's general default model instead). The marker records which of the
 three applied. A polishing failure
 excuses the run with `polish_failed`; `assembly_stats.tsv` names the
-polisher per genome. Unpolished ONT assemblies carry indel errors that break
+polisher per genome. When `--polisher auto` finds an adapter for a run but
+its tool is not installed, the run is assembled unpolished and one warning
+per platform names the adapters. Unpolished ONT assemblies carry indel errors that break
 genes, which CheckM2 reads as lower completeness and higher contamination.
 
 Two optional checks run on the assemblies. With a CheckM2 database
@@ -198,7 +200,8 @@ with `checkm2 database --download`), every assembly is scored, the
 completeness and contamination reach `selection.tsv` and the manifest (so
 `--keeper quality` works as it does for GTDB genomes), and an assembly below
 `--min-completeness` (50) or above `--max-contamination` (10) is excused with
-`qc_failed`. With a GTDB sourmash sketch (`--gtdb-sketch` and
+`qc_failed`. An assembly for which CheckM2 reports no result is kept with a
+warning and without quality values. With a GTDB sourmash sketch (`--gtdb-sketch` and
 `--gtdb-lineages`, or `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`; the
 `gtdb-rs226-reps.k31-sc10k.sig.zip` sketch and its `lineages.csv` from
 `https://farm.cse.ucdavis.edu/~ctbrown/sourmash-db/gtdb-rs226/` serve), each
@@ -360,14 +363,18 @@ dereplicator, and a fourth inspects the genomes before dereplication.
 `derep/cluster_summary.tsv`, one row per representative (see `output.md`).
 `repgenr derep-unpack` lays the clusters out as one directory per
 representative with its members inside (`--no-representant` leaves the
-representative out). `repgenr glance` runs dRep's comparison over all genomes
+representative out); a member missing from `genomes/` is left out with a
+warning that names it. `repgenr glance` runs dRep's comparison over all genomes
 in `genomes/` and writes its dendrogram and plots (dRep only; it does not need
 a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
 representatives under `derep/stock/<run>`; `--action unpack` restores a
 stored run, refreshes the manifest and re-stamps the `dereplicate` record so
-the next `dereplicate` recomputes; `--action list` and `--action delete`
-manage the store.
+the next `dereplicate` recomputes (a stored run without
+`cluster_summary.tsv` gets one rebuilt from its clusters, and a live
+`genome_status.tsv` the stored run lacks is removed); `--action list` and `--action delete`
+manage the store. Deleting a run that is not stored exits 3 and lists the
+stored runs.
 
 ### Limiting the selection
 
@@ -754,7 +761,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
-  optionally `NCBI_EMAIL`) to raise the request-rate limit.
+  optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
+  is retried per batch of taxids; a connection error (no network, or the
+  host does not answer) stops the lookup at the first batch with exit 3.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
 - **Exit codes.** A script can tell the failure classes apart without

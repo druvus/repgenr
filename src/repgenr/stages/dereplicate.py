@@ -135,7 +135,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     if params.keeper == "quality":
         from .derep_keeper import rescore_representatives
 
-        quality = _quality_lookup(ctx)
+        quality = quality_lookup(ctx)
         if quality:
             result, keeper_swaps = rescore_representatives(result, quality, logger)
         else:
@@ -162,7 +162,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     check_result_complete(result, [g.name for g in genomes])
     # The summary reports quality whichever keeper rule was used, so a
     # --keeper tool run still shows where a member outscores the keeper.
-    _write_contract(ctx, result, quality or _quality_lookup(ctx))
+    _write_contract(ctx, result, quality or quality_lookup(ctx))
     _update_manifest(ctx, result)
 
     ctx.config.record_stage(
@@ -573,7 +573,7 @@ def _taxon_lookup(ctx: WorkdirContext, level: str) -> dict[str, str]:
     return lookup
 
 
-def _quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
+def quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
     """Map each genome filename to (completeness, contamination) from the manifest."""
     try:
         return ctx.manifest.quality()

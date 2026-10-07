@@ -79,9 +79,9 @@ def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     if not clusters_file.exists():
         raise WorkdirError(f"Missing {clusters_file}. Run the dereplicate stage first.")
     clusters = read_clusters(clusters_file)
-    from .dereplicate import _quality_lookup
+    from .dereplicate import quality_lookup
 
-    quality = _quality_lookup(ctx)
+    quality = quality_lookup(ctx)
     if not quality:
         logger.info("No assembly quality in the manifest; quality columns are left blank")
     rows = summarise_clusters(clusters, quality)

@@ -21,6 +21,7 @@ from ..core.contracts import (
     list_fasta,
     read_clusters,
     read_genome_status,
+    write_cluster_summary,
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.process import remove_tree
@@ -60,7 +61,10 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
         case "unpack":
             _unpack(ctx, run_path)
         case "delete":
+            # Not recorded: a delete leaves nothing to resume, and the CLI runs
+            # it as a query so a repeat delete is checked instead of skipped.
             _delete(run_path)
+            return
         case _:
             raise UserInputError(f"Unknown action '{params.action}'")
     ctx.config.record_stage(
@@ -73,7 +77,7 @@ def _list(store: Path, logger) -> None:
     if not store.exists() or not any(store.iterdir()):
         logger.info("No stored runs")
         return
-    for run_dir in sorted(p.name for p in store.iterdir() if p.is_dir()):
+    for run_dir in _stored_runs(store):
         logger.info(run_dir)
 
 
@@ -125,6 +129,10 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         src = run_path / name
         if src.exists():
             shutil.copy2(src, ctx.derep_dir / name)
+        elif (ctx.derep_dir / name).exists():
+            # Do not leave a file of the replaced dereplication beside the
+            # restored ones; the summary is rebuilt below.
+            (ctx.derep_dir / name).unlink()
     if ctx.representatives_dir.exists():
         remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
@@ -140,6 +148,19 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     _update_manifest(
         ctx, DerepResult(representatives=[], clusters=clusters, genome_status=genome_status)
     )
+    summary = ctx.derep_dir / CLUSTER_SUMMARY_TSV
+    if not summary.exists():
+        # A run packed before the summary existed: rebuild it from the
+        # restored clusters, as the dereplicate stage would have written it.
+        from .cluster_summary import summarise_clusters
+        from .dereplicate import quality_lookup
+
+        write_cluster_summary(summary, summarise_clusters(clusters, quality_lookup(ctx)))
+        ctx.logger.info(
+            "Stored run '%s' has no %s; rebuilt it from the restored clusters",
+            run_path.name,
+            CLUSTER_SUMMARY_TSV,
+        )
     prior = ctx.config.stages.get("dereplicate")
     ctx.config.record_stage(
         "dereplicate",
@@ -151,7 +172,17 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     ctx.logger.info("Unpacked run from %s", run_path)
 
 
+def _stored_runs(store: Path) -> list[str]:
+    if not store.is_dir():
+        return []
+    return sorted(p.name for p in store.iterdir() if p.is_dir())
+
+
 def _delete(run_path: Path) -> None:
     if not run_path.exists():
-        raise UserInputError(f"No stored run named '{run_path.name}'")
+        stored = _stored_runs(run_path.parent)
+        raise WorkdirError(
+            f"No stored run named '{run_path.name}'; stored runs: "
+            f"{', '.join(stored) if stored else 'none'}."
+        )
     remove_tree(run_path)

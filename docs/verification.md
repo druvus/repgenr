@@ -321,16 +321,16 @@ ok, and also counts the docs agreement check.
 | vmetadata | ok | ok | ok | ok | open | not run | open |
 | vgenome | open | ok | ok | ok | ok | not run | open |
 | ingest | ok | ok | ok | ok | ok | ok | ok |
-| reads | ok | ok | ok | ok | ok | not run | ok |
-| assemble | ok | ok | fixed | ok | fixed | not run | open |
+| reads | ok | fixed | ok | ok | ok | not run | fixed |
+| assemble | ok | ok | fixed | ok | fixed | not run | fixed |
 | dereplicate | ok | fixed | fixed | ok | ok | ok | fixed |
 | snptype | ok | ok | fixed | ok | ok | n/a | fixed |
 | phylo | fixed | ok | fixed | ok | ok | ok | fixed |
 | tree2tax | ok | fixed | fixed | fixed | ok | n/a | fixed |
-| glance | ok | fixed | fixed | ok | open | not run | open |
+| glance | ok | fixed | fixed | ok | fixed | not run | fixed |
 | cluster-summary | ok | fixed | ok | open | ok | ok | open |
-| derep-unpack | ok | ok | ok | open | ok | ok | open |
-| derep-stock | ok | fixed | fixed | fixed | fixed | ok | open |
+| derep-unpack | ok | ok | ok | fixed | fixed | ok | fixed |
+| derep-stock | ok | fixed | fixed | fixed | fixed | ok | fixed |
 | list-tools | ok | n/a | fixed | n/a | ok | ok | fixed |
 | doctor | ok | ok | ok | n/a | n/a | ok | ok |
 | versions | ok | fixed | ok | n/a | n/a | ok | fixed |
@@ -398,15 +398,10 @@ they are recorded here and not fixed.
 | Phylogeny | `tree2tax-relations` with an outgroup that is not a leaf logs a warning and leaves the tree unrooted, with exit 0. |
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
-| reads | `--accession-file` treats only a `#` in column 1 as a comment, and a rejected invocation still creates the workdir and a log. |
-| assemble | A missing CheckM2 result is kept with a warning and not excused, and `--polisher auto` with no polisher installed leaves ONT assemblies unpolished without a warning. |
-| derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
-| derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
-| glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
+| assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
 | Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
 | Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
-| Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |

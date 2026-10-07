@@ -47,14 +47,25 @@ class ReadsParams:
     one_per_sample: bool = True
 
 
-def run(ctx: WorkdirContext, params: ReadsParams) -> int:
-    logger = ctx.logger
-    accessions = [*params.accessions, *_read_accession_file(params.accession_file)]
+def validate(params: ReadsParams) -> list[str]:
+    """Check the selection before any workdir exists; return the accessions.
+
+    Called by the parameter builder, so a rejected invocation creates nothing,
+    and again by :func:`run` for callers that bypass the CLI.
+    """
+    accessions = [*params.accessions, *read_accession_file(params.accession_file)]
     target = params.target_species or params.target_genus or params.target_family
     if not accessions and not target:
         raise UserInputError(
             "Select runs by taxon (-tf/-tg/-ts) or by accession (--accession, --accession-file)."
         )
+    return accessions
+
+
+def run(ctx: WorkdirContext, params: ReadsParams) -> int:
+    logger = ctx.logger
+    accessions = validate(params)
+    target = params.target_species or params.target_genus or params.target_family
 
     taxid: str | None = None
     records: list[dict] = []
@@ -116,17 +127,23 @@ def _active_filters(params: ReadsParams) -> str:
     return f" by {', '.join(parts)}" if parts else ""
 
 
-def _read_accession_file(path: str | None) -> list[str]:
+def read_accession_file(path: str | None) -> list[str]:
+    """Accessions from a file, one per line.
+
+    Text from a ``#`` to the end of the line is a comment, whether the ``#``
+    opens the line, follows indentation or follows an accession.
+    """
     if path is None:
         return []
     file = Path(path)
     if not file.is_file():
         raise UserInputError(f"--accession-file {path} is not a file.")
-    return [
-        line.strip()
-        for line in file.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
+    out = []
+    for line in file.read_text(encoding="utf-8").splitlines():
+        accession = line.split("#", 1)[0].strip()
+        if accession:
+            out.append(accession)
+    return out
 
 
 def _dedupe(rows: list[ReadRow]) -> list[ReadRow]:

@@ -224,6 +224,37 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- Entrez taxonomy enrichment stops at the first batch of taxids that fails
+  with a connection error (no HTTP status) and exits 3 with a message that
+  names the host that gave no response. Before, every batch was
+  retried three times, about 16 minutes for 1050 taxids with the network
+  down. HTTP errors are still retried per batch.
+- `glance` removes the previous dendrogram and plots once the comparison
+  succeeds, so a plot with no similarity in the `--plot-min`/`--plot-max`
+  range is absent instead of left from an earlier run. A dRep failure prints
+  one console line; its command and output tail go to the run log (a test now
+  covers this for glance).
+- `derep-stock --action delete` of a run that is not stored exits 3 with a
+  message naming the run and listing the stored runs. A repeat delete was
+  skipped by the resume check and exited 0; delete is no longer recorded or
+  skipped.
+- `derep-unpack` warns about each cluster member that is missing from
+  `genomes/` (one line listing them when there are more than ten) instead of
+  leaving it out silently. `derep-stock --action unpack` of a stored run
+  without `cluster_summary.tsv` rebuilds the summary from the restored
+  clusters, and drops a live `genome_status.tsv` the stored run lacks,
+  instead of keeping the files of the replaced dereplication.
+- `assemble` and `assemble-run` with `--polisher auto` print one warning per
+  platform when an adapter would polish the runs but its tool is not
+  installed (for example medaka for ONT), naming the adapters and the remedy.
+  The runs are still assembled, unpolished; before, this happened without a
+  message.
+- `reads --accession-file` treats text from a `#` to the end of the line as a
+  comment, also after indentation or after an accession. `reads` (and `run
+  --reads`) parse the accession file and check that a selection is given
+  before the workdir is created, so a rejected call leaves no directory or
+  log; entry stages in general build their parameters before creating the
+  workdir.
 - `genome --accession-list-only` writes `ncbi_acc_download_list.txt` with a
   newline after the last accession, so `wc -l` and `while read` loops see
   every accession.
