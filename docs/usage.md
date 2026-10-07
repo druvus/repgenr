@@ -309,7 +309,11 @@ three are unchanged (it logs that it skipped). Re-running an upstream stage
 (e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
 downstream stage re-runs automatically the next time it is invoked. Change a
 parameter, switch `--container`, or pass `--force` to re-run explicitly. A
-stage that crashed mid-run has no completion stamp and so always re-runs.
+stage writes its record without a completion stamp before it starts, so one
+that failed or crashed mid-run is listed as `[interrupted]` by `status`,
+reported as a failure by `doctor`, and always re-runs; a successful run
+stamps the record. A failure in parameter validation, before the stage
+starts, writes no record.
 Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
@@ -756,7 +760,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   line naming the tool and its exit status; the command line and the output
   tail are in the same log. Re-run with `--verbose` to see them on the console
   (a data-channel step has no log and always prints the tail).
-  `repgenr status -wd <WD>` shows what completed and what is next.
+  `repgenr status -wd <WD>` shows what completed and what is next; a stage
+  that failed is listed as `[interrupted]` and its outputs may be partial
+  until it is re-run.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).

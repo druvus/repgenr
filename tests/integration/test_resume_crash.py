@@ -19,6 +19,7 @@ import yaml
 
 from repgenr.cli import base as cli
 from repgenr.core.config import CONFIG_FILENAME
+from repgenr.core.errors import UserInputError
 
 
 @dataclass
@@ -143,3 +144,90 @@ def test_query_only_flag_false_behaves_normally(tmp_path: Path, monkeypatch) -> 
     cli._run("crashtest", tmp_path, lambda: _P(query=False), create=True)
     cli._run("crashtest", tmp_path, lambda: _P(query=False), create=True)  # skips normally
     assert calls == [1]
+
+
+# -- first run: a provisional record marks a stage that fails ----------------
+
+
+def _install_named_fake(monkeypatch, name: str, *, fail: bool, record: bool = True) -> None:
+    fake = types.ModuleType(f"repgenr.stages.{name}")
+
+    def run(ctx, params):  # noqa: ANN001
+        (ctx.workdir / "partial.txt").write_text("partial\n", encoding="utf-8")
+        if fail:
+            raise UserInputError("simulated tool failure")
+        if record:
+            ctx.config.record_stage(
+                name, tool="x", params={"a": params.a}, completed="2026-01-01T00:00:00"
+            )
+            ctx.save_config()
+
+    fake.run = run  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, f"repgenr.stages.{name}", fake)
+
+
+def test_first_run_failure_leaves_an_interrupted_record(tmp_path: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.doctor import diagnose
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    _install_named_fake(monkeypatch, "metadata", fail=True)
+    with pytest.raises(typer.Exit):
+        cli._run("metadata", tmp_path, lambda: _P(), create=True)
+
+    data = yaml.safe_load((tmp_path / CONFIG_FILENAME).read_text(encoding="utf-8"))
+    record = data["stages"]["metadata"]
+    assert not record.get("completed")
+    assert not record.get("fingerprint")
+    assert record["params"] == {"a": 1, "query": False}
+
+    result = CliRunner().invoke(app, ["status", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "[interrupted] metadata" in result.stdout
+    findings = diagnose(tmp_path)
+    assert any(f.level == "fail" and f.area == "metadata" for f in findings)
+
+    # a successful rerun replaces the provisional record with a completed one
+    _install_named_fake(monkeypatch, "metadata", fail=False)
+    cli._run("metadata", tmp_path, lambda: _P(), create=True)
+    data = yaml.safe_load((tmp_path / CONFIG_FILENAME).read_text(encoding="utf-8"))
+    assert data["stages"]["metadata"]["completed"]
+    result = CliRunner().invoke(app, ["status", "-wd", str(tmp_path)])
+    assert "[interrupted]" not in result.stdout
+
+
+def test_successful_stage_without_its_own_record_leaves_none(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    _install_named_fake(monkeypatch, "crashtest", fail=False, record=False)
+    cli._run("crashtest", tmp_path, lambda: _P(), create=True)
+    config = tmp_path / CONFIG_FILENAME
+    if config.exists():
+        data = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
+        assert "crashtest" not in (data.get("stages") or {})
+
+
+def test_parameter_validation_failure_writes_no_record(tmp_path: Path, monkeypatch) -> None:
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+
+    def bad_params() -> _P:
+        raise UserInputError("bad flag")
+
+    with pytest.raises(typer.Exit):
+        cli._run("crashtest", tmp_path, bad_params, create=True)
+    assert calls == []
+    config = tmp_path / CONFIG_FILENAME
+    if config.exists():
+        data = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
+        assert "crashtest" not in (data.get("stages") or {})
+
+
+def test_query_only_first_invocation_writes_no_record(tmp_path: Path, monkeypatch) -> None:
+    _install_named_fake(monkeypatch, "crashtest", fail=False, record=False)
+    monkeypatch.setitem(cli.QUERY_ONLY_FLAGS, "crashtest", ("query",))
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    cli._run("crashtest", tmp_path, lambda: _P(query=True), create=True)
+    assert not (tmp_path / CONFIG_FILENAME).exists()

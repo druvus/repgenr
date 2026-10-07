@@ -791,8 +791,25 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         prior.completed = None
         prior.fingerprint = None
         ctx.save_config()
+    provisional = None
+    if prior is None:
+        # First run: write a provisional record (no completed stamp) so a stage
+        # that fails or is killed mid-run shows as interrupted in `status` and
+        # `doctor` instead of as not yet started. The stage's own record on
+        # success replaces it.
+        provisional = ctx.config.record_stage(
+            stage_name,
+            tool=_provisional_tool(params),
+            params=_provisional_params(params),
+        )
+        ctx.save_config()
     module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
     module.run(ctx, params)
+    if provisional is not None and ctx.config.stages.get(stage_name) is provisional:
+        # The stage finished without a record of its own: leave none behind.
+        del ctx.config.stages[stage_name]
+        ctx.save_config()
+        return
     # Stamp fingerprint + input digests on the record the stage just wrote,
     # so the next invocation can skip.
     record = ctx.config.stages.get(stage_name)
@@ -804,6 +821,23 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         record.fingerprint = fingerprint
         record.inputs = digests
         ctx.save_config()
+
+
+def _provisional_params(params: object) -> dict[str, Any]:
+    """Parameters of a stage invocation as plain YAML-safe values.
+
+    Paths and other non-JSON values are stringified, as in the fingerprint.
+    """
+    if dataclasses.is_dataclass(params) and not isinstance(params, type):
+        payload: dict = dataclasses.asdict(params)
+    else:
+        payload = dict(vars(params))
+    return json.loads(json.dumps(payload, default=str))
+
+
+def _provisional_tool(params: object) -> str | None:
+    tool = getattr(params, "tool", None)
+    return tool if isinstance(tool, str) else None
 
 
 def gated_extra(registry, tool: str, key: str, value: object) -> dict:

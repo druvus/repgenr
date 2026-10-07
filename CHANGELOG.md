@@ -219,6 +219,11 @@ All notable changes to RepGenR are documented here. The format follows
   record under `docs/audit/`. `docs/README.md` indexes the pages. The
   executed plans under `docs/superpowers/` and the unreferenced legacy figures
   under `docs/images/` are removed; git history keeps them.
+- A stage's first run writes a provisional record to `repgenr.yaml` before its
+  body starts, so a stage that fails or is killed shows as `[interrupted]` in
+  `status` and as a failure in `doctor`, where it previously looked as if it
+  had never started. A successful run replaces the record; a failure in
+  parameter validation and a query-only invocation write nothing.
 
 ### Fixed
 - The `reads` no-match message names every active filter, including

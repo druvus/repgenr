@@ -102,7 +102,7 @@ def status(
         elif rec is not None and (rec.params or rec.tool):
             # A record without a completed stamp but with provenance: the stage
             # started a (re-)run and did not finish -- its outputs may be partial.
-            typer.echo(f"  [interrupted] {stage}  (crashed mid-run; re-run it)")
+            typer.echo(f"  [interrupted] {stage}  (failed or crashed mid-run; re-run it)")
             if next_stage is None:
                 next_stage = stage
         else:

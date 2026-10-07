@@ -101,8 +101,8 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
                 Finding(
                     "fail",
                     name,
-                    "started a run and never finished (crashed mid-run); its outputs "
-                    "may be partial -- re-run the stage.",
+                    "started a run and never finished (failed or crashed mid-run); its "
+                    "outputs may be partial -- re-run the stage.",
                 )
             )
     return out
