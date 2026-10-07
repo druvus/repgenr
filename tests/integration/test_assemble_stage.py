@@ -774,3 +774,16 @@ def test_scratch_clearing_tolerates_files_that_vanish(tmp_path, monkeypatch) -> 
     monkeypatch.setattr(type(scratch), "iterdir", lambda self: iter(entries))
     stage._clear_scratch(row, scratch)
     assert not (scratch / "asm").exists() and not (scratch / "._asm").exists()
+
+
+def test_failed_downloads_are_named_with_how_to_retry(
+    workdir, tmp_path, fake_assembler, caplog
+) -> None:
+    """A repeat with the same settings skips the stage, so the log says how to retry."""
+    rows = [_row(tmp_path, "SRR1"), _row(tmp_path, "BADSUM", fastq_md5=("0" * 32, "0" * 32))]
+    ctx = _prepare(workdir, rows)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, AssembleParams(assembler="fakeasm"))
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("1 run(s) could not be fetched" in w and "--force" in w for w in warnings)

@@ -225,6 +225,14 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         n_disagree = apply_classification(assembled, classified, versions, logger)
 
     excused = [o.excused for o in outcomes if o.excused is not None]
+    unfetched = [e.run_accession for e in excused if e.reason.startswith("download_failed")]
+    if unfetched:
+        logger.warning(
+            "%d run(s) could not be fetched (%s); a repeat with the same settings skips this "
+            "stage, so rerun assemble with --force to try them again (finished runs are kept).",
+            len(unfetched),
+            ", ".join(unfetched[:5]) + (" ..." if len(unfetched) > 5 else ""),
+        )
     excused_path = ctx.workdir / EXCUSED_RUNS_TSV
     if excused:
         write_excused_runs(excused_path, excused)
