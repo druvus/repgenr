@@ -33,9 +33,18 @@ def test_carriage_return_redraws_are_reduced_to_the_last_frame(caplog) -> None:
     assert messages == ["[bar] a 100%"]
 
 
-def test_tools_get_no_stdin(caplog) -> None:
+def test_tools_get_no_stdin(monkeypatch) -> None:
     # A tool that prompts must read end-of-file, not wait on the terminal.
-    script = "import sys; print('stdin=' + repr(sys.stdin.read()))"
-    with caplog.at_level(logging.DEBUG, logger=_LOG.name):
-        process.run([sys.executable, "-c", script], logger=_LOG, log_prefix="fake")
-    assert any(r.message == "[fake] stdin=''" for r in caplog.records)
+    # pytest already replaces stdin, so assert on the Popen argument itself.
+    import subprocess
+
+    seen: dict = {}
+    real_popen = subprocess.Popen
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(process.subprocess, "Popen", spy)
+    process.run([sys.executable, "-c", "pass"], logger=_LOG, log_prefix="fake")
+    assert seen.get("stdin") is subprocess.DEVNULL
