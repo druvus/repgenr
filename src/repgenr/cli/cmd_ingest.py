@@ -13,7 +13,10 @@ from .base import HELP_WORKDIR_CREATED, PANEL_ENTRY, _run, app
 def ingest(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     genomes_dir: Path = typer.Option(
-        ..., "--genomes-dir", help="Directory of genome FASTA files to stage under genomes/."
+        ...,
+        "--genomes-dir",
+        help="Directory of genome FASTA files (.fasta, .fa, .fna, .fas or .fasta.gz; "
+        "subdirectories are not searched) to stage under genomes/.",
     ),
     selection: Path | None = typer.Option(
         None,

@@ -100,3 +100,20 @@ def test_looks_like_fasta(tmp_path: Path) -> None:
     assert looks_like_fasta(good)
     assert not looks_like_fasta(bad)
     assert not looks_like_fasta(tmp_path / "absent.fasta")
+
+
+def test_looks_like_fasta_reads_gzip_content(tmp_path) -> None:
+    """A .fasta.gz genome is FASTA; doctor used to fail every one of them."""
+    import gzip
+
+    from repgenr.core.integrity import looks_like_fasta
+
+    good = tmp_path / "a.fasta.gz"
+    good.write_bytes(gzip.compress(b">s\nACGT\n"))
+    bad = tmp_path / "b.fasta.gz"
+    bad.write_bytes(gzip.compress(b"<html>error</html>"))
+    torn = tmp_path / "c.fasta.gz"
+    torn.write_bytes(gzip.compress(b">s\n" + b"ACGT" * 5000)[:30])
+    assert looks_like_fasta(good)
+    assert not looks_like_fasta(bad)
+    looks_like_fasta(torn)  # a truncated stream must not raise

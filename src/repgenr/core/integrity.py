@@ -10,7 +10,9 @@ user passes ``--allow-incomplete``, which downgrades the refusal to a warning
 
 from __future__ import annotations
 
+import gzip
 import logging
+import zlib
 from pathlib import Path
 
 from .contracts import (
@@ -29,12 +31,17 @@ def looks_like_fasta(path: Path) -> bool:
     """Cheap first-bytes check: does this file plausibly hold FASTA data?
 
     Catches HTML error pages served with HTTP 200 and empty/absent files
-    without parsing whole (potentially multi-GB) genomes.
+    without parsing whole (potentially multi-GB) genomes. A gzip file (the
+    ``.fasta.gz`` genomes accepted under genomes/) is judged by its first
+    decompressed bytes.
     """
     try:
         with open(path, "rb") as fo:
             head = fo.read(4096)
-    except OSError:
+        if head[:2] == b"\x1f\x8b":
+            with gzip.open(path, "rb") as gz:
+                head = gz.read(4096)
+    except (OSError, EOFError, zlib.error):
         return False
     return head.lstrip().startswith(b">")
 

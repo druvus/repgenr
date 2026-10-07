@@ -139,6 +139,31 @@ def test_replace_genomes_deletes_deselected(tmp_path: Path) -> None:
     assert accs == {"A1", "OG2"}
 
 
+def test_replace_genomes_keeps_derep_status_of_unchanged_genomes(tmp_path: Path) -> None:
+    """A forced re-ingest of the same set used to clear every derep status, while
+    dereplicate (whose digest ignores those columns) stayed up to date."""
+    m = Manifest(tmp_path / "m.sqlite")
+    m.upsert_many(
+        [
+            GenomeRecord(accession="A1", filename="a1.fasta"),
+            GenomeRecord(accession="A2", filename="a2.fasta"),
+        ]
+    )
+    m.set_derep_status_many([("A1", "representative", "A1"), ("A2", "contained", "A1")])
+    m.replace_genomes(
+        [
+            GenomeRecord(accession="A1", filename="a1.fasta", species="x"),
+            GenomeRecord(accession="A2", filename="a2_renamed.fasta"),
+            GenomeRecord(accession="A3", filename="a3.fasta"),
+        ]
+    )
+    rows = {g.accession: g for g in m.all_genomes()}
+    assert (rows["A1"].derep_status, rows["A1"].representative) == ("representative", "A1")
+    assert rows["A1"].species == "x"
+    assert rows["A2"].derep_status is None  # a new file is not the genome dereplicated
+    assert rows["A3"].derep_status is None
+
+
 def test_set_derep_status_many_clears_stale_rows(tmp_path: Path) -> None:
     m = Manifest(tmp_path / "m.sqlite")
     m.upsert_many(

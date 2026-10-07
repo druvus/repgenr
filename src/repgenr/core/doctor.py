@@ -13,6 +13,7 @@ Strictly read-only: no file, log, or manifest is created in the workdir.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -122,7 +123,20 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 f"(e.g. {_examples(shortfall)}); re-run the genome stage.",
             )
         )
-    bad = [p.name for p in list_fasta(genomes_dir) if not looks_like_fasta(p)]
+    entries = list_fasta(genomes_dir)
+    dangling = [p for p in entries if p.is_symlink() and not p.exists()]
+    if dangling:
+        out.append(
+            Finding(
+                "fail",
+                "genomes",
+                f"{len(dangling)} link(s) under {genomes_dir} point at files that no longer "
+                f"exist (e.g. {dangling[0].name} -> {os.readlink(dangling[0])}); the linked "
+                "source was moved or deleted. Re-run ingest from its new location, or stage "
+                "copies with ingest --copy.",
+            )
+        )
+    bad = [p.name for p in entries if p not in dangling and not looks_like_fasta(p)]
     if bad:
         out.append(
             Finding(
@@ -132,7 +146,7 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 f"(e.g. {_examples(bad)}); delete them and re-run the genome stage.",
             )
         )
-    if not shortfall and not bad and genomes_dir.exists():
+    if not shortfall and not bad and not dangling and genomes_dir.exists():
         out.append(
             Finding("ok", "genomes", f"{len(list_fasta(genomes_dir))} genome file(s) look sound")
         )

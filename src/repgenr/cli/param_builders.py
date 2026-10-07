@@ -12,6 +12,7 @@ inputs the same way.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from .base import _require_choice, _require_unit_interval
@@ -99,6 +100,10 @@ def genome_params(*, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET
     return _build(GenomeParams, accession_list_only=accession_list_only, keep_files=keep_files)
 
 
+def _absolute(path: str) -> str:
+    return os.path.abspath(os.path.expanduser(path))
+
+
 def ingest_params(
     *,
     genomes_dir: str,
@@ -109,6 +114,16 @@ def ingest_params(
 ) -> IngestParams:
     from ..stages.ingest import IngestParams
 
+    # The paths are recorded and digested as resume inputs, and doctor
+    # re-derives the inputs from the record, so a relative path must not
+    # depend on the directory the command was started from. abspath, not
+    # resolve(): see the firmlink note in stages.ingest._stage. --outgroup is
+    # made absolute only when it names a file; otherwise it is a genome name.
+    genomes_dir = _absolute(genomes_dir)
+    if isinstance(selection, str):
+        selection = _absolute(selection)
+    if isinstance(outgroup, str) and os.path.isfile(os.path.expanduser(outgroup)):
+        outgroup = _absolute(outgroup)
     return _build(
         IngestParams,
         genomes_dir=genomes_dir,

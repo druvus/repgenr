@@ -102,7 +102,45 @@ one command; `--selection`, `--outgroup` and `--copy` pass through to
 `--outgroup` names a genome under `--genomes-dir` (filename, stem or
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
 out of the ingroup. When `--selection` also marks an outgroup row, both must
-name the same genome; otherwise `ingest` exits 2 and names both.
+name the same genome; otherwise `ingest` exits 2 and names both. A file from
+outside `--genomes-dir` whose name gives the filename or accession of an
+ingroup genome is refused (exit 2), since it would replace that genome.
+
+Without `--selection`, accession and taxonomy come from the filename:
+
+- `Family_genus_species_ACCESSION.fasta` (four or more `_`-separated tokens)
+  gives the first three tokens as taxonomy and the rest as the accession.
+  Any name with four or more tokens is read this way, so
+  `sample_1_run_A.fasta` gives the accession `A`.
+- A name that starts with an NCBI assembly accession
+  (`GCF_000008985.1_ASM898v1_genomic.fna`, as NCBI Datasets and the FTP site
+  deliver) gives that accession and no taxonomy.
+- Any other name gives no taxonomy and the file stem as the accession.
+
+Two genomes with one accession (for example `x.fasta` and `x.fna`, or two
+four-token names that end alike) stop `ingest` with exit 2; give them
+distinct accessions with `--selection`. The `is_outgroup` column of a
+selection takes `1`/`0` (also `true`/`false`, `yes`/`no`).
+
+Only the files directly under `--genomes-dir` with a suffix `.fasta`, `.fa`,
+`.fna`, `.fas` or `.fasta.gz` are read; other files (`x.fna.gz`, `X.FASTA`)
+are listed in a warning and skipped, and subdirectories are not searched
+(an NCBI Datasets download keeps each genome in its own directory, so collect
+the `.fna` files into one directory first). An empty or unreadable genome
+file (a dangling link included) stops `ingest` with exit 2 before anything is
+staged, and the record of an earlier `ingest` is left as it was; `doctor`
+checks that the staged files hold FASTA.
+
+By default `genomes/` holds symbolic links to the source files, which takes
+under a second for 1000 genomes. If the source is later moved or deleted the
+links dangle: `doctor` reports them, and `ingest` from the new location
+restages the set. `--copy` makes the working directory independent of the
+source (2 GB, 1000 genomes, from an exFAT disk took about 2.5 minutes); the
+copies keep the source's permissions, so read-only sources give read-only
+copies. A changed source (files added, removed or rewritten) re-runs `ingest`
+on its next invocation, prunes genomes no longer present, and marks
+`dereplicate` and later stages for a re-run; an unchanged set keeps the
+dereplication status recorded in the manifest.
 
 ### Starting from sequencing reads
 

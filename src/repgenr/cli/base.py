@@ -403,16 +403,27 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 
 
 # Refusals a stage can check before the harness marks its record incomplete:
-# stage -> callable(ctx, params) raising UserInputError/WorkdirError. Used
-# where one record serves several invocations (derep-stock's named runs), so
-# a refused call must not leave the record of the last finished one dirty.
+# stage -> callable(ctx, params) raising UserInputError/WorkdirError. Called
+# only when the stage will run (after the resume skip check), never on a skip.
+# Used where one record serves several invocations (derep-stock's named runs) or
+# where a refused re-run would otherwise dirty a finished record that later
+# stages build on (ingest), so the record of the last finished run stays clean.
 def _derep_stock_precheck(ctx: WorkdirContext, params: Any) -> None:
     from ..stages.derep_stock import precheck
 
     precheck(ctx, params)
 
 
-_STAGE_PRECHECKS: dict[str, Any] = {"derep_stock": _derep_stock_precheck}
+def _ingest_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.ingest import precheck
+
+    precheck(ctx, params)
+
+
+_STAGE_PRECHECKS: dict[str, Any] = {
+    "derep_stock": _derep_stock_precheck,
+    "ingest": _ingest_precheck,
+}
 
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
@@ -774,9 +785,6 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
         module.run(ctx, params)
         return
-    precheck = _STAGE_PRECHECKS.get(stage_name)
-    if precheck is not None:
-        precheck(ctx, params)
     # Digested once: upstream inputs are stable while this stage executes,
     # so the same digests are stamped onto the record after the run.
     digests = _stage_input_digests(ctx, stage_name, params)
@@ -821,6 +829,13 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
                 ", ".join(f"'{c}'" for c in added) or "none",
                 ", ".join(f"'{c}'" for c in dropped) or "none",
             )
+    # The stage will run. A precheck guards the run, not the skip: it refuses
+    # here, before the record is dirtied or a provisional record is written,
+    # so a refusal leaves the last finished record (or no record) as it was,
+    # and a stage that is skipped above is never refused or slowed by it.
+    precheck = _STAGE_PRECHECKS.get(stage_name)
+    if precheck is not None:
+        precheck(ctx, params)
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage
         # must not leave a completed-looking record over partial outputs.

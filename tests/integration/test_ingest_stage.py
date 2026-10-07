@@ -250,3 +250,148 @@ def test_ingest_outgroup_flag_agreeing_with_selection_row(
     run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup=flag))
     assert (workdir / "outgroup_accession.txt").read_text().strip() == "OG1"
     assert (ctx.outgroup_dir / "og.fasta").exists()
+
+
+def test_ingest_external_outgroup_sharing_an_ingroup_name_is_an_error(
+    tmp_path: Path, workdir: Path
+) -> None:
+    """An outgroup file named like an ingroup genome used to drop that genome silently."""
+    src = _source(tmp_path, ["Fam_Gen_sp1_GCA_000001.1.fasta", "Fam_Gen_sp2_GCA_000002.1.fasta"])
+    other = tmp_path / "other"
+    other.mkdir()
+    same_name = other / "Fam_Gen_sp1_GCA_000001.1.fasta"
+    same_name.write_text(_SEQ)
+    same_accession = other / "Out_Grp_sp9_GCA_000002.1.fasta"
+    same_accession.write_text(_SEQ)
+    ctx = WorkdirContext(workdir, create=True)
+
+    with pytest.raises(UserInputError, match="also the ingroup genome Fam_Gen_sp1"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(same_name)))
+    with pytest.raises(UserInputError, match="also the ingroup genome Fam_Gen_sp2"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(same_accession)))
+    assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())
+
+
+def test_ingest_duplicate_accessions_are_an_error(tmp_path: Path, workdir: Path) -> None:
+    """Two files with one accession used to leave the manifest one row short."""
+    src = _source(
+        tmp_path,
+        ["Fam_Gen_sp1_GCA_000001.1.fasta", "Fam_Gen_sp1_GCA_000001.1.fna", "iso_a_x_v1.fa"],
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"1 genome\(s\) share an accession: GCA_000001.1"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+    assert not (workdir / "selection.tsv").exists()
+
+
+def test_ingest_selection_listing_a_file_twice_is_an_error(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    write_selection(
+        sel,
+        [
+            SelectionRow("A1", "F", "G", "s", False, "a.fasta"),
+            SelectionRow("A2", "F", "G", "s", False, "a.fasta"),
+        ],
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="share a filename: a.fasta"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_refuses_empty_or_unreadable_files(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    (src / "empty.fasta").write_text("")
+    (src / "gone.fa").symlink_to(tmp_path / "nowhere.fa")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"2 genome file\(s\) are empty.*empty.fasta, gone.fa"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+    assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())
+
+
+def test_ingest_refuses_empty_external_outgroup(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    external = tmp_path / "Out_grp_sp_X1.fasta"
+    external.write_text("")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="Out_grp_sp_X1.fasta"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(external)))
+
+
+def test_ingest_warns_about_files_without_a_fasta_suffix(tmp_path: Path, workdir: Path) -> None:
+    """x.fna.gz and X.FASTA were skipped without a message."""
+    src = _source(tmp_path, ["a.fasta", "b.FASTA", "README"])
+    (src / "c.fna.gz").write_bytes(b"")
+    ctx = WorkdirContext(workdir, create=True)
+    assert run(ctx, IngestParams(genomes_dir=str(src))) == 1
+    log = (workdir / "repgenr.log").read_text(encoding="utf-8")
+    assert "WARNING Skipped 3 file(s)" in log
+    assert "README, b.FASTA, c.fna.gz" in log
+
+
+def test_ingest_selection_row_naming_an_unsupported_suffix(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta", "b.fna.gz"])
+    sel = tmp_path / "sel.tsv"
+    write_selection(sel, [SelectionRow("B1", "F", "G", "s", False, "b.fna.gz")])
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="1 of them exist but lack a FASTA suffix"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_empty_source_with_subdirectories_says_so(tmp_path: Path, workdir: Path) -> None:
+    """An NCBI Datasets tree (data/GCF_x/...fna) holds the genomes one level down."""
+    src = tmp_path / "data"
+    (src / "GCF_000001.1").mkdir(parents=True)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="1 subdirectories, which ingest does not search"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("acc\tfilename\nA\ta.fasta\n", "lacks the column"),
+        ("accession\tfilename\tcompleteness\nA\ta.fasta\thigh\n", "line 2: could not convert"),
+        ("accession\tfilename\tis_outgroup\nA\ta.fasta\tmaybe\n", "is_outgroup must be 0 or 1"),
+    ],
+)
+def test_ingest_malformed_selection_is_a_user_input_error(
+    tmp_path: Path, workdir: Path, body: str, message: str
+) -> None:
+    """A bad --selection exited 3 (workdir) or 1 (crash) instead of 2."""
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text(body)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=message):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_selection_outgroup_flag_accepts_true(tmp_path: Path, workdir: Path) -> None:
+    """'true' used to read as 0 and leave the intended outgroup in the ingroup."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text("accession\tfilename\tis_outgroup\nA\ta.fasta\tno\nB\tb.fasta\tTRUE\n")
+    ctx = WorkdirContext(workdir, create=True)
+    assert run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel))) == 1
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "B"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "accession\tfilename\nA\t\n",  # blank filename
+        "accession\tfilename\nA\n",  # short row: DictReader gives None
+        "accession\tfilename\n\ta.fasta\n",  # blank accession
+    ],
+)
+def test_ingest_selection_row_without_filename_or_accession(
+    tmp_path: Path, workdir: Path, body: str
+) -> None:
+    """A row without a filename crashed with exit 1 on the join of missing names."""
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text(body)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"line 2: the (filename|accession) column is empty"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))

@@ -89,3 +89,123 @@ def test_doctor_accepts_ingested_workdir(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "0 failure(s)" in result.output
+
+
+def test_doctor_accepts_gzipped_genomes(tmp_path: Path) -> None:
+    import gzip
+
+    src = tmp_path / "src"
+    src.mkdir()
+    for name in ("a.fasta.gz", "b.fasta.gz"):
+        (src / name).write_bytes(gzip.compress(_SEQ.encode()))
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+
+    assert result.exit_code == 0, result.output
+    assert "2 genome file(s) look sound" in result.output
+
+
+def test_doctor_names_links_left_dangling_by_a_moved_source(tmp_path: Path) -> None:
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    src.rename(tmp_path / "moved")
+
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+
+    assert result.exit_code == 1, result.output
+    assert "2 link(s)" in result.output
+    assert "source was moved or deleted" in result.output
+    assert "not FASTA" not in result.output
+
+
+def test_refused_reingest_leaves_the_finished_record_clean(tmp_path: Path) -> None:
+    """A refused re-ingest changed nothing but marked the finished ingest interrupted."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "c.fasta").write_text("")
+
+    refused = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(bad)])
+
+    assert refused.exit_code == 2
+    assert Config.load(wd).stages["ingest"].completed
+    assert sorted(p.name for p in (wd / "genomes").iterdir()) == ["a.fasta", "b.fasta"]
+    again = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)])
+    assert again.exit_code == 0
+    assert "skipping" in again.output
+
+
+def test_relative_paths_are_recorded_absolute(tmp_path: Path, monkeypatch) -> None:
+    """A relative --genomes-dir was recorded as given, so doctor run from another
+    directory reported the input as changed."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    (tmp_path / "Out_Grp_sp_X1.fasta").write_text(_SEQ)
+    monkeypatch.chdir(tmp_path)
+    wd = tmp_path / "wd"
+    args = ["ingest", "-wd", str(wd), "--genomes-dir", "src", "--outgroup", "Out_Grp_sp_X1.fasta"]
+    assert _runner.invoke(app, args).exit_code == 0
+    rec = Config.load(wd).stages["ingest"]
+    assert rec.params["genomes_dir"] == str(src)
+    assert rec.params["outgroup"] == str(tmp_path / "Out_Grp_sp_X1.fasta")
+
+    monkeypatch.chdir(wd)
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert "changed since completion" not in result.output, result.output
+
+
+def test_skipped_ingest_is_not_refused_by_appended_genomes(tmp_path: Path) -> None:
+    """After assemble --append the manifest holds sra rows; an unchanged ingest
+    must skip, not stop with the --drop-foreign refusal (a precheck guards a run)."""
+    from repgenr.core.manifest import GenomeRecord, Manifest
+
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    args = ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]
+    assert _runner.invoke(app, args).exit_code == 0
+    with Manifest.open(wd) as manifest:
+        manifest.upsert_many([GenomeRecord("SRR1", "Fam_Gen_sp_SRR1.fasta", "sra")])
+
+    again = _runner.invoke(app, args)
+
+    assert again.exit_code == 0, again.output
+    assert "skipping" in again.output
+    forced = _runner.invoke(app, ["--force", *args])
+    assert forced.exit_code == 2
+    assert "--drop-foreign" in forced.output
+    assert Config.load(wd).stages["ingest"].completed, "a refused run keeps the record clean"
+
+
+def test_precheck_runs_only_when_the_stage_runs(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_precheck(ctx, params) -> None:
+        calls.append(params.genomes_dir)
+
+    monkeypatch.setitem(cli._STAGE_PRECHECKS, "ingest", fake_precheck)
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    args = ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]
+    assert _runner.invoke(app, args).exit_code == 0
+    assert len(calls) == 1, "a first run is prechecked"
+    assert _runner.invoke(app, args).exit_code == 0
+    assert len(calls) == 1, "a skipped run is not prechecked"
+    assert _runner.invoke(app, ["--force", *args]).exit_code == 0
+    assert len(calls) == 2, "a forced run is prechecked"
+
+
+def test_refused_first_ingest_leaves_no_record_or_manifest(tmp_path: Path) -> None:
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "c.fasta").write_text("")
+    wd = tmp_path / "wd"
+
+    refused = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(bad)])
+
+    assert refused.exit_code == 2
+    assert not (wd / "manifest.sqlite").exists()
+    assert "ingest" not in Config.load(wd).stages
