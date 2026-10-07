@@ -116,8 +116,10 @@ All notable changes to RepGenR are documented here. The format follows
 
 ### Changed
 - `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
-  fractions from 0 to 1, and that `--keep-files` keeps `glance_wd/` (it
-  used the shared "download and scratch intermediates" wording).
+  fractions from 0 to 1, and that `--keep-files` keeps the dRep working
+  directory `glance_wd/` (it used the shared "download and scratch
+  intermediates" wording). Its description says that glance needs dRep on
+  the PATH but no dereplication, and names the three output files.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;

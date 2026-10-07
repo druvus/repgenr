@@ -184,10 +184,16 @@ def glance(
         help="Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1.",
     ),
     keep_files: bool = typer.Option(
-        False, "--keep-files", help="Keep glance_wd/, the comparison tool's working files."
+        False, "--keep-files", help="Keep the dRep working directory glance_wd/."
     ),
 ) -> None:
-    """Quick all-vs-all ANI overview (dRep compare dendrogram + plots)."""
+    """Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
+
+    Needs dRep on the PATH and no dereplication; compares every genome in
+    genomes/ and writes glance_clustering_dendrogram.pdf and two Mash ANI
+    plots, glance_MASH_ANI_similarity_boxplot.png and
+    glance_MASH_ANI_similarity_histogram.png.
+    """
     from ..dereplicators.base import registry as _derep_registry
     from ..stages.glance import GlanceParams
 

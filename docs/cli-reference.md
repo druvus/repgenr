@@ -334,6 +334,11 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 
 Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
 
+Needs dRep on the PATH and no dereplication; compares every genome in
+genomes/ and writes glance_clustering_dendrogram.pdf and two Mash ANI
+plots, glance_MASH_ANI_similarity_boxplot.png and
+glance_MASH_ANI_similarity_histogram.png.
+
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
@@ -341,7 +346,7 @@ Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--plot-max` | `1.0` | Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
 | `--plot-min` | `0.0` | Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
-| `--keep-files` | off | Keep glance_wd/, the comparison tool's working files. |
+| `--keep-files` | off | Keep the dRep working directory glance_wd/. |
 
 ### cluster-summary
 
