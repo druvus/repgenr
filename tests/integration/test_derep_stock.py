@@ -14,7 +14,7 @@ import pytest
 
 from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import write_clusters, write_genome_status
-from repgenr.core.errors import UserInputError
+from repgenr.core.errors import UserInputError, WorkdirError
 from repgenr.stages.derep_stock import DerepStockParams
 from repgenr.stages.derep_stock import run as derep_stock_run
 
@@ -127,3 +127,19 @@ def test_unpack_restores_summary_record_and_manifest(workdir: Path) -> None:
     status = {g.accession: g.derep_status for g in ctx.manifest.all_genomes()}
     assert status["GCA_000001.1"] == "representative"
     assert status["GCA_000003.1"] == "contained"
+
+
+@pytest.mark.parametrize("missing", ["clusters.tsv", "representatives"])
+def test_pack_without_dereplication_outputs_raises(workdir: Path, missing: str) -> None:
+    # Packing a workdir that holds no dereplication must not store an empty run.
+    import shutil
+
+    ctx = _setup_contract(workdir)
+    target = ctx.derep_dir / missing
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+    with pytest.raises(WorkdirError, match=missing):
+        derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    assert not (ctx.derep_dir / "stock" / "run1").exists()
