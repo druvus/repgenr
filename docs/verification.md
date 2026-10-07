@@ -440,14 +440,28 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | A gzipped genome in `genomes/` made `--tool drep` exit 3, since dRep names its decompressed copy | #225 |
 | dereplicate | Genomes dRep's filter removed (`--tool-arg length=N`) had no status and the stage exited 3; they are now `fail_qc` | #225 |
 | dereplicate | A deleted `genome_status.tsv` or `cluster_summary.tsv` was not rebuilt: `doctor` asked for a rerun and the rerun skipped | #225 |
+| tree2tax, doctor | A `tree.nwk` holding two concatenated trees passed the completeness check, and tree2tax used the first; both now refuse it (exit 3 in tree2tax) | (this PR) |
+| snptype, phylo | ParSNP records kept harvesttools' names (`x.fasta`, `x.fasta.ref`); phylo accepted the tree, but tree2tax could not find the outgroup leaf and exited 3, and the Gubbins outgroup exclusion missed it. Records are now named by genome stem (verified on the 50-genome set) | (this PR) |
+| snptype | ParSNP copied every query genome into scratch; they are now hardlinked | (this PR) |
+| phylo | cactus MSA records kept its sample names ('.' replaced by '_'), so IQ-TREE's `-o` and tree2tax missed a versioned outgroup; records are renamed to genome stems (unit test with a fake cactus; cactus itself not run) | (this PR) |
+| phylo, phylo-build | A tree whose leaves a tool renamed (extension, '.ref', characters replaced) passed the leaf check but not tree2tax; phylo now writes the input names back into `tree.nwk` | (this PR) |
+| phylo | `phylo --msa-source snptype` replaced the tables the `snptype` stage wrote in `snp/`, while the `snptype` record stayed; a repeat `snptype` skipped and `doctor` reported nothing. phylo now removes that record with a warning | (this PR) |
+| run | `--with-snptype --msa-source snptype` ran `snptype` before `phylo`, whose typing pass then replaced its tables; `snptype` now runs after `phylo` in that case | (this PR) |
+| tree2tax | After an interrupted phylo rebuild, tree2tax used the previous tree without notice; it now warns | (this PR) |
+| phylo | `--msa-source snptype` and `--mask` with an alignment-free builder were dropped without notice; the stage now warns | (this PR) |
+| tree2tax, tree2tax-relations | An outgroup accession matching no file in the outgroup directory was reported as "not present among tree leaves" | (this PR) |
+| all commands | SIGTERM to repgenr left the running tool (FastTree, live) behind; the tools are now stopped and repgenr exits 143 | (this PR) |
+| docs | usage.md and output.md: sourmash tree units for `--collapse-length`, the simple typer's treatment of absent sequence, `snp/` written by phylo, the distance matrix computed before masking | (this PR) |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
 
 | Area | Observation |
 |---|---|
-| Phylogeny | cactus renames its samples ('.' to '_'), while `tree2tax` resolves the outgroup leaf by file stem, so with a versioned accession such as `GCF_000001.1` the outgroup never matches a leaf. tree2tax warned and left the tree unrooted; it now exits 3 naming the outgroup. |
+| Phylogeny | cactus renames its samples ('.' to '_'), while `tree2tax` resolves the outgroup leaf by file stem, so with a versioned accession such as `GCF_000001.1` the outgroup never matched a leaf. tree2tax warned and left the tree unrooted, and later exited 3 naming the outgroup; since the second audit pass the cactus adapter renames the alignment records back to genome stems and phylo restores renamed leaves. |
 | Phylogeny | ParSNP's internal RAxML step refuses fewer than four genomes, so `--snptyper parsnp` exits 6 on a three-genome set; the three-genome check in `phylo` does not cover this. |
+| SNP typing | The `simple` typer fills sequence a genome lacks with the reference base. A copy of a genome with 500 kb removed differed from that genome at 20539 sites on the 50-genome set. Masking uncovered positions with N, and comparing sites only where both genomes have a base, would change a documented behaviour and the SNP counts, so it is left as a proposal; usage.md states the limitation. |
+| Exit codes | A missing tool found by the preflight (exit 4, for example `snptype --mask gubbins` without Gubbins) leaves the stage shown as `[interrupted]` in `status`, although nothing ran; the harness keeps the provisional record for exit 4 and 6 alike. |
 | Environment | ParSNP reads every file in its input directory, so the AppleDouble `._*.fasta` files macOS writes on exFAT volumes break it; stage the genomes on an APFS disk. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
