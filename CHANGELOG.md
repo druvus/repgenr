@@ -211,6 +211,10 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- `status` and `doctor` exit 3 with the shared "Workdir not found" message
+  when `-wd` does not exist, instead of exiting 0; an existing directory
+  without `repgenr.yaml` still prints the entry-stage hint (status) or a
+  warning (doctor).
 - Paired runs that ENA lists with a third, orphan FASTQ file (260 of the 424
   paired Illumina Wolbachia runs) no longer fail in skesa: the adapters find
   the `_1`/`_2` pair; skesa also takes the orphan file as unpaired input,

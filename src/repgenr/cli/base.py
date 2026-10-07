@@ -564,6 +564,25 @@ def stage_errors(logger: logging.Logger) -> Iterator[None]:
         raise typer.Exit(code=1) from exc
 
 
+def missing_workdir_message(workdir: Path) -> str:
+    """One sentence for a -wd that does not exist, shared by stages and queries."""
+    return (
+        f"Workdir not found: {workdir}. Create it with an entry stage "
+        "(metadata, ingest, reads or vmetadata) first."
+    )
+
+
+def require_existing_workdir(workdir: Path) -> None:
+    """Exit 3 (WorkdirError) when a read-only query names a missing -wd.
+
+    `status` and `doctor` run outside the stage harness, so they check here;
+    an existing directory without repgenr.yaml is reported by the command itself.
+    """
+    if not workdir.is_dir():
+        typer.echo(missing_workdir_message(workdir), err=True)
+        raise typer.Exit(code=WorkdirError.exit_code)
+
+
 def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) -> None:
     """Common harness: context, dispatch, clean error handling.
 
@@ -590,10 +609,7 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
     if not ctx.workdir.is_dir():
         # Only entry stages (create=True) start a workdir; any other stage
         # would otherwise create it as a side effect of opening the manifest.
-        raise WorkdirError(
-            f"Workdir not found: {ctx.workdir}. Create it with an entry stage "
-            "(metadata, ingest, reads or vmetadata) first."
-        )
+        raise WorkdirError(missing_workdir_message(ctx.workdir))
     # Stages that cache an intermediate of their own (phylo's MSA) must not
     # reuse it under --force, which means "recompute this stage".
     ctx.force = bool(_RUN_STATE["force"])

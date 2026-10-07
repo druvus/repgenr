@@ -108,6 +108,9 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 
 Show which pipeline stages have completed in a working directory.
 
+A -wd that does not exist exits 3; an existing directory without
+repgenr.yaml prints which entry stage to run first and exits 0.
+
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
@@ -391,7 +394,7 @@ Verify a workdir's outputs against its records (read-only health check).
 against the filesystem and the manifest: interrupted stages, missing or
 corrupt genomes, manifest drift, representative/cluster mismatches,
 truncated deliverables, and stages whose inputs changed since completion.
-Exits 1 when any failure is found.
+Exits 1 when any failure is found and 3 when the workdir does not exist.
 
 | option | default | description |
 |---|---|---|
