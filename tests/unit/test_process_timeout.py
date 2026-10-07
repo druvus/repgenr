@@ -23,6 +23,7 @@ def test_timeout_kills_and_raises() -> None:
             timeout=0.5,
         )
     assert "timeout" in ei.value.details()
+    assert "timed out after 0.5s" in str(ei.value)
     # killed promptly, nowhere near the 30s sleep
     assert time.monotonic() - start < 10
 

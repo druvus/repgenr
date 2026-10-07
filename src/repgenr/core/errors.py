@@ -49,12 +49,27 @@ class ToolExecutionError(RepGenRError):
 
     exit_code = 6
 
-    def __init__(self, command: list[str], returncode: int, output: str | None = None):
+    def __init__(
+        self,
+        command: list[str],
+        returncode: int,
+        output: str | None = None,
+        *,
+        tool: str | None = None,
+        timeout: float | None = None,
+    ):
         self.command = command
         self.returncode = returncode
         self.output = output
-        self.tool = Path(command[0]).name if command else "tool"
-        super().__init__(f"{self.tool} failed (exit {returncode})")
+        self.timeout = timeout
+        # The adapter's tool name when known: a containerized command starts
+        # with the engine, which says nothing about what failed.
+        self.tool = tool or (Path(command[0]).name if command else "tool")
+        if timeout is not None:
+            msg = f"{self.tool} timed out after {timeout:g}s (killed, exit {returncode})"
+        else:
+            msg = f"{self.tool} failed (exit {returncode})"
+        super().__init__(msg)
 
     @property
     def output_tail(self) -> str:

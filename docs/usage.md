@@ -720,9 +720,10 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   `--platform linux/amd64` (and enable Rosetta) so emulated images run.
 - **A stage failed; where are the details?** Errors print a concise message; the
   full traceback is in `<workdir>/repgenr.log`. A failed external tool prints one
-  line naming the tool and its exit status; the command line and the output tail
-  are in the same log. Re-run with `--verbose` to see them on the console (a
-  data-channel step has no log and always prints the tail). `repgenr status -wd <WD>` shows what completed and what is next.
+  line naming the tool and its exit status; the command line and the output
+  tail are in the same log. Re-run with `--verbose` to see them on the console
+  (a data-channel step has no log and always prints the tail).
+  `repgenr status -wd <WD>` shows what completed and what is next.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).
