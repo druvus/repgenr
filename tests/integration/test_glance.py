@@ -249,3 +249,19 @@ def test_glance_help_names_the_bound_units_and_the_kept_directory() -> None:
     text = " ".join(re.sub(r"\x1b\[[0-9;]*[A-Za-z]|[│╭╮╰╯─]", " ", result.output).split())
     assert "Mash ANI values plotted, as a fraction from 0 to 1" in text
     assert "Keep glance_wd/" in text
+
+
+def test_glance_warns_when_the_tool_returns_no_dendrogram(workdir: Path, monkeypatch) -> None:
+    def _no_dendrogram(caps, command, *, logger, **kwargs) -> None:
+        glance_wd = Path(command[-1])
+        (glance_wd / "data_tables").mkdir(parents=True)
+        (glance_wd / "data_tables" / "Mdb.csv").write_text(_MDB)
+
+    ctx = _setup(workdir)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", _no_dendrogram)
+    glance_run(ctx, GlanceParams(threads=2))
+    assert not (ctx.workdir / "glance_clustering_dendrogram.pdf").exists()
+    log = (ctx.workdir / "repgenr.log").read_text(encoding="utf-8")
+    assert "WARNING The comparison returned no dendrogram" in log
+

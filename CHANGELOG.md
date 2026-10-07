@@ -244,6 +244,8 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `glance` warns when the comparison tool returns no dendrogram. Before, the
+  dendrogram was left out without a message.
 - `glance` rejects `--plot-min` above `--plot-max`, or either bound outside
   0 to 1, with exit 2. Before, such bounds selected no values, the run
   exited 0 and removed the plots of the previous run.

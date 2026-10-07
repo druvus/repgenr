@@ -73,6 +73,8 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     out_pdf = ctx.workdir / "glance_clustering_dendrogram.pdf"
     if result.dendrogram is not None:
         shutil.copy2(result.dendrogram, out_pdf)
+    else:
+        logger.warning("The comparison returned no dendrogram; %s not written", out_pdf.name)
 
     if result.similarity_csv is not None:
         _plot(result.similarity_csv, ctx.workdir, params, logger)
