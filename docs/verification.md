@@ -403,17 +403,17 @@ parser), so they also apply to commands other than the one named.
 | derep-stock | Packing under a stored name replaced that run without notice; it now warns | #218 |
 | derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | #218 |
 | derep-stock | Unpack re-stamped the `dereplicate` record from the record live at unpack time, so a sourmash run restored after a skDER run was shown as `[skder]` by `status` and `versions`; a stored run now keeps its own record (`record.json`), and runs stored without one fall back as before | #220 |
-| ingest | An `--outgroup` file outside `--genomes-dir` named like an ingroup genome replaced that genome without a message (49 of 50 genomes left); it now exits 2 | (this PR) |
-| ingest | NCBI assembly filenames (`GCF_000008985.1_ASM898v1_genomic.fna`) parsed as family `GCF` with accession `genomic`, so a Datasets download kept one manifest row of many; the accession now comes from the leading GCA_/GCF_ accession | (this PR) |
-| ingest | Two files with one accession were all staged while the manifest kept one; a selection listing one file twice staged it twice; both now exit 2 | (this PR) |
-| ingest | Empty files and dangling links were staged and failed inside the dereplication tool; they now exit 2 before anything is staged | (this PR) |
-| ingest | Files without a supported suffix (`x.fna.gz`, `X.FASTA`) were skipped without a message; they are now listed in a warning, and an empty source holding subdirectories says they are not searched | (this PR) |
-| ingest | A malformed `--selection` exited 3 or crashed with exit 1, and `is_outgroup` `true` was read as 0 (the outgroup went into the ingroup); now exit 2 with file and line, and true/false, yes/no are accepted | (this PR) |
-| ingest | A refused re-ingest marked the finished ingest as interrupted; the checks now run before the record is touched | (this PR) |
-| ingest | Relative paths were recorded as given, so `doctor` run from another directory reported the source as changed; they are now recorded absolute | (this PR) |
-| ingest, metadata | `repgenr --force ingest` on an unchanged set cleared the manifest's dereplication status while `dereplicate` was skipped as up to date; an unchanged genome now keeps it | (this PR) |
-| doctor | Every `.fasta.gz` genome was reported as not FASTA (to be deleted); gzip files are now judged by their decompressed content | (this PR) |
-| doctor | Links left dangling by a moved source were reported as not FASTA with advice to re-run the genome stage; they are now named as dangling links with advice to re-run ingest | (this PR) |
+| ingest | An `--outgroup` file outside `--genomes-dir` named like an ingroup genome replaced that genome without a message (49 of 50 genomes left); it now exits 2 | #222 |
+| ingest | NCBI assembly filenames (`GCF_000008985.1_ASM898v1_genomic.fna`) parsed as family `GCF` with accession `genomic`, so a Datasets download kept one manifest row of many; the accession now comes from the leading GCA_/GCF_ accession | #222 |
+| ingest | Two files with one accession were all staged while the manifest kept one; a selection listing one file twice staged it twice; both now exit 2 | #222 |
+| ingest | Empty files and dangling links were staged and failed inside the dereplication tool; they now exit 2 before anything is staged | #222 |
+| ingest | Files without a supported suffix (`x.fna.gz`, `X.FASTA`) were skipped without a message; they are now listed in a warning, and an empty source holding subdirectories says they are not searched | #222 |
+| ingest | A malformed `--selection` exited 3 or crashed with exit 1, and `is_outgroup` `true` was read as 0 (the outgroup went into the ingroup); now exit 2 with file and line, and true/false, yes/no are accepted | #222 |
+| ingest | A refused re-ingest marked the finished ingest as interrupted; the checks now run before the record is touched | #222 |
+| ingest | Relative paths were recorded as given, so `doctor` run from another directory reported the source as changed; they are now recorded absolute | #222 |
+| ingest, metadata | `repgenr --force ingest` on an unchanged set cleared the manifest's dereplication status while `dereplicate` was skipped as up to date; an unchanged genome now keeps it | #222 |
+| doctor | Every `.fasta.gz` genome was reported as not FASTA (to be deleted); gzip files are now judged by their decompressed content | #222 |
+| doctor | Links left dangling by a moved source were reported as not FASTA with advice to re-run the genome stage; they are now named as dangling links with advice to re-run ingest | #222 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
