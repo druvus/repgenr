@@ -364,3 +364,25 @@ def test_refused_rerun_keeps_the_finished_record(workdir: Path, genome_files, fa
     second = CliRunner().invoke(app, args)
     assert second.exit_code == 3, second.output
     assert Config.load(workdir).stages["dereplicate"].completed
+
+
+def test_drep_virus_mode_reaches_anim_through_the_stage(
+    workdir: Path, genome_files, monkeypatch
+) -> None:
+    """The stage merges the adapter's default_params into the extras; dRep's
+    virus default (ANImf) must survive that merge."""
+    import repgenr.dereplicators.drep as drep_mod
+
+    seen: list[list[str]] = []
+
+    def record(caps, command, *, logger, **kwargs):
+        seen.append([str(c) for c in command])
+        raise RuntimeError("stop after recording the command")
+
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {"dRep": "3"})
+    monkeypatch.setattr(drep_mod, "run_tool", record)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(RuntimeError, match="stop after"):
+        run(ctx, DereplicateParams(tool="drep", extra={"virus": True}))
+    (cmd,) = seen
+    assert cmd[cmd.index("--S_algorithm") + 1] == "ANImf"

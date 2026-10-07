@@ -44,7 +44,9 @@ class DrepDereplicator(Dereplicator):
         # aligned-fraction setting is not translated onto it.
         ignored_params=frozenset({"aligned_fraction"}),
         required_binaries=(BinarySpec("dRep", version_args=("-h",), min_version="3.0"),),
-        default_params={"S_algorithm": "fastANI"},
+        # No default_params: the stage merges them into the extras, which
+        # would hide whether the user chose S_algorithm, and virus mode's own
+        # default (ANImf) would never apply. dereplicate() holds the defaults.
         recommended_max_genomes=2000,
         supports_native_scaling=False,
     )
