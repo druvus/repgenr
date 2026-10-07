@@ -417,11 +417,11 @@ parser), so they also apply to commands other than the one named.
 | metadata | A malformed `--release` (`abc.def`) ended in an unexpected error (exit 1), and an unknown `--gtdb-version` made two failed downloads (exit 3); both now exit 2 | #224 |
 | metadata | A `--metadata-path` that does not exist silently downloaded the full GTDB table instead; it now exits 2 | #224 |
 | metadata | With `--limit`, the automatic outgroup could be a target genome the cap left out (r232, genus Francisella, `--limit 5`: F. guangzhouensis); it now lies outside the target taxon | #224 |
-| metadata | `--outgroup-accession` naming a selected genome wrote it twice to `selection.tsv`; it now exits 2 (tsv and API) | #224 |
+| metadata | `--outgroup-accession` naming a selected genome wrote it twice to `selection.tsv`, and one naming a target genome left out by `-d rep` or `--limit` was accepted; both now exit 2 (tsv and API) | #224 |
 | metadata | `--source api` lowered GTDB suffixes (`Bacillus_A`) and kept a capitalised epithet (`-ts Tularensis`), and an unknown taxon or outgroup was an HTTP error with exit 3; names are spelled as GTDB does and unknown names exit 2 | #224 |
 | metadata | A failed table download (network or checksum) was retried on the legacy layout and reported as "check release/version"; only a 404 tries the next layout and other failures name their cause | #224 |
 | metadata | `--nodownload -r 232.1` reused the 232.0 table and recorded release 232.1 (table names carry the major release only); the exact release is now recorded beside the table and checked | #224 |
-| metadata, vmetadata | Through an unreachable proxy a GTDB request waited 481 s before exit 3; a 15 s connect timeout reports it in 120 s | #224 |
+| metadata | Through an unreachable proxy a GTDB request waited 481 s before exit 3; a 15 s connect timeout reports it in 120 s | #224 |
 | genome | A download batch made only of accessions NCBI no longer serves failed with exit 6 after three attempts; they are recorded in `missing_accessions.txt` | #224 |
 | genome | Rehydrated genomes were not checked against the package's `md5sum.txt` (`datasets rehydrate` does not check it); a mismatch is now discarded and recorded missing | #224 |
 | genome | An outgroup package without a FASTA completed the stage without an outgroup, an unserved outgroup exited 6, and a present outgroup was downloaded again on every run | #224 |

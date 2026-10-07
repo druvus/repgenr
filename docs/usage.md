@@ -75,7 +75,9 @@ are case-sensitive: the target's first letter is raised and a species epithet
 is lowered, so `-tg francisella -ts Tularensis` finds `s__Francisella
 tularensis`; suffixes such as `Bacillus_A` or `copri_A` must be typed as GTDB
 spells them. A taxon or `--outgroup-accession` the API does not know exits 2.
-The outgroup must lie outside the selection on both sources (exit 2 otherwise).
+A named outgroup must lie outside the target taxon on both sources, like the
+automatic one (exit 2 otherwise); a target genome that `-d rep` or `--limit`
+left out of the selection is still not an outgroup.
 
 Or run the whole chain in one command (bacterial by default; `--viral` for the
 NCBI Virus path), then check progress at any time:
@@ -347,7 +349,8 @@ strain-level name of the same species are grouped separately.
 in `download.source`. The BV-BRC source reuses the group FASTA only for the
 same target and downloads it again otherwise; switching a workdir between the
 two sources removes the other source's tables, so `vgenome` reads the latest
-download.
+download. A BV-BRC workdir written by an earlier version has no
+`download.source`, so its first re-run downloads the group FASTA again.
 
 ### Viral length filtering and over-represented species
 
