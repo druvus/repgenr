@@ -360,3 +360,22 @@ def test_drep_reports_gzipped_genomes_under_their_input_names(tmp_path, monkeypa
     assert set(result.genome_status) == {g.name for g in genomes}
     assert result.clusters == {"g1.fasta": ["g2.fasta.gz"], "g3.fasta.gz": ["g4.fasta"]}
     assert sorted(p.name for p in result.representatives) == ["g1.fasta", "g3.fasta.gz"]
+
+
+def test_drep_marks_genomes_its_filter_dropped_as_fail_qc(genomes, tmp_path, monkeypatch) -> None:
+    """dRep's --length or quality filter leaves a genome out of every table."""
+    import repgenr.dereplicators.drep as drep_mod
+
+    extra = genomes[0].parent / "short.fasta"
+    extra.write_text(">short\nACGT\n")
+
+    def fake(caps, command, *, logger, **kwargs):
+        _fake_drep([str(c) for c in command])  # writes only g1..g4
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", fake)
+    result = drep_mod.DrepDereplicator().dereplicate(
+        [*genomes, extra], tmp_path / "out", DerepParams(), _LOG
+    )
+    assert result.genome_status["short.fasta"] == "fail_qc"
+    assert all("short.fasta" not in m for m in result.clusters.values())
