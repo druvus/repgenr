@@ -179,7 +179,9 @@ def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> d
     if spec is None:
         return {}
     digests = inputs_digest(ctx.workdir, spec(ctx, params))
-    if stage_name in _MANIFEST_INPUT_STAGES:
+    # Opening the manifest creates it; a missing workdir has none to digest,
+    # and the stage itself then reports the missing input.
+    if stage_name in _MANIFEST_INPUT_STAGES and ctx.workdir.is_dir():
         digests["manifest"] = manifest_digest_for_stage(stage_name, ctx.manifest)
     return digests
 
