@@ -127,6 +127,10 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
     """Emit FlexTaxD relations from explicit inputs (stateless; no config)."""
     if not params.tree.exists():
         raise WorkdirError(f"Tree not found: {params.tree}. Run the phylo step first.")
+    if params.include_dereplicated and params.clusters is not None and not params.clusters.exists():
+        # An explicit path that is absent would otherwise drop every dereplicated
+        # member from genomes_map.tsv without notice.
+        raise WorkdirError(f"Clusters table not found: {params.clusters}.")
     outgroup_leaf = None
     if params.outgroup_dir is not None and params.outgroup_accession is not None:
         outgroup_leaf = _resolve_outgroup_leaf_from(

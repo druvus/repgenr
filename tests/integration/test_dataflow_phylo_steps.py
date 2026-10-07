@@ -126,3 +126,18 @@ def test_tree2tax_relations_rejects_a_malformed_tree(tmp_path: Path) -> None:
     with pytest.raises(WorkdirError, match="tree.nwk"):
         tree2tax_relations(Tree2taxStepParams(tree=tree, out_dir=tmp_path / "out"), _LOG)
 
+
+def test_tree2tax_relations_rejects_a_missing_clusters_file(tmp_path: Path) -> None:
+    # An explicit --clusters path that does not exist must not be skipped
+    # silently: the genome map would then lack every dereplicated member.
+    from repgenr.core.errors import WorkdirError
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text(_NWK + "\n")
+    with pytest.raises(WorkdirError, match="clusters.tsv"):
+        tree2tax_relations(
+            Tree2taxStepParams(
+                tree=tree, out_dir=tmp_path / "out", clusters=tmp_path / "clusters.tsv"
+            ),
+            _LOG,
+        )
