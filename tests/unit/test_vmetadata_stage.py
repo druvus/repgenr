@@ -274,7 +274,8 @@ def test_bvbrc_complete_existing_file_is_reused(tmp_path, monkeypatch) -> None:
     wd = ctx.workdir / "virus_download_wd"
     wd.mkdir(parents=True)
     (wd / "download.fa").write_text(_BVBRC_FASTA, encoding="utf-8")
-    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    (wd / "download.source").write_text("bvbrc:adenoviridae\n", encoding="utf-8")
+    vmetadata.run(ctx, VmetadataParams(target="Adenoviridae", source="bvbrc"))
     assert (wd / "metadata_base.tsv").exists()
 
 
@@ -322,3 +323,72 @@ def test_vgenome_dispatches_to_bvbrc_backend(tmp_path, monkeypatch) -> None:
         lambda ctx, params, fasta, base, ncbi, logger: 5,
     )
     assert vgenome.run(ctx, VgenomeParams()) == 5
+
+
+# --- deep audit 2026-10 (entry-net) -------------------------------------------
+
+
+def _bvbrc_fakes(monkeypatch) -> list[str]:
+    downloads: list[str] = []
+
+    def fake_download_group(target, dest, logger):
+        downloads.append(target)
+        dest.write_text(_BVBRC_FASTA, encoding="utf-8")
+
+    def fake_entrez(taxids, logger):
+        return {t: _taxdata(f"Species {t}", t) for t in taxids}, set(), {}
+
+    monkeypatch.setattr(vmetadata, "_download_group", fake_download_group)
+    monkeypatch.setattr(vmetadata, "get_taxon_data_from_entrez", fake_entrez)
+    return downloads
+
+
+def test_bvbrc_does_not_reuse_another_targets_group_fasta(tmp_path, monkeypatch) -> None:
+    """Live: '--target picornaviridae' reused the Hepatitis E group FASTA and
+    recorded it as picornaviridae."""
+    downloads = _bvbrc_fakes(monkeypatch)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    vmetadata.run(ctx, VmetadataParams(target="picornaviridae", source="bvbrc"))
+    assert downloads == ["adenoviridae", "picornaviridae"]
+    marker = ctx.workdir / "virus_download_wd" / "download.source"
+    assert marker.read_text(encoding="utf-8").strip() == "bvbrc:picornaviridae"
+
+
+def test_bvbrc_after_ncbi_virus_downloads_and_drops_the_records(
+    tmp_path, fake_datasets, monkeypatch
+) -> None:
+    """Live: switching a workdir to --source bvbrc reused NCBI Virus's
+    download.fa and failed with 'list index out of range' (exit 1); the stale
+    virus_records.json also kept vgenome on the NCBI Virus back-end."""
+    downloads = _bvbrc_fakes(monkeypatch)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae"))
+    wd = ctx.workdir / "virus_download_wd"
+    assert (wd / "virus_records.json").exists()
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    assert downloads == ["adenoviridae"]
+    assert not (wd / "virus_records.json").exists()
+    # and back: NCBI Virus drops the BV-BRC-only tables
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae"))
+    assert not (wd / "metadata_ncbi.tsv").exists()
+    assert not (ctx.workdir / "virus_metadata_ncbi.tsv").exists()
+    assert (wd / "download.source").read_text(encoding="utf-8").strip() == "ncbi_virus:adenoviridae"
+
+
+def test_bvbrc_unmarked_existing_fasta_is_downloaded_again(tmp_path, monkeypatch) -> None:
+    downloads = _bvbrc_fakes(monkeypatch)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    wd = ctx.workdir / "virus_download_wd"
+    wd.mkdir(parents=True)
+    (wd / "download.fa").write_text(_BVBRC_FASTA, encoding="utf-8")
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    assert downloads == ["adenoviridae"]
+
+
+def test_bvbrc_parse_names_a_foreign_fasta(tmp_path) -> None:
+    fasta = tmp_path / "download.fa"
+    fasta.write_text(">NC_004297.1 Lassa virus segment L\nACGT\n", encoding="utf-8")
+    with pytest.raises(WorkdirError, match="not a BV-BRC group FASTA"):
+        vmetadata._parse_fasta(fasta, "complete genome", _logger())

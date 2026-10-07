@@ -28,6 +28,22 @@ from ..viral.entrez import TAXNAMES_ORDERED, get_taxon_data_from_entrez
 
 BVBRC_FTP = "ftp.bvbrc.org"
 BVBRC_FTP_DIR = "viruses"
+# Names the source and target behind virus_download_wd/download.fa, so a
+# reuse never serves one target's (or source's) sequences as another's.
+DOWNLOAD_SOURCE = "download.source"
+# Files only one source writes; the other source removes them so vgenome
+# dispatches on the metadata of the latest vmetadata run.
+_NCBI_VIRUS_ONLY = ("virus_records.json",)
+_BVBRC_ONLY = ("metadata_ncbi.tsv", "metadata_ncbi_taxnames_data.json")
+
+
+def _source_key(source: str, target: str) -> str:
+    return f"{source}:{target.lower()}"
+
+
+def _drop(download_wd: Path, names: tuple[str, ...]) -> None:
+    for name in names:
+        (download_wd / name).unlink(missing_ok=True)
 
 
 class _ReuseFTP_TLS(FTP_TLS):
@@ -112,6 +128,11 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
     )
     if not records:
         raise WorkdirError(f"NCBI Virus returned no genomes for '{params.target}'.")
+    (download_wd / DOWNLOAD_SOURCE).write_text(
+        _source_key("ncbi_virus", params.target) + "\n", encoding="utf-8"
+    )
+    _drop(download_wd, _BVBRC_ONLY)
+    (ctx.workdir / "virus_metadata_ncbi.tsv").unlink(missing_ok=True)
     ncbi_virus.write_records(download_wd / "virus_records.json", records)
     _write_base_from_records(download_wd / "metadata_base.tsv", records)
     (ctx.workdir / "virus_metadata_base.tsv").write_text(
@@ -174,11 +195,29 @@ def _write_base_from_records(path: Path, records) -> None:
 def _run_bvbrc(ctx, params, download_wd, logger) -> int:
     target = params.target.lower()
     download_fa = download_wd / "download.fa"
+    marker = download_wd / DOWNLOAD_SOURCE
+    key = _source_key("bvbrc", target)
+    try:
+        recorded = marker.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        recorded = None
 
-    if not looks_like_fasta(download_fa):
-        _download_group(target, download_fa, logger)
-    else:
+    # Reuse only the group FASTA this target downloaded: one fetched for
+    # another target, or by the NCBI Virus source, is downloaded afresh.
+    if looks_like_fasta(download_fa) and recorded == key:
         logger.info("Group FASTA already present; reusing %s", download_fa)
+    else:
+        if download_fa.exists():
+            logger.info(
+                "Existing %s was fetched for %s, not %s; downloading again",
+                download_fa.name,
+                recorded or "an unrecorded target",
+                key,
+            )
+        marker.unlink(missing_ok=True)
+        _download_group(target, download_fa, logger)
+        marker.write_text(key + "\n", encoding="utf-8")
+    _drop(download_wd, _NCBI_VIRUS_ONLY)
 
     tag = params.filter or "complete genome"
     base, all_taxids, taxid_bvbrc = _parse_fasta(download_fa, tag, logger)
@@ -278,7 +317,13 @@ def _parse_fasta(path: Path, tag: str, logger):
     descriptions: dict[str, dict] = {}
 
     for entry in SeqIO.parse(str(path), "fasta"):
-        bvbrc_id = entry.description.split("| ")[1].split("]")[0]
+        try:
+            bvbrc_id = entry.description.split("| ")[1].split("]")[0]
+        except IndexError:
+            raise WorkdirError(
+                f"{path} is not a BV-BRC group FASTA (header without '[... | id]': "
+                f"{entry.description[:80]!r}). Delete it and re-run vmetadata."
+            ) from None
         taxid = bvbrc_id.split(".")[0]
         all_taxids.add(taxid)
         taxid_bvbrc.setdefault(taxid, set()).add(bvbrc_id)
