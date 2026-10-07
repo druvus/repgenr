@@ -185,6 +185,95 @@ def test_bvbrc_unreachable_is_a_named_workdir_error(tmp_path, monkeypatch, param
         vmetadata.run(ctx, params)
 
 
+class _FakeFTP:
+    """A stand-in FTPS session serving one group file."""
+
+    def __init__(self, payload: bytes, *, fail_after: int | None = None, size: int | None = None):
+        self.payload = payload
+        self.fail_after = fail_after
+        self.size_reported = len(payload) if size is None else size
+
+    def cwd(self, d):
+        pass
+
+    def nlst(self):
+        return ["Adenoviridae.fna"]
+
+    def sendcmd(self, cmd):
+        pass
+
+    def size(self, remote):
+        return self.size_reported
+
+    def retrbinary(self, cmd, callback):
+        if self.fail_after is None:
+            callback(self.payload)
+            return
+        callback(self.payload[: self.fail_after])
+        raise ConnectionResetError("connection dropped")
+
+
+def _fake_session(ftp):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def session():
+        yield ftp
+
+    return session
+
+
+def _logger():
+    import logging
+
+    return logging.getLogger("test")
+
+
+def test_bvbrc_download_success_publishes_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(vmetadata, "_bvbrc_session", _fake_session(_FakeFTP(b">a\nACGT\n")))
+    dest = tmp_path / "download.fa"
+    vmetadata._download_group("adenoviridae", dest, _logger())
+    assert dest.read_bytes() == b">a\nACGT\n"
+    assert not (tmp_path / "download.fa.tmp").exists()
+
+
+def test_bvbrc_interrupted_download_leaves_nothing(tmp_path, monkeypatch) -> None:
+    ftp = _FakeFTP(b">a\nACGTACGT\n", fail_after=5)
+    monkeypatch.setattr(vmetadata, "_bvbrc_session", _fake_session(ftp))
+    dest = tmp_path / "download.fa"
+    with pytest.raises(ConnectionResetError):
+        vmetadata._download_group("adenoviridae", dest, _logger())
+    assert not dest.exists()
+    assert not (tmp_path / "download.fa.tmp").exists()
+
+
+def test_bvbrc_size_mismatch_leaves_nothing(tmp_path, monkeypatch) -> None:
+    ftp = _FakeFTP(b">a\nACGT\n", size=999)
+    monkeypatch.setattr(vmetadata, "_bvbrc_session", _fake_session(ftp))
+    dest = tmp_path / "download.fa"
+    with pytest.raises(WorkdirError, match="Incomplete"):
+        vmetadata._download_group("adenoviridae", dest, _logger())
+    assert not dest.exists()
+    assert not (tmp_path / "download.fa.tmp").exists()
+
+
+def test_bvbrc_complete_existing_file_is_reused(tmp_path, monkeypatch) -> None:
+    def no_download(*args, **kwargs):
+        raise AssertionError("must not download")
+
+    def fake_entrez(taxids, logger):
+        return {t: _taxdata(f"Species {t}", t) for t in taxids}, set(), {}
+
+    monkeypatch.setattr(vmetadata, "_download_group", no_download)
+    monkeypatch.setattr(vmetadata, "get_taxon_data_from_entrez", fake_entrez)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    wd = ctx.workdir / "virus_download_wd"
+    wd.mkdir(parents=True)
+    (wd / "download.fa").write_text(_BVBRC_FASTA, encoding="utf-8")
+    vmetadata.run(ctx, VmetadataParams(target="adenoviridae", source="bvbrc"))
+    assert (wd / "metadata_base.tsv").exists()
+
+
 # --- vgenome dispatch ---------------------------------------------------------
 
 

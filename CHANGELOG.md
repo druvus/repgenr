@@ -230,6 +230,10 @@ All notable changes to RepGenR are documented here. The format follows
   the ingroup has fewer than three genomes, before any aligner, SNP typer or
   tree builder runs, instead of failing inside the tree builder (for example
   quicktree on a single representative).
+- A BV-BRC group download is written to a temporary file and renamed after
+  the size check, so an interrupted transfer no longer leaves a partial
+  `download.fa` that the next run reuses as complete. GTDB table downloads
+  and the NCBI Virus path were already protected.
 - `status` and `doctor` exit 3 with the shared "Workdir not found" message
   when `-wd` does not exist, instead of exiting 0; an existing directory
   without `repgenr.yaml` still prints the entry-stage hint (status) or a
