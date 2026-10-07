@@ -241,13 +241,34 @@ class Manifest:
     def replace_genomes(self, records: list[GenomeRecord]) -> None:
         """Make the manifest hold exactly ``records``: delete de-selected rows,
         then upsert, in one transaction. A re-selection (crashed or not) can no
-        longer leave the manifest holding the union of old and new selections."""
+        longer leave the manifest holding the union of old and new selections.
+
+        A genome kept under the same accession and filename keeps its
+        dereplication status when the new record carries none: a re-selection
+        of an unchanged set leaves dereplicate up to date (its input digest
+        ignores these columns), so it does not run again to restore them. A
+        changed set re-runs dereplicate, which resets every status."""
         keep = {r.accession for r in records}
         with self.transaction() as conn:
-            cur = conn.execute("SELECT accession FROM genomes")
-            stale = [row[0] for row in cur.fetchall() if row[0] not in keep]
+            cur = conn.execute(
+                "SELECT accession, filename, derep_status, representative FROM genomes"
+            )
+            existing = {row[0]: row for row in cur.fetchall()}
+            stale = [acc for acc in existing if acc not in keep]
             conn.executemany("DELETE FROM genomes WHERE accession = ?", [(acc,) for acc in stale])
-            conn.executemany(_UPSERT_SQL, [_record_params(r) for r in records])
+            params = []
+            for record in records:
+                item = _record_params(record)
+                prior = existing.get(record.accession)
+                if (
+                    prior is not None
+                    and prior[1] == record.filename
+                    and record.derep_status is None
+                    and record.representative is None
+                ):
+                    item["derep_status"], item["representative"] = prior[2], prior[3]
+                params.append(item)
+            conn.executemany(_UPSERT_SQL, params)
 
     def set_derep_status(
         self, accession: str, status: str, representative: str | None = None
