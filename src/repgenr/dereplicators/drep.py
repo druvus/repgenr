@@ -20,7 +20,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import list_fasta
-from ..core.errors import WorkdirError
+from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy, write_fofn
 from .base import (
@@ -44,7 +44,9 @@ class DrepDereplicator(Dereplicator):
         # aligned-fraction setting is not translated onto it.
         ignored_params=frozenset({"aligned_fraction"}),
         required_binaries=(BinarySpec("dRep", version_args=("-h",), min_version="3.0"),),
-        default_params={"S_algorithm": "fastANI"},
+        # No default_params: the stage merges them into the extras, which
+        # would hide whether the user chose S_algorithm, and virus mode's own
+        # default (ANImf) would never apply. dereplicate() holds the defaults.
         recommended_max_genomes=2000,
         supports_native_scaling=False,
     )
@@ -153,7 +155,61 @@ class DrepDereplicator(Dereplicator):
             raise WorkdirError(
                 "dRep working directory was not created; confirm dRep is installed and runs."
             )
-        return _parse_drep_output(drep_wd, logger)
+        if not (drep_wd / "data_tables" / "Cdb.csv").exists():
+            # dRep logs some fatal problems and still exits 0; the most common
+            # is CheckM missing when no genome quality is given.
+            raise ToolExecutionError(
+                [str(c) for c in cmd],
+                0,
+                "dRep wrote no data_tables/Cdb.csv. dRep stops this way when CheckM "
+                "is not on PATH: it scores genome quality with CheckM unless "
+                "--ignoreGenomeQuality is set, which --virus does. The [drep] lines "
+                "in repgenr.log show the step where it stopped.",
+                tool="dRep",
+            )
+        result = _parse_drep_output(drep_wd, logger)
+        result = _restore_input_names(
+            result, {st.name: src for st, src in zip(staged, genomes, strict=True)}
+        )
+        # dRep's filter step (--length, CheckM completeness/contamination)
+        # drops genomes from every table it writes; those are QC failures.
+        dropped = sorted(g.name for g in genomes if g.name not in result.genome_status)
+        if dropped:
+            logger.warning(
+                "dRep filtered out %d genome(s) before clustering (length or genome "
+                "quality); marked fail_qc in genome_status.tsv (e.g. %s).",
+                len(dropped),
+                ", ".join(dropped[:3]),
+            )
+            for name in dropped:
+                result.genome_status[name] = STATUS_FAIL_QC
+        return result
+
+
+def _restore_input_names(result: DerepResult, source_by_staged: dict[str, Path]) -> DerepResult:
+    """Report genomes under their input names, not dRep's staged copies.
+
+    A gzipped input is staged decompressed (``x.fasta.gz`` -> ``x.fasta``), so
+    dRep names it without ``.gz``; the stage checks every input name for a
+    status and links representatives from genomes/, so map the names back.
+    """
+
+    def name(staged: str) -> str:
+        src = source_by_staged.get(staged)
+        return src.name if src is not None else staged
+
+    return DerepResult(
+        representatives=[source_by_staged.get(p.name, p) for p in result.representatives],
+        clusters={
+            name(rep): [name(m) for m in members] for rep, members in result.clusters.items()
+        },
+        genome_status={name(g): state for g, state in result.genome_status.items()},
+        genome_information=[
+            {**row, "genome": name(str(row.get("genome", "")))}
+            for row in (result.genome_information or [])
+        ]
+        or result.genome_information,
+    )
 
 
 def _stage_genome(src: Path, dest_dir: Path) -> Path:

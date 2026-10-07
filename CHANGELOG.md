@@ -363,6 +363,43 @@ All notable changes to RepGenR are documented here. The format follows
 - `doctor` judges `.fasta.gz` genomes by their decompressed content (it
   reported every one as not FASTA), and names links left dangling by a moved
   source instead of reporting them as not FASTA.
+- `dereplicate --tool skder` keeps a partial genome (for example a 40 percent
+  fragment) under its cluster's representative. The aligned-fraction cutoff
+  now applies to the member's own aligned fraction, as in skDER; before, one
+  such genome left a member without a representative and the stage exited 3.
+- `derep/representatives/` links each representative from `genomes/`. With
+  skDER and galah it linked the tool's own copy, so every representative was
+  stored twice; galah no longer copies its representatives into scratch.
+- `dereplicate --virus` with a tool that does not read it (all but dRep) warns
+  and names the tools that do. It was dropped without a message, and the
+  viral example in the documentation used `skder --virus`.
+- External tools run with stdin closed. A tool that asks a question (skDER
+  below 80 percent ANI) waited on the terminal with its prompt hidden in the
+  log; it now reads end-of-file.
+- `dereplicate --tool skder` (and `auto` resolving to skDER) refuses
+  `--secondary-ani` or `--pre-secondary-ani` below 0.80 with exit 2 before
+  the run, since skDER stops at an interactive question there.
+- A `dereplicate` rerun refused before it starts (a selected genome missing
+  from `genomes/`, an empty `genomes/`, or skDER's ANI floor) leaves the
+  record of the last finished run complete. Before, `status` showed it
+  interrupted and `doctor` failed although `derep/` was untouched.
+- `dereplicate --tool drep` without CheckM exits 6 with the cause in the log.
+  dRep exits 0 without results in that case, and the run ended as an
+  unexpected error (exit 1).
+- `dereplicate --tool drep --virus` uses ANImf as its secondary algorithm.
+  The adapter's declared default (fastANI) reached the extras through the
+  stage and hid the virus default. The resume fingerprint holds the
+  user's parameters, not adapter defaults, so it does not change: a finished
+  `--tool drep --virus` run is skipped on a repeat and keeps its fastANI
+  result. Rerun it with `repgenr --force dereplicate ...` to get ANImf.
+- `dereplicate --tool drep` reports a gzipped genome under its input name
+  (`x.fasta.gz`); dRep names its decompressed copy, and the stage exited 3.
+- Genomes dRep's filter removes (`--tool-arg length=N`, CheckM thresholds)
+  are `fail_qc` in `genome_status.tsv`. They had no status and the stage
+  exited 3.
+- A repeat `dereplicate` rebuilds a deleted `genome_status.tsv` or
+  `cluster_summary.tsv`. Only `clusters.tsv` and `representatives/` were
+  deliverables, so `doctor` asked for a rerun and the rerun skipped.
 - `status` lists an interrupted optional stage (for example a `glance` run
   killed mid-way) as `[interrupted]` with the same hint as a stage of the
   chain. It showed `(incomplete)`, a word the documentation does not use.

@@ -67,6 +67,11 @@ class ToolExecutionError(RepGenRError):
         self.tool = tool or (Path(command[0]).name if command else "tool")
         if timeout is not None:
             msg = f"{self.tool} timed out after {timeout:g}s (killed, exit {returncode})"
+        elif returncode == 0:
+            # Some tools report a fatal problem and still exit 0 (dRep without
+            # CheckM); the adapter raises with returncode 0 when the expected
+            # output is absent.
+            msg = f"{self.tool} exited 0 without writing its results"
         else:
             msg = f"{self.tool} failed (exit {returncode})"
         super().__init__(msg)

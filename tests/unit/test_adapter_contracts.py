@@ -237,6 +237,17 @@ def test_drep_virus_mode_passes_one_secondary_algorithm(genomes, recorded, tmp_p
     assert cmd[cmd.index("--S_algorithm") + 1] == "ANIn"
 
 
+def test_galah_returns_the_input_genomes_without_copying(genomes, recorded, tmp_path) -> None:
+    """galah's representatives are the input files; no copy is written to out_dir."""
+    import repgenr.dereplicators.galah as galah_mod
+
+    out = tmp_path / "out"
+    result = galah_mod.GalahDereplicator().dereplicate(genomes, out, DerepParams(), _LOG)
+    assert result.representatives
+    assert set(result.representatives) <= set(genomes)
+    assert not (out / "representatives").exists()
+
+
 def test_galah_empty_clusters_yields_empty_result(genomes, recorded, tmp_path, monkeypatch) -> None:
     """Pinned as-is: an empty galah clusters.tsv produces an empty DerepResult."""
     import repgenr.dereplicators.galah as galah_mod
@@ -303,3 +314,68 @@ def test_every_registered_dereplicator_has_contract_coverage() -> None:
 def test_every_registered_treebuilder_has_contract_coverage() -> None:
     builtin = {"fasttree", "iqtree", "mashtree", "raxmlng", "sourmash"}
     assert builtin & set(tree_registry.names()) <= set(_TREE_PARAM_TOKENS)
+
+
+def test_drep_exit_0_without_results_is_a_tool_failure(genomes, tmp_path, monkeypatch) -> None:
+    """dRep without CheckM logs the problem, exits 0 and writes no Cdb.csv."""
+    import pytest
+
+    import repgenr.dereplicators.drep as drep_mod
+    from repgenr.core.errors import ToolExecutionError
+
+    def drep_without_checkm(caps, command, *, logger, **kwargs):
+        wd = Path(str(command[2]))
+        (wd / "data_tables").mkdir(parents=True)
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", drep_without_checkm)
+    with pytest.raises(ToolExecutionError) as info:
+        drep_mod.DrepDereplicator().dereplicate(genomes, tmp_path / "out", DerepParams(), _LOG)
+    assert info.value.exit_code == 6
+    assert str(info.value) == "dRep exited 0 without writing its results"
+    assert "CheckM" in info.value.details()
+
+
+def test_drep_reports_gzipped_genomes_under_their_input_names(tmp_path, monkeypatch) -> None:
+    """dRep sees a decompressed copy (x.fasta); results name the input (x.fasta.gz)."""
+    import gzip
+
+    import repgenr.dereplicators.drep as drep_mod
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for name in ("g1.fasta", "g2.fasta.gz", "g3.fasta.gz", "g4.fasta"):
+        p = gdir / name
+        text = f">{name}\nACGTACGTACGT\n".encode()
+        p.write_bytes(gzip.compress(text) if name.endswith(".gz") else text)
+        genomes.append(p)
+
+    def fake(caps, command, *, logger, **kwargs):
+        _fake_drep([str(c) for c in command])
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", fake)
+    result = drep_mod.DrepDereplicator().dereplicate(genomes, tmp_path / "out", DerepParams(), _LOG)
+    assert set(result.genome_status) == {g.name for g in genomes}
+    assert result.clusters == {"g1.fasta": ["g2.fasta.gz"], "g3.fasta.gz": ["g4.fasta"]}
+    assert sorted(p.name for p in result.representatives) == ["g1.fasta", "g3.fasta.gz"]
+
+
+def test_drep_marks_genomes_its_filter_dropped_as_fail_qc(genomes, tmp_path, monkeypatch) -> None:
+    """dRep's --length or quality filter leaves a genome out of every table."""
+    import repgenr.dereplicators.drep as drep_mod
+
+    extra = genomes[0].parent / "short.fasta"
+    extra.write_text(">short\nACGT\n")
+
+    def fake(caps, command, *, logger, **kwargs):
+        _fake_drep([str(c) for c in command])  # writes only g1..g4
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", fake)
+    result = drep_mod.DrepDereplicator().dereplicate(
+        [*genomes, extra], tmp_path / "out", DerepParams(), _LOG
+    )
+    assert result.genome_status["short.fasta"] == "fail_qc"
+    assert all("short.fasta" not in m for m in result.clusters.values())

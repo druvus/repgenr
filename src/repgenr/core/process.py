@@ -120,6 +120,11 @@ def run(
             cmd,
             cwd=str(cwd) if cwd is not None else None,
             env=full_env,
+            # No tool is fed through stdin. A tool that asks a question
+            # (skDER below 80 percent ANI) would otherwise wait on the
+            # terminal with its prompt hidden in the log; with no stdin it
+            # reads end-of-file and fails instead of hanging.
+            stdin=subprocess.DEVNULL,
             stdout=(out_handle if out_handle is not None else subprocess.PIPE),
             stderr=subprocess.STDOUT if out_handle is None else subprocess.PIPE,
             # Binary so that a "\r" inside a line is ours to interpret; text

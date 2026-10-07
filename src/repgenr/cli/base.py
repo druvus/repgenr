@@ -27,6 +27,7 @@ from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     CORE_SNP_FASTA,
+    GENOME_STATUS_TSV,
     GENOMES_MAP_TSV,
     READS_TSV,
     SELECTION_TSV,
@@ -94,6 +95,7 @@ HELP_PRE_SECONDARY_ANI = "Stage-1 (intra-chunk) secondary ANI; defaults to --sec
 HELP_REDUCE = (
     "Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon)."
 )
+HELP_VIRUS = "Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it."
 HELP_TARGET_REPS = (
     "Target representative count: search --secondary-ani to land near it "
     "(0 = off; re-runs dereplication per search step)."
@@ -358,7 +360,14 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     # genome reads selection.tsv and the manifest; it writes the genome files.
     "genome": _genome_deliverables,
     "vgenome": lambda ctx, p: _genome_set_deliverables(ctx),
-    "dereplicate": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir],
+    # All four outputs: doctor fails on a missing genome_status.tsv and asks
+    # for a rerun, which must then not be skipped.
+    "dereplicate": lambda ctx, p: [
+        ctx.derep_dir / CLUSTERS_TSV,
+        ctx.derep_dir / GENOME_STATUS_TSV,
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV,
+        ctx.representatives_dir,
+    ],
     "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],
     "phylo": lambda ctx, p: [ctx.tree_dir / TREE_NWK],
     "tree2tax": lambda ctx, p: [ctx.workdir / TREE2TAX_TSV, ctx.workdir / GENOMES_MAP_TSV],
@@ -432,8 +441,9 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 # stage -> callable(ctx, params) raising UserInputError/WorkdirError. Called
 # only when the stage will run (after the resume skip check), never on a skip.
 # Used where one record serves several invocations (derep-stock's named runs) or
-# where a refused re-run would otherwise dirty a finished record that later
-# stages build on (ingest), so the record of the last finished run stays clean.
+# where a refused re-run would otherwise dirty a finished record (ingest, and
+# dereplicate with a selected genome missing), so the record of the last
+# finished run stays clean.
 def _derep_stock_precheck(ctx: WorkdirContext, params: Any) -> None:
     from ..stages.derep_stock import precheck
 
@@ -446,8 +456,15 @@ def _ingest_precheck(ctx: WorkdirContext, params: Any) -> None:
     precheck(ctx, params)
 
 
+def _dereplicate_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.dereplicate import precheck
+
+    precheck(ctx, params)
+
+
 _STAGE_PRECHECKS: dict[str, Any] = {
     "derep_stock": _derep_stock_precheck,
+    "dereplicate": _dereplicate_precheck,
     "ingest": _ingest_precheck,
 }
 
@@ -938,16 +955,32 @@ def _provisional_tool(params: object) -> str | None:
     return tool if isinstance(tool, str) else None
 
 
-def gated_extra(registry, tool: str, key: str, value: object) -> dict:
+def gated_extra(registry, tool: str, key: str, value: object, *, flag: str | None = None) -> dict:
     """Return ``{key: value}`` only when ``tool`` reads that extra.
 
     Injecting a key a tool ignores would change the resume fingerprint without
     changing the result. ``auto`` passes the key through; the stage warns after
-    it has picked a concrete tool.
+    it has picked a concrete tool. ``flag`` names the option the user gave
+    (for example ``--virus``): when set and the tool does not read the key, a
+    warning says the option has no effect and which tools read it. Callers
+    that inject the key themselves (``run --viral``) leave it unset.
     """
     if tool != "auto":
         caps = registry.get(tool).capabilities
         if key not in caps.accepted_extras:
+            if flag is not None:
+                readers = sorted(
+                    name
+                    for name in registry.names()
+                    if not registry.is_broken(name)
+                    and key in registry.get(name).capabilities.accepted_extras
+                )
+                logging.getLogger("repgenr").warning(
+                    "%s has no effect with --tool %s; it is read by: %s.",
+                    flag,
+                    tool,
+                    ", ".join(readers) or "no installed tool",
+                )
             return {}
     return {key: value}
 

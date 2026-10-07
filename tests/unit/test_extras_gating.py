@@ -45,6 +45,23 @@ def test_gated_extra_skips_for_ignorer(register_tool) -> None:
     assert gated_extra(reg, "ignores", "virus", True) == {}
 
 
+def test_gated_extra_warns_when_the_user_flag_has_no_effect(register_tool, caplog) -> None:
+    reg = _registry(register_tool)
+    with caplog.at_level(logging.WARNING, logger="repgenr"):
+        assert gated_extra(reg, "ignores", "virus", True, flag="--virus") == {}
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("--virus has no effect with --tool ignores" in m and "reads" in m for m in msgs)
+
+
+def test_gated_extra_is_silent_without_a_user_flag(register_tool, caplog) -> None:
+    # run --viral injects the key itself; the user did not ask for it.
+    reg = _registry(register_tool)
+    with caplog.at_level(logging.WARNING, logger="repgenr"):
+        gated_extra(reg, "ignores", "virus", True)
+        gated_extra(reg, "reads", "virus", True, flag="--virus")
+    assert not caplog.records
+
+
 def test_gated_extra_passes_through_for_auto(register_tool) -> None:
     reg = _registry(register_tool)
     assert gated_extra(reg, "auto", "virus", True) == {"virus": True}

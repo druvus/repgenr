@@ -309,3 +309,120 @@ def test_missing_workdir_exits_3_without_creating_it(tmp_path: Path, unreachable
     assert result.exit_code == 3, result.output
     assert "Traceback" not in result.output
     assert not missing.exists()
+
+
+class _ScratchCopyDereplicator(_FakeDereplicator):
+    """Returns its representative as a copy in its own scratch dir, as skDER does."""
+
+    capabilities = ToolCapabilities(name="scratchcopy", supports_native_scaling=True)
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:
+        import shutil
+
+        result = super().dereplicate(genomes, out_dir, params, logger)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        copies = []
+        for rep in result.representatives:
+            dest = out_dir / rep.name
+            shutil.copy2(rep, dest)
+            copies.append(dest)
+        result.representatives = copies
+        return result
+
+
+def test_representatives_link_the_genome_not_the_tool_copy(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    registry.register("scratchcopy", _ScratchCopyDereplicator, replace=True)
+    try:
+        ctx = WorkdirContext(workdir, create=True)
+        run(ctx, DereplicateParams(tool="scratchcopy"))
+    finally:
+        registry._classes.pop("scratchcopy", None)
+    (rep,) = ctx.representatives_dir.iterdir()
+    genome = ctx.genomes_dir / rep.name
+    assert rep.stat().st_ino == genome.stat().st_ino
+
+
+def test_refused_rerun_keeps_the_finished_record(workdir: Path, genome_files, fake_tool) -> None:
+    """A selected genome gone from genomes/ refuses the rerun (exit 3) before the
+    record of the finished dereplication is marked incomplete."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    rows = ["accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\tcompleteness\tcontamination"]
+    for i, g in enumerate(genome_files):
+        rows.append(f"GCA_00000{i + 1}\tFrancisellaceae\tfrancisella\ttularensis\t0\t{g.name}\t\t")
+    (workdir / "selection.tsv").write_text("\n".join(rows) + "\n")
+
+    args = ["dereplicate", "-wd", str(workdir), "--tool", "fake"]
+    first = CliRunner().invoke(app, args)
+    assert first.exit_code == 0, first.output
+    genome_files[1].unlink()
+    second = CliRunner().invoke(app, args)
+    assert second.exit_code == 3, second.output
+    assert Config.load(workdir).stages["dereplicate"].completed
+
+
+def test_drep_virus_mode_reaches_anim_through_the_stage(
+    workdir: Path, genome_files, monkeypatch
+) -> None:
+    """The stage merges the adapter's default_params into the extras; dRep's
+    virus default (ANImf) must survive that merge."""
+    import repgenr.dereplicators.drep as drep_mod
+
+    seen: list[list[str]] = []
+
+    def record(caps, command, *, logger, **kwargs):
+        seen.append([str(c) for c in command])
+        raise RuntimeError("stop after recording the command")
+
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {"dRep": "3"})
+    monkeypatch.setattr(drep_mod, "run_tool", record)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(RuntimeError, match="stop after"):
+        run(ctx, DereplicateParams(tool="drep", extra={"virus": True}))
+    (cmd,) = seen
+    assert cmd[cmd.index("--S_algorithm") + 1] == "ANImf"
+
+
+@pytest.mark.parametrize("name", ["genome_status.tsv", "cluster_summary.tsv"])
+def test_a_deleted_secondary_output_is_rebuilt_without_force(
+    workdir: Path, genome_files, fake_tool, name: str
+) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    args = ["dereplicate", "-wd", str(workdir), "--tool", "fake"]
+    assert CliRunner().invoke(app, args).exit_code == 0
+    (workdir / "derep" / name).unlink()
+    again = CliRunner().invoke(app, args)
+    assert again.exit_code == 0, again.output
+    assert (workdir / "derep" / name).exists()
+
+
+@pytest.mark.parametrize("tool", ["skder", "auto"])
+def test_skder_ani_floor_refusal_keeps_the_finished_record(
+    workdir: Path, genome_files, fake_tool, tool: str, monkeypatch
+) -> None:
+    """skDER's 80 percent floor is refused in the precheck (exit 2), before the
+    harness marks the finished record incomplete; auto resolves to skDER here."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core import plugins
+    from repgenr.core.config import Config
+
+    # Hermetic auto: only skDER counts as runnable, whatever is on PATH and
+    # whichever test adapters are registered.
+    monkeypatch.setattr(plugins, "_tool_available", lambda caps: caps.name == "skder")
+
+    wd = str(workdir)
+    assert CliRunner().invoke(app, ["dereplicate", "-wd", wd, "--tool", "fake"]).exit_code == 0
+    refused = CliRunner().invoke(app, ["dereplicate", "-wd", wd, "--tool", tool, "-sani", "0.78"])
+    assert refused.exit_code == 2, refused.output
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.completed and record.tool == "fake"

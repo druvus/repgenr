@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -103,15 +102,11 @@ class GalahDereplicator(Dereplicator):
                     clusters[rep_name].append(member_name)
                     status[member_name] = STATUS_CONTAINED
 
-        # Stage representative FASTAs into out_dir for the contract layer.
-        rep_dir = out_dir / "representatives"
-        rep_dir.mkdir(exist_ok=True)
-        representatives: list[Path] = []
-        for name, src in rep_paths.items():
-            dest = rep_dir / name
-            if src.exists() and not dest.exists():
-                shutil.copy2(src, dest)
-            representatives.append(dest)
+        # galah names each representative by the path it was given, so the
+        # input genome is the representative file; the contract layer links it.
+        # (Copying every representative into out_dir doubled their disk use.)
+        by_name = {Path(g).name: Path(g) for g in genomes}
+        representatives = [by_name.get(name, src) for name, src in rep_paths.items()]
 
         return DerepResult(
             representatives=sorted(representatives),

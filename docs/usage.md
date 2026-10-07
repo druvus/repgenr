@@ -316,11 +316,15 @@ The viral path selects from NCBI Virus by default (via the `datasets` CLI);
 WD=./hav
 repgenr vmetadata -wd $WD --target hepatovirus            # NCBI Virus (default)
 repgenr vgenome   -wd $WD --target-genus Hepatovirus      # add --group-segments for segmented viruses
-repgenr dereplicate -wd $WD --tool skder --virus
+repgenr dereplicate -wd $WD --tool skder
 repgenr phylo -wd $WD --treebuilder mashtree
 repgenr tree2tax -wd $WD --include-dereplicated
 # or: repgenr run -wd $WD --viral --target hepatovirus -tg Hepatovirus --treebuilder mashtree
 ```
+
+`--virus` passes virus-tuned settings to dRep (`--tool drep --virus`); the
+other dereplicators do not read it, and `dereplicate` warns when it is given
+with one of them.
 
 `vgenome` picks an outgroup by itself: a record of a sister species with
 enough genomes, chosen by distance (mashtree by default). `--outgroup-accession`

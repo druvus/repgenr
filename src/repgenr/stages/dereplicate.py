@@ -72,6 +72,35 @@ class DereplicateParams:
     keeper: str = "quality"  # quality | tool
 
 
+def precheck(ctx: WorkdirContext, params: DereplicateParams) -> None:
+    """Refusals checked before the harness marks the stage record incomplete.
+
+    A missing selected genome or an empty genomes/ changes nothing on disk, so
+    the record of the last finished dereplication must stay complete; the
+    stage body repeats these checks for callers that bypass the harness.
+    """
+    if not params.allow_incomplete:
+        check_genome_completeness(
+            ctx.genomes_dir, ctx.workdir, logger=ctx.logger, allow_incomplete=False
+        )
+    genomes = _list_genomes(ctx.genomes_dir)
+    if not genomes:
+        raise WorkdirError(
+            f"No genome FASTAs found under {ctx.genomes_dir}. Run the genome stage first."
+        )
+    tool = params.tool
+    if tool == "auto":
+        tool = auto_select(registry, len(genomes)) or "skder"
+    if tool == "skder":
+        from ..dereplicators.skder import check_secondary_ani
+
+        # --target-reps searches the threshold itself, from 0.80 upwards.
+        if not params.target_reps:
+            check_secondary_ani(params.secondary_ani)
+        if params.pre_secondary_ani is not None:
+            check_secondary_ani(params.pre_secondary_ani, "--pre-secondary-ani")
+
+
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     logger = ctx.logger
     check_genome_completeness(
@@ -592,7 +621,12 @@ def _write_contract(
     rep_dir.mkdir(parents=True, exist_ok=True)
 
     for rep in result.representatives:
-        source = rep if rep.exists() else ctx.genomes_dir / rep.name
+        # Link from genomes/ when the genome is there: adapters may return a
+        # copy in their scratch directory (skDER's output, dRep's staged
+        # genomes), and linking that copy would hold a second full copy of
+        # every representative on disk.
+        staged = ctx.genomes_dir / rep.name
+        source = staged if staged.exists() else rep
         if not source.exists():
             raise WorkdirError(f"Representative genome file missing: {rep.name}")
         if source.stat().st_size == 0:

@@ -35,6 +35,7 @@ from .base import (
     HELP_SECONDARY_ANI,
     HELP_THREADS,
     HELP_VERSIONS_OUT,
+    HELP_VIRUS,
     PANEL_STEPS,
     _aligner_help,
     _assembler_help,
@@ -92,7 +93,7 @@ def dereplicate_chunk_cmd(
         0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
-    virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    virus: bool = typer.Option(False, "--virus", help=HELP_VIRUS),
     tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
         None,
@@ -131,7 +132,11 @@ def dereplicate_chunk_cmd(
                 threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
-                    **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
+                    **(
+                        gated_extra(_derep_registry, tool, "virus", True, flag="--virus")
+                        if virus
+                        else {}
+                    ),
                 },
                 selection_tsv=selection_tsv,
                 keeper=keeper,
@@ -311,7 +316,7 @@ def dereplicate_merge_cmd(
         0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
-    virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    virus: bool = typer.Option(False, "--virus", help=HELP_VIRUS),
     tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
         None,
@@ -368,7 +373,11 @@ def dereplicate_merge_cmd(
                 threads=threads,
                 extra={
                     **_parse_key_values(tool_arg, "--tool-arg"),
-                    **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
+                    **(
+                        gated_extra(_derep_registry, tool, "virus", True, flag="--virus")
+                        if virus
+                        else {}
+                    ),
                 },
                 selection_tsv=selection_tsv,
                 keeper=keeper,

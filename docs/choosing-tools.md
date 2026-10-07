@@ -14,7 +14,7 @@ limit and not a measurement, the text says so.
 | Genus or wider (diverse) | `metadata` (GTDB), or `--source api` for one taxon | `skder`, or `sourmash` for large sets | Alignment-free | No | `mashtree` |
 | One species | `metadata`, or `ingest` for local genomes | `skder` or `galah` | Core-SNP with `--reference` set to a genome of that species, or whole-genome MSA for small sets | `--mask gubbins` when under 10% of alignment columns vary | `iqtree` |
 | Outbreak or clonal set | `ingest`, or `reads` and `assemble` | `skder` or `galah`, with the clone-block caveat in section 4 | Core-SNP with `ska2` (reference-free) or a mapping typer | `gubbins` with a mapping typer only; `ska2` cannot be masked | `iqtree` or `fasttree` |
-| Viral | `vmetadata` and `vgenome` (NCBI Virus) | `skder --virus` or `sourmash` | Alignment-free | No | `mashtree` |
+| Viral | `vmetadata` and `vgenome` (NCBI Virus) | `skder` or `sourmash` | Alignment-free | No | `mashtree` |
 
 What each row rests on:
 
@@ -91,15 +91,16 @@ Notes on the table:
 | `skder` (default) | Superlinear in practice: 5 times the genomes cost about 10 times the wall time and 6 times the memory. Single pass: about 7 min at 1000 and 69 min at 5000, memory up to 8.2 GB. Chunked: about 15 min at 5000. | Its own aggregate score. Not quality-aware. | One representative per block. Which member is arbitrary. | No | Native and container (Wave) |
 | `galah` | Built for large sets. About 4 to 6 min at 1000 and 63 min at 5000. | Filename sort position within a clone block. | The alphabetically first member in the three orderings tested. | No | Native and container |
 | `sourmash` | Sparse back-end close to linear in close pairs. About 5.5 min at 5000, 0.3 to 0.7 GB. Dense back-end is capped at 5000. | Most-connected genome, alphabetical tie-break. | Biased toward the most-sequenced genotype. The sparse and dense back-ends can pick different members. | No | Native and container |
-| `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes, or `--ignoreGenomeQuality` | Container only |
+| `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes: CheckM on `PATH`, or `--virus`, which passes `--ignoreGenomeQuality`. Without either, dRep stops and `dereplicate` exits 6. | Container only |
 
 Guidance:
 
 - Use `skder`, the default, for most sets.
 - Use `sourmash` with `--derep_process_size 2000` (Nextflow) or `--process-size
   2000` for 10000 genomes or more (not measured at this size).
-- Use `drep` only when CheckM data are available, and keep it under about 2000
-  genomes.
+- Use `drep` only when CheckM is available, and keep it under about 2000
+  genomes. Genomes dRep's filter removes (`--tool-arg length=N`, or CheckM
+  thresholds) are `fail_qc` in `genome_status.tsv` and in no cluster.
 - The representative inside a clone block depends on the tool, its back-end and
   the accession names, not on genome quality. The default `--keeper quality`
   re-picks each cluster's representative by completeness minus 5 times

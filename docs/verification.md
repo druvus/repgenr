@@ -430,6 +430,16 @@ parser), so they also apply to commands other than the one named.
 | vgenome | `--group-segments` concatenated every record of an isolate name (Lassa Josiah: three L and three S segments, 21 kb) and joined isolates of different species that share a name; isolates now group per species with one record per segment | #224 |
 | vgenome | The grouped outgroup search admitted no segment of a two-segment virus (span midpoint plus/minus 15 percent); it uses the span widened by 15 percent, as documented | #224 |
 | vgenome | A run without an outgroup left an earlier run's `outgroup/` file and `outgroup_accession.txt` behind (both back-ends), and mashtree was recorded as the tool when it never ran | #224 |
+| dereplicate | A partial genome (a 40 percent fragment) made `--tool skder` exit 3: the adapter required both aligned fractions to pass `-af`, while skDER tests the member's own | #225 |
+| dereplicate | Representatives were hardlinks of the adapter's copies (skDER output, galah's scratch copy), not of `genomes/`, so each was held twice on disk | #225 |
+| dereplicate | `--virus` with a tool that does not read it (`skder --virus`, the viral example in usage.md) was dropped without a word; it now warns and names dRep | #225 |
+| dereplicate | `--tool skder -sani` below 0.80 waited on a hidden skDER prompt in an interactive shell; external tools now run with stdin closed and skDER refuses the value with exit 2 | #225 |
+| dereplicate | A rerun refused because a selected genome was missing (exit 3) marked the finished dereplication as interrupted and `doctor` failed | #225 |
+| dereplicate | dRep without CheckM exits 0 without results; the run ended as an unexpected error (exit 1) and now exits 6 with the cause in the log | #225 |
+| dereplicate | `--tool drep --virus` ran fastANI: the adapter's default S_algorithm, merged into the extras by the stage, hid the virus default ANImf | #225 |
+| dereplicate | A gzipped genome in `genomes/` made `--tool drep` exit 3, since dRep names its decompressed copy | #225 |
+| dereplicate | Genomes dRep's filter removed (`--tool-arg length=N`) had no status and the stage exited 3; they are now `fail_qc` | #225 |
+| dereplicate | A deleted `genome_status.tsv` or `cluster_summary.tsv` was not rebuilt: `doctor` asked for a rerun and the rerun skipped | #225 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -459,6 +469,10 @@ they are recorded here and not fixed.
 | vgenome | NCBI Virus segment labels are not normalised (`M`, `M; medium`, `middle`), so one segment can count as two labels when an isolate mixes them. |
 | metadata | `--source api` records no GTDB release: the API exposes no release number, so provenance shows `release: null`. |
 | genome, vmetadata | `datasets` has its own network timeouts; through an unreachable proxy one attempt took about 8.5 minutes, so the three attempts take some 25 minutes before exit 6. |
+| dereplicate | On `mixed_1000_clustered` (20 truth clusters) skder, galah, sourmash sparse and sourmash dense all recover the truth partition at the defaults (adjusted Rand index 1.0); sparse and dense pick different representatives within clusters, as choosing-tools.md states. |
+| dereplicate | Without manifest quality, galah picks a 40 percent fragment as the representative of its cluster (input order), and sourmash keeps the fragment as its own cluster (k-mer similarity counts the missing part). `--keeper quality` with manifest quality corrects the first. |
+| dereplicate | `--target-reps` with `--process-size` re-sketches the union of chunk representatives at each search step, since the union changes with the threshold; on 50 genomes the search took 87 s against 22 s unchunked. |
+| Environment | dRep 3.4.5 in the local environment fails in fastANI parsing (`read_csv` no longer accepts `delim_whitespace` in the installed pandas); ANImf (`--virus`) runs. The container pin is dRep 3.7.1. |
 
 ## Platform notes (macOS / Apple Silicon)
 
