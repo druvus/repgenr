@@ -858,6 +858,17 @@ def classifier_for(classifier: str, gtdb_sketch: str | None) -> str | None:
     return classifier
 
 
+def precheck(ctx: WorkdirContext, params: AssembleParams) -> None:
+    """Refuse a wrong database path or a missing QC tool before the harness marks
+    a finished record incomplete (registered in the CLI's stage prechecks)."""
+    check_quality_inputs(
+        checkm2_db=params.checkm2_db or checkm2_db_from_env(),
+        classifier=classifier_for(params.classifier, params.gtdb_sketch),
+        gtdb_sketch=params.gtdb_sketch,
+        gtdb_lineages=params.gtdb_lineages,
+    )
+
+
 def check_quality_inputs(
     *,
     checkm2_db: str | None,

@@ -829,3 +829,22 @@ def test_a_kill_during_a_refilter_never_leaves_a_marker_over_other_contigs(
     monkeypatch.setattr(stage, "_write_marker", original)
     run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
     assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+
+
+def test_a_rerun_with_a_wrong_database_leaves_the_finished_record(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    """The precheck refuses before the harness dirties the record (exit 2)."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _prepare(workdir, [_row(tmp_path, "SRR1")])
+    runner = CliRunner()
+    args = ["assemble", "-wd", str(workdir), "--assembler", "fakeasm"]
+    assert runner.invoke(app, args).exit_code == 0
+    refused = runner.invoke(app, [*args, "--checkm2-db", str(tmp_path / "nope.dmnd")])
+    assert refused.exit_code == 2
+    record = WorkdirContext(workdir).config.stages["assemble"]
+    assert record.completed and record.fingerprint
+    assert _FakeAssembler.calls == ["SRR1"]

@@ -452,7 +452,9 @@ All notable changes to RepGenR are documented here. The format follows
   it after the assembly; both now join the files.
 - A wrong `--checkm2-db`, `--gtdb-sketch` or `--gtdb-lineages` path, or an
   absent checkm2 or sourmash binary, was found only after every assembly; it
-  is now refused before any download (exit 2 or 4), also in `genome-qc`.
+  is now refused before any download (exit 2 or 4), also in `genome-qc`,
+  which reads both from `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`
+  as well. A rerun refused this way leaves the finished record as it was.
 - `assemble` refused to rerun over finished runs on a nearly full disk
   although it had nothing to download.
 - An assembly excused by the CheckM2 gate was not logged; it is now warned
