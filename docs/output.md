@@ -30,12 +30,12 @@ top level, and the execution reports under `pipeline_info/`.
 | `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
+| `derep/representatives/` | dereplicate | The representative genomes, one genome file per cluster; the distinct values of the first column of `clusters.tsv`. |
 | `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster, named after the representative's filename without the extension, with its member genomes (and the representative unless `--no-representant`), linked or copied from `genomes/`. Replaced on each run. |
 | `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv` and a `representatives/` directory of links to the representative genomes. `unpack` restores it. |
 | `glance_clustering_dendrogram.pdf` | glance | dRep's clustering dendrogram over all genomes. |
 | `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all Mash ANI values within `--plot-min`/`--plot-max`. A run removes the previous glance plots and dendrogram once the comparison succeeds, so a plot with no values in range is absent rather than stale. |
 | `glance_wd/` | glance | dRep working files; kept only with `--keep-files`. |
-| `derep/representatives/` | dereplicate | The representative genomes, one genome file per cluster; the distinct values of the first column of `clusters.tsv`. |
 | `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
 | `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |
 | `derep/cluster_summary.tsv` | dereplicate, cluster-summary | One row per representative: member count, species spanned and keeper quality against the members (below). |

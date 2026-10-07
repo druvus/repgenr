@@ -324,13 +324,13 @@ repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
 Each stage records its parameters, the digests of its inputs, and the container
 identity in `repgenr.yaml`; re-running a stage is a safe no-op only when all
 three are unchanged (it logs that it skipped). Re-running an upstream stage
-(e.g. `repgenr --force dereplicate ...`) changes a downstream stage's input digests, so the
-downstream stage re-runs automatically the next time it is invoked. Change a
+(e.g. `repgenr --force dereplicate ...`) changes a downstream stage's input
+digests, so the downstream stage re-runs automatically the next time it is
+invoked. Change a
 parameter, switch `--container`, or pass `--force` to re-run explicitly.
 `--force` is a global option and goes before the command name
 (`repgenr --force dereplicate -wd WD`); after the command name it is rejected
-as an unknown option. A
-stage writes its record without a completion stamp before it starts, so one
+as an unknown option. A stage writes its record without a completion stamp before it starts, so one
 that failed or crashed mid-run is listed as `[interrupted]` by `status`,
 reported as a failure by `doctor`, and always re-runs; a successful run
 stamps the record. A failure in parameter validation writes no record, and
@@ -407,8 +407,8 @@ stored runs.
 
 | Question | Where to look |
 |----------|---------------|
-| How many clusters, and how large is each? | `derep/cluster_summary.tsv` (`repgenr cluster-summary` rebuilds it). |
-| Which genomes are in the cluster of representative X? | Rows of `derep/clusters.tsv` whose first column is X, or the directory `derep/unpacked/<X without .fasta>/` after `repgenr derep-unpack`. |
+| How many clusters, and how large is each? | `derep/cluster_summary.tsv` (`repgenr cluster-summary` rebuilds it); `n_members` does not count the representative. |
+| Which genomes are in the cluster of representative X? | Rows of `derep/clusters.tsv` whose first column is X, or the directory `derep/unpacked/<X without its extension>/` after `repgenr derep-unpack`. |
 | What happened to one genome? | `derep/genome_status.tsv`: `representative`, `contained` or `fail_qc`. |
 | Do the genomes fall into clear groups before I pick thresholds? | `repgenr glance`, see below. |
 | How do two dereplications differ? | Store each with `derep-stock --action pack`, then compare the stored files, see below. |
@@ -438,18 +438,19 @@ representative's filename without its extension.
 `glance` needs dRep on the `PATH` and does not need a dereplication. It sets
 no thresholds. The Mash ANI histogram shows how the pairwise values are
 spread: when they fall into separate groups with an empty gap between them,
-a threshold placed in the gap separates them.
-On the synthetic set `clonal_50_clustered` (three groups of 20, 15 and 15
-genomes) the values split into between-group values lie at about 0.95 to 0.96,
-within-group values at 0.995 or higher, and nothing lies between 0.96 and
-0.995. Pairwise values spread evenly across the range mean the cut will decide
-the cluster sizes, so look at `cluster_summary.tsv` afterwards. dRep writes
+a threshold placed in the gap separates them. On the synthetic set
+`clonal_50_clustered` (three groups of 20, 15 and 15 genomes) the
+between-group values lie at about 0.95 to 0.96, the within-group values at
+0.995 or higher, and nothing lies between 0.96 and 0.995. If the values are
+spread evenly across the range, the threshold decides the cluster sizes, so
+check `cluster_summary.tsv` afterwards. dRep writes
 into its cache with names beginning `._` on exFAT volumes and fails there; use
 an APFS or ext4 working directory (see `verification.md`).
 
 #### Comparing two dereplications
 
-Pack each result under its own name, then compare the stored files.
+Pack each result under its own name, then compare the stored files. Check
+with `status` that `dereplicate` finished before each pack.
 
 ```bash
 repgenr dereplicate -wd $WD --tool sourmash
