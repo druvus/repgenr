@@ -287,6 +287,13 @@ entirely and `--length-all` disables the filter.
 
 `phylo` and `phylo-build` need at least three ingroup genomes (the outgroup is not
 counted) and exit 3 with a message before any tool runs when the set is smaller.
+After the tree is built, its leaves are compared with the input genomes
+(ingroup and outgroup). A tree builder can drop a genome it considers
+degenerate and still exit 0, as mashtree does; a missing or unexpected leaf
+then exits 3 with the names and the builder. The tree is kept in `tree/` for
+inspection, and `phylo` is not recorded as completed. Leaf names are compared
+without a FASTA extension and with characters other than letters, digits, `_`
+and `-` read as `_`, since some tools rewrite them.
 
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):

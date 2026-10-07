@@ -164,7 +164,8 @@ def test_phylo_build_needs_three_genomes(tmp_path: Path, register_tool, n: int) 
             calls.append(1)
             out_dir.mkdir(parents=True, exist_ok=True)
             tree = out_dir / "tree.nwk"
-            tree.write_text("(a,b,c);\n")
+            leaves = ",".join(Path(g).stem for g in msa_or_genomes)
+            tree.write_text(f"({leaves});\n")
             return tree
 
     tb_registry._load()
