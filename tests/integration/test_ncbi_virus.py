@@ -475,3 +475,105 @@ def test_vgenome_without_outgroup_search_records_no_tool(workdir: Path) -> None:
     ctx = WorkdirContext(workdir, create=True)
     vgenome_run(ctx, VgenomeParams(target_genus="lentivirus", length_all=True, no_outgroup=True))
     assert ctx.config.stages["vgenome"].tool is None
+
+
+# --- deep audit 2026-10 (entry-net) -------------------------------------------
+
+
+def _bisegmented(acc: str, species: str, segment: str, length: int, isolate: str) -> VirusRecord:
+    return VirusRecord(
+        acc,
+        "1",
+        species,
+        "Arenaviridae",
+        "Mammarenavirus",
+        species,
+        length,
+        "COMPLETE",
+        segment,
+        isolate,
+    )
+
+
+def _arena_records() -> list[VirusRecord]:
+    recs = [
+        _bisegmented("L1.1", "Lassa", "L", 7200, "iso1"),
+        _bisegmented("S1.1", "Lassa", "S", 3400, "iso1"),
+        _bisegmented("L2.1", "Lassa", "L", 7210, "iso2"),
+        _bisegmented("S2.1", "Lassa", "S", 3410, "iso2"),
+    ]
+    # a sister species with enough records to be a candidate
+    for i in range(5):
+        recs.append(_bisegmented(f"ML{i}.1", "Mobala", "L", 7250, f"m{i}"))
+        recs.append(_bisegmented(f"MS{i}.1", "Mobala", "S", 3380, f"m{i}"))
+    return recs
+
+
+def test_grouped_outgroup_search_uses_the_length_span(workdir: Path, monkeypatch) -> None:
+    """Live (Lassa, two segments of 3.4 and 7.3 kb): candidates were held to
+    the span midpoint plus/minus 15 percent, so no segment ever qualified."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+    from repgenr.viral import _outgroup
+    from repgenr.viral import selection as sel
+
+    recs = _arena_records()
+    ctx = _stage_records(workdir, recs)
+    staged: list[str] = []
+
+    def fake_matrix(builder, genome_files, genomesize, outgroup_wd, logger):
+        staged.extend(p.name for p in genome_files)
+        matrix = outgroup_wd / "m.tsv"
+        names = [p.stem for p in genome_files]
+        lines = ["\t" + "\t".join(names)]
+        for a in names:
+            row = ["0" if a == b else ("0.9" if "O_" in (a[:2] + b[:2]) else "0.1") for b in names]
+            lines.append(a + "\t" + "\t".join(row))
+        matrix.write_text("\n".join(lines) + "\n")
+        return matrix
+
+    monkeypatch.setattr(_outgroup, "preflight_outgroup_builder", lambda b: {"mashtree": "1.0"})
+    monkeypatch.setattr(_outgroup, "run_distance_matrix", fake_matrix)
+    monkeypatch.setattr(sel, "select_outgroup_from_matrix", lambda m, logger: "O_ML0.1")
+    vgenome_run(
+        ctx,
+        VgenomeParams(
+            target_species="lassa", group_segments=True, outgroup_candidates_taxid_min_genomes=5
+        ),
+    )
+    assert any(name.startswith("O_") for name in staged)
+    rows = read_selection(workdir / "selection.tsv")
+    assert {r.accession for r in rows if r.is_outgroup} == {"ML0.1"}
+    assert ctx.config.stages["vgenome"].tool == "mashtree"
+
+
+def test_no_outgroup_candidate_records_no_tool(workdir: Path, monkeypatch) -> None:
+    """mashtree was recorded as the stage tool although it never ran."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+    from repgenr.viral import _outgroup
+
+    ctx = _stage_records(workdir, _arena_records()[:4])
+    monkeypatch.setattr(_outgroup, "preflight_outgroup_builder", lambda b: {"mashtree": "1.0"})
+    vgenome_run(ctx, VgenomeParams(target_species="lassa", group_segments=True))
+    record = ctx.config.stages["vgenome"]
+    assert record.tool is None and not record.tool_versions
+
+
+def test_run_without_outgroup_removes_an_earlier_outgroup(workdir: Path) -> None:
+    """Live: after a run that chose an outgroup, --no-outgroup left outgroup/
+    and outgroup_accession.txt behind; later stages would root on them."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    recs = _arena_records()
+    ctx = _stage_records(workdir, recs)
+    vgenome_run(
+        ctx,
+        VgenomeParams(target_species="lassa", length_all=True, outgroup_accession="ML0.1"),
+    )
+    assert (workdir / "outgroup_accession.txt").exists()
+    assert list(ctx.outgroup_dir.iterdir())
+    vgenome_run(ctx, VgenomeParams(target_species="lassa", length_all=True, no_outgroup=True))
+    assert not (workdir / "outgroup_accession.txt").exists()
+    assert not [p for p in ctx.outgroup_dir.iterdir() if not p.name.startswith(".")]

@@ -227,6 +227,26 @@ def test_run_tool_with_retries_exhausts(monkeypatch) -> None:
         )
 
 
+def test_run_tool_with_retries_stops_on_a_permanent_failure(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def no_match(caps, cmd, **kwargs):
+        calls["n"] += 1
+        raise containers.ToolExecutionError(list(cmd), 1, output="Error: no match")
+
+    monkeypatch.setattr(containers, "run_tool", no_match)
+    monkeypatch.setattr(containers.time, "sleep", lambda s: None)
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool_with_retries(
+            _wave_caps(),
+            ["datasets", "download"],
+            logger=_LOG,
+            attempts=3,
+            permanent=lambda exc: "no match" in (exc.output or ""),
+        )
+    assert calls["n"] == 1
+
+
 # --- backlog fixes from the 2026-09-01 audit self-review ----------------------
 
 

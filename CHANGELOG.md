@@ -128,6 +128,25 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
+  Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
+  blocked network exits 3 after about two minutes instead of eight.
+- `metadata` writes `<version>_metadata_r<major>.release` beside a downloaded
+  GTDB table, and `--nodownload` refuses (exit 2) a table fetched for another
+  minor release; a table without the file is reused with a warning.
+- `metadata`: `-r/--release` must be major.minor, `--gtdb-version` must be
+  `bac120` or `ar53`, and a `--metadata-path` that does not exist is refused,
+  all with exit 2. On `--source api` an unknown taxon or outgroup exits 2, and
+  an `--outgroup-accession` inside the selection or the target taxon exits 2
+  on both sources.
+- `vmetadata` records the source and target of `download.fa` in
+  `virus_download_wd/download.source`; the BV-BRC source reuses the group
+  FASTA only for the same target, and each source removes the other's tables.
+  A BV-BRC workdir written by an earlier version has no such file, so its
+  first re-run downloads the group FASTA again.
+- `vgenome --group-segments` groups records per (species, isolate) and keeps
+  one record per segment; its outgroup search uses the kept records' length
+  span widened by 15 percent.
 - `glance --tool` defaults to `auto`: dRep when it can run (on the `PATH` or
   through the container backend, the test `dereplicate --tool auto` uses),
   sourmash otherwise. The log names the tool picked, and the stage record and
@@ -282,6 +301,25 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `metadata` (#224): under `--limit` the automatic outgroup could be a target
+  genome the cap left out; it now lies outside the target taxon. The API path
+  keeps GTDB suffixes (`Bacillus_A`) and lowers a capitalised epithet. A
+  network or checksum failure of the table download names its cause instead
+  of "check release/version".
+- `genome` (#224): a download batch made only of accessions NCBI no longer
+  serves is recorded in `missing_accessions.txt` after one attempt instead of
+  failing with exit 6; each rehydrated genome is checked against the
+  package's `md5sum.txt`; an outgroup NCBI does not serve, or a package
+  without its FASTA, exits 3 instead of exit 6 or a silent success; a present
+  outgroup is not downloaded again; a genome or outgroup deleted by hand is
+  fetched again on resume.
+- `vmetadata --source bvbrc` (#224) reused a group FASTA fetched for another
+  target or by the NCBI Virus source.
+- `vgenome` (#224): `--group-segments` concatenated repeated segment records
+  of one isolate and isolates of different species sharing a name; a run
+  without an outgroup left an earlier outgroup in `outgroup/` and
+  `outgroup_accession.txt`; mashtree was recorded as the tool when it did not
+  run.
 - `derep-stock --action pack` stores the completed `dereplicate` record
   (tool, parameters, tool versions, completion time) as
   `derep/stock/<name>/record.json`, and `--action unpack` re-stamps the

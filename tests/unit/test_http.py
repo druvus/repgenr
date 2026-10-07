@@ -161,3 +161,46 @@ def test_verify_md5_accepts_the_right_digest_and_rejects_a_wrong_one(tmp_path) -
     verify_md5(path, good.upper())  # case-insensitive, no return value needed
     with pytest.raises(WorkdirError, match="Checksum mismatch"):
         verify_md5(path, "0" * 32)
+
+
+def _http_error(status: int) -> requests.HTTPError:
+    response = requests.Response()
+    response.status_code = status
+    return requests.HTTPError(f"{status} error", response=response)
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_status_error_carries_the_status(monkeypatch, tmp_path: Path, status: int) -> None:
+    """A caller can tell an unknown resource (404) from a failing server."""
+    _patch(monkeypatch, _FakeResp(status_exc=_http_error(status)))
+    with pytest.raises(http.HTTPStatusError) as info:
+        http.get_json("https://x/y")
+    assert info.value.status == status
+    with pytest.raises(http.HTTPStatusError) as info:
+        http.download("https://x/y", tmp_path / "f")
+    assert info.value.status == status
+
+
+def test_connection_error_is_not_a_status_error(monkeypatch) -> None:
+    _patch(monkeypatch, _FakeResp(status_exc=requests.ConnectionError("refused")))
+    with pytest.raises(WorkdirError) as info:
+        http.get_json("https://x/y")
+    assert not isinstance(info.value, http.HTTPStatusError)
+
+
+def test_requests_use_a_short_connect_timeout(monkeypatch, tmp_path: Path) -> None:
+    """A blocked network is reported in minutes: through an unreachable proxy
+    one GTDB API request waited 481 s (six 120 s connect attempts)."""
+    seen = []
+
+    class _Recording(_FakeSession):
+        def get(self, url, **kw):
+            seen.append(kw["timeout"])
+            return super().get(url, **kw)
+
+    body = b"x"
+    resp = _FakeResp(json_data={}, content=body, headers={"Content-Length": "1"})
+    monkeypatch.setattr(http, "session", lambda: _Recording(resp))
+    http.get_json("https://x/y")
+    http.download("https://x/y", tmp_path / "f")
+    assert seen and all(isinstance(t, tuple) and t[0] <= 30 and t[1] >= 120 for t in seen)

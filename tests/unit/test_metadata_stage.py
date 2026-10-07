@@ -151,7 +151,7 @@ def test_obtain_metadata_downloads_and_verifies(tmp_path, gtdb_tsv, monkeypatch)
 def test_obtain_metadata_falls_back_to_tarball_layout(tmp_path, gtdb_tsv, monkeypatch) -> None:
     def fake_download(url, dest, *, logger, **kw):
         if url.endswith(".tsv.gz"):
-            raise WorkdirError("404")
+            raise metadata.http.HTTPStatusError("404", 404)
         # legacy layout: a .tar.gz containing the .tsv
         import tarfile
 
@@ -539,3 +539,292 @@ def test_tsv_missing_gtdb_version_names_the_cli_flag(tmp_path, gtdb_tsv) -> None
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     with pytest.raises(UserInputError, match="--gtdb-version"):
         metadata.run(ctx, _params(gtdb_tsv, version=None))
+
+
+# --- deep audit 2026-10 (entry-net) -------------------------------------------
+
+
+@pytest.mark.parametrize("release", ["abc.def", "232.x", "232", "232.0.1"])
+def test_malformed_release_is_user_input(tmp_path, gtdb_tsv, release) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="--release like"):
+        metadata.run(ctx, _params(gtdb_tsv, release=release))
+
+
+def test_unknown_gtdb_version_is_user_input(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="Invalid --gtdb-version 'bogus'"):
+        metadata.run(ctx, _params(gtdb_tsv, version="bogus"))
+
+
+def test_missing_metadata_path_is_refused_not_downloaded(tmp_path, monkeypatch) -> None:
+    def no_download(*a, **k):
+        raise AssertionError("a missing --metadata-path must not trigger a download")
+
+    monkeypatch.setattr(metadata.http, "download", no_download)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="--metadata-path not found"):
+        metadata.run(ctx, _params(tmp_path / "typo.tsv.gz"))
+
+
+def test_api_source_warns_about_every_ignored_table_flag(tmp_path, monkeypatch, caplog) -> None:
+    rows = [_api_row("GCF_000001.1", "Francisella", "tularensis")]
+    parent = rows + [_api_row("GCF_000010.1", "Francisella", "philomiragia")]
+    fake = _fake_api_with_cards(rows, parent, _cards_for(parent))
+    monkeypatch.setattr(metadata, "_api_get", fake)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    ctx.logger.addHandler(caplog.handler)  # the workdir logger does not propagate
+    params = MetadataParams(
+        dataset="all",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
+        nodownload=True,
+        metadata_path="/some/table.tsv.gz",
+    )
+    with caplog.at_level(logging.WARNING):
+        metadata.run(ctx, params)
+    assert "ignoring --metadata-path, --nodownload" in caplog.text
+
+
+def _cards_for(rows: list[dict]) -> dict[str, dict]:
+    return {r["gid"]: _card(99.0, 1.0) for r in rows}
+
+
+def test_tsv_limit_never_picks_an_outgroup_from_the_target_taxon(tmp_path) -> None:
+    """Under --limit the target genomes the cap left out are not outgroup candidates.
+
+    Live (r232, -l genus -tg Francisella --limit 5) picked F. guangzhouensis, a
+    species representative of the target genus, as the outgroup.
+    """
+    rows = [
+        ("GCF_000001.1", "GCF_000001.1", _tax("Francisellaceae", "Francisella", "tularensis")),
+        ("GCF_000010.1", "GCF_000010.1", _tax("Francisellaceae", "Francisella", "philomiragia")),
+        ("GCF_000030.1", "GCF_000030.1", _tax("Francisellaceae", "Fangia", "hongkongensis")),
+    ]
+    path = tmp_path / "t.tsv.gz"
+    header = "\t".join(
+        [
+            "accession",
+            "gtdb_genome_representative",
+            "gtdb_taxonomy",
+            "checkm2_completeness",
+            "checkm2_contamination",
+        ]
+    )
+    lines = [header]
+    for acc, rep, tax in rows:
+        quality = "99\t0" if acc == "GCF_000001.1" else "90\t5"
+        lines.append(f"RS_{acc}\tRS_{rep}\t{tax}\t{quality}")
+    with gzip.open(path, "wt", encoding="utf-8") as fo:
+        fo.write("\n".join(lines) + "\n")
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(path, level="genus", target_species=None, limit=1))
+    rows = _read_selection(ctx.workdir)
+    ingroup = [r for r in rows if r["is_outgroup"] == "0"]
+    outgroup = [r for r in rows if r["is_outgroup"] == "1"]
+    assert len(ingroup) == 1 and ingroup[0]["genus"] == "Francisella"
+    # the other Francisella representative is left out, not made the outgroup
+    assert [r["accession"] for r in outgroup] == ["GCF_000030.1"]
+
+
+def test_tsv_outgroup_accession_inside_the_selection_is_refused(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="part of the selection"):
+        metadata.run(ctx, _params(gtdb_tsv, outgroup_accession="GCF_000001.1"))
+
+
+def test_named_outgroup_inside_the_target_taxon_is_refused(tmp_path, gtdb_tsv) -> None:
+    """GCF_000002.1 is a non-representative tularensis genome: under -d rep it is
+    not selected, but it lies inside the target species, so it is no outgroup."""
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="inside the target species tularensis"):
+        metadata.run(ctx, _params(gtdb_tsv, dataset="rep", outgroup_accession="GCF_000002.1"))
+
+
+def test_named_outgroup_left_out_by_limit_is_refused(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="inside the target"):
+        metadata.run(ctx, _params(gtdb_tsv, limit=1, outgroup_accession="GCF_000003.1"))
+
+
+def test_named_outgroup_of_a_sister_species_is_accepted(tmp_path, gtdb_tsv) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(gtdb_tsv, dataset="rep", outgroup_accession="GCF_000010.1"))
+    rows = _read_selection(ctx.workdir)
+    assert [r["accession"] for r in rows if r["is_outgroup"] == "1"] == ["GCF_000010.1"]
+
+
+def test_api_named_outgroup_inside_the_target_taxon_is_refused(tmp_path, monkeypatch) -> None:
+    rows = [_api_row("GCF_000001.1", "Francisella", "tularensis")]
+    cards = _cards_for(rows)
+    cards["GCF_000002.1"] = {
+        "metadataTaxonomy": {
+            "gtdbFamily": "f__Francisellaceae",
+            "gtdbGenus": "g__Francisella",
+            "gtdbSpecies": "s__Francisella tularensis",
+        },
+        "metadata_gene": {},
+    }
+    monkeypatch.setattr(metadata, "_api_get", _fake_api_with_cards(rows, rows, cards))
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(
+        dataset="rep",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
+        outgroup_accession="GCF_000002.1",
+    )
+    with pytest.raises(UserInputError, match="inside the target species"):
+        metadata.run(ctx, params)
+
+
+def test_api_outgroup_accession_inside_the_selection_is_refused(tmp_path, monkeypatch) -> None:
+    rows = [_api_row("GCF_000001.1", "Francisella", "tularensis")]
+    monkeypatch.setattr(metadata, "_api_get", _fake_api_with_cards(rows, rows, _cards_for(rows)))
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(
+        dataset="all",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
+        outgroup_accession="GCF_000001.1",
+    )
+    with pytest.raises(UserInputError, match="part of the selection"):
+        metadata.run(ctx, params)
+
+
+def _api_404(path, params=None):
+    raise metadata.http.HTTPStatusError(f"HTTP request failed: {path} (404)", 404)
+
+
+def test_api_unknown_taxon_is_user_input(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(metadata, "_api_get", _api_404)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(dataset="rep", level="genus", source="api", target_genus="Nogenus")
+    with pytest.raises(UserInputError, match="GTDB API has no taxon g__Nogenus"):
+        metadata.run(ctx, params)
+
+
+def test_api_unknown_outgroup_is_user_input(tmp_path, monkeypatch) -> None:
+    rows = [_api_row("GCF_000001.1", "Francisella", "tularensis")]
+    cards = _cards_for(rows)
+    inner = _fake_api_with_cards(rows, rows, cards)
+
+    def fake(path, params=None):
+        if "GCF_999" in path:
+            return _api_404(path)
+        return inner(path, params)
+
+    monkeypatch.setattr(metadata, "_api_get", fake)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(
+        dataset="all",
+        level="species",
+        source="api",
+        target_genus="Francisella",
+        target_species="tularensis",
+        outgroup_accession="GCF_999.1",
+    )
+    with pytest.raises(UserInputError, match="not found in the GTDB API"):
+        metadata.run(ctx, params)
+
+
+def test_api_server_error_stays_a_workdir_error(tmp_path, monkeypatch) -> None:
+    def fake(path, params=None):
+        raise metadata.http.HTTPStatusError("HTTP request failed (503)", 503)
+
+    monkeypatch.setattr(metadata, "_api_get", fake)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = MetadataParams(dataset="rep", level="genus", source="api", target_genus="Francisella")
+    with pytest.raises(WorkdirError) as info:
+        metadata.run(ctx, params)
+    assert not isinstance(info.value, UserInputError)
+
+
+def test_unknown_release_names_both_layouts_as_user_input(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(metadata.http, "download", lambda url, dest, **k: _api_404(url))
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = _params(Path("unused"), metadata_path=None, release="999.0")
+    with pytest.raises(UserInputError, match="no bac120 metadata table for release 999.0"):
+        metadata.run(ctx, params)
+
+
+def test_network_failure_is_reported_without_trying_the_next_layout(tmp_path, monkeypatch) -> None:
+    calls = []
+
+    def fake_download(url, dest, **k):
+        calls.append(url)
+        raise WorkdirError(f"Download failed: {url} (Connection refused)")
+
+    monkeypatch.setattr(metadata.http, "download", fake_download)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(WorkdirError, match="Connection refused"):
+        metadata.run(ctx, _params(Path("unused"), metadata_path=None))
+    assert len(calls) == 1
+
+
+def test_checksum_mismatch_is_reported_as_such(tmp_path, gtdb_tsv, monkeypatch) -> None:
+    monkeypatch.setattr(
+        metadata.http, "download", lambda url, dest, **k: Path(dest).write_bytes(b"x")
+    )
+
+    def bad_md5(dest, url, **k):
+        raise WorkdirError("Checksum mismatch for bac120_metadata_r232.tsv.gz")
+
+    monkeypatch.setattr(metadata.http, "verify_md5_manifest", bad_md5)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(WorkdirError, match="Checksum mismatch"):
+        metadata.run(ctx, _params(gtdb_tsv, metadata_path=None))
+    assert not (ctx.workdir / "bac120_metadata_r232.tsv.gz").exists()
+
+
+def _download_fixture(gtdb_tsv):
+    def fake_download(url, dest, **k):
+        Path(dest).write_bytes(gtdb_tsv.read_bytes())
+
+    return fake_download
+
+
+def test_nodownload_refuses_a_table_from_another_minor_release(
+    tmp_path, gtdb_tsv, monkeypatch
+) -> None:
+    """Table names carry only the major release (r214 serves 214.0 and 214.1)."""
+    monkeypatch.setattr(metadata.http, "download", _download_fixture(gtdb_tsv))
+    monkeypatch.setattr(metadata.http, "verify_md5_manifest", lambda *a, **k: True)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True))
+    assert (ctx.workdir / "bac120_metadata_r232.release").read_text().strip() == "232.0"
+    with pytest.raises(UserInputError, match="downloaded for GTDB release 232.0, not 232.1"):
+        metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True, release="232.1"))
+    # the matching release is reused without a download
+    monkeypatch.setattr(metadata.http, "download", _api_404)
+    assert metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True)) == 3
+
+
+def test_nodownload_reuses_an_unmarked_table_with_a_warning(tmp_path, gtdb_tsv, caplog) -> None:
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    (ctx.workdir / "bac120_metadata_r232.tsv.gz").write_bytes(gtdb_tsv.read_bytes())
+    ctx.logger.addHandler(caplog.handler)  # the workdir logger does not propagate
+    with caplog.at_level(logging.WARNING):
+        assert metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True)) == 3
+    assert "Cannot confirm which GTDB release" in caplog.text
+
+
+def test_nodownload_reuses_a_legacy_tarball_without_requesting_the_modern_layout(
+    tmp_path, gtdb_tsv, monkeypatch
+) -> None:
+    import tarfile
+
+    monkeypatch.setattr(metadata.http, "download", _api_404)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    member = tmp_path / "bac120_metadata_r232.tsv"
+    with gzip.open(gtdb_tsv, "rb") as fo:
+        member.write_bytes(fo.read())
+    with tarfile.open(ctx.workdir / "bac120_metadata_r232.tar.gz", "w:gz") as tar:
+        tar.add(member, arcname=member.name)
+    (ctx.workdir / "bac120_metadata_r232.release").write_text("232.0\n")
+    assert metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True)) == 3

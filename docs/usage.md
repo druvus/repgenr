@@ -52,9 +52,32 @@ repgenr tree2tax -wd $WD --include-dereplicated
 ```
 
 `--metadata-path <table>` reads a GTDB metadata table you already have instead
-of downloading one. With `--source tsv` (the default) `-r/--release` and
-`--gtdb-version` are still required, because they select the table's release
-and domain and are recorded in the provenance.
+of downloading one; a path that does not exist exits 2. With `--source tsv`
+(the default) `-r/--release` (major.minor, e.g. `232.0`) and `--gtdb-version`
+(`bac120` or `ar53`) are still required, because they select the table's
+release and domain and are recorded in the provenance.
+
+The downloaded table stays in the workdir (`bac120_metadata_r232.tsv.gz`), and
+`--nodownload` reuses it instead of downloading it again. Table names carry
+only the major release, so a download also writes
+`<version>_metadata_r<major>.release` with the exact release, and
+`--nodownload` refuses a table fetched for another minor release (exit 2). A
+table without that file, for instance one placed by hand, is reused with a
+warning. The download is checked against its size and against GTDB's
+`MD5SUM.txt`; a checksum mismatch removes the file and exits 3. A release or
+version that GTDB does not publish exits 2 after trying the current
+(`.tsv.gz`) and the legacy (`.tar.gz`) layout; a network failure exits 3 with
+its cause and does not try the second layout.
+
+`--source api` serves GTDB's current release and ignores `-r`, `--gtdb-version`,
+`--metadata-path` and `--nodownload` (a warning names them). GTDB taxon names
+are case-sensitive: the target's first letter is raised and a species epithet
+is lowered, so `-tg francisella -ts Tularensis` finds `s__Francisella
+tularensis`; suffixes such as `Bacillus_A` or `copri_A` must be typed as GTDB
+spells them. A taxon or `--outgroup-accession` the API does not know exits 2.
+A named outgroup must lie outside the target taxon on both sources, like the
+automatic one (exit 2 otherwise); a target genome that `-d rep` or `--limit`
+left out of the selection is still not an outgroup.
 
 Or run the whole chain in one command (bacterial by default; `--viral` for the
 NCBI Virus path), then check progress at any time:
@@ -304,11 +327,30 @@ enough genomes, chosen by distance (mashtree by default). `--outgroup-accession`
 pins it to a downloaded record instead, an accession on the NCBI Virus path
 or a record id on BV-BRC, and `run --viral --outgroup-accession` forwards
 the same choice. With `--group-segments` the search still runs, with the
-kept records' length span as its window, and the outgroup is one record of
-the sister species rather than a grouped isolate. `--no-outgroup` leaves the
-tree unrooted. A grouped isolate's genome carries a synthetic `iso-` token as
-its accession; `segments.tsv` records the member accessions behind it, and
-`tree2tax` lists them under the isolate's leaf in `genomes_map.tsv`.
+kept records' length span widened by 15 percent as its window, and the
+outgroup is one record of the sister species rather than a grouped isolate.
+`--no-outgroup` leaves the tree unrooted, and a run that ends without an
+outgroup removes the outgroup an earlier run left in `outgroup/` and
+`outgroup_accession.txt`.
+
+`--group-segments` groups records that share a species and an isolate name and
+carry at least two distinct segment labels. Each isolate keeps one record per
+segment (complete before partial, then the longest, then the lowest
+accession), since NCBI Virus often holds several submissions of one segment;
+records without a segment label stay single genomes. A grouped isolate's
+genome carries a synthetic `iso-` token as its accession (with its first
+member accession appended when two isolate names would give the same token);
+`segments.tsv` records the member accessions behind it, and `tree2tax` lists
+them under the isolate's leaf in `genomes_map.tsv`. The species is the
+organism name of each record, so records NCBI files under an older or
+strain-level name of the same species are grouped separately.
+
+`vmetadata` records the source and target of `virus_download_wd/download.fa`
+in `download.source`. The BV-BRC source reuses the group FASTA only for the
+same target and downloads it again otherwise; switching a workdir between the
+two sources removes the other source's tables, so `vgenome` reads the latest
+download. A BV-BRC workdir written by an earlier version has no
+`download.source`, so its first re-run downloads the group FASTA again.
 
 ### Viral length filtering and over-represented species
 
@@ -578,7 +620,8 @@ candidate before the cut, one request per genome, four at a time (about five
 genomes a second; the 1540 Wolbachia genomes take some five minutes). The
 API refuses sustained bursts now and then; refused cards are retried once
 more, slowly, and only a genome refused twice is left unscored. The outgroup is chosen
-afterwards from the parent taxon and never counts against the limit.
+afterwards from the parent taxon, outside the target taxon (a target genome
+the cap left out is not a candidate), and never counts against the limit.
 
 ### Reusing an alignment across tree builders
 
@@ -946,8 +989,19 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   that failed is listed as `[interrupted]` and its outputs may be partial
   until it is re-run.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
-  (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
+  (`bac120`/`ar53`); transient HTTP errors are retried automatically. A host
+  that does not accept a connection within 15 s counts as unreachable, so a
+  blocked network exits 3 after about two minutes of retries. The
   `--source api` mode fetches only the target taxon (no full-table download).
+- **Genomes NCBI no longer serves.** A GTDB release can list assemblies that
+  NCBI has since suppressed. `genome` records them in `missing_accessions.txt`
+  (also when a whole download batch consists of them) and later stages excuse
+  them; a re-run asks for them again. Each rehydrated genome is checked
+  against the package's `md5sum.txt`, and a mismatch is recorded the same way.
+  An outgroup NCBI does not serve exits 3; choose another with
+  `metadata --outgroup-accession`. The `datasets` CLI has its own network
+  timeouts: on a blocked network each of its three attempts can take several
+  minutes before `genome` or `vmetadata` exits 6.
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
   optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
   is retried per batch of taxids; a connection error (no network, or the

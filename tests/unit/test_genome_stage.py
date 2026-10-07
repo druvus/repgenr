@@ -243,3 +243,115 @@ def test_accession_list_ends_with_newline(ctx, monkeypatch) -> None:
     genome.run(ctx, GenomeParams(accession_list_only=True))
     text = (ctx.workdir / "ncbi_acc_download_list.txt").read_text(encoding="utf-8")
     assert text.endswith("\n") and not text.endswith("\n\n")
+
+
+# --- deep audit 2026-10 (entry-net) -------------------------------------------
+
+_NO_MATCH = "Error: There are no genome assemblies that match your query."
+
+
+def test_batch_of_only_unserved_accessions_is_recorded_missing(ctx, monkeypatch) -> None:
+    """Live: a rerun whose remaining accession NCBI no longer serves failed with
+    exit 6 after three attempts; it is recorded in missing_accessions.txt."""
+    from repgenr.core.contracts import MISSING_ACCESSIONS_TXT
+
+    calls = _fake_run_cmd(monkeypatch)
+    inner = genome._run_cmd
+    attempts = []
+
+    def fake(cmd, *, logger, permanent=None, **kw):
+        if "--dehydrated" in [str(c) for c in cmd]:
+            attempts.append(cmd)
+            exc = genome.ToolExecutionError([str(c) for c in cmd], 1, output=_NO_MATCH)
+            assert permanent is not None and permanent(exc), "no retries for a no-match"
+            raise exc
+        return inner(cmd, logger=logger, **kw)
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    assert genome.run(ctx, GenomeParams()) == 2
+    missing = (ctx.workdir / MISSING_ACCESSIONS_TXT).read_text(encoding="utf-8").split()
+    assert missing == ["GCF_000001.1", "GCF_000002.1"]
+    assert len(attempts) == 1
+    assert ctx.config.stages["genome"].completed
+    assert calls  # the outgroup was still fetched
+
+
+def test_other_datasets_failures_still_fail_the_stage(ctx, monkeypatch) -> None:
+    def fake(cmd, *, logger, **kw):
+        raise genome.ToolExecutionError([str(c) for c in cmd], 1, output="connection reset")
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    with pytest.raises(genome.ToolExecutionError):
+        genome.run(ctx, GenomeParams())
+
+
+def test_rehydrated_genome_failing_its_md5_is_discarded(ctx, monkeypatch) -> None:
+    """datasets rehydrate does not check md5sum.txt; the stage does."""
+    import hashlib
+
+    from repgenr.core.contracts import MISSING_ACCESSIONS_TXT
+
+    good = b">seq\nACGT\n"
+    inner_calls = _fake_run_cmd(monkeypatch, fasta=good)
+    inner = genome._run_cmd
+
+    def fake(cmd, *, logger, **kw):
+        rc = inner(cmd, logger=logger, **kw)
+        if [str(c) for c in cmd][:2] == ["datasets", "rehydrate"]:
+            extract = Path(str(cmd[cmd.index("--directory") + 1]))
+            digest = hashlib.md5(good).hexdigest()
+            (extract / "md5sum.txt").write_text(
+                f"{digest}  data/GCF_000001.1/GCF_000001.1_genomic.fna\n"
+                f"{'0' * 32}  data/GCF_000002.1/GCF_000002.1_genomic.fna\n",
+                encoding="utf-8",
+            )
+        return rc
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    genome.run(ctx, GenomeParams())
+    names = sorted(p.name for p in ctx.genomes_dir.iterdir())
+    assert names == ["Francisellaceae_Francisella_tularensis_GCF_000001.1.fasta"]
+    missing = (ctx.workdir / MISSING_ACCESSIONS_TXT).read_text(encoding="utf-8")
+    assert "GCF_000002.1" in missing
+    assert inner_calls
+
+
+def test_unserved_outgroup_is_a_named_workdir_error(ctx, monkeypatch) -> None:
+    _fake_run_cmd(monkeypatch)
+    inner = genome._run_cmd
+
+    def fake(cmd, *, logger, **kw):
+        if "--dehydrated" not in [str(c) for c in cmd] and str(cmd[1]) == "download":
+            raise genome.ToolExecutionError([str(c) for c in cmd], 1, output=_NO_MATCH)
+        return inner(cmd, logger=logger, **kw)
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    with pytest.raises(WorkdirError, match="no assembly for the outgroup GCF_000010.1"):
+        genome.run(ctx, GenomeParams())
+
+
+def test_outgroup_package_without_fasta_is_an_error_not_silence(ctx, monkeypatch) -> None:
+    _fake_run_cmd(monkeypatch)
+    inner = genome._run_cmd
+
+    def fake(cmd, *, logger, **kw):
+        cmd_s = [str(c) for c in cmd]
+        if "--dehydrated" not in cmd_s and cmd_s[1] == "download":
+            with zipfile.ZipFile(cmd_s[cmd_s.index("--filename") + 1], "w") as zf:
+                zf.writestr("README.md", "no data")
+            return 0
+        return inner(cmd, logger=logger, **kw)
+
+    monkeypatch.setattr(genome, "_run_cmd", fake)
+    with pytest.raises(WorkdirError, match="holds no genome FASTA"):
+        genome.run(ctx, GenomeParams())
+
+
+def test_present_outgroup_is_not_downloaded_again(ctx, monkeypatch) -> None:
+    calls = _fake_run_cmd(monkeypatch)
+    ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
+    present = ctx.outgroup_dir / "Francisellaceae_Francisella_philomiragia_GCF_000010.1.fasta"
+    present.write_text(">og\nACGT\n", encoding="utf-8")
+    genome.run(ctx, GenomeParams())
+    assert not any("GCF_000010.1" in c for c in calls)
+    assert present.read_text(encoding="utf-8") == ">og\nACGT\n"

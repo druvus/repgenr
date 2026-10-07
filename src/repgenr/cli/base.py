@@ -311,6 +311,32 @@ def _derep_stock_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
     return []
 
 
+def _genome_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
+    """The genome directory and manifest, plus every file the selection promises.
+
+    One genome or the outgroup deleted by hand then reruns the stage (which
+    fetches only what is absent) instead of being skipped because genomes/ is
+    not empty. Accessions NCBI returned nothing for are excused.
+    """
+    from ..core.contracts import read_selection
+    from ..core.integrity import excused_accessions
+
+    paths = [ctx.genomes_dir, ctx.workdir / MANIFEST_FILENAME]
+    selection = ctx.workdir / SELECTION_TSV
+    if not selection.is_file():
+        return paths
+    try:
+        rows = read_selection(selection)
+    except (OSError, ValueError, RepGenRError):
+        return paths  # the stage itself reports an unreadable selection
+    excused = excused_accessions(ctx.workdir)
+    for row in rows:
+        if row.accession in excused:
+            continue
+        paths.append((ctx.outgroup_dir if row.is_outgroup else ctx.genomes_dir) / row.filename)
+    return paths
+
+
 def _genome_set_deliverables(ctx: WorkdirContext) -> list[Path]:
     """What every entry path that writes a genome set leaves in the workdir."""
     return [ctx.genomes_dir, ctx.workdir / SELECTION_TSV, ctx.workdir / MANIFEST_FILENAME]
@@ -330,7 +356,7 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     "assemble": lambda ctx, p: _genome_set_deliverables(ctx),
     "vmetadata": _vmetadata_deliverables,
     # genome reads selection.tsv and the manifest; it writes the genome files.
-    "genome": lambda ctx, p: [ctx.genomes_dir, ctx.workdir / MANIFEST_FILENAME],
+    "genome": _genome_deliverables,
     "vgenome": lambda ctx, p: _genome_set_deliverables(ctx),
     "dereplicate": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir],
     "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],

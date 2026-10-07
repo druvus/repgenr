@@ -25,7 +25,14 @@ from urllib3.util.retry import Retry
 
 from .errors import WorkdirError
 
-_DEFAULT_TIMEOUT = 120
+# (connect, read) seconds. A server that does not accept a connection within
+# the connect timeout is unreachable (blocked network, dead proxy); with the
+# retries below that is reported in about two minutes instead of the twelve
+# that a single 120 s timeout per attempt took. Reads keep the long timeout.
+_CONNECT_TIMEOUT = 15
+_READ_TIMEOUT = 120
+_DEFAULT_TIMEOUT: tuple[float, float] = (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+Timeout = float | tuple[float, float]
 _CHUNK = 1 << 20  # 1 MiB streaming chunks
 
 _RETRY = Retry(
@@ -36,6 +43,25 @@ _RETRY = Retry(
     respect_retry_after_header=True,
     raise_on_status=False,
 )
+
+
+class HTTPStatusError(WorkdirError):
+    """The server answered with an error status (4xx/5xx after retries).
+
+    ``status`` lets a caller tell "this resource does not exist" (404) from a
+    network or server failure, e.g. to report an unknown taxon as user input.
+    """
+
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
+def _request_error(prefix: str, url: str, exc: requests.RequestException) -> WorkdirError:
+    response = getattr(exc, "response", None)
+    if isinstance(exc, requests.HTTPError) and response is not None:
+        return HTTPStatusError(f"{prefix}: {url} ({exc})", response.status_code)
+    return WorkdirError(f"{prefix}: {url} ({exc})")
 
 
 @lru_cache(maxsize=1)
@@ -49,16 +75,16 @@ def session() -> requests.Session:
     return s
 
 
-def _get(url: str, *, params: dict | None, timeout: int) -> requests.Response:
+def _get(url: str, *, params: dict | None, timeout: Timeout) -> requests.Response:
     try:
         resp = session().get(url, params=params, timeout=timeout)
         resp.raise_for_status()
         return resp
     except requests.RequestException as exc:
-        raise WorkdirError(f"HTTP request failed: {url} ({exc})") from exc
+        raise _request_error("HTTP request failed", url, exc) from exc
 
 
-def get_json(url: str, *, params: dict | None = None, timeout: int = _DEFAULT_TIMEOUT) -> dict:
+def get_json(url: str, *, params: dict | None = None, timeout: Timeout = _DEFAULT_TIMEOUT) -> dict:
     """GET ``url`` and parse JSON; raises :class:`WorkdirError` on failure."""
     resp = _get(url, params=params, timeout=timeout)
     try:
@@ -67,7 +93,7 @@ def get_json(url: str, *, params: dict | None = None, timeout: int = _DEFAULT_TI
         raise WorkdirError(f"Expected JSON from {url} but could not parse it ({exc})") from exc
 
 
-def get_text(url: str, *, params: dict | None = None, timeout: int = _DEFAULT_TIMEOUT) -> str:
+def get_text(url: str, *, params: dict | None = None, timeout: Timeout = _DEFAULT_TIMEOUT) -> str:
     """GET ``url`` and return the response body as text (status-checked)."""
     return _get(url, params=params, timeout=timeout).text
 
@@ -76,7 +102,7 @@ def download(
     url: str,
     dest: Path,
     *,
-    timeout: int = _DEFAULT_TIMEOUT,
+    timeout: Timeout = _DEFAULT_TIMEOUT,
     logger: logging.Logger | None = None,
 ) -> Path:
     """Stream ``url`` to ``dest``, verifying the size and writing atomically.
@@ -99,7 +125,7 @@ def download(
                     written += len(chunk)
     except requests.RequestException as exc:
         tmp.unlink(missing_ok=True)
-        raise WorkdirError(f"Download failed: {url} ({exc})") from exc
+        raise _request_error("Download failed", url, exc) from exc
 
     if expected and written != expected:
         tmp.unlink(missing_ok=True)

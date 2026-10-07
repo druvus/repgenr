@@ -18,8 +18,9 @@ from ..core import process
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool_with_retries
 from ..core.context import WorkdirContext
-from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, genome_filename
-from ..core.errors import WorkdirError
+from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, atomic_path, genome_filename
+from ..core.errors import ToolExecutionError, WorkdirError
+from ..core.http import verify_md5
 from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
 from ..core.process import check_free_disk, remove_tree
@@ -46,6 +47,15 @@ def _timeout_for(n_items: int) -> float:
 def _run_cmd(cmd, n_items: int = 0, **kwargs):
     """Run the datasets CLI with retries and a timeout (it has neither built in)."""
     return run_tool_with_retries(DATASETS_CAPS, cmd, timeout=_timeout_for(n_items), **kwargs)
+
+
+def no_assembly_matched(exc: ToolExecutionError) -> bool:
+    """datasets found none of the requested accessions (exit 1, no package).
+
+    NCBI suppresses or withdraws assemblies that a GTDB release still lists;
+    a batch made only of those fails this way. Retrying cannot help.
+    """
+    return "no genome assemblies that match" in (exc.output or "").lower()
 
 
 @dataclass
@@ -215,22 +225,35 @@ def _download_one_batch(
     if extract.exists():
         remove_tree(extract)
 
-    _run_cmd(
-        [
-            "datasets",
-            "download",
-            "genome",
-            "accession",
-            "--dehydrated",
-            "--inputfile",
-            acc_file,
-            "--filename",
-            zip_path,
-        ],
-        n_items=len(batch),
-        logger=logger,
-        log_prefix="datasets",
-    )
+    try:
+        _run_cmd(
+            [
+                "datasets",
+                "download",
+                "genome",
+                "accession",
+                "--dehydrated",
+                "--inputfile",
+                acc_file,
+                "--filename",
+                zip_path,
+            ],
+            n_items=len(batch),
+            logger=logger,
+            log_prefix="datasets",
+            permanent=no_assembly_matched,
+        )
+    except ToolExecutionError as exc:
+        if not no_assembly_matched(exc):
+            raise
+        logger.warning(
+            "NCBI serves none of the %d accessions in batch %d (e.g. %s); recorded as missing",
+            len(batch),
+            bi,
+            ", ".join(batch[:3]),
+        )
+        acc_file.unlink(missing_ok=True)
+        return list(batch)
     process.unzip(zip_path, extract)
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
@@ -239,6 +262,7 @@ def _download_one_batch(
         log_prefix="datasets",
     )
 
+    checksums = _package_checksums(extract)
     produced: set[str] = set()
     for fna in extract.rglob("*.fna"):
         # Skip AppleDouble "._x.fna" side files that macOS writes next to
@@ -257,6 +281,16 @@ def _download_one_batch(
                 )
                 fna.unlink(missing_ok=True)
                 continue
+            # rehydrate does not check the package's md5sum.txt; a corrupt
+            # transfer that still starts with '>' would otherwise be kept.
+            expected = checksums.get(fna.relative_to(extract).as_posix())
+            if expected is not None:
+                try:
+                    verify_md5(fna, expected)
+                except WorkdirError as exc:
+                    logger.warning("Discarding download for %s: %s", fna.parent.name, exc)
+                    fna.unlink(missing_ok=True)
+                    continue
             target = dest_dir / name
             shutil.move(str(fna), str(target))
             produced.add(fna.parent.name)
@@ -278,37 +312,74 @@ def _download_one_batch(
     return missing
 
 
+def _package_checksums(extract: Path) -> dict[str, str]:
+    """``md5sum.txt`` of a datasets package: path relative to the package -> md5."""
+    md5_file = extract / "md5sum.txt"
+    if not md5_file.is_file():
+        return {}
+    out: dict[str, str] = {}
+    for line in md5_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2 and len(parts[0]) == 32:
+            out[parts[1].strip().removeprefix("./")] = parts[0].lower()
+    return out
+
+
 def _download_outgroup(ctx, outgroup, logger) -> None:
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = ctx.workdir / "ncbi_download_outgroup.zip"
-    _run_cmd(
-        [
-            "datasets",
-            "download",
-            "genome",
-            "accession",
-            outgroup.accession,
-            "--filename",
-            zip_path,
-        ],
-        logger=logger,
-        log_prefix="datasets",
-    )
     name = _output_name(outgroup)
+    out_path = ctx.outgroup_dir / name
+    if looks_like_fasta(out_path):
+        logger.info("Outgroup %s already present", outgroup.accession)
+    else:
+        _fetch_outgroup(ctx, outgroup, out_path, logger)
+    # Only the current outgroup may remain: stale outgroups from earlier
+    # selections would otherwise accumulate and could shadow this one.
+    _prune(ctx.outgroup_dir, {name}, ctx.logger)
+
+
+def _fetch_outgroup(ctx, outgroup, out_path: Path, logger) -> None:
+    zip_path = ctx.workdir / "ncbi_download_outgroup.zip"
+    hint = "choose another with 'repgenr metadata --outgroup-accession'."
+    try:
+        _run_cmd(
+            [
+                "datasets",
+                "download",
+                "genome",
+                "accession",
+                outgroup.accession,
+                "--filename",
+                zip_path,
+            ],
+            logger=logger,
+            log_prefix="datasets",
+            permanent=no_assembly_matched,
+        )
+    except ToolExecutionError as exc:
+        if not no_assembly_matched(exc):
+            raise
+        raise WorkdirError(
+            f"NCBI serves no assembly for the outgroup {outgroup.accession}; {hint}"
+        ) from exc
+    found = False
     try:
         with zipfile.ZipFile(zip_path) as zf:
             for item in zf.namelist():
                 if item.endswith(".fna") and outgroup.accession in item:
-                    (ctx.outgroup_dir / name).write_bytes(zf.read(item))
+                    # Written beside the target and renamed, so an interrupted
+                    # run never leaves a partial outgroup that looks complete.
+                    with atomic_path(out_path) as tmp:
+                        tmp.write_bytes(zf.read(item))
+                    found = True
                     break
     except zipfile.BadZipFile as exc:
         raise WorkdirError(
             f"Corrupt outgroup download: {zip_path} ({exc}). Re-run to retry."
         ) from exc
-    out_path = ctx.outgroup_dir / name
-    if out_path.exists():
-        _assert_fasta(out_path)
-    # Only the current outgroup may remain: stale outgroups from earlier
-    # selections would otherwise accumulate and could shadow this one.
-    _prune(ctx.outgroup_dir, {name}, ctx.logger)
+    if not found:
+        raise WorkdirError(
+            f"The outgroup download for {outgroup.accession} holds no genome FASTA; {hint}"
+        )
+    _assert_fasta(out_path)
     zip_path.unlink(missing_ok=True)
