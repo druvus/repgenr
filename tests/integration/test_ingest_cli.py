@@ -119,3 +119,22 @@ def test_doctor_names_links_left_dangling_by_a_moved_source(tmp_path: Path) -> N
     assert "2 link(s)" in result.output
     assert "source was moved or deleted" in result.output
     assert "not FASTA" not in result.output
+
+
+def test_refused_reingest_leaves_the_finished_record_clean(tmp_path: Path) -> None:
+    """A refused re-ingest changed nothing but marked the finished ingest interrupted."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "c.fasta").write_text("")
+
+    refused = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(bad)])
+
+    assert refused.exit_code == 2
+    assert Config.load(wd).stages["ingest"].completed
+    assert sorted(p.name for p in (wd / "genomes").iterdir()) == ["a.fasta", "b.fasta"]
+    again = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)])
+    assert again.exit_code == 0
+    assert "skipping" in again.output

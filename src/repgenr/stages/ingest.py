@@ -34,7 +34,7 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError, WorkdirError
-from ..core.integrity import looks_like_fasta, refuse_foreign_rows
+from ..core.integrity import refuse_foreign_rows
 from ..core.manifest import GenomeRecord, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
@@ -51,9 +51,31 @@ class IngestParams:
     drop_foreign: bool = False
 
 
-def run(ctx: WorkdirContext, params: IngestParams) -> int:
-    logger = ctx.logger
-    refuse_foreign_rows(ctx, "ingest", drop_foreign=params.drop_foreign, logger=logger)
+@dataclass
+class _Plan:
+    """What ingest will stage, resolved and checked before anything is written."""
+
+    source: Path
+    by_name: dict[str, Path]
+    ingroup: list[SelectionRow]
+    outgroup_row: SelectionRow | None
+    outgroup_file: Path | None
+
+
+def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
+    """Refuse an ingest that cannot proceed, before anything is changed.
+
+    The CLI harness calls this before it marks the stage record incomplete, so
+    a mistyped directory or a bad genome file does not leave a finished ingest
+    (and the stages built on it) looking interrupted.
+    """
+    if not params.drop_foreign:
+        refuse_foreign_rows(ctx, "ingest", drop_foreign=False, logger=ctx.logger)
+    _plan(params, logger=None)
+
+
+def _plan(params: IngestParams, logger) -> _Plan:
+    """Resolve and check the genome set; warn through ``logger`` when given."""
     source = Path(params.genomes_dir).expanduser()
     if not source.is_dir():
         raise UserInputError(f"--genomes-dir {source} is not a directory.")
@@ -76,7 +98,7 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
     else:
         rows = [_row_from_filename(f.name) for f in files]
         skipped = [p.name for p in others if p.is_file()]
-        if skipped:
+        if skipped and logger is not None:
             logger.warning(
                 "Skipped %d file(s) under %s without a FASTA suffix (%s): %s",
                 len(skipped),
@@ -90,10 +112,19 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
     ingroup = [r for r in rows if not r.is_outgroup and r.filename != outgroup_name]
     _refuse_duplicates([*ingroup, *([outgroup_row] if outgroup_row is not None else [])])
 
-    _refuse_non_fasta(
+    _refuse_unusable(
         [by_name[r.filename] for r in ingroup]
         + ([outgroup_file] if outgroup_file is not None else [])
     )
+    return _Plan(source, by_name, ingroup, outgroup_row, outgroup_file)
+
+
+def run(ctx: WorkdirContext, params: IngestParams) -> int:
+    logger = ctx.logger
+    refuse_foreign_rows(ctx, "ingest", drop_foreign=params.drop_foreign, logger=logger)
+    plan = _plan(params, logger)
+    source, by_name, ingroup = plan.source, plan.by_name, plan.ingroup
+    outgroup_row, outgroup_file = plan.outgroup_row, plan.outgroup_file
 
     ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
     if params.copy:
@@ -176,16 +207,24 @@ def _examples(names: list[str], limit: int = 5) -> str:
     return ", ".join(names[:limit]) + more
 
 
-def _refuse_non_fasta(paths: list[Path]) -> None:
-    """Fail on empty, unreadable or non-FASTA genome files before anything is staged.
+def _refuse_unusable(paths: list[Path]) -> None:
+    """Fail on empty or unreadable genome files (a dangling link included) before
+    anything is staged.
 
-    The first bytes are read (decompressed for gzip), so a few thousand genomes
-    cost well under a second; a dangling link in the source reads as unreadable.
+    One ``stat`` per file: opening each file to check its first bytes cost about
+    50 s for 1000 genomes on an exFAT disk, and this check also runs on the
+    resume path. ``doctor`` checks the content of the staged genomes.
     """
-    bad = [p.name for p in paths if not looks_like_fasta(p)]
+    bad: list[str] = []
+    for path in paths:
+        try:
+            if path.stat().st_size == 0:
+                bad.append(path.name)
+        except OSError:
+            bad.append(path.name)
     if bad:
         raise UserInputError(
-            f"{len(bad)} genome file(s) are empty, unreadable or not FASTA: {_examples(bad)}. "
+            f"{len(bad)} genome file(s) are empty or unreadable: {_examples(bad)}. "
             "Remove them from --genomes-dir (or from --selection) and re-run."
         )
 

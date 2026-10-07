@@ -404,15 +404,25 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 
 # Refusals a stage can check before the harness marks its record incomplete:
 # stage -> callable(ctx, params) raising UserInputError/WorkdirError. Used
-# where one record serves several invocations (derep-stock's named runs), so
-# a refused call must not leave the record of the last finished one dirty.
+# where one record serves several invocations (derep-stock's named runs) or
+# where a refused re-run would otherwise dirty a finished record that later
+# stages build on (ingest), so the record of the last finished run stays clean.
 def _derep_stock_precheck(ctx: WorkdirContext, params: Any) -> None:
     from ..stages.derep_stock import precheck
 
     precheck(ctx, params)
 
 
-_STAGE_PRECHECKS: dict[str, Any] = {"derep_stock": _derep_stock_precheck}
+def _ingest_precheck(ctx: WorkdirContext, params: Any) -> None:
+    from ..stages.ingest import precheck
+
+    precheck(ctx, params)
+
+
+_STAGE_PRECHECKS: dict[str, Any] = {
+    "derep_stock": _derep_stock_precheck,
+    "ingest": _ingest_precheck,
+}
 
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {

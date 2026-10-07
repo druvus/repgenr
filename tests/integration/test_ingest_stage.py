@@ -299,17 +299,17 @@ def test_ingest_selection_listing_a_file_twice_is_an_error(tmp_path: Path, workd
         run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
 
 
-def test_ingest_refuses_empty_or_non_fasta_files(tmp_path: Path, workdir: Path) -> None:
+def test_ingest_refuses_empty_or_unreadable_files(tmp_path: Path, workdir: Path) -> None:
     src = _source(tmp_path, ["a.fasta"])
     (src / "empty.fasta").write_text("")
-    (src / "page.fa").write_text("<html>404</html>\n")
+    (src / "gone.fa").symlink_to(tmp_path / "nowhere.fa")
     ctx = WorkdirContext(workdir, create=True)
-    with pytest.raises(UserInputError, match=r"2 genome file\(s\) are empty.*empty.fasta, page.fa"):
+    with pytest.raises(UserInputError, match=r"2 genome file\(s\) are empty.*empty.fasta, gone.fa"):
         run(ctx, IngestParams(genomes_dir=str(src)))
     assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())
 
 
-def test_ingest_refuses_non_fasta_external_outgroup(tmp_path: Path, workdir: Path) -> None:
+def test_ingest_refuses_empty_external_outgroup(tmp_path: Path, workdir: Path) -> None:
     src = _source(tmp_path, ["a.fasta"])
     external = tmp_path / "Out_grp_sp_X1.fasta"
     external.write_text("")
