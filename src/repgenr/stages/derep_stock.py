@@ -104,6 +104,21 @@ def _pack(ctx: WorkdirContext, run_path: Path) -> None:
 def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     if not run_path.exists():
         raise UserInputError(f"No stored run named '{run_path.name}'")
+    # Validate the stored run in full before the current dereplication is
+    # replaced, so an incomplete run leaves the workdir unchanged.
+    stored_clusters = run_path / CLUSTERS_TSV
+    if not stored_clusters.is_file():
+        raise WorkdirError(f"Stored run '{run_path.name}' is incomplete: missing {stored_clusters}")
+    stored_reps = run_path / "representatives"
+    if not stored_reps.is_dir():
+        raise WorkdirError(f"Stored run '{run_path.name}' is incomplete: missing {stored_reps}")
+    rep_names = [rep.name for rep in list_fasta(stored_reps)]
+    absent = [name for name in rep_names if not (ctx.genomes_dir / name).is_file()]
+    if absent:
+        raise WorkdirError(
+            f"Stored run '{run_path.name}' names {len(absent)} representative(s) "
+            f"not found under {ctx.genomes_dir}, e.g. {absent[0]}"
+        )
     for name in _FLAT_FILES:
         src = run_path / name
         if src.exists():
@@ -111,8 +126,8 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     if ctx.representatives_dir.exists():
         remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
-    for rep in (run_path / "representatives").iterdir():
-        shutil.copy2(ctx.genomes_dir / rep.name, ctx.representatives_dir / rep.name)
+    for name in rep_names:
+        shutil.copy2(ctx.genomes_dir / name, ctx.representatives_dir / name)
     # The derep contract now describes the stored run: bring the manifest's
     # per-genome status in line with it and re-stamp the dereplicate record
     # without a fingerprint, so `status` reports the run on disk and the next

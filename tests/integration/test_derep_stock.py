@@ -143,3 +143,28 @@ def test_pack_without_dereplication_outputs_raises(workdir: Path, missing: str) 
     with pytest.raises(WorkdirError, match=missing):
         derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
     assert not (ctx.derep_dir / "stock" / "run1").exists()
+
+
+@pytest.mark.parametrize("damage", ["stored_representatives", "stored_clusters", "genome"])
+def test_unpack_of_incomplete_run_raises_before_changing_the_workdir(
+    workdir: Path, damage: str
+) -> None:
+    # A stored run that cannot be restored in full must leave the current
+    # dereplication in place and report the problem as a workdir error.
+    import shutil
+
+    ctx = _setup_contract(workdir)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    packed = ctx.derep_dir / "stock" / "run1"
+    if damage == "stored_representatives":
+        shutil.rmtree(packed / "representatives")
+    elif damage == "stored_clusters":
+        (packed / "clusters.tsv").unlink()
+    else:
+        (ctx.genomes_dir / _REPS[0]).unlink()
+    clusters_before = (ctx.derep_dir / "clusters.tsv").read_text()
+
+    with pytest.raises(WorkdirError):
+        derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    assert {p.name for p in ctx.representatives_dir.iterdir()} == set(_REPS)
+    assert (ctx.derep_dir / "clusters.tsv").read_text() == clusters_before
