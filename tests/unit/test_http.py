@@ -186,3 +186,21 @@ def test_connection_error_is_not_a_status_error(monkeypatch) -> None:
     with pytest.raises(WorkdirError) as info:
         http.get_json("https://x/y")
     assert not isinstance(info.value, http.HTTPStatusError)
+
+
+def test_requests_use_a_short_connect_timeout(monkeypatch, tmp_path: Path) -> None:
+    """A blocked network is reported in minutes: through an unreachable proxy
+    one GTDB API request waited 481 s (six 120 s connect attempts)."""
+    seen = []
+
+    class _Recording(_FakeSession):
+        def get(self, url, **kw):
+            seen.append(kw["timeout"])
+            return super().get(url, **kw)
+
+    body = b"x"
+    resp = _FakeResp(json_data={}, content=body, headers={"Content-Length": "1"})
+    monkeypatch.setattr(http, "session", lambda: _Recording(resp))
+    http.get_json("https://x/y")
+    http.download("https://x/y", tmp_path / "f")
+    assert seen and all(isinstance(t, tuple) and t[0] <= 30 and t[1] >= 120 for t in seen)
