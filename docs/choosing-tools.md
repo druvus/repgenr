@@ -184,6 +184,9 @@ Notes:
   libraries by ENA library selection. Its default is `MDA`: amplified libraries
   assemble into chimeric, uneven contigs. A 12% contamination figure seen on one
   MDA library disappeared once the library was dropped.
+- `--classifier auto` (the default) verifies each assembly's organism with
+  sourmash gather against a GTDB sketch when one is given; without a sketch the
+  check is skipped and the log says so.
 - `--one-per-sample` (the default) keeps one run per sample. A long-read run is
   preferred when it has at least 100 Mb and a tenth of the largest short-read
   run.

@@ -365,6 +365,23 @@ All notable changes to RepGenR are documented here. The format follows
   such removal now tolerates entries that disappear mid-walk (found on a
   genus-scale run whose workdir sat on an external volume).
 
+### Documentation
+- `docs/install.md` covers installation: the package and its extras, three
+  ways to provide the external tools (one conda environment, several
+  environments on `PATH`, containers), a recommendation per situation, a
+  per-tool table with conda packages, container pins and databases, Cactus,
+  Nextflow and how to verify an installation. The container image, storage and
+  notes sections moved there from `docs/usage.md`.
+- `docs/choosing-tools.md` helps choose tools by dataset type and size, with the
+  measured runs behind each recommendation, the dereplicator and tree builder
+  trade-offs, assemblers and polishers per platform, `run` versus Nextflow, and
+  how `auto` chooses. It states which limits are declared and not benchmarked.
+  A new unit test checks its table of declared genome limits against the
+  registered adapters.
+- The README installation section points to the install guide, its pipeline
+  section shows the four stage chains, and its scalability claim states the
+  largest recorded run.
+
 ## [2.1.0] - 2026-09-10
 
 The first public release of the fork. It carries the 2.0.0 rewrite (kept
