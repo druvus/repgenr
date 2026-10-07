@@ -246,7 +246,9 @@ def test_glance_help_names_the_bound_units_and_the_kept_directory() -> None:
     from repgenr.cli.main import app
 
     result = CliRunner().invoke(app, ["glance", "--help"], terminal_width=200)
-    text = " ".join(re.sub(r"\x1b\[[0-9;]*[A-Za-z]|[│╭╮╰╯─]", " ", result.output).split())
+    # Strip colour codes and the rich panel border characters (ASCII escapes).
+    noise = r"\x1b\[[0-9;]*[A-Za-z]|[\u2500\u2502\u256d\u256e\u256f\u2570]"
+    text = " ".join(re.sub(noise, " ", result.output).split())
     assert "Mash ANI values plotted, as a fraction from 0 to 1" in text
     assert "Keep glance_wd/" in text
 
