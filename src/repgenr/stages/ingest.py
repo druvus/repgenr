@@ -34,7 +34,7 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError
-from ..core.integrity import refuse_foreign_rows
+from ..core.integrity import looks_like_fasta, refuse_foreign_rows
 from ..core.manifest import GenomeRecord, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
@@ -58,23 +58,46 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
     if not source.is_dir():
         raise UserInputError(f"--genomes-dir {source} is not a directory.")
     files = list_fasta(source)
+    others = _other_entries(source, files)
     if not files:
+        subdirs = [p for p in others if p.is_dir()]
+        where = (
+            f"; it holds {len(subdirs)} subdirectories, which ingest does not search"
+            if subdirs
+            else ""
+        )
         raise UserInputError(
-            f"No genome FASTA files under {source} (expected {', '.join(FASTA_SUFFIXES)})."
+            f"No genome FASTA files under {source} (expected {', '.join(FASTA_SUFFIXES)}){where}."
         )
     by_name = {f.name: f for f in files}
 
     if params.selection:
-        rows = _rows_from_selection(Path(params.selection), by_name)
+        rows = _rows_from_selection(Path(params.selection), by_name, others)
     else:
         rows = [_row_from_filename(f.name) for f in files]
+        skipped = [p.name for p in others if p.is_file()]
+        if skipped:
+            logger.warning(
+                "Skipped %d file(s) under %s without a FASTA suffix (%s): %s",
+                len(skipped),
+                source,
+                ", ".join(FASTA_SUFFIXES),
+                _examples(skipped),
+            )
 
     outgroup_row, outgroup_file = _resolve_outgroup(rows, by_name, params.outgroup)
     outgroup_name = outgroup_row.filename if outgroup_row is not None else None
     ingroup = [r for r in rows if not r.is_outgroup and r.filename != outgroup_name]
     _refuse_duplicates([*ingroup, *([outgroup_row] if outgroup_row is not None else [])])
 
+    _refuse_non_fasta(
+        [by_name[r.filename] for r in ingroup]
+        + ([outgroup_file] if outgroup_file is not None else [])
+    )
+
     ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
+    if params.copy:
+        logger.info("Copying %d genomes from %s into %s", len(ingroup), source, ctx.genomes_dir)
     _prune(ctx.genomes_dir, {r.filename for r in ingroup}, logger)
     for row in ingroup:
         _stage(by_name[row.filename], ctx.genomes_dir / row.filename, params.copy)
@@ -116,17 +139,51 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
     return len(ingroup)
 
 
-def _rows_from_selection(path: Path, by_name: dict[str, Path]) -> list[SelectionRow]:
+def _rows_from_selection(
+    path: Path, by_name: dict[str, Path], others: list[Path]
+) -> list[SelectionRow]:
     if not path.is_file():
         raise UserInputError(f"--selection {path} is not a file.")
     rows = read_selection(path)
     missing = [r.filename for r in rows if r.filename not in by_name]
     if missing:
+        unsupported = {p.name for p in others} & set(missing)
+        note = (
+            f"; {len(unsupported)} of them exist but lack a FASTA suffix "
+            f"({', '.join(FASTA_SUFFIXES)})"
+            if unsupported
+            else ""
+        )
         raise UserInputError(
             f"{len(missing)} selection row(s) name a file not present under --genomes-dir "
-            f"(e.g. {', '.join(missing[:3])})."
+            f"(e.g. {', '.join(missing[:3])}){note}."
         )
     return rows
+
+
+def _other_entries(source: Path, files: list[Path]) -> list[Path]:
+    """Entries under ``source`` that are not genome FASTA files (dotfiles excluded)."""
+    taken = {f.name for f in files}
+    return sorted(p for p in source.iterdir() if not p.name.startswith(".") and p.name not in taken)
+
+
+def _examples(names: list[str], limit: int = 5) -> str:
+    more = f" (+{len(names) - limit} more)" if len(names) > limit else ""
+    return ", ".join(names[:limit]) + more
+
+
+def _refuse_non_fasta(paths: list[Path]) -> None:
+    """Fail on empty, unreadable or non-FASTA genome files before anything is staged.
+
+    The first bytes are read (decompressed for gzip), so a few thousand genomes
+    cost well under a second; a dangling link in the source reads as unreadable.
+    """
+    bad = [p.name for p in paths if not looks_like_fasta(p)]
+    if bad:
+        raise UserInputError(
+            f"{len(bad)} genome file(s) are empty, unreadable or not FASTA: {_examples(bad)}. "
+            "Remove them from --genomes-dir (or from --selection) and re-run."
+        )
 
 
 def _refuse_duplicates(rows: list[SelectionRow]) -> None:

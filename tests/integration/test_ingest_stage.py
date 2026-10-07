@@ -297,3 +297,51 @@ def test_ingest_selection_listing_a_file_twice_is_an_error(tmp_path: Path, workd
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="share a filename: a.fasta"):
         run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_refuses_empty_or_non_fasta_files(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    (src / "empty.fasta").write_text("")
+    (src / "page.fa").write_text("<html>404</html>\n")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"2 genome file\(s\) are empty.*empty.fasta, page.fa"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+    assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())
+
+
+def test_ingest_refuses_non_fasta_external_outgroup(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    external = tmp_path / "Out_grp_sp_X1.fasta"
+    external.write_text("")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="Out_grp_sp_X1.fasta"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(external)))
+
+
+def test_ingest_warns_about_files_without_a_fasta_suffix(tmp_path: Path, workdir: Path) -> None:
+    """x.fna.gz and X.FASTA were skipped without a message."""
+    src = _source(tmp_path, ["a.fasta", "b.FASTA", "README"])
+    (src / "c.fna.gz").write_bytes(b"")
+    ctx = WorkdirContext(workdir, create=True)
+    assert run(ctx, IngestParams(genomes_dir=str(src))) == 1
+    log = (workdir / "repgenr.log").read_text(encoding="utf-8")
+    assert "WARNING Skipped 3 file(s)" in log
+    assert "README, b.FASTA, c.fna.gz" in log
+
+
+def test_ingest_selection_row_naming_an_unsupported_suffix(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta", "b.fna.gz"])
+    sel = tmp_path / "sel.tsv"
+    write_selection(sel, [SelectionRow("B1", "F", "G", "s", False, "b.fna.gz")])
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="1 of them exist but lack a FASTA suffix"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_empty_source_with_subdirectories_says_so(tmp_path: Path, workdir: Path) -> None:
+    """An NCBI Datasets tree (data/GCF_x/...fna) holds the genomes one level down."""
+    src = tmp_path / "data"
+    (src / "GCF_000001.1").mkdir(parents=True)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="1 subdirectories, which ingest does not search"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
