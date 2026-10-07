@@ -461,6 +461,15 @@ parser), so they also apply to commands other than the one named.
 | assemble | A rerun over finished runs refused on a nearly full disk although it downloads nothing | (this PR) |
 | assemble | A CheckM2 `qc_failed` excuse was not logged; it is warned about, and failed downloads are named with how to retry them (`--force`) | (this PR) |
 | reads | Runs found by accession were taken whatever their strategy, so an RNA-Seq run (SRR24576250) was selected as a genome; they now pass the WGS genomic filter | (this PR) |
+| assemble | A finished run was reused whatever the settings, so another `--min-contig-length`, `--assembler`, `--polisher`, `--polish-rounds` or `--tool-arg` kept the old contigs; the marker records the settings, a higher floor refilters and any other change assembles again | #226 |
+| assemble | A resumed run recorded no tool versions and the record named the tool `auto`; reused markers supply their versions and the record names the assemblers used | #226 |
+| assemble | An unreadable `assembly.ok` gave a JSON traceback; the marker is written atomically and an unreadable one is assembled again; a run without contigs above the floor left its reads in scratch | #226 |
+| assemble | A run killed during assembly downloaded its reads again on resume; files matching their checksum are kept (on exFAT the clean-up also failed with Errno 2 on AppleDouble files) | #226 |
+| assemble | ONT runs labelled PAIRED by ENA (359 bacterial WGS runs) were excused as `unsupported_platform`; racon polished a multi-file run with its first file and medaka refused it after assembly | #226 |
+| assemble, genome-qc | A wrong database path or an absent checkm2 or sourmash binary was found only after every assembly; both are checked before any download (exit 2 or 4) | #226 |
+| assemble | A rerun over finished runs refused on a nearly full disk although it downloads nothing | #226 |
+| assemble | A CheckM2 `qc_failed` excuse was not logged; it is warned about, and failed downloads are named with how to retry them (`--force`) | #226 |
+| reads | Runs found by accession were taken whatever their strategy, so an RNA-Seq run (SRR24576250) was selected as a genome; they now pass the WGS genomic filter | #226 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
