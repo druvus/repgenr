@@ -105,8 +105,8 @@ def _emit_relations(
         # Same rule as doctor: dendropy would read the first tree and ignore
         # whatever follows its ';', which hides a truncated or concatenated file.
         raise WorkdirError(
-            f"{source} is empty or truncated (no terminating ';' at the end of the file); "
-            "re-run phylo."
+            f"{source} is empty or truncated: it has no terminating ';' or has text "
+            "after its final ';'. Re-run phylo."
         )
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
