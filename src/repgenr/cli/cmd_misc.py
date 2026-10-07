@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -165,48 +166,66 @@ def _glance_tool_help() -> str:
     from ..dereplicators.base import compare_supporters
 
     names = compare_supporters()
-    return f"Dereplicator with comparison support: {', '.join(names) or '(none registered)'}."
+    return (
+        f"Dereplicator with comparison support: auto, {', '.join(names) or '(none registered)'}. "
+        "auto uses dRep when it can run (on the PATH or via the container backend), "
+        "otherwise sourmash."
+    )
 
 
 @app.command(rich_help_panel=PANEL_INSPECT)
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
-    tool: str = typer.Option("drep", "--tool", help=_glance_tool_help()),
+    tool: str = typer.Option("auto", "--tool", help=_glance_tool_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     plot_max: float = typer.Option(
         1.0,
         "--plot-max",
-        help="Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1.",
+        help="Upper bound of the ANI values plotted, as a fraction from 0 to 1.",
     ),
     plot_min: float = typer.Option(
         0.0,
         "--plot-min",
-        help="Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1.",
+        help="Lower bound of the ANI values plotted, as a fraction from 0 to 1.",
     ),
     keep_files: bool = typer.Option(
-        False, "--keep-files", help="Keep the dRep working directory glance_wd/."
+        False,
+        "--keep-files",
+        help="Keep the comparison tool's working directory glance_wd/.",
     ),
 ) -> None:
-    """Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
+    """Quick all-vs-all ANI overview (dendrogram + similarity plots).
 
-    Needs dRep (on the PATH, or via the container backend) and no
-    dereplication; compares every genome in genomes/ and writes
-    glance_clustering_dendrogram.pdf and two Mash ANI plots,
+    Needs dRep or sourmash (on the PATH, or via the container backend) and
+    no dereplication; compares every genome in genomes/ and writes
+    glance_clustering_dendrogram.pdf and two ANI plots,
     glance_MASH_ANI_similarity_boxplot.png and
-    glance_MASH_ANI_similarity_histogram.png.
+    glance_MASH_ANI_similarity_histogram.png. dRep reports Mash ANI;
+    sourmash reports the k-mer ANI estimate that dereplicate --tool
+    sourmash thresholds.
     """
     from ..dereplicators.base import registry as _derep_registry
-    from ..stages.glance import GlanceParams
+    from ..stages.glance import GlanceParams, log_auto_choice, resolve_auto_tool
 
     def build() -> GlanceParams:
-        _require_choice(tool, set(_derep_registry.names()), "--tool")
+        _require_choice(tool, {"auto", *_derep_registry.names()}, "--tool")
         if not 0.0 <= plot_min <= plot_max <= 1.0:
             raise UserInputError(
-                "--plot-min and --plot-max are Mash ANI fractions with "
+                "--plot-min and --plot-max are ANI fractions with "
                 f"0 <= --plot-min <= --plot-max <= 1; got {plot_min} and {plot_max}."
             )
+        chosen = tool
+        if tool == "auto":
+            # Resolved here, before the resume fingerprint is taken, so the
+            # fingerprint and the stage record name the concrete tool. When
+            # nothing can run, 'auto' passes through and the stage reports it
+            # after its workdir and genome checks.
+            resolved = resolve_auto_tool()
+            if resolved is not None:
+                log_auto_choice(logging.getLogger("repgenr"), resolved)
+                chosen = resolved
         return GlanceParams(
-            tool=tool,
+            tool=chosen,
             threads=threads,
             plot_max=plot_max,
             plot_min=plot_min,

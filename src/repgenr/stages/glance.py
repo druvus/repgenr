@@ -1,45 +1,90 @@
-"""glance stage: quick ANI overview with dRep compare.
+"""glance stage: quick all-vs-all ANI overview of the genomes.
 
-Ports ``glance.py``: run ``dRep compare`` (mash primary clustering only) on all
-genomes, copy out the clustering dendrogram, and plot a boxplot + histogram of
-the all-vs-all MASH ANI similarities from ``Mdb.csv``.
+Ports ``glance.py``: compare all genomes with a dereplicator that implements
+``compare`` (dRep compare, Mash primary clustering only, or sourmash sketches
+with the ANI estimate used by ``dereplicate --tool sourmash``), copy out the
+clustering dendrogram, and plot a box plot + histogram of the pairwise
+similarities. ``--tool auto`` prefers dRep and falls back to sourmash.
 """
 
 from __future__ import annotations
 
+import logging
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
 from ..core.contracts import list_fasta
-from ..core.errors import UserInputError, WorkdirError
+from ..core.errors import MissingBinaryError, UserInputError, WorkdirError
+from ..core.plugins import AUTO
 from ..core.process import remove_tree
 
+# File names predate the sourmash backend and stay fixed; the plots' axes name
+# the measure the chosen tool reports.
 GLANCE_OUTPUTS = (
     "glance_clustering_dendrogram.pdf",
     "glance_MASH_ANI_similarity_boxplot.png",
     "glance_MASH_ANI_similarity_histogram.png",
 )
 
+# --tool auto: dRep first (the original glance tool), then sourmash; any other
+# compare-capable adapter ranks after these, alphabetically.
+_AUTO_PREFERENCE = ("drep", "sourmash")
+
 
 @dataclass
 class GlanceParams:
     threads: int = 16  # same default as the CLI's -t
-    tool: str = "drep"
+    tool: str = AUTO
     plot_max: float = 1.0
     plot_min: float = 0.0
     keep_files: bool = False
+
+
+def resolve_auto_tool(reg=None) -> str | None:
+    """The compare-capable dereplicator ``--tool auto`` picks, or None.
+
+    A tool qualifies when it can run here: its binaries are on the PATH, or a
+    container backend is active and the adapter declares an image (the same
+    availability test ``dereplicate --tool auto`` uses).
+    """
+    from ..core.plugins import tool_available
+    from ..dereplicators.base import compare_supporters
+    from ..dereplicators.base import registry as derep_registry
+
+    reg = derep_registry if reg is None else reg
+
+    def rank(name: str) -> tuple[int, str]:
+        pref = _AUTO_PREFERENCE.index(name) if name in _AUTO_PREFERENCE else len(_AUTO_PREFERENCE)
+        return pref, name
+
+    for name in sorted(compare_supporters(reg), key=rank):
+        if tool_available(reg.get(name).capabilities):
+            return name
+    return None
+
+
+def no_compare_tool_message(reg=None) -> str:
+    from ..dereplicators.base import compare_supporters
+
+    supporters = compare_supporters(reg)
+    return (
+        "glance --tool auto found no comparison tool to run: none of "
+        f"{', '.join(supporters) or '(none registered)'} is on the PATH. Install one of "
+        "them, use a container backend (--container docker or singularity), or name "
+        "one with --tool."
+    )
 
 
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
     from ..dereplicators.base import compare_supporters, registry
 
-    adapter = registry.create(params.tool)
     supporters = compare_supporters()
-    if params.tool not in supporters:
+    if params.tool != AUTO and params.tool not in supporters:
+        registry.get(params.tool)  # an unknown or broken plugin reports itself
         raise UserInputError(
             f"Dereplicator '{params.tool}' does not support glance comparisons. "
             f"Tools with compare support: {', '.join(supporters) or 'none'}."
@@ -52,6 +97,15 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
         raise WorkdirError(
             f"glance needs at least two genomes; found {len(genomes)} under {ctx.genomes_dir}"
         )
+    if params.tool == AUTO:
+        # The CLI resolves auto before the resume fingerprint is taken; this
+        # covers direct callers. The record names the concrete tool.
+        resolved = resolve_auto_tool()
+        if resolved is None:
+            raise MissingBinaryError(no_compare_tool_message())
+        log_auto_choice(logger, resolved)
+        params = replace(params, tool=resolved)
+    adapter = registry.create(params.tool)
     versions = adapter.preflight()
 
     glance_wd = ctx.workdir / "glance_wd"
@@ -76,7 +130,7 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
         )
 
     if result.similarity_csv is not None:
-        _plot(result.similarity_csv, ctx.workdir, params, logger)
+        _plot(result.similarity_csv, ctx.workdir, params, logger, result.measure)
     else:
         logger.warning("No similarity table produced; skipping plots")
 
@@ -94,10 +148,14 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     return out_pdf
 
 
-def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
-    """Similarity of each unordered genome pair in ``Mdb.csv`` within [low, high].
+def log_auto_choice(logger: logging.Logger, tool: str) -> None:
+    logger.info("glance --tool auto selected '%s' (dRep preferred, then sourmash)", tool)
 
-    dRep lists every pair in both orders and each genome against itself; a
+
+def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
+    """Similarity of each unordered genome pair in the table within [low, high].
+
+    dRep's ``Mdb.csv`` lists every pair in both orders and each genome against itself; a
     pair is counted once (its first readable row) and self-comparisons are
     skipped.
     """
@@ -128,7 +186,9 @@ def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
     return values
 
 
-def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
+def _plot(
+    mdb: Path, workdir: Path, params: GlanceParams, logger, measure: str = "MASH ANI"
+) -> None:
     from matplotlib import pyplot as plt
 
     values = _pair_similarities(mdb, params.plot_min, params.plot_max)
@@ -136,11 +196,11 @@ def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
         logger.warning("No similarity values in range; skipping plots")
         return
 
-    title = f"MASH ANI, all-vs-all ({len(values)} genome pairs)"
+    title = f"{measure}, all-vs-all ({len(values)} genome pairs)"
     fig, ax = plt.subplots()
     ax.boxplot(values)
     ax.set_xticklabels([""])
-    ax.set_ylabel("MASH ANI")
+    ax.set_ylabel(measure)
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(workdir / "glance_MASH_ANI_similarity_boxplot.png")
@@ -148,7 +208,7 @@ def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
 
     fig, ax = plt.subplots()
     ax.hist(values, bins=100)
-    ax.set_xlabel("MASH ANI")
+    ax.set_xlabel(measure)
     ax.set_ylabel("Genome pairs")
     ax.set_title(title)
     fig.tight_layout()

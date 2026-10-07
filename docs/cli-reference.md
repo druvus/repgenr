@@ -332,22 +332,24 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 
 ### glance
 
-Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
+Quick all-vs-all ANI overview (dendrogram + similarity plots).
 
-Needs dRep (on the PATH, or via the container backend) and no
-dereplication; compares every genome in genomes/ and writes
-glance_clustering_dendrogram.pdf and two Mash ANI plots,
+Needs dRep or sourmash (on the PATH, or via the container backend) and
+no dereplication; compares every genome in genomes/ and writes
+glance_clustering_dendrogram.pdf and two ANI plots,
 glance_MASH_ANI_similarity_boxplot.png and
-glance_MASH_ANI_similarity_histogram.png.
+glance_MASH_ANI_similarity_histogram.png. dRep reports Mash ANI;
+sourmash reports the k-mer ANI estimate that dereplicate --tool
+sourmash thresholds.
 
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
-| `--tool` | `drep` | Dereplicator with comparison support: drep. |
+| `--tool` | `auto` | Dereplicator with comparison support: auto, drep, sourmash. auto uses dRep when it can run (on the PATH or via the container backend), otherwise sourmash. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--plot-max` | `1.0` | Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
-| `--plot-min` | `0.0` | Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1. |
-| `--keep-files` | off | Keep the dRep working directory glance_wd/. |
+| `--plot-max` | `1.0` | Upper bound of the ANI values plotted, as a fraction from 0 to 1. |
+| `--plot-min` | `0.0` | Lower bound of the ANI values plotted, as a fraction from 0 to 1. |
+| `--keep-files` | off | Keep the comparison tool's working directory glance_wd/. |
 
 ### cluster-summary
 
