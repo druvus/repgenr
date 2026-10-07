@@ -82,3 +82,54 @@ def test_derep_stock_list_is_a_query_but_pack_is_recorded(tmp_path: Path, monkey
     rec = Config.load(wd).stages["derep_stock"]
     assert rec.completed and rec.params["action"] == "pack" and rec.params["name"] == "r1"
     assert (wd / "derep" / "stock" / "r1").is_dir()
+
+
+def test_cluster_summary_on_missing_workdir_exits_3_without_creating_it(tmp_path: Path) -> None:
+    # The manifest digest of the resume fingerprint must not create the
+    # workdir (or its manifest) before the stage reports the missing input.
+    wd = tmp_path / "absent"
+    result = _runner.invoke(app, ["cluster-summary", "-wd", str(wd)])
+    assert result.exit_code == 3, result.output
+    assert not wd.exists()
+
+
+def test_derep_stock_unpack_reruns_after_the_dereplication_changed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A repeat unpack of the same run must restore it when the live derep/
+    # outputs changed in between (e.g. a new dereplicate), and skip otherwise.
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    clusters = wd / "derep" / CLUSTERS_TSV
+    stored = clusters.read_text(encoding="utf-8")
+
+    def stock(action: str) -> None:
+        result = _runner.invoke(
+            app, ["derep-stock", "-wd", str(wd), "--action", action, "--name", "r1"]
+        )
+        assert result.exit_code == 0, result.output
+
+    stock("pack")
+    stock("unpack")
+    stamp = Config.load(wd).stages["derep_stock"].completed
+    stock("unpack")  # nothing changed: skipped
+    assert Config.load(wd).stages["derep_stock"].completed == stamp
+
+    # A different dereplication replaces the live outputs.
+    clusters.write_text(
+        "representative\tmember\n"
+        "Fam_Gen_sp2_GCA_000002.1.fasta\tFam_Gen_sp2_GCA_000002.1.fasta\n"
+        "Fam_Gen_sp2_GCA_000002.1.fasta\tFam_Gen_sp1_GCA_000001.1.fasta\n",
+        encoding="utf-8",
+    )
+    stock("unpack")
+    assert clusters.read_text(encoding="utf-8") == stored
+
+
+def test_derep_stock_on_missing_workdir_exits_3(tmp_path: Path) -> None:
+    # A mistyped -wd must not read as an empty store.
+    wd = tmp_path / "absent"
+    for args in (["--action", "list"], ["--action", "delete", "--name", "r1"]):
+        result = _runner.invoke(app, ["derep-stock", "-wd", str(wd), *args])
+        assert result.exit_code == 3, result.output
+    assert not wd.exists()

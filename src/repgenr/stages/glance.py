@@ -43,10 +43,10 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
             f"Dereplicator '{params.tool}' does not support glance comparisons. "
             f"Tools with compare support: {', '.join(supporters) or 'none'}."
         )
-    adapter.preflight()
     genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
+    versions = adapter.preflight()
 
     glance_wd = ctx.workdir / "glance_wd"
     if glance_wd.exists():
@@ -69,6 +69,7 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
         "glance",
         tool=params.tool,
         params=asdict(params),
+        tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

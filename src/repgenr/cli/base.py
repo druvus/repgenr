@@ -194,7 +194,13 @@ def _derep_stock_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     if action == "pack":
         return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
     if action == "unpack":
-        return [ctx.derep_dir / "stock" / name]
+        # The live derep outputs are inputs too: unpack replaces them, so a
+        # repeat unpack after a new dereplicate must restore the run again.
+        return [
+            ctx.derep_dir / "stock" / name,
+            ctx.derep_dir / CLUSTERS_TSV,
+            ctx.representatives_dir,
+        ]
     return []
 
 
@@ -263,6 +269,13 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Invocations that rewrite their own declared inputs (derep-stock unpack
+# restores derep/): the record is stamped with digests taken after the run,
+# so an identical repeat matches the restored state and skips.
+_REDIGEST_AFTER_RUN: dict[str, Any] = {
+    "derep_stock": lambda p: getattr(p, "action", None) == "unpack",
+}
+
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
     "derep_stock": lambda p: getattr(p, "action", None) == "list",
@@ -282,7 +295,9 @@ def _stage_input_digests(ctx: WorkdirContext, stage_name: str, params: Any) -> d
     if spec is None:
         return {}
     digests = inputs_digest(ctx.workdir, spec(ctx, params))
-    if stage_name in _MANIFEST_INPUT_STAGES:
+    # Opening the manifest creates it; a missing workdir has none to digest,
+    # and the stage itself then reports the missing input.
+    if stage_name in _MANIFEST_INPUT_STAGES and ctx.workdir.is_dir():
         digests["manifest"] = manifest_digest_for_stage(stage_name, ctx.manifest)
     return digests
 
@@ -610,6 +625,10 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
     # Stamp fingerprint + input digests on the record the stage just wrote,
     # so the next invocation can skip.
     record = ctx.config.stages.get(stage_name)
+    redigest = _REDIGEST_AFTER_RUN.get(stage_name)
+    if record is not None and redigest is not None and redigest(params):
+        digests = _stage_input_digests(ctx, stage_name, params)
+        fingerprint = _stage_fingerprint(stage_name, params, digests, _env_fragment())
     if record is not None:
         record.fingerprint = fingerprint
         record.inputs = digests
