@@ -404,7 +404,14 @@ def run(
                 "or --genomes-dir."
             )
         if reads:
-            reads_params(platform=platform)
+            # Also parses --accession-file and checks that a selection is given.
+            reads_params(
+                target_family=target_family,
+                target_genus=target_genus,
+                target_species=target_species,
+                accession_file=None if accession_file is None else str(accession_file),
+                platform=platform,
+            )
             assemble_params(assembler=assembler)
         if with_snptype:
             # The standalone snptype stage uses --snptyper whatever the MSA

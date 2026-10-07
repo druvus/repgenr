@@ -224,6 +224,12 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- `reads --accession-file` treats text from a `#` to the end of the line as a
+  comment, also after indentation or after an accession. `reads` (and `run
+  --reads`) parse the accession file and check that a selection is given
+  before the workdir is created, so a rejected call leaves no directory or
+  log; entry stages in general build their parameters before creating the
+  workdir.
 - `genome --accession-list-only` writes `ncbi_acc_download_list.txt` with a
   newline after the last accession, so `wc -l` and `while read` loops see
   every accession.

@@ -133,11 +133,11 @@ def reads_params(
     drop_selection: Any = _UNSET,
     one_per_sample: Any = _UNSET,
 ) -> ReadsParams:
-    from ..stages.reads import PLATFORMS, ReadsParams
+    from ..stages.reads import PLATFORMS, ReadsParams, validate
 
     if platform is not _UNSET:
         _require_choice(platform, set(PLATFORMS), "--platform")
-    return _build(
+    params = _build(
         ReadsParams,
         target_family=target_family,
         target_genus=target_genus,
@@ -151,6 +151,10 @@ def reads_params(
         drop_selection=drop_selection,
         one_per_sample=one_per_sample,
     )
+    # Parse the accession file and check the selection now: the builder runs
+    # before the workdir is created, so a rejected call leaves nothing behind.
+    validate(params)
+    return params
 
 
 def assemble_params(

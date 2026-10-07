@@ -398,7 +398,6 @@ they are recorded here and not fixed.
 | Phylogeny | `tree2tax-relations` with an outgroup that is not a leaf logs a warning and leaves the tree unrooted, with exit 0. |
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
-| reads | `--accession-file` treats only a `#` in column 1 as a comment, and a rejected invocation still creates the workdir and a log. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused, and `--polisher auto` with no polisher installed leaves ONT assemblies unpolished without a warning. |
 | derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
 | derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |

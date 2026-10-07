@@ -88,3 +88,22 @@ def test_assemble_command_rejects_an_unknown_assembler(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["assemble", "-wd", str(tmp_path / "wd"), "--assembler", "velvet"])
     assert result.exit_code != 0
     assert "--assembler" in result.output + str(result.exception or "")
+
+
+def test_a_rejected_reads_call_leaves_no_workdir(tmp_path: Path) -> None:
+    wd = tmp_path / "wd"
+    missing = _runner.invoke(
+        app, ["reads", "-wd", str(wd), "--accession-file", str(tmp_path / "nope.txt")]
+    )
+    assert missing.exit_code == 2, missing.output
+    assert not wd.exists()
+    empty = _runner.invoke(app, ["reads", "-wd", str(wd)])
+    assert empty.exit_code == 2, empty.output
+    assert not wd.exists()
+    comments_only = tmp_path / "acc.txt"
+    comments_only.write_text("# nothing here\n", encoding="utf-8")
+    none_listed = _runner.invoke(
+        app, ["reads", "-wd", str(wd), "--accession-file", str(comments_only)]
+    )
+    assert none_listed.exit_code == 2, none_listed.output
+    assert not wd.exists()
