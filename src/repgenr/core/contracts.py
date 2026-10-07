@@ -266,25 +266,50 @@ def _opt_float(value: str | None) -> float | None:
     return float(value)
 
 
+_OUTGROUP_FLAGS = {"1": True, "true": True, "yes": True, "0": False, "false": False, "no": False}
+
+
+def _outgroup_flag(value: str | None) -> bool:
+    """The is_outgroup column: 1/0 as written, true/false and yes/no accepted.
+
+    Any other value is an error: reading it as 0 put an intended outgroup into
+    the ingroup without a message.
+    """
+    key = (value or "0").strip().lower() or "0"
+    if key not in _OUTGROUP_FLAGS:
+        raise ValueError(f"is_outgroup must be 0 or 1, not {value!r}")
+    return _OUTGROUP_FLAGS[key]
+
+
 def read_selection(path: Path) -> list[SelectionRow]:
-    """Read a selection.tsv back into SelectionRow records."""
+    """Read a selection.tsv back into SelectionRow records.
+
+    A malformed file (undecodable, an unknown outgroup flag, a quality value
+    that is not a number) raises WorkdirError naming the file and line.
+    """
     rows: list[SelectionRow] = []
-    with open(path, encoding="utf-8", newline="") as fo:
-        reader = csv.DictReader(fo, delimiter="\t")
-        _require_columns(reader, path, ["accession", "filename"])
-        for row in reader:
-            rows.append(
-                SelectionRow(
-                    accession=row["accession"],
-                    family=row.get("family", ""),
-                    genus=row.get("genus", ""),
-                    species=row.get("species", ""),
-                    is_outgroup=row.get("is_outgroup", "0") == "1",
-                    filename=row["filename"],
-                    completeness=_opt_float(row.get("completeness")),
-                    contamination=_opt_float(row.get("contamination")),
-                )
-            )
+    try:
+        with open(path, encoding="utf-8", newline="") as fo:
+            reader = csv.DictReader(fo, delimiter="\t")
+            _require_columns(reader, path, ["accession", "filename"])
+            for row in reader:
+                try:
+                    rows.append(
+                        SelectionRow(
+                            accession=row["accession"],
+                            family=row.get("family") or "",
+                            genus=row.get("genus") or "",
+                            species=row.get("species") or "",
+                            is_outgroup=_outgroup_flag(row.get("is_outgroup")),
+                            filename=row["filename"],
+                            completeness=_opt_float(row.get("completeness")),
+                            contamination=_opt_float(row.get("contamination")),
+                        )
+                    )
+                except ValueError as exc:
+                    raise WorkdirError(f"{path} line {reader.line_num}: {exc}.") from exc
+    except UnicodeDecodeError as exc:
+        raise WorkdirError(f"{path} is not UTF-8 text ({exc.reason}).") from exc
     return rows
 
 

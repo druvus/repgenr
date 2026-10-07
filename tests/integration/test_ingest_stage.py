@@ -345,3 +345,33 @@ def test_ingest_empty_source_with_subdirectories_says_so(tmp_path: Path, workdir
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="1 subdirectories, which ingest does not search"):
         run(ctx, IngestParams(genomes_dir=str(src)))
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("acc\tfilename\nA\ta.fasta\n", "lacks the column"),
+        ("accession\tfilename\tcompleteness\nA\ta.fasta\thigh\n", "line 2: could not convert"),
+        ("accession\tfilename\tis_outgroup\nA\ta.fasta\tmaybe\n", "is_outgroup must be 0 or 1"),
+    ],
+)
+def test_ingest_malformed_selection_is_a_user_input_error(
+    tmp_path: Path, workdir: Path, body: str, message: str
+) -> None:
+    """A bad --selection exited 3 (workdir) or 1 (crash) instead of 2."""
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text(body)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=message):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))
+
+
+def test_ingest_selection_outgroup_flag_accepts_true(tmp_path: Path, workdir: Path) -> None:
+    """'true' used to read as 0 and leave the intended outgroup in the ingroup."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    sel = tmp_path / "sel.tsv"
+    sel.write_text("accession\tfilename\tis_outgroup\nA\ta.fasta\tno\nB\tb.fasta\tTRUE\n")
+    ctx = WorkdirContext(workdir, create=True)
+    assert run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel))) == 1
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "B"

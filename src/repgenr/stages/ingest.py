@@ -33,7 +33,7 @@ from ..core.contracts import (
     strip_fasta_suffix,
     write_selection,
 )
-from ..core.errors import UserInputError
+from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import looks_like_fasta, refuse_foreign_rows
 from ..core.manifest import GenomeRecord, record_from_selection
 
@@ -144,7 +144,11 @@ def _rows_from_selection(
 ) -> list[SelectionRow]:
     if not path.is_file():
         raise UserInputError(f"--selection {path} is not a file.")
-    rows = read_selection(path)
+    try:
+        rows = read_selection(path)
+    except WorkdirError as exc:
+        # The file is the user's input here, not workdir state.
+        raise UserInputError(f"--selection: {exc}") from exc
     missing = [r.filename for r in rows if r.filename not in by_name]
     if missing:
         unsupported = {p.name for p in others} & set(missing)
