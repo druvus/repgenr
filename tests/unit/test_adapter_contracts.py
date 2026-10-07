@@ -314,3 +314,23 @@ def test_every_registered_dereplicator_has_contract_coverage() -> None:
 def test_every_registered_treebuilder_has_contract_coverage() -> None:
     builtin = {"fasttree", "iqtree", "mashtree", "raxmlng", "sourmash"}
     assert builtin & set(tree_registry.names()) <= set(_TREE_PARAM_TOKENS)
+
+
+def test_drep_exit_0_without_results_is_a_tool_failure(genomes, tmp_path, monkeypatch) -> None:
+    """dRep without CheckM logs the problem, exits 0 and writes no Cdb.csv."""
+    import pytest
+
+    import repgenr.dereplicators.drep as drep_mod
+    from repgenr.core.errors import ToolExecutionError
+
+    def drep_without_checkm(caps, command, *, logger, **kwargs):
+        wd = Path(str(command[2]))
+        (wd / "data_tables").mkdir(parents=True)
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", drep_without_checkm)
+    with pytest.raises(ToolExecutionError) as info:
+        drep_mod.DrepDereplicator().dereplicate(genomes, tmp_path / "out", DerepParams(), _LOG)
+    assert info.value.exit_code == 6
+    assert str(info.value) == "dRep exited 0 without writing its results"
+    assert "CheckM" in info.value.details()

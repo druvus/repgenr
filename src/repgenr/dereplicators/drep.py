@@ -20,7 +20,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import list_fasta
-from ..core.errors import WorkdirError
+from ..core.errors import ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy, write_fofn
 from .base import (
@@ -152,6 +152,18 @@ class DrepDereplicator(Dereplicator):
         if not drep_wd.exists():
             raise WorkdirError(
                 "dRep working directory was not created; confirm dRep is installed and runs."
+            )
+        if not (drep_wd / "data_tables" / "Cdb.csv").exists():
+            # dRep logs some fatal problems and still exits 0; the most common
+            # is CheckM missing when no genome quality is given.
+            raise ToolExecutionError(
+                [str(c) for c in cmd],
+                0,
+                "dRep wrote no data_tables/Cdb.csv. dRep stops this way when CheckM "
+                "is not on PATH: it scores genome quality with CheckM unless "
+                "--ignoreGenomeQuality is set, which --virus does. The [drep] lines "
+                "in repgenr.log show the step where it stopped.",
+                tool="dRep",
             )
         return _parse_drep_output(drep_wd, logger)
 
