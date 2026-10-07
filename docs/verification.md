@@ -396,12 +396,8 @@ they are recorded here and not fixed.
 | Phylogeny | mashtree can drop degenerate genomes and exit 0, and no check compares the leaves of the tree with the input genomes. |
 | Phylogeny | A `tree.nwk` with text after the final `;` is accepted by `tree2tax` but flagged as truncated by `doctor`. |
 | Phylogeny | `tree2tax-relations` with an outgroup that is not a leaf logs a warning and leaves the tree unrooted, with exit 0. |
-| Phylogeny | FastTree on the variable-site-only alignment of the `simple` typer gives branch lengths above one substitution per site, because there is no ascertainment correction; usage.md could say so. |
-| Phylogeny | `phylo-build --msa-only` leaves `snp/` beside `msa.fasta`, and a ska2 run keeps its k-mer files in `scratch/snptype/`. |
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
-| Help text | `glance --tool` lists four dereplicators but only dRep supports comparison; `reads -tf/-tg/-ts` are not combined, since only the most specific is used; `tree2tax --node-basename` does not say that internal nodes otherwise get hash names. |
-| Help text | The `reads --drop-selection` default is rendered as a Python list in the reference, and the no-match message of `reads` does not mention `--max-bases`. |
 | reads | `--accession-file` treats only a `#` in column 1 as a comment, and a rejected invocation still creates the workdir and a log. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused, and `--polisher auto` with no polisher installed leaves ONT assemblies unpolished without a warning. |
 | derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
@@ -411,7 +407,6 @@ they are recorded here and not fixed.
 | Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
 | Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
-| Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |

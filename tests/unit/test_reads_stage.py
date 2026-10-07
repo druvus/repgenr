@@ -197,3 +197,26 @@ def test_amplified_libraries_are_dropped_by_default(workdir: Path, ena_fake, cap
     run(ctx, ReadsParams(target_species="x", one_per_sample=False, drop_selection=[]))
     kept = {r.run_accession: r for r in read_reads(workdir / READS_TSV)}
     assert kept["ERR17019821"].library_selection == "MDA"
+
+
+def test_no_match_message_names_every_active_filter(workdir: Path, monkeypatch, ena_fake) -> None:
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    ctx = WorkdirContext(workdir, create=True)
+    params = ReadsParams(
+        target_genus="Nothing", platform="ont", min_bases=5, max_bases=100, drop_selection=["MDA"]
+    )
+    with pytest.raises(UserInputError) as exc:
+        run(ctx, params)
+    msg = str(exc.value)
+    for flag in ("--platform", "--min-bases", "--max-bases", "--drop-selection"):
+        assert flag in msg
+
+
+def test_no_match_message_omits_inactive_filters(workdir: Path, monkeypatch, ena_fake) -> None:
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    ctx = WorkdirContext(workdir, create=True)
+    params = ReadsParams(target_genus="Nothing", drop_selection=[], one_per_sample=False)
+    with pytest.raises(UserInputError) as exc:
+        run(ctx, params)
+    assert "--max-bases" not in str(exc.value)
+    assert "--platform" not in str(exc.value)

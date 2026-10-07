@@ -19,7 +19,6 @@ from .base import (
     PIPELINE_LOCAL,
     PIPELINE_READS,
     PIPELINE_VIRAL,
-    _derep_help,
     _require_choice,
     _run,
     app,
@@ -155,10 +154,22 @@ def doctor(
         raise typer.Exit(code=1)
 
 
+def _glance_tool_help() -> str:
+    """Dereplicators that implement the comparison capability, from the registry."""
+    from ..dereplicators.base import Dereplicator, registry
+
+    names = [
+        n
+        for n in registry.names()
+        if not registry.is_broken(n) and registry.get(n).compare is not Dereplicator.compare
+    ]
+    return f"{', '.join(names) or '(none registered)'} (dereplicators that support comparison)."
+
+
 @app.command(rich_help_panel=PANEL_INSPECT)
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
-    tool: str = typer.Option("drep", "--tool", help=_derep_help(auto=False)),
+    tool: str = typer.Option("drep", "--tool", help=_glance_tool_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     plot_max: float = typer.Option(
         1.0, "--plot-max", help="Upper similarity bound of the values plotted."

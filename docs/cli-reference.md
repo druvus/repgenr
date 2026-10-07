@@ -60,7 +60,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `-r`, `--release` |  | GTDB release (tsv source). |
 | `--gtdb-version` |  | GTDB table: bac120 or ar53 (tsv source). |
 | `--metadata-source` | `tsv` | tsv or api. |
-| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
+| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. With --source tsv, -r/--release and --gtdb-version are still required. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
 | `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
@@ -94,7 +94,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype or --with-snptype. |
-| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--node-basename` |  | Name internal nodes <basename><n>. Without it, internal nodes receive names derived from a hash of their descendant leaves. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
@@ -135,7 +135,7 @@ The --source option is called --metadata-source in 'run'.
 | `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
 | `-ts`, `--target-species` |  | Restrict the selection to this species. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
+| `--metadata-path` |  | Use this GTDB metadata table instead of downloading. With --source tsv, -r/--release and --gtdb-version are still required. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
 | `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
@@ -213,16 +213,16 @@ Select sequencing runs from ENA/SRA by taxon or accession (writes reads.tsv).
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `-tf`, `--target-family` |  | Restrict the selection to this family. |
-| `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
-| `-ts`, `--target-species` |  | Restrict the selection to this species. |
+| `-tf`, `--target-family` |  | Restrict the selection to this family. Only the most specific of -tf/-tg/-ts given is used; they are not combined. |
+| `-tg`, `--target-genus` |  | Restrict the selection to this genus. Only the most specific of -tf/-tg/-ts given is used; they are not combined. |
+| `-ts`, `--target-species` |  | Restrict the selection to this species. Only the most specific of -tf/-tg/-ts given is used; they are not combined. |
 | `--accession` |  | A run (SRR/ERR/DRR), sample (SAMN.., SRS..) or study (PRJNA.., SRP..) accession to include (repeatable). |
 | `--accession-file` |  | File of accessions, one per line (# comments allowed). |
 | `--platform` | `any` | Keep runs of one platform: any, illumina, ont or pacbio. |
 | `--max-runs` |  | Keep at most N runs, the largest by bases. |
 | `--min-bases` | `0` | Drop runs with fewer sequenced bases than this. |
 | `--max-bases` |  | Drop runs with more sequenced bases than this (a guard against whole-host libraries, which would assemble into a host-dominated genome). |
-| `--drop-selection` | `['MDA']` | Drop runs whose ENA library selection is this value (repeatable; default MDA, whole-genome amplification). Pass 'none' to keep every selection. |
+| `--drop-selection` | `MDA` | Drop runs whose ENA library selection is this value (repeatable; default MDA, whole-genome amplification). Pass 'none' to keep every selection. |
 | `--one-per-sample`, `--all-runs` | on | Keep the best run of each sample (a long-read run with enough bases, else the largest run), or every run. |
 
 ### assemble
@@ -321,7 +321,7 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
-| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--node-basename` |  | Name internal nodes <basename><n>. Without it, internal nodes receive names derived from a hash of their descendant leaves. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
@@ -337,7 +337,7 @@ Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
-| `--tool` | `drep` | drep, galah, skder, sourmash. |
+| `--tool` | `drep` | drep (dereplicators that support comparison). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--plot-max` | `1.0` | Upper similarity bound of the values plotted. |
 | `--plot-min` | `0.0` | Lower similarity bound of the values plotted. |
@@ -506,7 +506,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--clusters` |  | derep clusters.tsv (for --include-dereplicated). |
 | `--outgroup-dir` |  | Directory holding the outgroup genome file(s). |
 | `--outgroup-accession` |  | File naming the outgroup accession. |
-| `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
+| `--node-basename` |  | Name internal nodes <basename><n>. Without it, internal nodes receive names derived from a hash of their descendant leaves. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |

@@ -62,7 +62,10 @@ HELP_WORKDIR = "Working directory."
 HELP_WORKDIR_CREATED = "Working directory (created)."
 HELP_GTDB_RELEASE = "GTDB release (tsv source)."
 HELP_GTDB_VERSION = "GTDB table: bac120 or ar53 (tsv source)."
-HELP_METADATA_PATH = "Use this GTDB metadata table instead of downloading."
+HELP_METADATA_PATH = (
+    "Use this GTDB metadata table instead of downloading. With --source tsv, "
+    "-r/--release and --gtdb-version are still required."
+)
 HELP_NODOWNLOAD = "Reuse a GTDB table already present in the workdir."
 HELP_LIMIT = "Keep at most N GTDB genomes, round-robin over species by CheckM quality."
 HELP_DATASET = "GTDB dataset: all or rep."
@@ -96,7 +99,10 @@ HELP_TARGET_REPS = (
     "(0 = off; re-runs dereplication per search step)."
 )
 HELP_ALLOW_INCOMPLETE = "Proceed with a warning when the input genome set is incomplete."
-HELP_NODE_BASENAME = "Name internal nodes <basename><n> instead of by content hash."
+HELP_NODE_BASENAME = (
+    "Name internal nodes <basename><n>. Without it, internal nodes receive names "
+    "derived from a hash of their descendant leaves."
+)
 HELP_ROOT_NAME = "Label of the top node."
 HELP_REMOVE_OUTGROUP = "Leave the outgroup out of the taxonomy after rooting."
 HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative in the taxonomy."

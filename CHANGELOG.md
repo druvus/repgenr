@@ -221,6 +221,15 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- Help and documentation wording from the command audit: `glance --tool`
+  lists only dereplicators that support comparison, the `reads` taxon options
+  say only the most specific is used, `tree2tax --node-basename` says internal
+  nodes otherwise get hash-derived names, and `--metadata-path` says `-r` and
+  `--gtdb-version` are still required. The `reads` no-match message names every
+  active filter including `--max-bases`, and the command reference shows list
+  defaults as comma-separated values. usage.md notes that variable-site-only
+  alignments give inflated branch lengths, and that `phylo-build --msa-only`
+  and `ska2` leave `snp/` and k-mer files in place.
 - `genome --accession-list-only` writes `ncbi_acc_download_list.txt` with a
   newline after the last accession, so `wc -l` and `while read` loops see
   every accession.
