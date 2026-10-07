@@ -71,3 +71,22 @@ def test_missing_workdir_exits_3_without_creating_it(tmp_path: Path, unreachable
     assert result.exit_code == 3, result.output
     assert "Traceback" not in result.output
     assert not missing.exists()
+
+
+def test_flag_change_is_not_reported_as_a_changed_input(workdir: Path) -> None:
+    """--no-include-dereplicated drops derep/clusters.tsv from the stage inputs;
+    the rerun must not claim that file changed when it did not."""
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _setup(workdir).close()
+    runner = CliRunner()
+    first = runner.invoke(app, ["tree2tax", "-wd", str(workdir)])
+    assert first.exit_code == 0, first.output
+    for flag in ("--no-include-dereplicated", "--include-dereplicated"):
+        result = runner.invoke(app, ["tree2tax", "-wd", str(workdir), flag])
+        assert result.exit_code == 0, result.output
+    log = (workdir / "repgenr.log").read_text()
+    assert log.count("Wrote tree2tax.tsv") == 3  # each flag change re-ran
+    assert "'derep/clusters.tsv' changed" not in log

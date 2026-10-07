@@ -487,14 +487,26 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
                 stage_name,
             )
             return
-        changed = sorted(
-            key for key in {*prior.inputs, *digests} if prior.inputs.get(key) != digests.get(key)
-        )
+        # A key present on one side only means the stage now reads a different
+        # set of inputs (a flag such as --include-dereplicated, or an outgroup
+        # added), not that a file's content changed; say which.
+        shared = prior.inputs.keys() & digests.keys()
+        changed = sorted(key for key in shared if prior.inputs[key] != digests[key])
+        added = sorted(digests.keys() - prior.inputs.keys())
+        dropped = sorted(prior.inputs.keys() - digests.keys())
         if changed and prior.inputs:
             logger.info(
                 "Stage '%s': input %s changed since last completion; re-running.",
                 stage_name,
                 ", ".join(f"'{c}'" for c in changed),
+            )
+        if (added or dropped) and prior.inputs:
+            logger.info(
+                "Stage '%s': reads a different input set than at last completion "
+                "(added: %s; no longer read: %s); re-running.",
+                stage_name,
+                ", ".join(f"'{c}'" for c in added) or "none",
+                ", ".join(f"'{c}'" for c in dropped) or "none",
             )
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage
