@@ -35,7 +35,7 @@ from ..core.contracts import (
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import refuse_foreign_rows
-from ..core.manifest import GenomeRecord, record_from_selection
+from ..core.manifest import MANIFEST_FILENAME, GenomeRecord, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
 
@@ -69,7 +69,9 @@ def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
     a mistyped directory or a bad genome file does not leave a finished ingest
     (and the stages built on it) looking interrupted.
     """
-    if not params.drop_foreign:
+    # Only an existing manifest can hold appended genomes; opening one in a new
+    # workdir would create an empty manifest.sqlite for a refused ingest.
+    if not params.drop_foreign and (ctx.workdir / MANIFEST_FILENAME).exists():
         refuse_foreign_rows(ctx, "ingest", drop_foreign=False, logger=ctx.logger)
     _plan(params, logger=None)
 
