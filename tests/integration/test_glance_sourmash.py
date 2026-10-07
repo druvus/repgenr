@@ -233,13 +233,16 @@ def test_resolve_auto_tool_counts_a_container_backend(monkeypatch) -> None:
     assert resolve_auto_tool(reg) == "drep"
 
 
-def test_auto_records_the_concrete_tool_and_resumes(workdir: Path, fake_sourmash) -> None:
+def test_auto_records_the_concrete_tool_and_resumes(
+    workdir: Path, fake_sourmash, monkeypatch
+) -> None:
+    import repgenr.core.plugins as plugins
+
+    # Hermetic: the real resolver runs, but availability is stubbed (dRep
+    # absent, sourmash present) so the result does not depend on the PATH.
+    monkeypatch.setattr(plugins, "tool_available", lambda caps: caps.name == "sourmash")
     _setup(workdir)
     runner = CliRunner()
-    import shutil
-
-    if shutil.which("dRep"):
-        pytest.skip("dRep is on the PATH; auto would pick it")
     result = runner.invoke(app, ["glance", "-wd", str(workdir), "-t", "2"])
     assert result.exit_code == 0, result.output
     record = Config.load(workdir).stages["glance"]
