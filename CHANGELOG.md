@@ -371,6 +371,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `metadata` with a local GTDB table names `--gtdb-version` when it is missing
   (it named `--version`) and reruns when the `--metadata-path` table changes.
   `vmetadata --source bvbrc` reports an unreachable FTP server as exit 3.
+- `snptype --tool simple` with no variable sites names the genome count and
+  the reference, and suggests a closer reference, more divergent genomes, or
+  an alignment-free tree.
 
 ### Changed
 - A run whose assembler is not installed is excused as

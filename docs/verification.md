@@ -391,7 +391,6 @@ they are recorded here and not fixed.
 | Area | Observation |
 |---|---|
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
-| Errors | `snptype` with no variable sites exits 3; a message that names the cause would help. |
 | Phylogeny | A `tree.nwk` with text after the final `;` is accepted by `tree2tax` but flagged as truncated by `doctor`. |
 | Phylogeny | `tree2tax-relations` with an outgroup that is not a leaf logs a warning and leaves the tree unrooted, with exit 0. |
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
