@@ -30,7 +30,8 @@ top level, and the execution reports under `pipeline_info/`.
 | `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
-| `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster with its member genomes (and the representative unless `--no-representant`), linked or copied from `genomes/`. Replaced on each run. |
+| `derep/representatives/` | dereplicate | The representative genomes, one genome file per cluster; the distinct values of the first column of `clusters.tsv`. |
+| `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster, named after the representative's filename without the extension, with its member genomes (and the representative unless `--no-representant`), linked or copied from `genomes/`. Replaced on each run. |
 | `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv` and a `representatives/` directory of links to the representative genomes. `unpack` restores it. |
 | `glance_clustering_dendrogram.pdf` | glance | dRep's clustering dendrogram over all genomes. |
 | `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all Mash ANI values within `--plot-min`/`--plot-max`. A run removes the previous glance plots and dendrogram once the comparison succeeds, so a plot with no values in range is absent rather than stale. |
@@ -66,6 +67,18 @@ dereplicator.
 | `rep_completeness`, `rep_contamination` | CheckM values of the keeper from the manifest; blank when unknown. |
 | `member_max_completeness`, `member_min_contamination` | Best values among the scored members; blank when no member is scored. |
 | `best_member` | Highest-scoring genome in the cluster by completeness minus five times contamination, keeper included. Equals `representative` when the keeper is already the best; blank when nothing in the cluster is scored. |
+
+The species columns come from the genome filenames
+(`Family_genus_species_ACCESSION.fasta`), not from `selection.tsv`. A name that
+does not follow that pattern gives an unreliable species. In a cluster of one
+species `n_species` is 1. A larger value means the cluster joins several
+species, or, for names such as the synthetic benchmark sets, that every genome
+has its own species token. With no quality in the manifest (for example after
+`ingest` without `--selection` columns) the four quality columns and
+`best_member` are blank and the command logs that it left them blank.
+
+To list the members of a cluster, see "Finding the members of a cluster" in
+[usage.md](usage.md#inspecting-a-dereplication).
 
 A row whose `best_member` differs from its `representative` marks a cluster
 where a member outscores the keeper. This is expected under `--keeper tool`,

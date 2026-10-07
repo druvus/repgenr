@@ -105,6 +105,12 @@ Guidance:
   re-picks each cluster's representative by completeness minus 5 times
   contamination, using the values in the manifest, whichever tool clustered.
   `--keeper tool` keeps the adapter's choice.
+- On the synthetic set `clonal_50_clustered` (groups of 20, 15 and 15 genomes,
+  within-group ANI about 0.995 or higher, between-group about 0.96 or lower),
+  `sourmash`, `galah` and `skder` at the defaults formed the same three
+  clusters, and each kept a different representative. To check this on your own
+  data, see "Comparing two dereplications" in
+  [usage.md](usage.md#inspecting-a-dereplication).
 
 ## 5. Phylogeny routes
 
