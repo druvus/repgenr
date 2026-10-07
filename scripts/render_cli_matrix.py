@@ -106,12 +106,15 @@ def _option_rows(cmd) -> list[str]:
 
 def render_reference(cli=None) -> str:
     """The command reference: every command with its options, defaults and help."""
+    from repgenr.cli.base import COMMAND_PANELS
+
     cli = cli or _click_tree()
     lines = [
         "# Command reference",
         "",
         "Generated from the command tree by `scripts/render_cli_matrix.py`; the",
-        "matrix test keeps it in sync. Global options go before the command name",
+        "matrix test keeps it in sync. Commands are grouped as in `repgenr --help`.",
+        "Global options go before the command name",
         "(`repgenr --container docker dereplicate ...`).",
         "",
         "## Global options",
@@ -119,15 +122,17 @@ def render_reference(cli=None) -> str:
         *_option_rows(cli),
         "",
     ]
-    for name in sorted(cli.commands):
-        cmd = cli.commands[name]
-        lines += [f"## {name}", "", (cmd.help or "").strip(), ""]
-        lines += (
-            _option_rows(cmd)
-            if any(getattr(p, "opts", None) for p in cmd.params)
-            else ["(no options)"]
-        )
-        lines.append("")
+    for panel, names in COMMAND_PANELS.items():
+        lines += [f"## {panel}", ""]
+        for name in names:
+            cmd = cli.commands[name]
+            lines += [f"### {name}", "", (cmd.help or "").strip(), ""]
+            lines += (
+                _option_rows(cmd)
+                if any(getattr(p, "opts", None) for p in cmd.params)
+                else ["(no options)"]
+            )
+            lines.append("")
     return "\n".join(lines)
 
 

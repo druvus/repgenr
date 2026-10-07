@@ -356,6 +356,17 @@ def test_rendered_reference_in_sync() -> None:
     )
 
 
+def test_rendered_reference_has_panel_and_command_headings() -> None:
+    from repgenr.cli.base import COMMAND_PANELS
+    from scripts.render_cli_matrix import render_reference
+
+    headings = set(render_reference(CLICK).splitlines())
+    for panel, names in COMMAND_PANELS.items():
+        assert f"## {panel}" in headings
+        for name in names:
+            assert f"### {name}" in headings
+
+
 @pytest.mark.parametrize(("command", "flag", "rec"), RECORDS, ids=IDS)
 def test_every_flag_is_documented(command, flag, rec) -> None:
     """Each flag appears in at least one document besides the audit matrix."""
