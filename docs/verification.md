@@ -320,7 +320,7 @@ ok, and also counts the docs agreement check.
 | genome | ok | ok | ok | not run | open | not run | open |
 | vmetadata | ok | ok | ok | ok | open | not run | open |
 | vgenome | open | ok | ok | ok | ok | not run | open |
-| ingest | ok | ok | ok | ok | ok | ok | ok |
+| ingest | fixed | fixed | fixed | fixed | fixed | ok | fixed |
 | reads | ok | fixed | ok | ok | ok | not run | fixed |
 | assemble | ok | ok | fixed | ok | fixed | not run | fixed |
 | dereplicate | ok | fixed | fixed | ok | ok | ok | fixed |
@@ -403,6 +403,17 @@ parser), so they also apply to commands other than the one named.
 | derep-stock | Packing under a stored name replaced that run without notice; it now warns | #218 |
 | derep-stock | Unpack copied every representative (1.9 GB at 1000 genomes); it now hardlinks like `dereplicate` | #218 |
 | derep-stock | Unpack re-stamped the `dereplicate` record from the record live at unpack time, so a sourmash run restored after a skDER run was shown as `[skder]` by `status` and `versions`; a stored run now keeps its own record (`record.json`), and runs stored without one fall back as before | #220 |
+| ingest | An `--outgroup` file outside `--genomes-dir` named like an ingroup genome replaced that genome without a message (49 of 50 genomes left); it now exits 2 | (this PR) |
+| ingest | NCBI assembly filenames (`GCF_000008985.1_ASM898v1_genomic.fna`) parsed as family `GCF` with accession `genomic`, so a Datasets download kept one manifest row of many; the accession now comes from the leading GCA_/GCF_ accession | (this PR) |
+| ingest | Two files with one accession were all staged while the manifest kept one; a selection listing one file twice staged it twice; both now exit 2 | (this PR) |
+| ingest | Empty files and dangling links were staged and failed inside the dereplication tool; they now exit 2 before anything is staged | (this PR) |
+| ingest | Files without a supported suffix (`x.fna.gz`, `X.FASTA`) were skipped without a message; they are now listed in a warning, and an empty source holding subdirectories says they are not searched | (this PR) |
+| ingest | A malformed `--selection` exited 3 or crashed with exit 1, and `is_outgroup` `true` was read as 0 (the outgroup went into the ingroup); now exit 2 with file and line, and true/false, yes/no are accepted | (this PR) |
+| ingest | A refused re-ingest marked the finished ingest as interrupted; the checks now run before the record is touched | (this PR) |
+| ingest | Relative paths were recorded as given, so `doctor` run from another directory reported the source as changed; they are now recorded absolute | (this PR) |
+| ingest, metadata | `repgenr --force ingest` on an unchanged set cleared the manifest's dereplication status while `dereplicate` was skipped as up to date; an unchanged genome now keeps it | (this PR) |
+| doctor | Every `.fasta.gz` genome was reported as not FASTA (to be deleted); gzip files are now judged by their decompressed content | (this PR) |
+| doctor | Links left dangling by a moved source were reported as not FASTA with advice to re-run the genome stage; they are now named as dangling links with advice to re-run ingest | (this PR) |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -424,6 +435,11 @@ they are recorded here and not fixed.
 | Resume | The skip message says "use --force to re-run", but `--force` is a global option and must come before the command (`repgenr --force glance ...`); `repgenr glance --force` exits 2 with "No such option". |
 | derep-stock | A stored run keeps links to the representative files, but unpack restores by name from `genomes/`; a genome replaced under the same name since the pack is restored in its current form. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
+| ingest | `status` shows `dereplicate` as done after the genome set changed; only `doctor` and the next run detect the stale input. |
+| ingest | A refused first ingest in a new workdir leaves an `[interrupted]` record (no earlier record exists to keep clean). |
+| ingest | Only `.fasta.gz` is accepted among compressed suffixes; `.fna.gz` and `.fa.gz` (the NCBI FTP default) are skipped with a warning. Widening the suffix list changes the genome contract of every stage and is left as a proposal. |
+| ingest | Any name with four or more `_`-separated tokens is read as Family_genus_species_ACCESSION (`sample_1_run_A.fasta` gives accession `A`); documented, with `--selection` as the remedy. |
+| Resume | `metadata --metadata-path`, `reads --accession-file` and `assemble --outgroup` record relative paths as given, as ingest did before this audit. |
 
 ## Platform notes (macOS / Apple Silicon)
 

@@ -292,6 +292,35 @@ All notable changes to RepGenR are documented here. The format follows
   which stays in `record.json`. Runs stored without `record.json` fall back
   to the previous behaviour, and pack warns when there is no completed
   `dereplicate` record to store.
+- `ingest` refuses (exit 2) an `--outgroup` file from outside `--genomes-dir`
+  whose name gives the filename or accession of an ingroup genome; the
+  outgroup replaced that genome without a message.
+- NCBI assembly filenames (`GCF_000008985.1_ASM898v1_genomic.fna`) give the
+  leading GCA_/GCF_ accession and no taxonomy. They parsed as family `GCF`
+  with accession `genomic`, so an ingested NCBI Datasets download kept one
+  manifest row of many.
+- `ingest` refuses genomes that share an accession (for example `x.fasta`
+  and `x.fna`) and a selection that lists one file twice; the manifest kept
+  one row while `genomes/` and `selection.tsv` kept all.
+- `ingest` refuses empty and unreadable genome files (dangling links
+  included) before staging anything, lists the files it skips for lack of a
+  FASTA suffix (`x.fna.gz`, `X.FASTA`) in a warning, and says when an empty
+  source holds subdirectories, which it does not search.
+- A malformed `ingest --selection` exits 2 naming the file and line (it
+  exited 3, or 1 for a non-numeric quality value or a non-UTF-8 file), and
+  the `is_outgroup` column accepts `true`/`false` and `yes`/`no`; other
+  values are an error rather than read as 0.
+- A refused `ingest` leaves the record of an earlier finished ingest
+  complete; `status` and `doctor` reported it as interrupted.
+- `ingest` records `--genomes-dir`, `--selection` and an outgroup file as
+  absolute paths, so `doctor` run from another directory no longer reports
+  the source as changed.
+- A re-selection that leaves a genome unchanged (`repgenr --force ingest` on
+  the same directory) keeps its dereplication status in the manifest; it was
+  cleared while `dereplicate` was skipped as up to date.
+- `doctor` judges `.fasta.gz` genomes by their decompressed content (it
+  reported every one as not FASTA), and names links left dangling by a moved
+  source instead of reporting them as not FASTA.
 - `status` lists an interrupted optional stage (for example a `glance` run
   killed mid-way) as `[interrupted]` with the same hint as a stage of the
   chain. It showed `(incomplete)`, a word the documentation does not use.
