@@ -224,6 +224,12 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- `derep-unpack` warns about each cluster member that is missing from
+  `genomes/` (one line listing them when there are more than ten) instead of
+  leaving it out silently. `derep-stock --action unpack` of a stored run
+  without `cluster_summary.tsv` rebuilds the summary from the restored
+  clusters, and drops a live `genome_status.tsv` the stored run lacks,
+  instead of keeping the files of the replaced dereplication.
 - `assemble` and `assemble-run` with `--polisher auto` print one warning per
   platform when an adapter would polish the runs but its tool is not
   installed (for example medaka for ONT), naming the adapters and the remedy.

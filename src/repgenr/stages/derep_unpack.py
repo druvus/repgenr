@@ -34,6 +34,7 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
     unpack_dir.mkdir(parents=True)
 
     empty = 0
+    missing: list[str] = []
     for rep, members in clusters.items():
         targets = list(members)
         if not params.no_representant:
@@ -47,6 +48,9 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
             source = ctx.genomes_dir / genome
             if source.exists():
                 link_or_copy(source, cluster_dir / genome)
+            else:
+                missing.append(genome)
+    _warn_missing(missing, ctx.genomes_dir, logger)
     if empty:
         logger.info("%d clusters had only a representative and were skipped", empty)
     ctx.config.record_stage(
@@ -57,3 +61,26 @@ def run(ctx: WorkdirContext, params: DerepUnpackParams) -> Path:
     ctx.save_config()
     logger.info("Unpacked %d clusters into %s", len(clusters), unpack_dir)
     return unpack_dir
+
+
+_MAX_MISSING_LINES = 10
+
+
+def _warn_missing(missing: list[str], genomes_dir: Path, logger) -> None:
+    """Name the cluster members that are not under ``genomes/``.
+
+    One line per genome, or one line listing them all when there are more
+    than ten, so a large gap does not flood the console.
+    """
+    if not missing:
+        return
+    if len(missing) > _MAX_MISSING_LINES:
+        logger.warning(
+            "%d cluster members are not in %s and were left out: %s",
+            len(missing),
+            genomes_dir,
+            ", ".join(missing),
+        )
+        return
+    for genome in missing:
+        logger.warning("Cluster member %s is not in %s; left out", genome, genomes_dir)

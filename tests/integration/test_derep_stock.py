@@ -168,3 +168,17 @@ def test_unpack_of_incomplete_run_raises_before_changing_the_workdir(
         derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
     assert {p.name for p in ctx.representatives_dir.iterdir()} == set(_REPS)
     assert (ctx.derep_dir / "clusters.tsv").read_text() == clusters_before
+
+
+def test_unpack_of_a_run_without_summary_rebuilds_the_summary(workdir: Path) -> None:
+    from repgenr.core.contracts import read_cluster_summary
+
+    ctx = _setup_contract(workdir)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="old"))  # no summary stored
+    # A later dereplication with a different clustering writes its own summary.
+    (ctx.derep_dir / "cluster_summary.tsv").write_text(
+        "representative\tn_members\nstale.fasta\t9\n", "utf-8"
+    )
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="old"))
+    rows = read_cluster_summary(ctx.derep_dir / "cluster_summary.tsv")
+    assert {r.representative for r in rows} == set(_REPS)

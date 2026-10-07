@@ -21,6 +21,7 @@ from ..core.contracts import (
     list_fasta,
     read_clusters,
     read_genome_status,
+    write_cluster_summary,
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.process import remove_tree
@@ -125,6 +126,10 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         src = run_path / name
         if src.exists():
             shutil.copy2(src, ctx.derep_dir / name)
+        elif (ctx.derep_dir / name).exists():
+            # Do not leave a file of the replaced dereplication beside the
+            # restored ones; the summary is rebuilt below.
+            (ctx.derep_dir / name).unlink()
     if ctx.representatives_dir.exists():
         remove_tree(ctx.representatives_dir)
     ctx.representatives_dir.mkdir(parents=True)
@@ -140,6 +145,19 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     _update_manifest(
         ctx, DerepResult(representatives=[], clusters=clusters, genome_status=genome_status)
     )
+    summary = ctx.derep_dir / CLUSTER_SUMMARY_TSV
+    if not summary.exists():
+        # A run packed before the summary existed: rebuild it from the
+        # restored clusters, as the dereplicate stage would have written it.
+        from .cluster_summary import summarise_clusters
+        from .dereplicate import _quality_lookup
+
+        write_cluster_summary(summary, summarise_clusters(clusters, _quality_lookup(ctx)))
+        ctx.logger.info(
+            "Stored run '%s' has no %s; rebuilt it from the restored clusters",
+            run_path.name,
+            CLUSTER_SUMMARY_TSV,
+        )
     prior = ctx.config.stages.get("dereplicate")
     ctx.config.record_stage(
         "dereplicate",

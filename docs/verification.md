@@ -399,7 +399,6 @@ they are recorded here and not fixed.
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
-| derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
 | derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
 | glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
 | Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
