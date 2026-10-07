@@ -197,3 +197,49 @@ def test_ingest_refuses_to_drop_appended_assemblies(tmp_path: Path, workdir: Pat
         run(ctx, IngestParams(genomes_dir=str(src)))
     run(ctx, IngestParams(genomes_dir=str(src), drop_foreign=True))
     assert {g.accession for g in ctx.manifest.all_genomes()} == {"GCA_000001.1"}
+
+
+def test_ingest_records_drop_foreign(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, IngestParams(genomes_dir=str(src), drop_foreign=True))
+    assert ctx.config.stages["ingest"].params["drop_foreign"] is True
+
+
+@pytest.mark.parametrize("flag", ["b.fasta", "external"])
+def test_ingest_outgroup_flag_conflicting_with_selection_row_is_an_error(
+    tmp_path: Path, workdir: Path, flag: str
+) -> None:
+    """--outgroup naming another genome than the selection's outgroup row names both."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta", "og.fasta"])
+    selection = tmp_path / "sel.tsv"
+    write_selection(
+        selection,
+        [
+            SelectionRow("A1", "F", "G", "s", False, "a.fasta"),
+            SelectionRow("B1", "F", "G", "s", False, "b.fasta"),
+            SelectionRow("OG1", "F", "H", "t", True, "og.fasta"),
+        ],
+    )
+    if flag == "external":
+        external = tmp_path / "Out_grp_sp_X1.fasta"
+        external.write_text(_SEQ)
+        flag = str(external)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"og\.fasta.*--outgroup"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup=flag))
+
+
+def test_ingest_outgroup_flag_agreeing_with_selection_row(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta", "og.fasta"])
+    selection = tmp_path / "sel.tsv"
+    write_selection(
+        selection,
+        [
+            SelectionRow("A1", "F", "G", "s", False, "a.fasta"),
+            SelectionRow("OG1", "F", "H", "t", True, "og.fasta"),
+        ],
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup="OG1"))
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "OG1"

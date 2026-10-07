@@ -101,7 +101,8 @@ one command; `--selection`, `--outgroup` and `--copy` pass through to
 
 `--outgroup` names a genome under `--genomes-dir` (filename, stem or
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
-out of the ingroup.
+out of the ingroup. When `--selection` also marks an outgroup row, both must
+name the same genome; otherwise `ingest` exits 2 and names both.
 
 ### Starting from sequencing reads
 

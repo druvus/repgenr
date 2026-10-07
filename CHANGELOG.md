@@ -234,6 +234,9 @@ All notable changes to RepGenR are documented here. The format follows
   outgroup when it is not a leaf of the tree; they logged a warning, left the
   tree unrooted and exited 0. `tree2tax` after `phylo --no-outgroup` still
   leaves the tree unrooted.
+- `ingest --outgroup` naming another genome than the outgroup row of
+  `--selection` exits 2 and names both; the selection's outgroup row was
+  dropped without a message.
 
 ### Fixed
 - The `reads` no-match message names every active filter, including
@@ -389,6 +392,8 @@ All notable changes to RepGenR are documented here. The format follows
   `vmetadata` record `datasets`, the BV-BRC `vmetadata` records `bvbrc`, and
   `vgenome` records the outgroup tree builder when the outgroup search ran.
   The NCBI Virus `vmetadata` record keeps `released_after` in its parameters.
+- The `ingest` record in `repgenr.yaml` includes `drop_foreign` in its
+  parameters.
 
 ### Changed
 - A run whose assembler is not installed is excused as
