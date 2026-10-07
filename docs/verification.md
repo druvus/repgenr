@@ -391,7 +391,7 @@ they are recorded here and not fixed.
 | Area | Observation |
 |---|---|
 | Resume | The resume fingerprint covers parameters, inputs and the environment, not outputs, so a stage whose output was deleted by hand is skipped and `--force` is needed. |
-| Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3, while the exit-code table reserves 6 for a failed external tool. |
+| Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
 | Errors | A stage that fails cleanly leaves no record in `repgenr.yaml`, so `status` shows it as next and not interrupted, and `doctor` reports no failure while `tree/` holds partial files. |
 | Errors | `phylo --treebuilder mashtree` on a single-representative set fails inside mashtree, and `snptype` with no variable sites exits 3; a genome-count check would give a clearer message. |
 | Phylogeny | mashtree can drop degenerate genomes and exit 0, and no check compares the leaves of the tree with the input genomes. |
@@ -401,7 +401,6 @@ they are recorded here and not fixed.
 | Phylogeny | `phylo-build --msa-only` leaves `snp/` beside `msa.fasta`, and a ska2 run keeps its k-mer files in `scratch/snptype/`. |
 | Records | The `tree2tax` record in `repgenr.yaml` has no tool and no versions, although output.md says every stage records its tool versions. |
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
-| Docs | docs/output.md does not list `derep/unpacked/`, `derep/stock/<run>/`, the glance plots and `glance_wd/`, or the result directories of the stateless steps. |
 | Help text | `glance --tool` lists four dereplicators but only dRep supports comparison; `reads -tf/-tg/-ts` are not combined, since only the most specific is used; `tree2tax --node-basename` does not say that internal nodes otherwise get hash names. |
 | Help text | The `reads --drop-selection` default is rendered as a Python list in the reference, and the no-match message of `reads` does not mention `--max-bases`. |
 | reads | `--accession-file` treats only a `#` in column 1 as a comment, and a rejected invocation still creates the workdir and a log. |
@@ -409,14 +408,12 @@ they are recorded here and not fixed.
 | derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
 | derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
 | glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
-| Entry stages | `ncbi_acc_download_list.txt` has no trailing newline, so `wc -l` undercounts and a `while read` loop drops the last accession. |
 | Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
 | Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
 | Network | A BV-BRC group download writes `download.fa` in place, so an interrupted transfer can leave a partial file that the next run reuses. |
 | Network | The BV-BRC path uses FTPS directly, so proxy variables do not block it, and `vmetadata --list` needs the network whatever `--source` says. |
 | Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
-| Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table, and `vgenome --outgroup-treebuilder` does not name its accepted values (mashtree only). |
-| Docs | docs/output.md does not list `ncbi_acc_download_list.txt`, the deliverable of `genome --accession-list-only`. |
+| Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |

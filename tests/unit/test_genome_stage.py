@@ -236,3 +236,10 @@ def test_present_html_file_is_redownloaded(ctx, monkeypatch) -> None:
     acc_list = (ctx.workdir / "ncbi_acc_download_list.txt").read_text(encoding="utf-8")
     assert "GCF_000001.1" in acc_list
     assert any("--dehydrated" in c for c in calls)
+
+
+def test_accession_list_ends_with_newline(ctx, monkeypatch) -> None:
+    _fake_run_cmd(monkeypatch)
+    genome.run(ctx, GenomeParams(accession_list_only=True))
+    text = (ctx.workdir / "ncbi_acc_download_list.txt").read_text(encoding="utf-8")
+    assert text.endswith("\n") and not text.endswith("\n\n")

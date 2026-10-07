@@ -369,6 +369,13 @@ def _classifier_help() -> str:
     return tool_choices_help(registry, auto=True, prefix="Classifier: none, ")
 
 
+def _outgroup_builder_help() -> str:
+    from ..viral._outgroup import distance_matrix_builders
+
+    names = ", ".join(distance_matrix_builders()) or "(none registered)"
+    return f"Tree builder used for the outgroup distance matrix. Accepted: {names}."
+
+
 def _mask_help() -> str:
     from ..core.plugins import tool_choices_help
     from ..maskers.base import registry

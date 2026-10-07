@@ -215,6 +215,11 @@ All notable changes to RepGenR are documented here. The format follows
   under `docs/images/` are removed; git history keeps them.
 
 ### Fixed
+- `genome --accession-list-only` writes `ncbi_acc_download_list.txt` with a
+  newline after the last accession, so `wc -l` and `while read` loops see
+  every accession.
+- `vgenome --outgroup-treebuilder` help names the accepted values, taken from
+  the registered tree builders with distance-matrix support.
 - `status` and `doctor` exit 3 with the shared "Workdir not found" message
   when `-wd` does not exist, instead of exiting 0; an existing directory
   without `repgenr.yaml` still prints the entry-stage hint (status) or a
@@ -389,6 +394,10 @@ All notable changes to RepGenR are documented here. The format follows
 - The README installation section points to the install guide, its pipeline
   section shows the four stage chains, and its scalability claim states the
   largest recorded runs (1157 bacterial and 1256 viral genomes).
+- `docs/output.md` lists `derep/unpacked/`, `derep/stock/<name>/`, the
+  `glance` plots and `glance_wd/`, and `ncbi_acc_download_list.txt`. The
+  exit-code table in `docs/usage.md` states that `assemble` and `reads-gather`
+  exit 3 when every run was excused and nothing was produced.
 
 ## [2.1.0] - 2026-09-10
 
