@@ -22,6 +22,7 @@ top level, and the execution reports under `pipeline_info/`.
 | `repgenr.log` | all stages | Run log. |
 | `genomes/` | genome, ingest, vgenome | Genome FASTAs, one per selected accession. |
 | `outgroup/` | genome, ingest, vgenome | Outgroup genome for rooting. |
+| `ncbi_acc_download_list.txt` | genome | Accessions the download step will fetch, one per line (those without a FASTA in `genomes/`). With `--accession-list-only` it is the only output. |
 | `missing_accessions.txt` | genome | Accessions the download did not return; the completeness guard of later stages reads it. |
 | `reads.tsv` | reads | The selected sequencing runs: run, sample and study accessions, organism and taxid, the resolved family/genus/species tokens, platform, instrument, layout, bases, the FASTQ locations, checksums and sizes ENA reports (empty when ENA holds no FASTQ mirror), and ENA's library selection (RANDOM, MDA, PCR, ...). |
 | `assemblies/<run>/` | assemble | Each assembled run's filtered contigs and its `assembly.ok` marker (assembler, version, metrics); a re-run skips runs that have one. |
@@ -29,6 +30,11 @@ top level, and the execution reports under `pipeline_info/`.
 | `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
+| `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster with its member genomes (and the representative unless `--no-representant`), linked or copied from `genomes/`. Replaced on each run. |
+| `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv` and a `representatives/` directory of links to the representative genomes. `unpack` restores it. |
+| `glance_clustering_dendrogram.pdf` | glance | dRep's clustering dendrogram over all genomes. |
+| `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all Mash ANI values within `--plot-min`/`--plot-max`. |
+| `glance_wd/` | glance | dRep working files; kept only with `--keep-files`. |
 | `derep/clusters.tsv` | dereplicate | `representative<TAB>member`, one row per genome; a representative also lists itself. |
 | `derep/genome_status.tsv` | dereplicate | Per-genome status: `representative`, `contained` or `fail_qc`. |
 | `derep/cluster_summary.tsv` | dereplicate, cluster-summary | One row per representative: member count, species spanned and keeper quality against the members (below). |
