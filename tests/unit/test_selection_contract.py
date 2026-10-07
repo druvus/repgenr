@@ -49,6 +49,7 @@ def test_genome_fetch_downloads_selected_and_outgroup(monkeypatch, tmp_path: Pat
 
     # genome_steps imports the symbol into its namespace, so patch it there.
     monkeypatch.setattr("repgenr.stages.genome_steps.download_accessions", fake_download)
+    monkeypatch.setattr("repgenr.stages.genome_steps.preflight", lambda _caps: {"datasets": "0"})
 
     rows = [
         SelectionRow("GCF_1.1", "Fam", "Gen", "sp1", False, "Fam_Gen_sp1_GCF_1.1.fasta"),
@@ -77,6 +78,29 @@ def test_genome_fetch_rejects_missing_selection(tmp_path: Path) -> None:
         genome_fetch(
             GenomeFetchParams(selection_tsv=tmp_path / "nope.tsv", out_dir=tmp_path / "o"), _LOG
         )
+
+
+def test_genome_fetch_checks_datasets_before_downloading(monkeypatch, tmp_path: Path) -> None:
+    # Without --versions-out the step must still run the preflight, so a missing
+    # datasets binary is reported as MissingBinaryError (exit 4), not as a
+    # FileNotFoundError from the first download (exit 1 with a traceback).
+    from repgenr.core.errors import MissingBinaryError
+
+    def missing(_caps):
+        raise MissingBinaryError("datasets: not found on PATH")
+
+    def no_download(*_args, **_kwargs):
+        raise AssertionError("download attempted before the preflight")
+
+    monkeypatch.setattr("repgenr.stages.genome_steps.preflight", missing)
+    monkeypatch.setattr("repgenr.stages.genome_steps.download_accessions", no_download)
+    selection = tmp_path / "selection.tsv"
+    write_selection(
+        selection,
+        [SelectionRow("GCF_1.1", "Fam", "Gen", "sp1", False, "Fam_Gen_sp1_GCF_1.1.fasta")],
+    )
+    with pytest.raises(MissingBinaryError):
+        genome_fetch(GenomeFetchParams(selection_tsv=selection, out_dir=tmp_path / "o"), _LOG)
 
 
 def test_output_name_matches_canonical(tmp_path: Path) -> None:
