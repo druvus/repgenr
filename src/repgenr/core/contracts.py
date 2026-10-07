@@ -339,8 +339,9 @@ def read_genome_status(path: Path) -> dict[str, str]:
 class ClusterSummaryRow:
     """One dereplication cluster seen from its representative.
 
-    ``n_members`` excludes the representative. ``species`` lists the distinct
-    species across representative and members, the representative's first.
+    ``n_members`` excludes the representative; ``n_genomes`` includes it.
+    ``species`` lists the distinct species across representative and members,
+    the representative's first, capped at five names plus "+N more".
     Quality columns are ``None`` when the manifest carried no CheckM values;
     the ``member_*`` extremes span scored members only. ``best_member`` is the
     highest-scoring genome in the cluster (representative included) and equals
@@ -358,6 +359,11 @@ class ClusterSummaryRow:
     member_min_contamination: float | None = None
     best_member: str = ""
 
+    @property
+    def n_genomes(self) -> int:
+        """Genomes in the cluster, the representative included."""
+        return self.n_members + 1
+
 
 _CLUSTER_SUMMARY_COLUMNS = (
     "representative",
@@ -369,6 +375,8 @@ _CLUSTER_SUMMARY_COLUMNS = (
     "member_max_completeness",
     "member_min_contamination",
     "best_member",
+    # Appended last so the positions of the earlier columns stay unchanged.
+    "n_genomes",
 )
 
 
@@ -388,6 +396,7 @@ def write_cluster_summary(path: Path, rows: list[ClusterSummaryRow]) -> None:
                     _fmt_opt(r.member_max_completeness),
                     _fmt_opt(r.member_min_contamination),
                     r.best_member,
+                    r.n_genomes,
                 ]
             )
 

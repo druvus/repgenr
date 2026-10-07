@@ -236,7 +236,13 @@ def derep_unpack(
 def cluster_summary(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
 ) -> None:
-    """Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster)."""
+    """Regenerate derep/cluster_summary.tsv (size, species, keeper quality per cluster).
+
+    n_members counts the genomes under the representative and excludes it;
+    n_genomes includes it. Species come from the manifest taxonomy, or from
+    canonical filenames when the manifest has none, and at most five are
+    listed.
+    """
     from ..stages.cluster_summary import ClusterSummaryParams
 
     _run("cluster_summary", workdir, ClusterSummaryParams)

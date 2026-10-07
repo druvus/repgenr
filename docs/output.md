@@ -53,24 +53,28 @@ top level, and the execution reports under `pipeline_info/`.
 ## Cluster summary
 
 `derep/cluster_summary.tsv` condenses `clusters.tsv` into one row per
-representative, largest cluster first. `dereplicate` writes it after every run
+representative, largest cluster first and then by representative name.
+`dereplicate` writes it after every run
 and `repgenr cluster-summary -wd <workdir>` regenerates it for an existing
 working directory from `clusters.tsv` and the manifest, without rerunning the
-dereplicator.
+dereplicator. The outgroup is set aside before dereplication and has
+no row.
 
 | Column | Meaning |
 |--------|---------|
 | `representative` | Keeper filename, as in `clusters.tsv`. |
-| `n_members` | Genomes contained under the keeper (the keeper itself is not counted). |
-| `n_species` | Distinct species across keeper and members, parsed from the canonical filenames. |
-| `species` | Those species, comma-separated, the keeper's first. |
+| `n_members` | Genomes contained under the keeper; the keeper itself is not counted, so a cluster of 20 genomes reads 19 (`clusters.tsv` lists the keeper as a member of itself). |
+| `n_species` | Distinct species across keeper and members. The species comes from the manifest taxonomy (`selection.tsv` in the Nextflow steps) and, for a genome without one, from its canonical filename. A genome with neither adds no species, so a cluster of such genomes reports 0. Species are told apart by genus and epithet. |
+| `species` | Those species, comma-separated: the keeper's first, then by number of genomes and name. At most five are listed, followed by `+N more`; `n_species` gives the full count. An epithet shared by two genera is written with its genus, for example `Escherichia coli`. |
 | `rep_completeness`, `rep_contamination` | CheckM values of the keeper from the manifest; blank when unknown. |
 | `member_max_completeness`, `member_min_contamination` | Best values among the scored members; blank when no member is scored. |
 | `best_member` | Highest-scoring genome in the cluster by completeness minus five times contamination, keeper included. Equals `representative` when the keeper is already the best; blank when nothing in the cluster is scored. |
+| `n_genomes` | Genomes in the cluster, the keeper included (`n_members` + 1). It is the last column, so the positions of the earlier columns are unchanged. |
 
-The species columns come from the genome filenames
-(`Family_genus_species_ACCESSION.fasta`), not from `selection.tsv`. A name that
-does not follow that pattern gives an unreliable species. In a cluster of one
+The species columns come from the manifest taxonomy (`selection.tsv` in the
+Nextflow steps), and from the canonical filename
+(`Family_genus_species_ACCESSION.fasta`) for a genome without one. A genome
+with neither adds no species. In a cluster of one
 species `n_species` is 1. A larger value means the cluster joins several
 species, or, for names such as the synthetic benchmark sets, that every genome
 has its own species token. With no quality in the manifest (for example after

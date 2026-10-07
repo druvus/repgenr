@@ -581,3 +581,58 @@ def test_merge_target_reps_searches_secondary_ani(tmp_path: Path, register_tool)
     )
     # anidep keeps round(ani * 10); the search must settle on an ANI that yields 9.
     assert len(final.representatives) == 9
+
+
+def test_chunk_and_merge_summary_take_species_from_selection_tsv(tmp_path: Path, reg) -> None:
+    """Non-canonical filenames carry no species; selection.tsv supplies it."""
+    from repgenr.core.contracts import read_cluster_summary
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for i in range(4):
+        p = gdir / f"iso-{i}.fasta"
+        p.write_text(">x\nACGT\n")
+        genomes.append(p)
+    selection = tmp_path / "selection.tsv"
+    species = ["tularensis", "tularensis", "novicida", "holarctica"]
+    write_selection(
+        selection,
+        [
+            SelectionRow(f"A{i}", "Fam", "Francisella", f"Francisella {species[i]}", False, g.name)
+            for i, g in enumerate(genomes)
+        ],
+    )
+    dereplicate_chunk(
+        ChunkParams(
+            tool="halver", genomes=genomes, out_dir=tmp_path / "c0", selection_tsv=selection
+        ),
+        _LOG,
+    )
+    # halver of 4 -> reps [g0, g2]; g0 holds g1, g2 holds g3.
+    chunk_rows = {
+        r.representative: r for r in read_cluster_summary(tmp_path / "c0" / CLUSTER_SUMMARY_TSV)
+    }
+    assert (chunk_rows["iso-0.fasta"].n_species, chunk_rows["iso-0.fasta"].species) == (
+        1,
+        "tularensis",
+    )
+    assert chunk_rows["iso-2.fasta"].species == "novicida,holarctica"
+
+    dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+        ),
+        _LOG,
+    )
+    merged = {
+        r.representative: r for r in read_cluster_summary(tmp_path / "merged" / CLUSTER_SUMMARY_TSV)
+    }
+    assert all(r.n_species >= 1 for r in merged.values()), merged
+    # Without the selection table the same names carry no species.
+    dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes, out_dir=tmp_path / "bare"), _LOG)
+    bare = read_cluster_summary(tmp_path / "bare" / CLUSTER_SUMMARY_TSV)
+    assert all(r.n_species == 0 for r in bare)
