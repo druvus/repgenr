@@ -162,6 +162,10 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
             CLUSTER_SUMMARY_TSV,
         )
     prior = ctx.config.stages.get("dereplicate")
+    if prior is not None and not prior.completed:
+        # An incomplete record describes a run that did not finish, not the
+        # stored run being restored: carry nothing over from it.
+        prior = None
     ctx.config.record_stage(
         "dereplicate",
         tool=prior.tool if prior else None,

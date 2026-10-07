@@ -198,3 +198,18 @@ def test_deleting_an_unknown_run_exits_3_and_lists_the_stored_runs(workdir: Path
     again = runner.invoke(app, [*args, "--action", "delete", "--name", "gone"])
     assert again.exit_code == 3, again.output
     assert "'gone'" in again.output and "keep" in again.output
+
+
+def test_unpack_ignores_an_incomplete_dereplicate_record(workdir: Path) -> None:
+    """An [interrupted] dereplicate record describes a run that did not finish;
+    unpacking must not copy its tool or parameters onto the restored run."""
+    ctx = _setup_contract(workdir)
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    ctx.config.record_stage("dereplicate", tool="vsearch", params={"tool": "vsearch"})
+    ctx.save_config()
+
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = ctx.config.stages["dereplicate"]
+    assert record.completed
+    assert record.tool is None
+    assert record.params == {"stock": "run1"}
