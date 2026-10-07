@@ -292,8 +292,11 @@ After the tree is built, its leaves are compared with the input genomes
 degenerate and still exit 0, as mashtree does; a missing or unexpected leaf
 then exits 3 with the names and the builder. The tree is kept in `tree/` for
 inspection, and `phylo` is not recorded as completed. Leaf names are compared
-without a FASTA extension and with characters other than letters, digits, `_`
-and `-` read as `_`, since some tools rewrite them.
+without a FASTA extension or ParSNP's `.ref` reference marker, and with
+characters other than letters, digits, `_` and `-` read as `_`, since some
+tools rewrite them. This matching is looser than `tree2tax`, which uses leaf
+names as written, so a tree that passes the check can still leave leaves that
+`tree2tax` does not map to a genome.
 
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
