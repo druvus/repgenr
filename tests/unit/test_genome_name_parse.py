@@ -42,3 +42,16 @@ def test_non_canonical_name() -> None:
     fam, gen, sp, acc = parse_genome_filename("weird.fasta")
     assert (fam, gen, sp) == ("", "", "")
     assert acc == "weird"
+
+
+def test_ncbi_assembly_filename_gives_the_assembly_accession() -> None:
+    # Four tokens used to parse as Family=GCF, genus=000008985.1, accession
+    # "genomic", so every NCBI Datasets file shared one accession.
+    for name, acc in [
+        ("GCF_000008985.1_ASM898v1_genomic.fna", "GCF_000008985.1"),
+        ("GCA_000156415.1_genomic.fna", "GCA_000156415.1"),
+        ("GCF_000017785.1.fasta", "GCF_000017785.1"),
+    ]:
+        assert parse_genome_filename(name) == ("", "", "", acc)
+    # A canonical name holding the same accession is unchanged.
+    assert accession_from_filename("Fam_Gen_sp_GCF_000008985.1.fasta") == "GCF_000008985.1"

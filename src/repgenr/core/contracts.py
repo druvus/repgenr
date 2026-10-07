@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -122,15 +123,24 @@ def sanitise_taxon_tokens(family: str, genus: str, species: str) -> tuple[str, s
     return clean(family), clean(genus), clean(species)
 
 
+# An NCBI assembly accession leading a filename stem: GCA_/GCF_, digits, version.
+_NCBI_ASSEMBLY_PREFIX = re.compile(r"^(GC[AF]_\d+\.\d+)(?:_|$)")
+
+
 def parse_genome_filename(name: str) -> tuple[str, str, str, str]:
     """Inverse of :func:`genome_filename`. Returns (family, genus, species,
     accession). The first three ``_``-separated tokens are the taxonomy and
     **everything after** is the accession, so accessions with underscores
     (bacterial ``GCF_x.y``, viral ``NC_x.y``) and without (viral ``MN908947.3``)
-    all round-trip. A non-canonical name (< 4 tokens) yields empty taxonomy and
-    the whole stem as the accession.
+    all round-trip. A name that starts with an NCBI assembly accession (the
+    ``GCF_000008985.1_ASM898v1_genomic.fna`` files NCBI Datasets and the FTP site
+    deliver) yields empty taxonomy and that accession. Any other non-canonical
+    name (< 4 tokens) yields empty taxonomy and the whole stem as the accession.
     """
     stem = strip_fasta_suffix(Path(name).name)
+    ncbi = _NCBI_ASSEMBLY_PREFIX.match(stem)
+    if ncbi:
+        return "", "", "", ncbi.group(1)
     parts = stem.split("_")
     if len(parts) < 4:
         return "", "", "", stem
