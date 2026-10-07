@@ -114,3 +114,15 @@ def test_resolve_outgroup_files(tmp_path: Path) -> None:
     assert leaf == "Fam_Gen_sp_GCA_000004.1"
     # missing dir / accession -> no outgroup, no crash
     assert resolve_outgroup_files(tmp_path / "nope", acc, _LOG) == (None, None)
+
+
+def test_tree2tax_relations_rejects_a_malformed_tree(tmp_path: Path) -> None:
+    # A tree file that is not Newick is an input error (exit 3) naming the
+    # file, not a dendropy parser traceback (exit 1).
+    from repgenr.core.errors import WorkdirError
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("not a newick tree\n")
+    with pytest.raises(WorkdirError, match="tree.nwk"):
+        tree2tax_relations(Tree2taxStepParams(tree=tree, out_dir=tmp_path / "out"), _LOG)
+

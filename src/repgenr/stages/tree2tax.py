@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import dendropy
+from dendropy.utility.error import DataParseError
 
 from ..core.context import WorkdirContext
 from ..core.contracts import (
@@ -84,6 +85,7 @@ def _emit_relations(
     collapse_support: float | None = None,
     collapse_length: float | None = None,
     segments: dict[str, list[str]] | None = None,
+    tree_source: Path | None = None,
 ) -> tuple[Path, Path, int]:
     """Build FlexTaxD relations from a tree and write the two output tables.
 
@@ -95,7 +97,11 @@ def _emit_relations(
     """
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
-    tree = dendropy.Tree.get(data=tree_text, schema="newick", preserve_underscores=True)
+    try:
+        tree = dendropy.Tree.get(data=tree_text, schema="newick", preserve_underscores=True)
+    except (DataParseError, ValueError) as exc:
+        source = tree_source if tree_source is not None else "the tree"
+        raise WorkdirError(f"{source} is not a valid Newick tree: {exc}") from exc
 
     if outgroup_leaf is not None:
         _set_outgroup(tree, outgroup_leaf, logger)
@@ -150,6 +156,7 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         logger=logger,
         collapse_support=params.collapse_support,
         collapse_length=params.collapse_length,
+        tree_source=params.tree,
     )
     return out_tree2tax, out_map
 
@@ -178,6 +185,7 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
         collapse_support=params.collapse_support,
         collapse_length=params.collapse_length,
         segments=segments,
+        tree_source=tree_file,
     )
 
     ctx.config.record_stage(
