@@ -230,6 +230,10 @@ All notable changes to RepGenR are documented here. The format follows
   tree builder, when they differ; mashtree can drop a degenerate genome and
   exit 0. The tree is kept for inspection and the stage is not recorded as
   completed.
+- `tree2tax` and `tree2tax-relations` exit 3 with a message naming the
+  outgroup when it is not a leaf of the tree; they logged a warning, left the
+  tree unrooted and exited 0. `tree2tax` after `phylo --no-outgroup` still
+  leaves the tree unrooted.
 
 ### Fixed
 - The `reads` no-match message names every active filter, including

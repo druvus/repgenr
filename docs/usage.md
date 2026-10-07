@@ -298,6 +298,11 @@ tools rewrite them. This matching is looser than `tree2tax`, which uses leaf
 names as written, so a tree that passes the check can still leave leaves that
 `tree2tax` does not map to a genome.
 
+`tree2tax` and `tree2tax-relations` root the tree on the outgroup and exit 3
+when the outgroup is not a leaf of the tree. After `phylo --no-outgroup`,
+`tree2tax` leaves the tree unrooted; for `tree2tax-relations`, omit
+`--outgroup-accession` when the tree was built without the outgroup.
+
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
 

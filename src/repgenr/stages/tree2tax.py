@@ -112,7 +112,7 @@ def _emit_relations(
         raise WorkdirError(f"{source} is not a valid Newick tree: {exc}") from exc
 
     if outgroup_leaf is not None:
-        _set_outgroup(tree, outgroup_leaf, logger)
+        _set_outgroup(tree, outgroup_leaf, source)
 
     # Collapse before naming so node names describe the collapsed topology.
     stats = _collapse_weak_nodes(
@@ -217,6 +217,12 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
 
 
 def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:
+    phylo = ctx.config.stages.get("phylo")
+    if phylo is not None and phylo.completed and phylo.params.get("outgroup", "") is None:
+        # phylo ran without an outgroup (--no-outgroup, or none was found), so
+        # the tree has no outgroup leaf to root on.
+        logger.warning("phylo built the tree without an outgroup; tree is left unrooted")
+        return None
     acc_file = ctx.workdir / "outgroup_accession.txt"
     if not acc_file.exists() or not ctx.outgroup_dir.exists():
         logger.warning("No outgroup available; tree is left unrooted")
@@ -250,11 +256,16 @@ def _leaf_label(node) -> str:
     return node.taxon.label if node.taxon is not None else ""
 
 
-def _set_outgroup(tree: dendropy.Tree, leaf_label: str, logger) -> None:
+def _set_outgroup(tree: dendropy.Tree, leaf_label: str, source: object) -> None:
     node = tree.find_node_with_taxon_label(leaf_label)
-    if node is None:
-        logger.warning("Outgroup leaf %s not in tree; leaving unrooted", leaf_label)
-        return
+    if node is None or not node.is_leaf():
+        # Leaving the tree unrooted would give a taxonomy rooted at an
+        # arbitrary node with exit 0; a named outgroup must root the tree.
+        raise WorkdirError(
+            f"Outgroup {leaf_label} is not a leaf of the tree {source}. Rebuild the "
+            "tree with this outgroup, or omit the outgroup if the tree was built "
+            "without one (phylo --no-outgroup)."
+        )
     # Root on the outgroup's edge, not at its parent node: to_outgroup_position
     # keeps the parent as the root, and on an unrooted (trifurcating) tree from
     # mashtree, fasttree or the sourmash NJ that leaves the root with three
