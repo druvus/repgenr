@@ -324,9 +324,12 @@ repgenr phylo -wd $WD --msa-source snptype --treebuilder iqtree --mask gubbins
 Each stage records its parameters, the digests of its inputs, and the container
 identity in `repgenr.yaml`; re-running a stage is a safe no-op only when all
 three are unchanged (it logs that it skipped). Re-running an upstream stage
-(e.g. `dereplicate --force`) changes a downstream stage's input digests, so the
+(e.g. `repgenr --force dereplicate ...`) changes a downstream stage's input digests, so the
 downstream stage re-runs automatically the next time it is invoked. Change a
-parameter, switch `--container`, or pass `--force` to re-run explicitly. A
+parameter, switch `--container`, or pass `--force` to re-run explicitly.
+`--force` is a global option and goes before the command name
+(`repgenr --force dereplicate -wd WD`); after the command name it is rejected
+as an unknown option. A
 stage writes its record without a completion stamp before it starts, so one
 that failed or crashed mid-run is listed as `[interrupted]` by `status`,
 reported as a failure by `doctor`, and always re-runs; a successful run
