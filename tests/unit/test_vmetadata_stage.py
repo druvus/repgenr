@@ -163,6 +163,28 @@ def test_bvbrc_end_to_end(tmp_path, monkeypatch) -> None:
     assert "vmetadata" in ctx.config.stages
 
 
+def _refuse_ftp(*args, **kwargs):
+    raise ConnectionRefusedError(61, "Connection refused")
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        VmetadataParams(source="bvbrc", list_targets=True),
+        VmetadataParams(target="adenoviridae", source="bvbrc"),
+    ],
+    ids=["list", "download"],
+)
+def test_bvbrc_unreachable_is_a_named_workdir_error(tmp_path, monkeypatch, params) -> None:
+    """An unreachable BV-BRC FTP server raises the same named, expected error
+    class as an unreachable HTTP service (core.http), not a bare OSError that
+    the CLI reports as an unexpected failure (exit 1)."""
+    monkeypatch.setattr(vmetadata, "_ReuseFTP_TLS", _refuse_ftp)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(WorkdirError, match="BV-BRC"):
+        vmetadata.run(ctx, params)
+
+
 # --- vgenome dispatch ---------------------------------------------------------
 
 
