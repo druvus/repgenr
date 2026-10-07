@@ -136,22 +136,51 @@ def test_an_excused_tool_failure_stays_on_one_tsv_line(
     assert reason.startswith("assembly_failed:") and "boom" in reason
 
 
-def test_auto_without_an_installed_assembler_is_a_missing_tool(
+def test_auto_excuses_runs_whose_assembler_is_not_installed(
+    workdir: Path, tmp_path: Path, fake_assembler, monkeypatch, caplog
+) -> None:
+    # Only an Illumina assembler is installed: the Illumina run assembles, the
+    # ONT run (which flye would take) is excused with an accurate reason.
+    from repgenr.assemblers import base as assemblers_base
+
+    monkeypatch.setattr(_FakeAssembler, "read_types", frozenset({"ILLUMINA"}))
+    monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: caps.name == "fakeasm")
+    rows = [
+        _row(tmp_path, "SRR1"),
+        _row(tmp_path, "ONT1", "OXFORD_NANOPORE", "SINGLE"),
+        _row(tmp_path, "IONT", platform="ION_TORRENT"),
+    ]
+    ctx = _prepare(workdir, rows)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        n = run(ctx, AssembleParams(assembler="auto"))
+    assert n == 1
+    excused = {
+        e.run_accession: (e.step, e.reason) for e in read_excused_runs(workdir / EXCUSED_RUNS_TSV)
+    }
+    assert excused == {
+        "ONT1": ("assemble", "assembler_not_installed"),
+        "IONT": ("assemble", "unsupported_platform"),
+    }
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("OXFORD_NANOPORE" in w and "flye" in w and "--container" in w for w in warnings)
+    assert check_genome_completeness(ctx.genomes_dir, workdir, logger=_LOG) == []
+
+
+def test_auto_with_no_installed_assembler_is_a_missing_tool(
     workdir: Path, tmp_path: Path, monkeypatch
 ) -> None:
-    # A run some adapter accepts, with none of them installed, is a missing
-    # tool (exit 4), not a run excused as an unsupported platform.
+    # Nothing can be assembled because no assembler is installed: exit 4,
+    # naming the adapters per platform, not exit 3 with every run excused.
     from repgenr.assemblers import base as assemblers_base
     from repgenr.core.errors import MissingBinaryError
 
     monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: False)
-    ctx = _prepare(
-        workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "ONT1", "OXFORD_NANOPORE", "SINGLE")]
-    )
+    rows = [_row(tmp_path, "SRR1"), _row(tmp_path, "ONT1", "OXFORD_NANOPORE", "SINGLE")]
+    ctx = _prepare(workdir, rows)
     with pytest.raises(MissingBinaryError, match="skesa") as info:
         run(ctx, AssembleParams(assembler="auto"))
-    assert "flye" in str(info.value)
-    assert not (workdir / EXCUSED_RUNS_TSV).exists()
+    assert info.value.exit_code == 4 and "flye" in str(info.value)
 
 
 def test_outgroup_fasta_is_staged(workdir: Path, tmp_path: Path, fake_assembler) -> None:

@@ -141,9 +141,13 @@ accepts no less than 8). Each finished run leaves a marker under
 `assemblies/<run>/`, so an interrupted stage resumes without refetching;
 reads are deleted after a successful assembly unless `--keep-reads`, and the
 assembler's scratch unless `--keep-files`. A run without an ENA FASTQ
-mirror, one whose download fails its checksum, one no assembler accepts, or
-one whose assembly fails is written to `excused_runs.tsv` with the reason and
-the rest proceed; the completeness guard of later stages excuses those runs.
+mirror, one whose download fails its checksum, one no assembler accepts
+(`unsupported_platform`), one whose assembler is not installed under
+`--assembler auto` (`assembler_not_installed`, with a warning naming the
+adapters that would take it), or one whose assembly fails is written to
+`excused_runs.tsv` with the reason and the rest proceed; the completeness
+guard of later stages excuses those runs. When no run can be assembled
+because no assembler is installed, the stage exits 4 instead.
 `--outgroup FASTA` sets a genome aside for rooting, as `ingest --outgroup`
 does. Per-assembly metrics (contigs, total length, N50, coverage from the
 sequenced bases) are in `assembly_stats.tsv`.
