@@ -38,7 +38,9 @@ What each row rests on:
   distances saturate near identity, which makes `mashtree` weak on clonal sets.
 - **Viral.** The live suite runs the viral chain on Hepatovirus records from
   NCBI Virus with `sourmash` and `mashtree` (`test_run_viral_chain_end_to_end`,
-  21 seconds). No scaling measurement exists for viral sets.
+  21 seconds). The largest viral run recorded is 1256 Hepeviridae (hepatitis E)
+  genomes from BV-BRC: `skder` gave 799 representatives, followed by `mashtree`
+  and `tree2tax` (scaling audit). Other viral scaling is not measured.
 
 ## 2. Then by size
 
@@ -63,7 +65,8 @@ Notes on the table:
   limit was lowered after the measurement). The aligners and SNP typers have not
   been run at scale. In the audit, SibeliaZ did not finish within an hour at 20
   genomes, so its declared limit of 2000 is not supported by a run. The largest
-  recorded end-to-end run is the 1157-genome Francisella set.
+  recorded end-to-end runs are the 1157-genome Francisella set (bacterial) and
+  1256 Hepeviridae genomes (viral).
 - Past a few thousand genomes, dereplicate in chunks (`--process-size` on the
   CLI, `--derep_process_size` in Nextflow). Chunking changes which genome
   represents a cluster, not the clustering (scaling audit, finding 3).
@@ -85,7 +88,7 @@ Notes on the table:
 
 | Tool | Scaling shape | Representative criterion | Clone-block behaviour | Needs CheckM data | Verified |
 |---|---|---|---|---|---|
-| `skder` (default) | Near-linear in practice. Single pass: about 7 min at 1000 and 69 min at 5000, memory up to 8.2 GB. Chunked: about 15 min at 5000. | Its own aggregate score. Not quality-aware. | One representative per block. Which member is arbitrary. | No | Native and container (Wave) |
+| `skder` (default) | Superlinear in practice: 5 times the genomes cost about 10 times the wall time and 6 times the memory. Single pass: about 7 min at 1000 and 69 min at 5000, memory up to 8.2 GB. Chunked: about 15 min at 5000. | Its own aggregate score. Not quality-aware. | One representative per block. Which member is arbitrary. | No | Native and container (Wave) |
 | `galah` | Built for large sets. About 4 to 6 min at 1000 and 63 min at 5000. | Filename sort position within a clone block. | The alphabetically first member in the three orderings tested. | No | Native and container |
 | `sourmash` | Sparse back-end close to linear in close pairs. About 5.5 min at 5000, 0.3 to 0.7 GB. Dense back-end is capped at 5000. | Most-connected genome, alphabetical tie-break. | Biased toward the most-sequenced genotype. The sparse and dense back-ends can pick different members. | No | Native and container |
 | `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes, or `--ignoreGenomeQuality` | Container only |
@@ -94,7 +97,7 @@ Guidance:
 
 - Use `skder`, the default, for most sets.
 - Use `sourmash` with `--derep_process_size 2000` (Nextflow) or `--process-size
-  2000` for 10000 genomes or more.
+  2000` for 10000 genomes or more (not measured at this size).
 - Use `drep` only when CheckM data are available, and keep it under about 2000
   genomes.
 - The representative inside a clone block depends on the tool, its back-end and
@@ -102,9 +105,6 @@ Guidance:
   re-picks each cluster's representative by completeness minus 5 times
   contamination, using the values in the manifest, whichever tool clustered.
   `--keeper tool` keeps the adapter's choice.
-- The sourmash adapter converts similarity to ANI before applying
-  `--secondary-ani`. Before that fix it thresholded Jaccard similarity and left
-  most genomes as singletons; the audit records this as found and fixed.
 
 ## 5. Phylogeny routes
 
@@ -182,8 +182,8 @@ Notes:
 - The ENA selection filters that matter most are `--max-bases`, which drops
   whole-host libraries above a size, and `--drop-selection`, which drops
   libraries by ENA library selection. Its default is `MDA`: amplified libraries
-  assemble into chimeric, uneven contigs. A 12% contamination figure seen on one
-  MDA library disappeared once the library was dropped.
+  assemble into chimeric, uneven contigs. The 12% contamination seen on one
+  library came from MDA amplification, which the default now drops.
 - `--classifier auto` (the default) verifies each assembly's organism with
   sourmash gather against a GTDB sketch when one is given; without a sketch the
   check is skipped and the log says so.
@@ -195,7 +195,7 @@ Notes:
 
 | | `repgenr run` | `nextflow run nextflow/main.nf` |
 |---|---|---|
-| Best for | One machine, a few hundred to a few thousand genomes. | Scatter-gather dereplication above a few thousand genomes, HPC, cloud. |
+| Best for | One machine, up to about a thousand genomes (measured). | Scatter-gather dereplication above a few thousand genomes, HPC, cloud. |
 | Parallelism | Threads within a stage. | Tasks per chunk and per assembled run. |
 | Resume | Per stage, from parameter and input fingerprints. `--force` overrides. | Nextflow's `-resume` and task cache. |
 | Representative choice | `--keeper quality\|tool` | `--derep_keeper quality\|tool` |

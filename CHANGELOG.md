@@ -380,7 +380,7 @@ All notable changes to RepGenR are documented here. The format follows
   registered adapters.
 - The README installation section points to the install guide, its pipeline
   section shows the four stage chains, and its scalability claim states the
-  largest recorded run.
+  largest recorded runs (1157 bacterial and 1256 viral genomes).
 
 ## [2.1.0] - 2026-09-10
 
