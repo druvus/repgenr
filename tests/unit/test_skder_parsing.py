@@ -76,3 +76,43 @@ def test_skder_warns_when_argv_may_overflow(tmp_path, monkeypatch, caplog) -> No
             genomes, tmp_path / "out", params, logging.getLogger("test")
         )
     assert "--process-size" in caplog.text
+
+
+def test_partial_genome_joins_by_its_own_aligned_fraction(tmp_path: Path) -> None:
+    # A 40 percent fragment of a repA-like genome: 99 percent of the fragment
+    # aligns, 40 percent of repA does. skDER covers the fragment by repA, so the
+    # cutoff applies to the member's aligned fraction, not the smaller of the two.
+    edges = (
+        "Ref_file\tQuery_file\tANI\tAlign_fraction_ref\tAlign_fraction_query\tRef_name\tQuery_name\n"
+        "/g/frag.fasta\t/g/repA.fasta\t99.6\t99.3\t39.7\tf\trA\n"
+        "/g/repB.fasta\t/g/frag.fasta\t95.0\t39.7\t99.2\trB\tf\n"
+    )
+    out = _make_skder_out(tmp_path, edges)
+    genomes = [Path(f"/g/{n}.fasta") for n in ("repA", "repB", "frag")]
+    result = _parse_skder_output(out, genomes, ani_cutoff=99.0, af_cutoff=50.0, logger=_LOG)
+    assert result.clusters["repA.fasta"] == ["frag.fasta"]
+    assert result.genome_status["frag.fasta"] == "contained"
+
+
+def test_representative_aligned_fraction_does_not_admit_a_member(tmp_path: Path) -> None:
+    # The member's own aligned fraction (30) is below the cutoff; only the
+    # representative's side (95) passes. The edge does not assign the member by
+    # the cutoff rule, so it is placed under its closest representative at or
+    # above the ANI cutoff, with a warning naming it.
+    edges = (
+        "Ref_file\tQuery_file\tANI\tAlign_fraction_ref\tAlign_fraction_query\tRef_name\tQuery_name\n"
+        "/g/repA.fasta\t/g/memX.fasta\t99.5\t95\t30\trA\tmX\n"
+    )
+    out = _make_skder_out(tmp_path, edges)
+    genomes = [Path(f"/g/{n}.fasta") for n in ("repA", "repB", "memX")]
+    log = logging.getLogger("test.skder.nearest")
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    log.addHandler(handler)
+    try:
+        result = _parse_skder_output(out, genomes, ani_cutoff=99.0, af_cutoff=50.0, logger=log)
+    finally:
+        log.removeHandler(handler)
+    assert result.clusters["repA.fasta"] == ["memX.fasta"]
+    assert any("memX.fasta" in r.getMessage() for r in records if r.levelno == logging.WARNING)

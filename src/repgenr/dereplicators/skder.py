@@ -151,20 +151,52 @@ def _parse_skder_output(
 
     # Assign each non-representative to its closest representative via the skani
     # edge table (best ANI above the cutoffs). Streamed, so the full edge list is
-    # never materialized -- the table can be large for big inputs.
+    # never materialized -- the table can be large for big inputs. As in skDER's
+    # own selection, the aligned-fraction cutoff applies to the member's aligned
+    # fraction: a partial genome is covered by a complete representative even
+    # though only a small fraction of the representative aligns to it.
     best: dict[str, tuple[str, float]] = {}  # member -> (rep, ani)
-    for a, b, ani, af in _iter_edges(result_dir):
-        if ani < ani_cutoff or af < af_cutoff:
+    for a, b, ani, af_a, af_b in _iter_edges(result_dir):
+        if ani < ani_cutoff:
             continue
-        for member, rep in ((a, b), (b, a)):
+        for member, rep, member_af in ((a, b, af_a), (b, a, af_b)):
+            if member_af < af_cutoff:
+                continue
             if rep in rep_names and member not in rep_names:
                 if member not in best or ani > best[member][1]:
                     best[member] = (rep, ani)
+    # skDER covered every genome it did not select, but its aligned-fraction
+    # rule may differ from the one above at the margins (rounding at the
+    # cutoff, a later skDER rule). Place such a genome under its highest-ANI
+    # representative at or above the ANI cutoff instead of failing the whole
+    # stage, and name it.
+    unassigned = {g.name for g in genomes} - rep_names - best.keys()
+    if unassigned:
+        nearest: dict[str, tuple[str, float]] = {}
+        for a, b, ani, _af_a, _af_b in _iter_edges(result_dir):
+            if ani < ani_cutoff:
+                continue
+            for member, rep in ((a, b), (b, a)):
+                if member in unassigned and rep in rep_names:
+                    if member not in nearest or ani > nearest[member][1]:
+                        nearest[member] = (rep, ani)
+        for member, (rep, ani) in sorted(nearest.items()):
+            logger.warning(
+                "skDER did not select %s, and no edge to a representative meets "
+                "the aligned-fraction cutoff; placing it under its closest "
+                "representative %s (ANI %.2f).",
+                member,
+                rep,
+                ani,
+            )
+        best.update(nearest)
+
     for member, (rep, _ani) in best.items():
         clusters[rep].append(member)
         status[member] = STATUS_CONTAINED
 
-    # any remaining input genome that is neither a representative nor assigned
+    # any remaining input genome that is neither a representative nor assigned;
+    # the stage's completeness check refuses the result and names it
     for g in genomes:
         status.setdefault(g.name, STATUS_CONTAINED)
 
@@ -190,8 +222,13 @@ def _find_representatives_dir(result_dir: Path) -> Path | None:
     return None
 
 
-def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float]]:
-    """Stream skDER's skani edge table as (a, b, ANI, min_AF) basename tuples."""
+def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float, float]]:
+    """Stream skDER's skani edge table as (a, b, ANI, AF_a, AF_b) tuples.
+
+    The table is skani's ``Ref_file Query_file ANI Align_fraction_ref
+    Align_fraction_query ...``; ``AF_a`` is the aligned fraction of genome
+    ``a`` (the reference), ``AF_b`` that of ``b``. Names are basenames.
+    """
     edge_file = result_dir / "Skani_Triangle_Edge_Output.txt"
     if not edge_file.exists():
         matches = sorted(result_dir.rglob("*Edge_Output*.txt"))
@@ -207,7 +244,7 @@ def _iter_edges(result_dir: Path) -> Iterator[tuple[str, str, float, float]]:
                 continue
             try:
                 ani = float(fields[2])
-                af = min(float(fields[3]), float(fields[4]))
+                af_a, af_b = float(fields[3]), float(fields[4])
             except ValueError:
                 continue
-            yield (Path(fields[0]).name, Path(fields[1]).name, ani, af)
+            yield (Path(fields[0]).name, Path(fields[1]).name, ani, af_a, af_b)
