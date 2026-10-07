@@ -62,6 +62,11 @@ def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
     parsed = _parse_version(blob)
     if parsed:
         return ".".join(map(str, parsed))
+    # Without a version number, keep the first line only when the tool accepted
+    # the flag: a non-zero exit means the line is an error message (sibeliaz
+    # has no version flag and answers `-v` with "illegal option"), not a version.
+    if proc.returncode != 0:
+        return None
     return blob.strip().splitlines()[0] if blob.strip() else None
 
 
@@ -85,8 +90,9 @@ def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
             have = _parse_version(reported or "")
             want = _parse_version(spec.min_version)
             if have is None and want is not None and spec.strict_version:
+                got = f"got {reported!r}" if reported else "no version reported"
                 problems.append(
-                    f"{spec.name}: could not read a version (got {reported!r}); need "
+                    f"{spec.name}: could not read a version ({got}); need "
                     f">= {spec.min_version}. A legacy build that does not answer its "
                     "version flag may be shadowing it on PATH -- use a modern environment."
                 )
