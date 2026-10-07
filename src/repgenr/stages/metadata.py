@@ -178,6 +178,22 @@ def _record_from_tax(
     )
 
 
+# Newer GTDB releases (>= r220) ship the metadata as a plain ``.tsv.gz``;
+# older ones (<= r214) as a ``.tar.gz``. The modern layout is tried first.
+_TABLE_SUFFIXES = (".tsv.gz", ".tar.gz")
+
+
+def workdir_tables(workdir: Path, release: str, version: str) -> list[Path]:
+    """The GTDB table paths a download writes and ``--nodownload`` reuses.
+
+    One per naming scheme, in the order they are tried. The resume fingerprint
+    declares them as inputs under ``--nodownload``, so replacing a reused table
+    reruns the stage.
+    """
+    major = int(float(release))
+    return [workdir / f"{version}_metadata_r{major}{ext}" for ext in _TABLE_SUFFIXES]
+
+
 def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Path:
     if params.metadata_path and Path(params.metadata_path).exists():
         logger.info("Using provided metadata: %s", params.metadata_path)
@@ -191,12 +207,14 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
         f"https://data.gtdb.ecogenomic.org/releases/release{major}/"
         f"{params.release}/{params.version}_metadata_r{major}"
     )
-    # Newer GTDB releases (>= r220) ship the metadata as a plain ``.tsv.gz``;
-    # older ones (<= r214) as a ``.tar.gz``. Try the modern layout first, then
-    # fall back, so current releases resolve on the first request.
-    for ext in (".tsv.gz", ".tar.gz"):
+    # Try the modern layout first, then fall back, so current releases
+    # resolve on the first request.
+    for ext, dest in zip(
+        _TABLE_SUFFIXES,
+        workdir_tables(ctx.workdir, params.release, str(params.version)),
+        strict=True,
+    ):
         url = base + ext
-        dest = ctx.workdir / Path(url).name
         if params.nodownload and dest.exists():
             logger.info("Using previously downloaded %s", dest.name)
             return dest

@@ -276,3 +276,74 @@ def test_metadata_inputs_track_a_local_metadata_path(tmp_path: Path) -> None:
     table.write_text("accession\nRS_GCF_1\nRS_GCF_2\n", encoding="utf-8")
     after = _digests(ctx, "metadata", params)
     assert after != before
+
+
+def _write_gtdb_table(path: Path, species: list[str]) -> None:
+    import gzip
+
+    prefix = "d__Bacteria;p__P;c__C;o__O;f__Francisellaceae;g__Francisella;s__Francisella"
+    lines = [
+        "accession\tgtdb_genome_representative\tgtdb_taxonomy\tncbi_genbank_assembly_accession"
+    ]
+    for i, sp in enumerate(species, start=1):
+        acc = f"GCF_00000{i}.1"
+        lines.append(f"RS_{acc}\tRS_{acc}\t{prefix} {sp}\t{acc}")
+    with gzip.open(path, "wt", encoding="utf-8") as fo:
+        fo.write("\n".join(lines) + "\n")
+
+
+def test_metadata_nodownload_inputs_track_the_reused_table(tmp_path: Path) -> None:
+    """--nodownload reuses the table in the workdir, so it is a declared input."""
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    params = SimpleNamespace(
+        metadata_path=None, nodownload=True, release="232.0", version="bac120", source="tsv"
+    )
+    table = ctx.workdir / "bac120_metadata_r232.tsv.gz"
+    _write_gtdb_table(table, ["tularensis", "philomiragia"])
+    before = _digests(ctx, "metadata", params)
+    assert before
+    _write_gtdb_table(table, ["tularensis", "tularensis", "philomiragia"])
+    assert _digests(ctx, "metadata", params) != before
+    # without --nodownload the table is downloaded afresh: no file input
+    assert _digests(ctx, "metadata", SimpleNamespace(**{**vars(params), "nodownload": False})) == {}
+
+
+def test_metadata_nodownload_reruns_when_the_reused_table_is_replaced(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from repgenr.stages.metadata import MetadataParams
+
+    wd = tmp_path / "wd"
+    wd.mkdir()
+    table = wd / "bac120_metadata_r232.tsv.gz"
+    _write_gtdb_table(table, ["tularensis", "philomiragia"])
+
+    def build_params() -> MetadataParams:
+        return MetadataParams(
+            dataset="all",
+            level="species",
+            release="232.0",
+            version="bac120",
+            target_genus="Francisella",
+            target_species="tularensis",
+            nodownload=True,
+        )
+
+    def read_log() -> str:
+        for h in logging.getLogger("repgenr").handlers:
+            h.flush()
+        return (wd / "repgenr.log").read_text(encoding="utf-8")
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(cli._RUN_STATE, "log_level", logging.INFO)
+    cli._run("metadata", wd, build_params, create=True)
+    cli._run("metadata", wd, build_params, create=True)
+    assert read_log().count("already completed") == 1
+
+    _write_gtdb_table(table, ["tularensis", "tularensis", "philomiragia"])
+    cli._run("metadata", wd, build_params, create=True)
+    log = read_log()
+    assert "input 'bac120_metadata_r232.tsv.gz' changed since last completion" in log
+    assert log.count("already completed") == 1
+    ctx = WorkdirContext(wd)
+    assert ctx.config.stages["metadata"].params["selected_count"] == 2
