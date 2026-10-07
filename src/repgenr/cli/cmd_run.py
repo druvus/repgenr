@@ -63,7 +63,7 @@ from .base import (
     _aligner_help,
     _assembler_help,
     _derep_help,
-    _mask_help_msa,
+    _mask_help,
     _parse_key_values,
     _require_choice,
     _run,
@@ -286,7 +286,9 @@ def run(
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
-    mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
+    mask: str = typer.Option(
+        "none", "--mask", help=_mask_help() + " Needs --msa-source snptype or --with-snptype."
+    ),
     # --- taxonomy output ---
     node_basename: str | None = typer.Option(
         None,

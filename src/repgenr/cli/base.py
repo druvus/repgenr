@@ -58,7 +58,9 @@ HELP_LIMIT = "Keep at most N GTDB genomes, round-robin over species by CheckM qu
 HELP_DATASET = "GTDB dataset: all or rep."
 HELP_LEVEL = "family, genus or species."
 HELP_ALL_GENOMES = "Use all genomes, not only the representatives."
-HELP_BOOTSTRAP = "Bootstrap replicates (0 = off; IQ-TREE needs >=1000)."
+HELP_BOOTSTRAP = (
+    "Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on."
+)
 HELP_REFERENCE = "Reference genome filename."
 HELP_MSA_SOURCE = "aligner or snptype."
 HELP_ALIGNER_ARG = (

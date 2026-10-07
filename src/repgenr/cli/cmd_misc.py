@@ -67,7 +67,10 @@ def status(
 
     if not (workdir / CONFIG_FILENAME).exists():
         typer.echo(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
-        typer.echo("Start with 'repgenr metadata -wd <wd> ...' (or 'vmetadata' for viruses).")
+        typer.echo(
+            "Start with 'repgenr metadata' (bacteria), 'vmetadata' (viruses), "
+            "'ingest' (local genomes) or 'reads' (sequencing reads), with -wd <wd>."
+        )
         raise typer.Exit()
 
     cfg = Config.load(workdir)

@@ -90,10 +90,10 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype or --with-snptype. |
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
@@ -304,7 +304,7 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
@@ -480,7 +480,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
-| `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
+| `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
