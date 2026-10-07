@@ -38,7 +38,7 @@ from ..core.plugins import (
 )
 from ..core.process import link_or_copy, remove_tree
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
-from .cluster_summary import summarise_clusters
+from .cluster_summary import summarise_clusters, taxonomy_lookup
 
 
 @dataclass
@@ -605,7 +605,8 @@ def _write_contract(
     write_clusters(ctx.derep_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(ctx.derep_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
-        ctx.derep_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality)
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV,
+        summarise_clusters(result.clusters, quality, taxonomy_lookup(ctx)),
     )
 
 

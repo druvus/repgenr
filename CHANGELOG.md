@@ -7,6 +7,8 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `cluster_summary.tsv` gains a last column, `n_genomes`, which counts the
+  genomes in the cluster including the keeper (`n_members` excludes it).
 - `repgenr --help` groups the commands into panels (pipeline, entry points,
   core stages, inspection, environment, Nextflow steps) in pipeline order, and
   its epilog lists the four stage chains (bacterial, viral, local genomes,
@@ -129,6 +131,12 @@ All notable changes to RepGenR are documented here. The format follows
   as `dereplicate` does, copying only where the file system cannot link. At
   1000 representatives on one volume the unpack took 0.5 s instead of 5 s
   and no extra disk instead of 1.9 GB.
+- `cluster_summary.tsv` takes the species from the manifest taxonomy (from
+  `selection.tsv` in the Nextflow steps) and falls back to the canonical
+  filename. Before, `ingest --selection` with non-canonical filenames gave
+  wrong species. Species are told apart by genus and epithet. The `species`
+  column lists the keeper's species first, then by number of genomes, and
+  stops after five names with `+N more`. `n_species` keeps the full count.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
@@ -300,11 +308,17 @@ All notable changes to RepGenR are documented here. The format follows
   line, so the list can be read by a script and also appears under
   `--quiet`; it was a log message on stderr. `--action delete` logs the run
   it removed.
+- `cluster-summary` warns when `derep/clusters.tsv` lists no clusters,
+  instead of logging `Summarised 0 clusters` at info level.
 - `derep-stock --action unpack` rebuilds `derep/cluster_summary.tsv` from
   the restored clusters and the current manifest instead of restoring the
   stored copy. The stored copy carried the CheckM quality of pack time, and
   `cluster-summary` skipped afterwards (its inputs had not changed), so the
   live summary could disagree with the manifest.
+- `cluster_summary.tsv` no longer counts a genome whose filename is not
+  canonical as a species of its own: `n_species` and `species` now list only
+  the species parsed from canonical names (a cluster of such genomes reports
+  0 and a blank).
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.

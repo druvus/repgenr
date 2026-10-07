@@ -70,6 +70,21 @@ def test_cluster_summary_regenerates_from_clusters_tsv(tmp_path: Path, monkeypat
     assert second.exit_code == 0 and Config.load(wd).stages["cluster_summary"].completed == stamp
 
 
+def test_cluster_summary_warns_when_clusters_tsv_lists_no_cluster(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A clusters.tsv with only its header gives a header-only summary; say so
+    # at warning level instead of an ordinary "Summarised 0 clusters".
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    (wd / "derep" / CLUSTERS_TSV).write_text("representative\tmember\n", encoding="utf-8")
+    result = _runner.invoke(app, ["cluster-summary", "-wd", str(wd)])
+    assert result.exit_code == 0, result.output
+    log = (wd / "repgenr.log").read_text(encoding="utf-8")
+    assert "WARNING" in log and "lists no clusters" in log
+    assert read_cluster_summary(wd / "derep" / CLUSTER_SUMMARY_TSV) == []
+
+
 def test_derep_stock_list_is_a_query_but_pack_is_recorded(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setitem(cli._RUN_STATE, "force", False)
     wd = _derep_workdir(tmp_path)

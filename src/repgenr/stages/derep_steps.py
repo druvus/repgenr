@@ -46,7 +46,7 @@ from ..core.plugins import warn_ignored_params, warn_unconsumed_extras
 from ..core.process import link_or_copy, remove_tree
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
-from .cluster_summary import summarise_clusters
+from .cluster_summary import Taxonomy, summarise_clusters
 from .derep_keeper import rescore_representatives
 from .dereplicate import (
     DereplicateParams,
@@ -157,7 +157,13 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
 
     check_result_complete(result, [g.name for g in params.genomes])
     fallbacks = sorted({g.parent for g in params.genomes})
-    _write_step_contract(params.out_dir, result, fallbacks, _summary_quality(params.selection_tsv))
+    _write_step_contract(
+        params.out_dir,
+        result,
+        fallbacks,
+        _summary_quality(params.selection_tsv),
+        _summary_taxonomy(params.selection_tsv),
+    )
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-chunk: %d genomes -> %d representatives (%s)",
@@ -272,7 +278,13 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     # The final representatives are stage-2 representative paths, which live in the
     # chunk representatives/ directories; fall back to those when resolving files.
     fallbacks = [d / _REPRESENTATIVES_DIR for d in params.chunk_dirs]
-    _write_step_contract(params.out_dir, final, fallbacks, _summary_quality(params.selection_tsv))
+    _write_step_contract(
+        params.out_dir,
+        final,
+        fallbacks,
+        _summary_quality(params.selection_tsv),
+        _summary_taxonomy(params.selection_tsv),
+    )
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-merge: %d chunks, union of %d reps -> %d representatives (%s)",
@@ -333,6 +345,7 @@ def _write_step_contract(
     result: DerepResult,
     fallback_dirs: list[Path],
     quality: Mapping[str, tuple[float, float]],
+    taxonomy: Taxonomy | None = None,
 ) -> None:
     """Write representatives/, clusters.tsv, genome_status.tsv and
     cluster_summary.tsv under ``out_dir``."""
@@ -354,7 +367,7 @@ def _write_step_contract(
     write_clusters(out_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(out_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
-        out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality)
+        out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality, taxonomy)
     )
 
 
@@ -362,6 +375,14 @@ def _summary_quality(selection_tsv: Path | None) -> dict[str, tuple[float, float
     """Quality for the cluster summary: from selection.tsv when given, whatever
     the keeper rule, so the summary can show a member outscoring the keeper."""
     return {} if selection_tsv is None else _quality_from_selection(selection_tsv)
+
+
+def _summary_taxonomy(selection_tsv: Path | None) -> dict[str, tuple[str, str]]:
+    """Taxonomy for the cluster summary from selection.tsv; without one the
+    summary parses the canonical filenames."""
+    if selection_tsv is None:
+        return {}
+    return {r.filename: (r.genus, r.species) for r in read_selection(selection_tsv) if r.filename}
 
 
 def _find(dirs: list[Path], name: str) -> Path | None:

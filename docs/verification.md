@@ -328,7 +328,7 @@ ok, and also counts the docs agreement check.
 | phylo | fixed | ok | fixed | ok | ok | ok | fixed |
 | tree2tax | ok | fixed | fixed | fixed | ok | n/a | fixed |
 | glance | ok | fixed | fixed | ok | fixed | not run | fixed |
-| cluster-summary | ok | fixed | ok | open | ok | ok | open |
+| cluster-summary | ok | fixed | fixed | fixed | ok | ok | fixed |
 | derep-unpack | ok | ok | ok | fixed | fixed | ok | fixed |
 | derep-stock | ok | fixed | fixed | fixed | fixed | ok | fixed |
 | list-tools | ok | n/a | fixed | n/a | ok | ok | fixed |
@@ -389,6 +389,11 @@ parser), so they also apply to commands other than the one named.
 | cluster-summary | A missing workdir created a manifest, or raised an OSError traceback | 50194c6 |
 | derep-stock | `pack` of a workdir without dereplication outputs stored an empty run | f84e11f |
 | derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
+| cluster-summary | A genome with a non-canonical filename was counted as a species with a blank name | c97a84a |
+| cluster-summary | After `derep-stock unpack` the live summary kept the quality of pack time, and `cluster-summary` skipped; unpack now rebuilds it from the current manifest | 6c17246 |
+| cluster-summary | A `clusters.tsv` with no clusters gave a header-only summary without a warning | 10e56c7 |
+| cluster-summary | Species came from filenames only, so `ingest --selection` with non-canonical names gave wrong species, and equal epithets of two genera counted once; the summary now uses the manifest taxonomy, adds `n_genomes` and caps the species list | 40b42fb |
+| cluster-summary | A deleted `cluster_summary.tsv` was not rebuilt on resume; the deliverables check now reruns the stage (verified on the 50-genome set) | (resume deliverables check) |
 | derep-stock | A repeat `unpack` after a new dereplication was skipped and restored nothing | fde2eb9 |
 | derep-stock | `list` and `pack` on a nonexistent workdir exited 0 or created the workdir | bec185a |
 | derep-stock | `list` wrote the run names to the log on stderr, so `--quiet` hid them; they now go to stdout, and delete logs the removed run | #218 |
@@ -409,6 +414,7 @@ they are recorded here and not fixed.
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
+| cluster-summary | `read_clusters` skips the first line without checking that it is the `representative`/`member` header, so a hand-written `clusters.tsv` without a header loses its first row. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | glance | Changing `--plot-min` or `--plot-max` reruns the whole dRep comparison, about 80 s for 1000 genomes, although only the plots change. |

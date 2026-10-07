@@ -1,7 +1,8 @@
 """cluster_summary stage: one row per dereplication representative.
 
 Summarises ``derep/clusters.tsv`` into ``derep/cluster_summary.tsv`` with the
-cluster size, the species it spans (parsed from the canonical filenames) and
+cluster size, the species it spans (from the manifest taxonomy, else parsed
+from the canonical filenames) and
 the manifest CheckM quality of the keeper against its members. The dereplicate
 stage writes the file itself; this stage regenerates it for an existing
 working directory without rerunning the dereplicator.
@@ -9,6 +10,8 @@ working directory without rerunning the dereplicator.
 
 from __future__ import annotations
 
+import sqlite3
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -21,12 +24,18 @@ from ..core.contracts import (
     ClusterSummaryRow,
     parse_genome_filename,
     read_clusters,
+    sanitise_taxon_tokens,
     write_cluster_summary,
 )
 from ..core.errors import WorkdirError
 from .derep_keeper import quality_score
 
 Quality = Mapping[str, tuple[float, float]]
+# filename -> (genus, species) as recorded in the manifest or selection.tsv.
+Taxonomy = Mapping[str, tuple[str, str]]
+
+# Species names listed in the ``species`` column before "+N more".
+SPECIES_LIST_MAX = 5
 
 
 @dataclass
@@ -35,21 +44,52 @@ class ClusterSummaryParams:
 
 
 def summarise_clusters(
-    clusters: Mapping[str, list[str]], quality: Quality
+    clusters: Mapping[str, list[str]], quality: Quality, taxonomy: Taxonomy | None = None
 ) -> list[ClusterSummaryRow]:
-    """Build the summary rows, largest cluster first, then by representative name."""
-    rows = [_summarise(rep, members, quality) for rep, members in clusters.items()]
+    """Build the summary rows, largest cluster first, then by representative name.
+
+    ``taxonomy`` gives the species of each genome; a genome it lacks (or
+    holds without a species) falls back to its canonical filename.
+    """
+    taxonomy = taxonomy or {}
+    rows = [_summarise(rep, members, quality, taxonomy) for rep, members in clusters.items()]
     rows.sort(key=lambda r: (-r.n_members, r.representative))
     return rows
 
 
-def _summarise(rep: str, members: list[str], quality: Quality) -> ClusterSummaryRow:
+def _taxon(name: str, taxonomy: Taxonomy) -> tuple[str, str]:
+    """(genus, species) tokens of a genome; species is blank when unknown."""
+    genus, species = taxonomy.get(name, ("", ""))
+    if species:
+        _, genus, species = sanitise_taxon_tokens("", genus, species)
+        if species:
+            return genus, species
+    _, genus, species, _ = parse_genome_filename(name)
+    return genus, species
+
+
+def _species_column(rep: str, others: list[str], taxonomy: Taxonomy) -> tuple[int, str]:
+    """Distinct species and the capped, comma-separated list of their names.
+
+    The keeper's species comes first, then the others by member count and
+    name. A genome without a species (non-canonical filename, no taxonomy)
+    adds none. An epithet shared by two genera is written with its genus.
+    """
+    counts = Counter(t for t in (_taxon(n, taxonomy) for n in (rep, *others)) if t[1])
+    keeper = _taxon(rep, taxonomy)
+    ordered = sorted(counts, key=lambda t: (t != keeper, -counts[t], t[1], t[0]))
+    genera_per_epithet = Counter(sp for _, sp in counts)
+    names = [sp if genera_per_epithet[sp] == 1 else f"{g} {sp}" for g, sp in ordered]
+    if len(names) > SPECIES_LIST_MAX:
+        names = [*names[:SPECIES_LIST_MAX], f"+{len(names) - SPECIES_LIST_MAX} more"]
+    return len(counts), ",".join(names)
+
+
+def _summarise(
+    rep: str, members: list[str], quality: Quality, taxonomy: Taxonomy
+) -> ClusterSummaryRow:
     others = [m for m in members if m != rep]
-    species: list[str] = []
-    for name in (rep, *others):
-        sp = parse_genome_filename(name)[2]
-        if sp not in species:
-            species.append(sp)
+    n_species, species = _species_column(rep, others, taxonomy)
 
     rep_q = quality.get(rep)
     scored = [(m, quality[m]) for m in others if m in quality]
@@ -63,8 +103,8 @@ def _summarise(rep: str, members: list[str], quality: Quality) -> ClusterSummary
     return ClusterSummaryRow(
         representative=rep,
         n_members=len(others),
-        n_species=len(species),
-        species=",".join(species),
+        n_species=n_species,
+        species=species,
         rep_completeness=None if rep_q is None else rep_q[0],
         rep_contamination=None if rep_q is None else rep_q[1],
         member_max_completeness=max((q[0] for _, q in scored), default=None),
@@ -73,18 +113,30 @@ def _summarise(rep: str, members: list[str], quality: Quality) -> ClusterSummary
     )
 
 
+def taxonomy_lookup(ctx: WorkdirContext) -> dict[str, tuple[str, str]]:
+    """Map each genome filename to its manifest (genus, species)."""
+    try:
+        records = ctx.manifest.all_genomes(include_outgroup=True)
+    except (sqlite3.OperationalError, OSError):
+        # No manifest (data-channel path, tests): the filenames supply species.
+        return {}
+    return {r.filename: (r.genus or "", r.species or "") for r in records if r.filename}
+
+
 def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     logger = ctx.logger
     clusters_file = ctx.derep_dir / CLUSTERS_TSV
     if not clusters_file.exists():
         raise WorkdirError(f"Missing {clusters_file}. Run the dereplicate stage first.")
     clusters = read_clusters(clusters_file)
+    if not clusters:
+        logger.warning("%s lists no clusters; the summary holds only its header", clusters_file)
     from .dereplicate import quality_lookup
 
     quality = quality_lookup(ctx)
     if not quality:
         logger.info("No assembly quality in the manifest; quality columns are left blank")
-    rows = summarise_clusters(clusters, quality)
+    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx))
     out = ctx.derep_dir / CLUSTER_SUMMARY_TSV
     write_cluster_summary(out, rows)
     ctx.config.record_stage(
