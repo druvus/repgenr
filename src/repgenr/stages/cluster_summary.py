@@ -58,14 +58,25 @@ def summarise_clusters(
 
 
 def _taxon(name: str, taxonomy: Taxonomy) -> tuple[str, str]:
-    """(genus, species) tokens of a genome; species is blank when unknown."""
+    """(genus, species) tokens of a genome; species is blank when unknown.
+
+    The manifest supplies the taxonomy; a genome without one, or whose
+    species is blank, falls back to its canonical filename. A manifest
+    species with a blank genus (``ingest --selection`` requires neither)
+    takes the genus from the species when it is a binomial, else from the
+    filename, so it matches canonical members.
+    """
+    file_genus, file_species = parse_genome_filename(name)[1:3]
     genus, species = taxonomy.get(name, ("", ""))
     if species:
+        if not genus and " " in species.strip():
+            # A binomial without a genus column: take the genus from it.
+            genus, species = species.strip().split(" ", 1)
+        genus = genus or file_genus
         _, genus, species = sanitise_taxon_tokens("", genus, species)
         if species:
             return genus, species
-    _, genus, species, _ = parse_genome_filename(name)
-    return genus, species
+    return file_genus, file_species
 
 
 def _species_column(rep: str, others: list[str], taxonomy: Taxonomy) -> tuple[int, str]:
@@ -75,11 +86,19 @@ def _species_column(rep: str, others: list[str], taxonomy: Taxonomy) -> tuple[in
     name. A genome without a species (non-canonical filename, no taxonomy)
     adds none. An epithet shared by two genera is written with its genus.
     """
-    counts = Counter(t for t in (_taxon(n, taxonomy) for n in (rep, *others)) if t[1])
-    keeper = _taxon(rep, taxonomy)
+    taxa = [_taxon(n, taxonomy) for n in (rep, *others)]
+    # An epithet known without its genus (manifest row with a blank genus and
+    # a non-canonical filename) belongs to the one genus the cluster holds it
+    # under, when there is exactly one.
+    genera = {sp: {g for g, s in taxa if s == sp and g} for _, sp in taxa if sp}
+    taxa = [
+        (g or next(iter(genera[sp])) if sp and len(genera[sp]) == 1 else g, sp) for g, sp in taxa
+    ]
+    counts = Counter(t for t in taxa if t[1])
+    keeper = taxa[0]
     ordered = sorted(counts, key=lambda t: (t != keeper, -counts[t], t[1], t[0]))
     genera_per_epithet = Counter(sp for _, sp in counts)
-    names = [sp if genera_per_epithet[sp] == 1 else f"{g} {sp}" for g, sp in ordered]
+    names = [sp if genera_per_epithet[sp] == 1 or not g else f"{g} {sp}" for g, sp in ordered]
     if len(names) > SPECIES_LIST_MAX:
         names = [*names[:SPECIES_LIST_MAX], f"+{len(names) - SPECIES_LIST_MAX} more"]
     return len(counts), ",".join(names)

@@ -132,3 +132,46 @@ def test_summary_species_list_is_capped_most_frequent_first() -> None:
     (row,) = summarise_clusters({"F_G_sp9_GCF_9.1.fasta": members}, {})
     assert row.n_species == 8
     assert row.species == "sp9,sp7,sp3,sp1,sp2,+3 more"
+
+
+def test_summary_manifest_species_with_blank_genus_matches_canonical_members() -> None:
+    # ingest --selection requires neither genus nor species: a row with a
+    # species and a blank genus takes the genus from the filename, and the
+    # name is never written with a leading genus and a space.
+    canonical = "Francisellaceae_Francisella_tularensis_GCF_5.1.fasta"
+    for species in ("tularensis", "Francisella tularensis"):
+        taxonomy = {canonical: ("", species), "iso-1.fasta": ("", species)}
+        (row,) = summarise_clusters({canonical: ["iso-1.fasta"]}, {}, taxonomy)
+        assert (row.n_species, row.species) == (1, "tularensis"), species
+    (row,) = summarise_clusters({"iso-1.fasta": []}, {}, {"iso-1.fasta": ("", "coli")})
+    assert (row.n_species, row.species) == (1, "coli")
+
+
+def test_taxonomy_lookup_reads_the_manifest(tmp_path: Path) -> None:
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.manifest import GenomeRecord
+    from repgenr.stages.cluster_summary import taxonomy_lookup
+
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    ctx.manifest.upsert_many(
+        [
+            GenomeRecord(
+                accession="A1", filename="iso-1.fasta", genus="Escherichia", species="coli"
+            ),
+            GenomeRecord(accession="A2", filename="iso-2.fasta", genus=None, species=None),
+            GenomeRecord(
+                accession="A3",
+                filename="out.fasta",
+                genus="Shigella",
+                species="flexneri",
+                is_outgroup=True,
+            ),
+        ]
+    )
+    assert taxonomy_lookup(ctx) == {
+        "iso-1.fasta": ("Escherichia", "coli"),
+        "iso-2.fasta": ("", ""),
+        "out.fasta": ("Shigella", "flexneri"),
+    }
+    # No manifest at all: the filenames supply the species.
+    assert taxonomy_lookup(WorkdirContext(tmp_path / "none")) == {}

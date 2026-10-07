@@ -315,10 +315,10 @@ All notable changes to RepGenR are documented here. The format follows
   stored copy. The stored copy carried the CheckM quality of pack time, and
   `cluster-summary` skipped afterwards (its inputs had not changed), so the
   live summary could disagree with the manifest.
-- `cluster_summary.tsv` no longer counts a genome whose filename is not
-  canonical as a species of its own: `n_species` and `species` now list only
-  the species parsed from canonical names (a cluster of such genomes reports
-  0 and a blank).
+- `cluster_summary.tsv` no longer counts a genome without a species as a
+  species of its own: a genome with neither manifest taxonomy nor a canonical
+  filename adds nothing to `n_species` and `species` (a cluster of such
+  genomes reports 0 and a blank).
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.

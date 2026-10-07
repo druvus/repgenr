@@ -71,14 +71,12 @@ no row.
 | `best_member` | Highest-scoring genome in the cluster by completeness minus five times contamination, keeper included. Equals `representative` when the keeper is already the best; blank when nothing in the cluster is scored. |
 | `n_genomes` | Genomes in the cluster, the keeper included (`n_members` + 1). It is the last column, so the positions of the earlier columns are unchanged. |
 
-The species columns come from the genome filenames
-(`Family_genus_species_ACCESSION.fasta`), not from `selection.tsv`. A name that
-does not follow that pattern gives an unreliable species. In a cluster of one
+The species columns come from the manifest taxonomy (`selection.tsv` in the
+Nextflow steps), and from the canonical filename
+(`Family_genus_species_ACCESSION.fasta`) for a genome without one. A genome
+with neither adds no species. In a cluster of one
 species `n_species` is 1. A larger value means the cluster joins several
 species, or, for names such as the synthetic benchmark sets, that every genome
-has its own species token. With no quality in the manifest (for example after
-`ingest` without `--selection` columns) the four quality columns and
-`best_member` are blank and the command logs that it left them blank.
 
 To list the members of a cluster, see "Finding the members of a cluster" in
 [usage.md](usage.md#inspecting-a-dereplication).
