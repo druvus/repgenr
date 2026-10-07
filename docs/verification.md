@@ -440,18 +440,18 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | A gzipped genome in `genomes/` made `--tool drep` exit 3, since dRep names its decompressed copy | #225 |
 | dereplicate | Genomes dRep's filter removed (`--tool-arg length=N`) had no status and the stage exited 3; they are now `fail_qc` | #225 |
 | dereplicate | A deleted `genome_status.tsv` or `cluster_summary.tsv` was not rebuilt: `doctor` asked for a rerun and the rerun skipped | #225 |
-| tree2tax, doctor | A `tree.nwk` holding two concatenated trees passed the completeness check, and tree2tax used the first; both now refuse it (exit 3 in tree2tax) | (this PR) |
-| snptype, phylo | ParSNP records kept harvesttools' names (`x.fasta`, `x.fasta.ref`); phylo accepted the tree, but tree2tax could not find the outgroup leaf and exited 3, and the Gubbins outgroup exclusion missed it. Records are now named by genome stem (verified on the 50-genome set) | (this PR) |
-| snptype | ParSNP copied every query genome into scratch; they are now hardlinked | (this PR) |
-| phylo | cactus MSA records kept its sample names ('.' replaced by '_'), so IQ-TREE's `-o` and tree2tax missed a versioned outgroup; records are renamed to genome stems (unit test with a fake cactus; cactus itself not run) | (this PR) |
-| phylo, phylo-build | A tree whose leaves a tool renamed (extension, '.ref', characters replaced) passed the leaf check but not tree2tax; phylo now writes the input names back into `tree.nwk` | (this PR) |
-| phylo | `phylo --msa-source snptype` replaced the tables the `snptype` stage wrote in `snp/`, while the `snptype` record stayed; a repeat `snptype` skipped and `doctor` reported nothing. phylo now removes that record with a warning | (this PR) |
-| run | `--with-snptype --msa-source snptype` ran `snptype` before `phylo`, whose typing pass then replaced its tables; `snptype` now runs after `phylo` in that case | (this PR) |
-| tree2tax | After an interrupted phylo rebuild, tree2tax used the previous tree without notice; it now warns | (this PR) |
-| phylo | `--msa-source snptype` and `--mask` with an alignment-free builder were dropped without notice; the stage now warns | (this PR) |
-| tree2tax, tree2tax-relations | An outgroup accession matching no file in the outgroup directory was reported as "not present among tree leaves" | (this PR) |
-| all commands | SIGTERM to repgenr left the running tool (FastTree, live) behind; the tools are now stopped and repgenr exits 143 | (this PR) |
-| docs | usage.md and output.md: sourmash tree units for `--collapse-length`, the simple typer's treatment of absent sequence, `snp/` written by phylo, the distance matrix computed before masking | (this PR) |
+| tree2tax, doctor | A `tree.nwk` holding two concatenated trees passed the completeness check, and tree2tax used the first; both now refuse it (exit 3 in tree2tax) | #223 |
+| snptype, phylo | ParSNP records kept harvesttools' names (`x.fasta`, `x.fasta.ref`); phylo accepted the tree, but tree2tax could not find the outgroup leaf and exited 3, and the Gubbins outgroup exclusion missed it. Records are now named by genome stem (verified on the 50-genome set) | #223 |
+| snptype | ParSNP copied every query genome into scratch; they are now hardlinked | #223 |
+| phylo | cactus MSA records kept its sample names ('.' replaced by '_'), so IQ-TREE's `-o` and tree2tax missed a versioned outgroup; records are renamed to genome stems (unit test with a fake cactus; cactus itself not run) | #223 |
+| phylo, phylo-build | A tree whose leaves a tool renamed (extension, '.ref', characters replaced) passed the leaf check but not tree2tax; phylo now writes the input names back into `tree.nwk` | #223 |
+| phylo | `phylo --msa-source snptype` replaced the tables the `snptype` stage wrote in `snp/`, while the `snptype` record stayed; a repeat `snptype` skipped and `doctor` reported nothing. phylo now removes that record with a warning | #223 |
+| run | `--with-snptype --msa-source snptype` ran `snptype` before `phylo`, whose typing pass then replaced its tables; `snptype` now runs after `phylo` in that case | #223 |
+| tree2tax | After an interrupted phylo rebuild, tree2tax used the previous tree without notice; it now warns | #223 |
+| phylo | `--msa-source snptype` and `--mask` with an alignment-free builder were dropped without notice; the stage now warns | #223 |
+| tree2tax, tree2tax-relations | An outgroup accession matching no file in the outgroup directory was reported as "not present among tree leaves" | #223 |
+| all commands | SIGTERM to repgenr left the running tool (FastTree, live) behind; the tools are now stopped and repgenr exits 143 | #223 |
+| docs | usage.md and output.md: sourmash tree units for `--collapse-length`, the simple typer's treatment of absent sequence, `snp/` written by phylo, the distance matrix computed before masking | #223 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
