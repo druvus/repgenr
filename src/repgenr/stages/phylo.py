@@ -387,6 +387,21 @@ class PhyloBuildParams:
     msa: Path | None = None
 
 
+MIN_TREE_GENOMES = 3
+
+
+def _require_tree_size(genomes: Sequence[Path], hint: str) -> None:
+    """Refuse an ingroup too small for a tree before any tool runs.
+
+    The outgroup is not counted. Tree builders fail on fewer than three
+    leaves with errors that do not name the cause.
+    """
+    if len(genomes) < MIN_TREE_GENOMES:
+        raise WorkdirError(
+            f"A tree needs at least {MIN_TREE_GENOMES} genomes; {len(genomes)} found {hint}."
+        )
+
+
 def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
     """Build a phylogeny from an explicit genomes directory (data-channel step).
 
@@ -397,6 +412,7 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
     genomes = list_fasta(params.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genome FASTA files found in {params.genomes_dir}.")
+    _require_tree_size(genomes, f"in {params.genomes_dir}")
 
     outgroup_file: Path | None = None
     outgroup_leaf: str | None = None
@@ -458,6 +474,12 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     genomes = _genome_set(ctx, params.all_genomes)
     if not genomes:
         raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
+    _require_tree_size(
+        genomes,
+        "in the genome set"
+        if params.all_genomes
+        else "after dereplication (use --all-genomes or a lower ANI threshold)",
+    )
 
     outgroup_file, outgroup_leaf = _resolve_outgroup(ctx, params.no_outgroup, logger)
 

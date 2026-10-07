@@ -220,6 +220,10 @@ All notable changes to RepGenR are documented here. The format follows
   every accession.
 - `vgenome --outgroup-treebuilder` help names the accepted values, taken from
   the registered tree builders with distance-matrix support.
+- `phylo` and `phylo-build` exit 3 with "A tree needs at least 3 genomes" when
+  the ingroup has fewer than three genomes, before any aligner, SNP typer or
+  tree builder runs, instead of failing inside the tree builder (for example
+  quicktree on a single representative).
 - `status` and `doctor` exit 3 with the shared "Workdir not found" message
   when `-wd` does not exist, instead of exiting 0; an existing directory
   without `repgenr.yaml` still prints the entry-stage hint (status) or a
