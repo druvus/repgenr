@@ -138,3 +138,21 @@ def test_refused_reingest_leaves_the_finished_record_clean(tmp_path: Path) -> No
     again = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)])
     assert again.exit_code == 0
     assert "skipping" in again.output
+
+
+def test_relative_paths_are_recorded_absolute(tmp_path: Path, monkeypatch) -> None:
+    """A relative --genomes-dir was recorded as given, so doctor run from another
+    directory reported the input as changed."""
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    (tmp_path / "Out_Grp_sp_X1.fasta").write_text(_SEQ)
+    monkeypatch.chdir(tmp_path)
+    wd = tmp_path / "wd"
+    args = ["ingest", "-wd", str(wd), "--genomes-dir", "src", "--outgroup", "Out_Grp_sp_X1.fasta"]
+    assert _runner.invoke(app, args).exit_code == 0
+    rec = Config.load(wd).stages["ingest"]
+    assert rec.params["genomes_dir"] == str(src)
+    assert rec.params["outgroup"] == str(tmp_path / "Out_Grp_sp_X1.fasta")
+
+    monkeypatch.chdir(wd)
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert "changed since completion" not in result.output, result.output
