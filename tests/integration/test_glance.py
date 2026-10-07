@@ -95,3 +95,19 @@ def test_glance_records_tool_version(workdir: Path, monkeypatch) -> None:
     record = ctx.config.stages["glance"]
     assert record.tool == "drep"
     assert record.tool_versions == {"dRep": "3.7.1"}
+
+
+def test_glance_reports_missing_genomes_before_the_tool_check(workdir: Path, monkeypatch) -> None:
+    # A workdir without genomes is a workdir error (exit 3) whether or not
+    # dRep is installed; the tool check must not mask it.
+    import pytest
+
+    from repgenr.core.errors import MissingBinaryError, WorkdirError
+
+    def _absent(self):
+        raise MissingBinaryError("dRep: not found on PATH")
+
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", _absent)
+    ctx = WorkdirContext(workdir / "absent")
+    with pytest.raises(WorkdirError):
+        glance_run(ctx, GlanceParams(threads=2))
