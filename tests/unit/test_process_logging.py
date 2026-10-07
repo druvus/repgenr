@@ -31,3 +31,11 @@ def test_carriage_return_redraws_are_reduced_to_the_last_frame(caplog) -> None:
         process.run([sys.executable, "-c", script], logger=_LOG, log_prefix="bar")
     messages = [r.message for r in caplog.records if r.levelname == "DEBUG"]
     assert messages == ["[bar] a 100%"]
+
+
+def test_tools_get_no_stdin(caplog) -> None:
+    # A tool that prompts must read end-of-file, not wait on the terminal.
+    script = "import sys; print('stdin=' + repr(sys.stdin.read()))"
+    with caplog.at_level(logging.DEBUG, logger=_LOG.name):
+        process.run([sys.executable, "-c", script], logger=_LOG, log_prefix="fake")
+    assert any(r.message == "[fake] stdin=''" for r in caplog.records)
