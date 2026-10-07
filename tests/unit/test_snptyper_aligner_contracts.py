@@ -317,3 +317,97 @@ def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
     builtin_aln = {"progressivemauve", "cactus", "sibeliaz"}
     assert builtin_snp & set(snp_registry.names()) <= set(_SNP_PARAM_TOKENS)
     assert builtin_aln & set(align_registry.names()) <= set(_ALIGN_PARAM_TOKENS)
+
+
+def test_parsnp_names_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+    """harvesttools names records by file name, the reference with '.ref'; the
+    typer renames them to genome stems, so tree leaves match the input genomes
+    and tree2tax finds a versioned outgroup such as 'x_GCF_9.1'."""
+    if "parsnp" not in snp_registry.names():
+        pytest.skip("parsnp not registered")
+
+    import repgenr.snptypers.parsnp as parsnp_mod
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    stems = ["Fam_Gen_sp_GCF_1.1", "Fam_Gen_sp_GCF_2.1", "Fam_Gen_sp_GCF_9.1"]
+    genomes = []
+    for stem in stems:
+        path = gdir / f"{stem}.fasta"
+        path.write_text(f">{stem}\nACGT\n", encoding="utf-8")
+        genomes.append(path)
+    # As observed with parsnp 2 and harvesttools 1.3 on the 50-genome set.
+    harvest = f">{stems[0]}.fasta.ref\nACGT\n>{stems[1]}.fasta\nACGA\n>{stems[2]}.fasta\nACTT\n"
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        if Path(cmd[0]).name == "parsnp":
+            _write(Path(_flag_value(cmd, "-o")) / "parsnp.ggr", "GGR")
+        elif "-S" in cmd:
+            _write(Path(_flag_value(cmd, "-S")), harvest)
+        elif "-M" in cmd:
+            _write(Path(_flag_value(cmd, "-M")), harvest)
+        return 0
+
+    monkeypatch.setattr(parsnp_mod, "run_tool", fake_run_tool)
+    result = snp_registry.create("parsnp").call(
+        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=2), _LOG
+    )
+    assert _read_headers(result.core_snp_fasta) == set(stems)
+    assert result.full_alignment is not None
+    assert _read_headers(result.full_alignment) == set(stems)
+    assert sorted(p.name for p in (tmp_path / "snp_out").glob("harvest_*")) == []
+
+
+def test_parsnp_hardlinks_its_query_genomes(genomes, recorded, tmp_path) -> None:
+    """The query directory ParSNP reads holds links to the genomes, not copies."""
+    if "parsnp" not in snp_registry.names():
+        pytest.skip("parsnp not registered")
+    snp_registry.create("parsnp").call(
+        genomes, genomes[0], tmp_path / "snp_out", SnpParams(threads=2), _LOG
+    )
+    staged = tmp_path / "snp_out" / "input_genomes"
+    assert sorted(p.name for p in staged.iterdir()) == [g.name for g in genomes[1:]]
+    for genome in genomes[1:]:
+        assert (staged / genome.name).stat().st_ino == genome.stat().st_ino
+
+
+def test_cactus_names_msa_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+    """cactus sample names replace '.' with '_'; the MSA records are renamed back
+    to genome stems so a versioned outgroup (x_GCF_9.1) stays findable by
+    IQ-TREE's -o and by tree2tax."""
+    if "cactus" not in align_registry.names():
+        pytest.skip("cactus not registered")
+
+    import repgenr.aligners.cactus as cactus_mod
+    import repgenr.converters.hal_to_maf as h2m
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    seqs = {"Fam_Gen_sp_GCF_1.1": "AAAACCCC", "Fam_Gen_sp_GCF_2.1": "AAATCCCC"}
+    seqs["Fam_Gen_sp_GCF_9.1"] = "TAAACCCA"
+    genomes = []
+    for stem, seq in seqs.items():
+        path = gdir / f"{stem}.fasta"
+        path.write_text(f">contig1\n{seq}\n", encoding="utf-8")
+        genomes.append(path)
+    maf_rows = "\n".join(
+        f"s {stem.replace('.', '_')}.contig1 0 8 + 8 {seq}" for stem, seq in seqs.items()
+    )
+
+    def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
+        cmd = [str(part) for part in command]
+        tool = Path(cmd[0]).name
+        if tool == "cactus-pangenome":
+            _write(Path(_flag_value(cmd, "--outDir")) / "pangenome.full.hal", "HAL")
+        elif tool == "hal2maf":
+            _write(Path(cmd[-1]), f"##maf version=1\na score=0\n{maf_rows}\n")
+        return 0
+
+    monkeypatch.setattr(cactus_mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(h2m, "run_tool", fake_run_tool)
+    result = align_registry.create("cactus").align(
+        genomes, genomes[0], tmp_path / "align", AlignParams(threads=2), _LOG
+    )
+    assert _read_headers(result.msa_fasta) == set(seqs)
+    assert not (tmp_path / "align" / "cactus_samples.fasta").exists()

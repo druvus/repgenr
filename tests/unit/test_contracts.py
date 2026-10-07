@@ -99,3 +99,21 @@ def test_contract_tsvs_use_unix_line_endings(tmp_path: Path) -> None:
     write_genomes_map(tmp_path / "m.tsv", [("acc", "leaf")])
     for name in ("c.tsv", "s.tsv", "t.tsv", "m.tsv"):
         assert b"\r" not in (tmp_path / name).read_bytes(), name
+
+
+def test_newick_is_complete_accepts_one_tree_only() -> None:
+    """One tree ended by ';' passes; a second tree or trailing text does not.
+
+    A Newick reader takes the first of two concatenated trees and ignores the
+    second, so a file holding two trees must not pass as one.
+    """
+    from repgenr.core.contracts import newick_is_complete
+
+    assert newick_is_complete("((a:1,b:1)0.9:1,c:1);\n")
+    # ';' inside a quoted label or a comment does not end the tree.
+    assert newick_is_complete("('a;b':1,[x;y]c:1,'d''e':1);")
+    assert not newick_is_complete("")
+    assert not newick_is_complete("((a,b),c)")
+    assert not newick_is_complete("((a,b),c); extra")
+    assert not newick_is_complete("((a,b),c);\n((a,c),b);\n")
+    assert not newick_is_complete("(a,[open comment b);")

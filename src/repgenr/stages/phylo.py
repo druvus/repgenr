@@ -130,7 +130,9 @@ class PhyloOutcome:
 # again. The stage fingerprint cannot do this: it covers the whole stage.
 MSA_STAMP = "msa_source.json"
 # 2: the snippy typer names its reference record by genome (was "Reference").
-_MSA_STAMP_VERSION = 2
+# 3: parsnp and cactus records carry genome stems (were file names with
+# '.ref', and '.' replaced by '_'); an older alignment would keep them.
+_MSA_STAMP_VERSION = 3
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
@@ -317,6 +319,17 @@ def build_tree(
     dirs.tree_dir.mkdir(parents=True, exist_ok=True)
 
     if builder.input_kind == InputKind.GENOMES:
+        unused = []
+        if params.msa_source == "snptype":
+            unused.append(f"--msa-source snptype (--snptyper {params.snptyper})")
+        if str(params.extra.get("mask", "none")) not in ("none", ""):
+            unused.append(f"--mask {params.extra['mask']}")
+        if unused:
+            logger.warning(
+                "Tree builder '%s' builds from the genomes without an alignment; %s has no effect.",
+                treebuilder,
+                " and ".join(unused),
+            )
         inputs = list(genomes)
         if outgroup_file is not None:
             inputs.append(outgroup_file)
@@ -350,6 +363,7 @@ def build_tree(
     logger.info("Phylogenetic tree written to %s", final)
     expected = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
     check_tree_leaves(final, [g.stem for g in expected], treebuilder)
+    restore_leaf_names(final, [g.stem for g in expected], logger)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
     )
@@ -409,6 +423,121 @@ def check_tree_leaves(tree: Path, expected: Sequence[str], treebuilder: str) -> 
         + f"). The tree is kept at {tree} for inspection; the stage is not recorded "
         "as completed."
     )
+
+
+def restore_leaf_names(tree: Path, expected: Sequence[str], logger: logging.Logger) -> int:
+    """Rename leaves a tool rewrote back to the input genome names.
+
+    check_tree_leaves accepts a leaf that differs from its genome only in the
+    way tools rewrite names (a FASTA extension, '.ref', characters replaced by
+    '_'). tree2tax and genomes_map.tsv read the leaves as genome names, so the
+    tree is rewritten with the input names. Only the renamed leaf labels change
+    in the text; every other byte (rooting tags, comments, quoting, lengths,
+    supports) stays as the tool wrote it. A name that two inputs would share is
+    left as written. Returns the number of leaves renamed.
+    """
+    keys: dict[str, list[str]] = {}
+    for name in expected:
+        keys.setdefault(_leaf_key(name), []).append(name)
+
+    def target(label: str) -> str | None:
+        names = keys.get(_leaf_key(label), [])
+        if len(names) == 1 and names[0] != label:
+            return names[0]
+        return None
+
+    text = tree.read_text(encoding="utf-8")
+    new_text, renamed = _rename_newick_leaves(text, target)
+    if renamed:
+        with atomic_path(tree) as tmp:
+            tmp.write_text(new_text, encoding="utf-8")
+        logger.info("Renamed %d tree leaf/leaves back to the input genome names", renamed)
+    return renamed
+
+
+_NEWICK_LABEL_END = set("():,;[") | set(" \t\r\n")
+_NEWICK_NEEDS_QUOTES = re.compile(r"[\s():,;\[\]']")
+
+
+def _rename_newick_leaves(text: str, target) -> tuple[str, int]:  # noqa: ANN001
+    """Replace leaf labels in Newick ``text`` for which ``target(label)`` gives a name.
+
+    A leaf label is the label that follows '(' or ','; labels after ')' are
+    internal (supports or names) and are never touched. Quoted labels are read
+    with '' as an escaped quote; [comments] are skipped. A new name is written
+    bare when it holds no character that Newick reserves, and quoted otherwise.
+    """
+    out: list[str] = []
+    renamed = 0
+    i, n = 0, len(text)
+    expect_leaf = False
+    while i < n:
+        char = text[i]
+        if char == "[":
+            close = text.find("]", i)
+            close = n - 1 if close < 0 else close
+            out.append(text[i : close + 1])
+            i = close + 1
+            continue
+        if char in "(,":
+            out.append(char)
+            expect_leaf = True
+            i += 1
+            continue
+        if char.isspace():
+            out.append(char)
+            i += 1
+            continue
+        if expect_leaf and char not in "():;":
+            # Read one label, quoted or bare.
+            if char == "'":
+                j = i + 1
+                parts: list[str] = []
+                while j < n:
+                    if text[j] == "'":
+                        if j + 1 < n and text[j + 1] == "'":
+                            parts.append("'")
+                            j += 2
+                            continue
+                        break
+                    parts.append(text[j])
+                    j += 1
+                label, raw_end = "".join(parts), j + 1
+            else:
+                j = i
+                while j < n and text[j] not in _NEWICK_LABEL_END:
+                    j += 1
+                label, raw_end = text[i:j], j
+            new = target(label)
+            if new is None:
+                out.append(text[i:raw_end])
+            else:
+                if _NEWICK_NEEDS_QUOTES.search(new):
+                    new = "'" + new.replace("'", "''") + "'"
+                out.append(new)
+                renamed += 1
+            i = raw_end
+            expect_leaf = False
+            continue
+        if char == "'":
+            # A quoted internal label: copy it whole, so a ',' or '(' inside
+            # it is not read as structure.
+            j = i + 1
+            while j < n:
+                if text[j] == "'":
+                    if j + 1 < n and text[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(text[i : j + 1])
+            i = j + 1
+            expect_leaf = False
+            continue
+        expect_leaf = False
+        out.append(char)
+        i += 1
+    return "".join(out), renamed
 
 
 def _listed(names: list[str]) -> str:
@@ -556,16 +685,22 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         snp_dir=ctx.snp_dir,
         scratch_dir=ctx.scratch_dir,
     )
-    outcome = build_tree(
-        genomes,
-        outgroup_file,
-        outgroup_leaf,
-        dirs,
-        params,
-        logger,
-        # --force means recompute this stage, cached alignment included.
-        reuse_msa=not ctx.force,
-    )
+    snp_before = _file_identity(ctx.snp_dir / CORE_SNP_FASTA)
+    try:
+        outcome = build_tree(
+            genomes,
+            outgroup_file,
+            outgroup_leaf,
+            dirs,
+            params,
+            logger,
+            # --force means recompute this stage, cached alignment included.
+            reuse_msa=not ctx.force,
+        )
+    finally:
+        # Also on failure: the typing pass may have replaced snp/ before the
+        # tree builder failed.
+        _release_replaced_snptype_record(ctx, snp_before, logger)
 
     is_msa = treebuilder_registry.create(outcome.treebuilder).input_kind == InputKind.MSA_FASTA
     ctx.config.record_stage(
@@ -593,6 +728,39 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     )
     ctx.save_config()
     return outcome.tree
+
+
+def _file_identity(path: Path) -> tuple[int, int, int] | None:
+    """Inode, size and mtime of ``path``; None when absent. Outputs are
+    replaced by rename, so a rewrite changes the inode."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def _release_replaced_snptype_record(
+    ctx: WorkdirContext, before: tuple[int, int, int] | None, logger: logging.Logger
+) -> None:
+    """Drop the snptype record when phylo's own typing pass replaced its tables.
+
+    With --msa-source snptype, phylo types the genome set (outgroup included)
+    into snp/, the directory the snptype stage writes. The snptype record then
+    describes tables that are no longer there, and a repeat snptype would skip.
+    Removing the record makes status say so and lets snptype rebuild them.
+    """
+    record = ctx.config.stages.get("snptype")
+    if record is None or _file_identity(ctx.snp_dir / CORE_SNP_FASTA) == before:
+        return
+    del ctx.config.stages["snptype"]
+    ctx.save_config()
+    logger.warning(
+        "phylo's SNP typing pass (--msa-source snptype) replaced the tables the "
+        "snptype stage wrote in snp/ (snptype %s); its record is removed. Run "
+        "'repgenr snptype' again to rebuild them.",
+        record.tool or "",
+    )
 
 
 def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:

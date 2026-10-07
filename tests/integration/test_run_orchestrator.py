@@ -271,6 +271,21 @@ def test_run_with_snptype_inserts_the_stage(monkeypatch, tmp_path) -> None:
     assert calls == ["metadata", "genome", "dereplicate", "snptype", "phylo", "tree2tax"]
 
 
+def test_run_with_snptype_and_snp_msa_source_types_after_phylo(monkeypatch, tmp_path) -> None:
+    """phylo's own typing pass writes snp/ too; the standalone stage runs after
+    it, so the tables left in snp/ are the ones the snptype record describes."""
+    calls = _record(monkeypatch)
+    args = ["run", "-wd", str(tmp_path), "-l", "genus", "-tg", "francisella"]
+    args += ["--with-snptype", "--msa-source", "snptype"]
+    result = _runner.invoke(app, args)
+    assert result.exit_code == 0, result.stdout
+    assert calls == ["metadata", "genome", "dereplicate", "phylo", "snptype", "tree2tax"]
+    dry = _runner.invoke(app, [*args, "--dry-run"])
+    assert dry.exit_code == 0, dry.output
+    listed = [ln.strip()[2:] for ln in dry.output.splitlines() if ln.strip().startswith("- ")]
+    assert listed == ["metadata", "genome", "dereplicate", "phylo", "snptype", "tree2tax"]
+
+
 def test_run_reads_chain(monkeypatch, tmp_path) -> None:
     calls = _record(monkeypatch)
     result = _runner.invoke(

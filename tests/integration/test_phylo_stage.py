@@ -344,6 +344,73 @@ def test_snptype_source_types_the_outgroup_too(
     assert core.count(">") == 4 and ">Fam_gen_og_GCA_000009" in core
 
 
+def test_snptype_source_releases_the_snptype_record_it_replaces(
+    workdir: Path, fake_phylo_tools, fake_snptyper, caplog
+) -> None:
+    """phylo's typing pass writes into snp/, where the snptype stage's tables
+    were; the snptype record no longer describes them and is removed, so status
+    says so and a repeat snptype rebuilds them instead of skipping."""
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = workdir / "snp"
+    snp.mkdir()
+    (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
+    ctx.save_config()
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_msa",
+                msa_source="snptype",
+                snptyper="fakesnptyper",
+                no_outgroup=True,
+            ),
+        )
+    assert "snptype" not in Config.load(workdir).stages
+    assert "phylo" in Config.load(workdir).stages
+    assert any("snptype ska2" in r.getMessage() for r in caplog.records)
+
+
+def test_aligner_source_keeps_the_snptype_record(workdir: Path, fake_phylo_tools) -> None:
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = workdir / "snp"
+    snp.mkdir()
+    (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
+    ctx.save_config()
+    run(ctx, PhyloParams(treebuilder="faketree_msa", aligner="fakealigner", no_outgroup=True))
+    assert "snptype" in Config.load(workdir).stages
+    assert (snp / "core_snp.fasta").read_text() == ">from_snptype\nACGT\n"
+
+
+def test_alignment_free_builder_warns_that_msa_options_have_no_effect(
+    workdir: Path, fake_phylo_tools, caplog
+) -> None:
+    """--msa-source snptype and --mask are dropped by a builder that reads genomes."""
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
+    with caplog.at_level(logging.WARNING, logger="test-phylo"):
+        run(
+            ctx,
+            PhyloParams(
+                treebuilder="faketree_genomes",
+                msa_source="snptype",
+                no_outgroup=True,
+                extra={"mask": "gubbins"},
+            ),
+        )
+    warned = [r.getMessage() for r in caplog.records if "has no effect" in r.getMessage()]
+    assert len(warned) == 1
+    assert "--msa-source snptype" in warned[0] and "--mask gubbins" in warned[0]
+    assert not (workdir / "snp").exists()
+
+
 def _align_calls(monkeypatch) -> list[int]:
     """Count aligner invocations across phylo runs."""
     calls: list[int] = []
@@ -578,6 +645,88 @@ def test_tree_leaf_check_tolerates_renamed_dots(workdir: Path, fake_phylo_tools)
     assert ctx.config.stages["phylo"].completed
 
 
+class _RenamingLengthTreeBuilder(TreeBuilder):
+    """A rooted tree with lengths and a support, its leaves renamed as cactus
+    (dots to '_') and harvesttools ('.fasta', '.ref') name them."""
+
+    capabilities = ToolCapabilities(name="faketree_rename_len")
+    input_kind = InputKind.GENOMES
+
+    def preflight(self):
+        return {"faketree": "1.0"}
+
+    def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tree = out_dir / "tree.nwk"
+        a, b, c = (Path(g).stem for g in msa_or_genomes)
+        a, b = a.replace(".", "_"), f"{b}.fasta.ref"
+        tree.write_text(f"(({a}:0.1,{b}:0.2)0.95:0.3,{c}.fasta:0.4);\n")
+        return tree
+
+
+def test_renamed_leaves_are_restored_to_the_input_names(workdir: Path, fake_phylo_tools) -> None:
+    """tree2tax reads leaves as genome names, so phylo writes them back as the
+    inputs were named, keeping branch lengths and supports."""
+    import dendropy
+
+    from repgenr.stages.tree2tax import Tree2taxParams
+    from repgenr.stages.tree2tax import run as tree2tax_run
+
+    tb_registry.register("faketree_rename_len", _RenamingLengthTreeBuilder, replace=True)
+    try:
+        reps = workdir / "derep" / "representatives"
+        reps.mkdir(parents=True)
+        stems = [f"Fam_gen_sp_GCA_00000{i}.1" for i in range(1, 4)]
+        for stem in stems:
+            (reps / f"{stem}.fasta").write_text(">s\nACGTACGT\n")
+        ctx = WorkdirContext(workdir, create=True)
+        tree = run(ctx, PhyloParams(treebuilder="faketree_rename_len", no_outgroup=True))
+    finally:
+        tb_registry._classes.pop("faketree_rename_len", None)
+    parsed = dendropy.Tree.get(path=str(tree), schema="newick", preserve_underscores=True)
+    assert sorted(n.taxon.label for n in parsed.leaf_node_iter()) == stems
+    lengths = sorted(e.length for e in parsed.postorder_edge_iter() if e.length is not None)
+    assert lengths == [0.1, 0.2, 0.3, 0.4]
+    assert [n.label for n in parsed.internal_nodes() if n.label] == ["0.95"]
+    # The taxonomy maps every accession to a leaf of the same name.
+    _, gmap = tree2tax_run(WorkdirContext(workdir), Tree2taxParams())
+    rows = dict(ln.split("\t") for ln in gmap.read_text().splitlines())
+    assert rows == {stem.removeprefix("Fam_gen_sp_"): stem for stem in stems}
+
+
+def test_restore_leaf_names_leaves_ambiguous_names_alone(tmp_path: Path) -> None:
+    """Two inputs that a tool would write as one name are not guessed between."""
+    from repgenr.stages.phylo import restore_leaf_names
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(x_1,y,z);\n")
+    assert restore_leaf_names(tree, ["x.1", "x_1", "y", "z"], logging.getLogger("t")) == 0
+    assert tree.read_text() == "(x_1,y,z);\n"
+
+
+def test_restore_leaf_names_changes_only_the_renamed_labels(tmp_path: Path) -> None:
+    """Review of #223: the rewrite kept neither a leading [&R] nor a quoted label
+    with a space that was not renamed. Only matched leaf labels change now."""
+    from repgenr.stages.phylo import restore_leaf_names
+
+    tree = tmp_path / "tree.nwk"
+    original = "[&R] (('GCF 3':0.1,x_GCF_1_1.fasta.ref:0.2)'node, a':0.3,[c;m] x_GCF_2_1:0.4)0.9;\n"
+    tree.write_text(original)
+    expected = ["GCF 3", "x_GCF_1.1", "x_GCF_2.1"]
+    assert restore_leaf_names(tree, expected, logging.getLogger("t")) == 2
+    assert tree.read_text() == (
+        "[&R] (('GCF 3':0.1,x_GCF_1.1:0.2)'node, a':0.3,[c;m] x_GCF_2.1:0.4)0.9;\n"
+    )
+
+
+def test_rename_quotes_a_new_name_that_needs_it() -> None:
+    from repgenr.stages.phylo import _rename_newick_leaves
+
+    text, n = _rename_newick_leaves("(a_b,'c''d',e);", {"a_b": "a b", "c'd": "c'e"}.get)
+    assert n == 2
+    assert text == "('a b','c''e',e);"
+
+
 def test_leaf_key_matches_tool_rewritten_names() -> None:
     from repgenr.stages.phylo import _leaf_key
 
@@ -594,13 +743,14 @@ def test_msa_stamped_by_an_earlier_version_is_not_reused(
     alignment that still names the reference 'Reference') is rebuilt."""
     from repgenr.stages import phylo as phylo_mod
 
-    assert phylo_mod._MSA_STAMP_VERSION >= 2
+    # 3: the parsnp and cactus record names changed (#223).
+    assert phylo_mod._MSA_STAMP_VERSION >= 3
     _make_reps(workdir)
     ctx = WorkdirContext(workdir)
     calls = _align_calls(monkeypatch)
     base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
     with monkeypatch.context() as m:
-        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 1)
+        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 2)
         run(ctx, PhyloParams(no_outgroup=True, **base))
     assert len(calls) == 1
     run(ctx, PhyloParams(no_outgroup=True, **base))

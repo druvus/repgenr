@@ -33,6 +33,68 @@ _module_logger = logging.getLogger(__name__)
 # subprocess launch.
 _warned_bad_timeout = False
 
+# Tools running now, with whether each leads its own process group, so a
+# termination signal can stop them before repgenr exits (see
+# install_termination_handler). Several run at once under parallel_map.
+# Reentrant: the signal handler runs on the main thread, which may hold the
+# lock inside run() when the signal arrives.
+_live_lock = threading.RLock()
+_live: dict[subprocess.Popen[bytes], bool] = {}
+# Set by the termination handler: run() then starts no further tool, so tasks
+# still queued in a thread pool do not launch while repgenr shuts down.
+stop_requested = threading.Event()
+
+
+def stop_running_tools() -> int:
+    """Send SIGTERM to every tool started by :func:`run` that is still running.
+
+    A tool that leads its own process group (a timeout is set) is signalled
+    with its children; otherwise the tool itself. Returns the number signalled.
+    """
+    with _live_lock:
+        running = list(_live.items())
+    stopped = 0
+    for proc, own_group in running:
+        if proc.poll() is not None:
+            continue
+        try:
+            if own_group:
+                os.killpg(proc.pid, signal.SIGTERM)
+            else:
+                proc.terminate()
+            stopped += 1
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    return stopped
+
+
+def install_termination_handler() -> None:
+    """Stop running tools when repgenr receives SIGTERM or SIGHUP.
+
+    Python's default action ends the interpreter at once, leaving the external
+    tool running without its parent (seen live: FastTree kept running after
+    its phylo run was terminated). The handler stops the tools, then exits
+    with 128 + the signal number, so the stage record stays marked as
+    interrupted and a temporary output is removed. A second signal of the same
+    kind takes the default action. Only the main thread can install handlers.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return
+
+    def _on_signal(signum: int, _frame: object) -> None:
+        signal.signal(signum, signal.SIG_DFL)
+        stop_requested.set()
+        stopped = stop_running_tools()
+        # os.write is safe in a signal handler; logging is not.
+        os.write(
+            2,
+            f"repgenr: received signal {signum}; stopped {stopped} running tool(s)\n".encode(),
+        )
+        raise SystemExit(128 + signum)
+
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, _on_signal)
+
 
 def _default_timeout() -> float | None:
     """Global subprocess timeout (seconds) from ``REPGENR_SUBPROCESS_TIMEOUT``.
@@ -92,6 +154,10 @@ def run(
     """
     cmd = [str(part) for part in command]
     prefix = f"[{log_prefix}] " if log_prefix else ""
+    if stop_requested.is_set():
+        raise ToolExecutionError(
+            cmd, -signal.SIGTERM, output="not started: repgenr is stopping", tool=log_prefix
+        )
     logger.info("%s$ %s", prefix, " ".join(cmd))
 
     full_env = {**os.environ, **env} if env else None
@@ -133,6 +199,11 @@ def run(
             # Own process group so a timeout can kill the tool and its children.
             start_new_session=limit is not None,
         )
+        with _live_lock:
+            _live[proc] = limit is not None
+        if stop_requested.is_set():
+            # Started while the handler was stopping the others.
+            stop_running_tools()
 
         if limit is not None:
 
@@ -177,6 +248,9 @@ def run(
             out_tmp.unlink(missing_ok=True)
         raise
     finally:
+        if proc is not None:
+            with _live_lock:
+                _live.pop(proc, None)
         if timer is not None:
             timer.cancel()
         if out_handle is not None:

@@ -18,7 +18,7 @@ from ..converters.hal_to_maf import hal_to_maf
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.contracts import MSA_FASTA
+from ..core.contracts import MSA_FASTA, rename_fasta_records
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Aligner, AlignParams, AlignResult
@@ -96,8 +96,13 @@ class CactusAligner(Aligner):
         maf = out_dir / "pangenome.maf"
         hal_to_maf(hal, ref_name, maf, logger, caps=self.capabilities)
         msa = out_dir / MSA_FASTA
+        raw_msa = out_dir / "cactus_samples.fasta"
         # Drop the Minigraph-Cactus backbone pseudo-genome so it is not a taxon.
-        maf_to_fasta(maf, ref_name, msa, exclude={"_MINIGRAPH_"})
+        maf_to_fasta(maf, ref_name, raw_msa, exclude={"_MINIGRAPH_"})
+        # Back from cactus sample names to genome stems: a versioned accession
+        # (GCF_000001.1) would otherwise reach the tree builder as GCF_000001_1,
+        # and neither IQ-TREE's -o nor tree2tax would find the outgroup.
+        rename_fasta_records(raw_msa, msa, {_sample_name(g): g.stem for g in genomes})
         return AlignResult(msa_fasta=msa, native_format=hal)
 
 

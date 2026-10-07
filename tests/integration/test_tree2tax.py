@@ -215,3 +215,60 @@ def test_tree2tax_records_dendropy_as_its_tool(workdir: Path) -> None:
     record = ctx.config.stages["tree2tax"]
     assert record.tool == "dendropy"
     assert record.tool_versions == {"dendropy": version("dendropy")}
+
+
+def test_tree2tax_rejects_two_concatenated_trees(workdir: Path) -> None:
+    """A second complete tree after the first is refused, not silently dropped."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    _setup(workdir)
+    (workdir / "tree" / "tree.nwk").write_text(_NWK.strip() + "\n" + _NWK)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError, match=r"more than one tree"):
+        tree2tax_run(ctx, Tree2taxParams())
+
+
+def test_tree2tax_warns_when_the_last_phylo_run_did_not_finish(workdir: Path, caplog) -> None:
+    """An interrupted phylo keeps the previous tree.nwk; tree2tax says so."""
+    import logging
+
+    _setup(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-t2t"))
+    ctx.config.record_stage("phylo", tool="fasttree", completed=None)
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_run(ctx, Tree2taxParams())
+    assert any("did not finish" in r.getMessage() for r in caplog.records)
+
+    caplog.clear()
+    ctx.config.record_stage("phylo", tool="fasttree", completed="2026-10-07T00:00:00")
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_run(ctx, Tree2taxParams())
+    assert not any("did not finish" in r.getMessage() for r in caplog.records)
+
+
+def test_unmatched_outgroup_accession_names_the_outgroup_directory(tmp_path: Path, caplog) -> None:
+    """An accession no outgroup file matches is reported as such, not as a
+    missing leaf; the tree is left unrooted as phylo-build leaves it."""
+    import logging
+
+    from repgenr.stages.tree2tax import Tree2taxStepParams, tree2tax_relations
+
+    tree = tmp_path / "tree.nwk"
+    tree.write_text(_NWK + "\n")
+    og = tmp_path / "og"
+    og.mkdir()
+    (og / "Fam_Gen_sp_GCA_000004.1.fasta").write_text(">x\nACGT\n")
+    acc = tmp_path / "acc.txt"
+    acc.write_text("GCA_999999.1\n")
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_relations(
+            Tree2taxStepParams(
+                tree=tree, out_dir=tmp_path / "out", outgroup_dir=og, outgroup_accession=acc
+            ),
+            logging.getLogger("test-t2t"),
+        )
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("No file in" in m and "GCA_999999.1" in m for m in messages), messages
+    assert not any("among tree leaves" in m for m in messages)

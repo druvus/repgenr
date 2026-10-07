@@ -91,9 +91,14 @@ repgenr status -wd $WD     # which stages are done, and what to run next
 the stage command by hand (`repgenr status` says which comes next). Two
 worth knowing: `--with-snptype` adds the standalone `snptype` stage after
 dereplication, so the SNP tables under `snp/` are produced even when the tree
-is built another way (with `--msa-source snptype`, `phylo` still runs its own
-typing pass into the same directory, and reuses it afterwards), and
-`--genomes-dir` starts the chain from local genomes.
+is built another way, and `--genomes-dir` starts the chain from local genomes.
+With `--msa-source snptype`, `phylo` runs its own typing pass, outgroup
+included, into the same directory; `run` then places `snptype` after `phylo`,
+so `snp/` holds the tables the `snptype` record describes, and a later `phylo`
+run that changes only the tree builder types again. When a `phylo` typing pass
+replaces tables the `snptype` stage wrote, `phylo` removes the `snptype` record
+and says so in the log; `status` then no longer lists the stage, and a repeat
+`snptype` rebuilds the tables.
 
 ### Starting from local genomes
 
@@ -687,6 +692,18 @@ whose chain fails keeps its intermediates for inspection. Under a container
 backend each genome's chain of tools runs in a single container, so a genome
 costs one engine start rather than eight.
 
+The `simple` typer builds each genome's consensus by applying its SNP calls to
+the reference, so sequence a genome lacks keeps the reference base rather than
+an N. Such a genome appears closer to the reference, and further from its
+nearest relatives, than its sequence supports. On the 50-genome test set a copy
+of one genome with 500 kb removed differed from that genome at 20539 sites,
+all but one of them within the removed region. Where genomes differ in gene content,
+prefer `snippy`, `parsnp` or `ska2`, or compare the tree with an
+alignment-free one.
+
+`parsnp` names its records by file name and marks the reference with `.ref`;
+the typer renames them to the genome names, as the other typers write them.
+
 `--tool ska2` (split k-mer analysis) is reference-free: every genome is an
 ordinary sample, so no assembly's private errors bias the SNP distances, and
 the alphabetical-first-genome reference default does not apply. It emits a
@@ -704,7 +721,8 @@ runs) can merge weakly supported or near-zero-length internal nodes into
 their parents before naming them, so a split the data does not support does
 not become its own FlexTaxD node. Both thresholds are off by default.
 `--collapse-length L` merges a node whose branch is shorter than L, in the
-tree's own units (mash distance for mashtree, substitutions per site for the
+tree's own units (mash distance for mashtree, one minus the Jaccard similarity
+of the k-mer sketches for the sourmash builder, substitutions per site for the
 ML builders). `--collapse-support S` merges a node whose support is below the
 fraction S; IQ-TREE and RAxML-NG write percentages and are normalised
 automatically, FastTree writes fractions, and mashtree and the sourmash

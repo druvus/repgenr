@@ -105,8 +105,8 @@ def _emit_relations(
         # Same rule as doctor: dendropy would read the first tree and ignore
         # whatever follows its ';', which hides a truncated or concatenated file.
         raise WorkdirError(
-            f"{source} is empty or truncated: it has no terminating ';' or has text "
-            "after its final ';'. Re-run phylo."
+            f"{source} is empty or truncated: it has no terminating ';', has text "
+            "after its final ';', or holds more than one tree. Re-run phylo."
         )
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
@@ -184,6 +184,15 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     tree_file = ctx.tree_dir / TREE_NWK
     if not tree_file.exists():
         raise WorkdirError(f"Tree not found: {tree_file}. Run the phylo stage first.")
+    phylo = ctx.config.stages.get("phylo")
+    if phylo is not None and not phylo.completed:
+        # tree.nwk is replaced only when a build succeeds, so the file is a
+        # whole tree, but from an earlier phylo run than the one recorded.
+        logger.warning(
+            "The last phylo run did not finish; %s is the tree of an earlier run. "
+            "Re-run phylo before tree2tax to use the current settings.",
+            tree_file,
+        )
 
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}
@@ -264,7 +273,11 @@ def _resolve_outgroup_leaf_from(
         if accession in f.name:
             logger.info("Outgroup resolved by substring match: %s", f.name)
             return f.stem
-    logger.warning("Outgroup accession %s not present among tree leaves", accession)
+    logger.warning(
+        "No file in %s matches outgroup accession %s; tree is left unrooted",
+        outgroup_dir,
+        accession,
+    )
     return None
 
 

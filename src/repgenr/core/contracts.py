@@ -64,13 +64,54 @@ FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
 
 
 def newick_is_complete(text: str) -> bool:
-    """True when a Newick text is non-empty and ends with its terminating ';'.
+    """True when a Newick text holds exactly one tree, ended by its ';'.
 
-    Text after the final ';' (or no ';' at all) marks a truncated or
-    concatenated file. ``doctor`` and ``tree2tax`` share this rule.
+    No ';' at all, text after the final ';', or a second tree before it marks
+    a truncated or concatenated file: a Newick reader takes the first tree and
+    ignores the rest. A ';' inside a quoted label or a [comment] does not end
+    a tree. ``doctor`` and ``tree2tax`` share this rule.
     """
     content = text.strip()
-    return bool(content) and content.endswith(";")
+    if not content.endswith(";"):
+        return False
+    terminators = 0
+    quoted = False
+    comment_depth = 0
+    for char in content:
+        if quoted:
+            # A doubled quote inside a quoted label toggles twice: no net change.
+            if char == "'":
+                quoted = False
+        elif comment_depth:
+            if char == "[":
+                comment_depth += 1
+            elif char == "]":
+                comment_depth -= 1
+        elif char == "'":
+            quoted = True
+        elif char == "[":
+            comment_depth = 1
+        elif char == ";":
+            terminators += 1
+    return terminators == 1 and not quoted and not comment_depth
+
+
+def rename_fasta_records(src: Path, dst: Path, names: dict[str, str]) -> None:
+    """Copy a FASTA from ``src`` to ``dst``, renaming the records in ``names``.
+
+    Tools rename their samples (harvesttools adds the file extension, cactus
+    turns '.' into '_'); records are renamed back to genome stems so that
+    tree leaves, the outgroup lookup and the masker's outgroup exclusion see
+    the input names. Streams line by line, since whole-genome alignments are
+    large, and removes ``src``. A record not in ``names`` keeps its name.
+    """
+    with open(src, encoding="utf-8") as fi, open(dst, "w", encoding="utf-8") as fo:
+        for line in fi:
+            if line.startswith(">"):
+                name = line[1:].strip()
+                line = f">{names.get(name, name)}\n"
+            fo.write(line)
+    src.unlink()
 
 
 def list_fasta(source: Path) -> list[Path]:
