@@ -121,6 +121,10 @@ All notable changes to RepGenR are documented here. The format follows
   intermediates" wording). Its description says that glance needs dRep (on
   the PATH, or via the container backend) but no dereplication, and names
   the three output files.
+- `derep-unpack` logs once when the file system cannot hard-link and genomes
+  are copied (about 4.5 minutes and 2.1 GB for 1000 genomes on exFAT, against
+  under a second with hard links on APFS), and its closing line counts the
+  genome files and cluster directories written rather than the clusters read.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
@@ -268,6 +272,12 @@ All notable changes to RepGenR are documented here. The format follows
   titles were twice the number of pairs. The histogram's x axis is now
   labelled "MASH ANI" and its y axis "Genome pairs" (the y axis was labelled
   "MASH ANI"), and the box plot no longer shows a "1" tick.
+- `derep-unpack` removed the previous `derep/unpacked/` before building the
+  new one, so a failed or interrupted run left a partial tree. The tree is now
+  built beside the old one and swapped in when complete.
+- `derep-unpack` failed with exit 1 and left a partial `derep/unpacked/` when
+  two representatives shared a file stem (`x.fasta` and `x.fna`); such
+  clusters are now named by the full file name.
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.

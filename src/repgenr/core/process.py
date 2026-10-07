@@ -255,7 +255,7 @@ def write_fofn(paths: Sequence[str | os.PathLike[str]], dest: str | os.PathLike[
     return dest_path
 
 
-def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> bool:
     """Stage ``src`` at ``dst`` cheaply: hardlink it, copying only as a fallback.
 
     Staging genomes into representatives/cluster dirs copies tens of GB at 1000s
@@ -263,6 +263,7 @@ def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> No
     with the source, which is safe because these staged files are only read by
     downstream stages, never modified in place. Falls back to a real copy when
     the filesystem can't hardlink (cross-device, or exFAT/NTFS on the dev box).
+    Returns True when the file was linked, False when it was copied.
     """
     # Resolve symlinks to the real file first. Tools such as skDER emit their
     # representative genomes as symlinks (often into a Nextflow-/container-staged
@@ -278,6 +279,8 @@ def link_or_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> No
         os.link(src_s, dst_s)
     except OSError:
         shutil.copy2(src_s, dst_s)
+        return False
+    return True
 
 
 def _ignore_vanished(func, path, exc):  # noqa: ANN001

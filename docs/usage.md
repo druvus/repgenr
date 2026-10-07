@@ -392,7 +392,14 @@ dereplicator, and a fourth inspects the genomes before dereplication.
 `repgenr derep-unpack` lays the clusters out as one directory per
 representative with its members inside (`--no-representant` leaves the
 representative out); a member missing from `genomes/` is left out with a
-warning that names it. `repgenr glance` runs dRep's comparison over all genomes
+warning that names it. The files are hard links to the genomes where the
+file system allows it, so editing one in place also changes the genome under
+`genomes/` (and, after a default symlinking `ingest`, the original file);
+elsewhere, for example on exFAT or across volumes, they are copies, which for
+1000 genomes took minutes rather than under a second. The directories
+describe the dereplication they were made from: after a new `dereplicate` or
+a `derep-stock --action unpack`, run `derep-unpack` again (it reruns because
+`clusters.tsv` changed, and `doctor` warns until then). `repgenr glance` runs dRep's comparison over all genomes
 in `genomes/` (at least two) and writes its dendrogram and plots (dRep
 only; it does not need a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
