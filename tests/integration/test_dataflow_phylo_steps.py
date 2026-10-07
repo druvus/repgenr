@@ -141,3 +141,49 @@ def test_tree2tax_relations_rejects_a_missing_clusters_file(tmp_path: Path) -> N
             ),
             _LOG,
         )
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_phylo_build_needs_three_genomes(tmp_path: Path, register_tool, n: int) -> None:
+    from repgenr.core.errors import WorkdirError
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
+    from repgenr.treebuilders.base import InputKind, TreeBuilder
+    from repgenr.treebuilders.base import registry as tb_registry
+
+    calls: list[int] = []
+
+    class _Tree(TreeBuilder):
+        capabilities = ToolCapabilities(name="faketree_steps")
+        input_kind = InputKind.GENOMES
+
+        def preflight(self):
+            return {}
+
+        def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
+            calls.append(1)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            tree = out_dir / "tree.nwk"
+            tree.write_text("(a,b,c);\n")
+            return tree
+
+    tb_registry._load()
+    register_tool(tb_registry, "faketree_steps", _Tree)
+    genomes = tmp_path / "genomes"
+    genomes.mkdir()
+    for i in range(n):
+        (genomes / f"g{i}.fasta").write_text(">s\nACGT\n")
+    params = PhyloBuildParams(
+        genomes_dir=genomes,
+        out_dir=tmp_path / "out",
+        phylo=PhyloParams(treebuilder="faketree_steps", no_outgroup=True),
+    )
+    logger = logging.getLogger("t")
+    if n < 3:
+        with pytest.raises(WorkdirError) as exc:
+            phylo_build(params, logger)
+        assert f"A tree needs at least 3 genomes; {n} found in {genomes}." in str(exc.value)
+        assert exc.value.exit_code == 3
+        assert calls == []
+    else:
+        assert phylo_build(params, logger).exists()

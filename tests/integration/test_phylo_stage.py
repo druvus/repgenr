@@ -464,3 +464,36 @@ def test_builder_file_cleanup_tolerates_entries_that_vanish(tmp_path: Path, monk
     monkeypatch.setattr(Path, "iterdir", iterdir_with_ghost)
     phylo_mod._clear_previous_builder_files(tree_dir)
     assert sorted(p.name for p in real_iterdir(tree_dir)) == ["tree.nwk"]
+
+
+def _make_n_reps(workdir: Path, n: int) -> None:
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, n + 1):
+        (reps / f"Fam_gen_sp_GCA_00000{i}.fasta").write_text(f">s{i}\nACGTACGT\n")
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_phylo_refuses_fewer_than_three_genomes(
+    workdir: Path, fake_phylo_tools, monkeypatch, n: int
+) -> None:
+    from repgenr.core.errors import WorkdirError
+
+    calls: list[int] = []
+    monkeypatch.setattr(_GenomesTreeBuilder, "build", lambda *a, **k: calls.append(1))
+    _make_n_reps(workdir, n)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError) as exc:
+        run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True))
+    assert str(exc.value) == (
+        f"A tree needs at least 3 genomes; {n} found after dereplication "
+        "(use --all-genomes or a lower ANI threshold)."
+    )
+    assert exc.value.exit_code == 3
+    assert calls == []
+
+
+def test_phylo_accepts_exactly_three_genomes(workdir: Path, fake_phylo_tools) -> None:
+    _make_n_reps(workdir, 3)
+    ctx = WorkdirContext(workdir, create=True)
+    assert run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True)).exists()

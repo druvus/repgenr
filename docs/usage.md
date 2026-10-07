@@ -277,6 +277,9 @@ entirely and `--length-all` disables the filter.
 
 ### Alignment-free and SNP-based phylogenies
 
+`phylo` and `phylo-build` need at least three ingroup genomes (the outgroup is not
+counted) and exit 3 with a message before any tool runs when the set is smaller.
+
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
 
