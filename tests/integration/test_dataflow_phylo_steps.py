@@ -216,3 +216,30 @@ def test_tree2tax_relations_outgroup_not_a_leaf_is_an_error(tmp_path: Path) -> N
     )
     with pytest.raises(WorkdirError, match=r"Fam_Gen_sp_GCA_000099\.1 is not a leaf"):
         tree2tax_relations(params, _LOG)
+
+
+def test_tree2tax_relations_no_outgroup_ignores_the_outgroup_inputs(tmp_path: Path) -> None:
+    """A tree built with phylo --no-outgroup has no outgroup leaf; --no-outgroup
+    leaves it unrooted even when the outgroup files are staged."""
+    tree = tmp_path / "tree.nwk"
+    tree.write_text(
+        "(Fam_Gen_sp_GCA_000001.1,(Fam_Gen_sp_GCA_000002.1,Fam_Gen_sp_GCA_000003.1));\n"
+    )
+    og = tmp_path / "outgroup"
+    og.mkdir()
+    (og / "Fam_Gen_sp_GCA_000099.1.fasta").write_text(">x\nACGT\n")
+    acc = tmp_path / "outgroup_accession.txt"
+    acc.write_text("GCA_000099.1\n")
+    params = Tree2taxStepParams(
+        tree=tree,
+        out_dir=tmp_path / "out",
+        outgroup_dir=og,
+        outgroup_accession=acc,
+        no_outgroup=True,
+    )
+    t2t, gmap = tree2tax_relations(params, _LOG)
+    assert {c for c, _ in _edges(t2t) if c.startswith("Fam_")} == {
+        "Fam_Gen_sp_GCA_000001.1",
+        "Fam_Gen_sp_GCA_000002.1",
+        "Fam_Gen_sp_GCA_000003.1",
+    }

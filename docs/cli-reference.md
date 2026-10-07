@@ -509,6 +509,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--node-basename` |  | Name internal nodes <basename><n>. Without it, internal nodes receive names derived from a hash of their descendant leaves. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
+| `--no-outgroup` | off | Do not root with an outgroup. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |

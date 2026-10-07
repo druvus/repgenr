@@ -233,7 +233,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `tree2tax` and `tree2tax-relations` exit 3 with a message naming the
   outgroup when it is not a leaf of the tree; they logged a warning, left the
   tree unrooted and exited 0. `tree2tax` after `phylo --no-outgroup` still
-  leaves the tree unrooted.
+  leaves the tree unrooted. `tree2tax-relations --no-outgroup` ignores the
+  staged outgroup, and the Nextflow pipeline passes it when `phylo_args`
+  contains `--no-outgroup`.
 - `ingest --outgroup` naming another genome than the outgroup row of
   `--selection` exits 2 and names both; the selection's outgroup row was
   dropped without a message.

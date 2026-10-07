@@ -71,6 +71,9 @@ class Tree2taxStepParams:
     versions_out: Path | None = None
     collapse_support: float | None = None
     collapse_length: float | None = None
+    # The tree was built without an outgroup (phylo --no-outgroup): ignore the
+    # staged outgroup inputs and leave the tree unrooted.
+    no_outgroup: bool = False
 
 
 def _emit_relations(
@@ -141,7 +144,9 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         # member from genomes_map.tsv without notice.
         raise WorkdirError(f"Clusters table not found: {params.clusters}.")
     outgroup_leaf = None
-    if params.outgroup_dir is not None and params.outgroup_accession is not None:
+    if params.no_outgroup:
+        logger.warning("No outgroup (--no-outgroup); tree is left unrooted")
+    elif params.outgroup_dir is not None and params.outgroup_accession is not None:
         outgroup_leaf = _resolve_outgroup_leaf_from(
             params.outgroup_dir, params.outgroup_accession, logger
         )
@@ -274,8 +279,8 @@ def _set_outgroup(tree: dendropy.Tree, leaf_label: str, source: object) -> None:
         # arbitrary node with exit 0; a named outgroup must root the tree.
         raise WorkdirError(
             f"Outgroup {leaf_label} is not a leaf of the tree {source}. Rebuild the "
-            "tree with this outgroup, or omit the outgroup if the tree was built "
-            "without one (phylo --no-outgroup)."
+            "tree with this outgroup; if the tree was built without one (phylo "
+            "--no-outgroup), pass --no-outgroup to tree2tax-relations."
         )
     # Root on the outgroup's edge, not at its parent node: to_outgroup_position
     # keeps the parent as the root, and on an unrooted (trifurcating) tree from
