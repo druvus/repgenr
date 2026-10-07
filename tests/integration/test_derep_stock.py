@@ -294,6 +294,18 @@ def test_an_interrupted_unpack_leaves_the_dereplicate_record_incomplete(
     assert record.completed and record.tool == "skder"
     assert record.params == {"tool": "skder", "stock": "run1"}
 
+    # A dereplicate run interrupted after that unpack is a different case:
+    # its record carries nothing over, although it still names the run.
+    record.completed = None
+    record.fingerprint = None
+    record.tool = "sourmash"
+    ctx.config.stages["dereplicate"] = record
+    ctx.save_config()
+    derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    record = Config.load(workdir).stages["dereplicate"]
+    assert record.completed and record.tool is None
+    assert record.params == {"stock": "run1"}
+
 
 def test_unpack_links_the_representatives_like_dereplicate(workdir: Path) -> None:
     # dereplicate hardlinks representatives to genomes/ where it can; unpack

@@ -30,6 +30,10 @@ from ..dereplicators.base import DerepResult
 from .dereplicate import _update_manifest
 
 _FLAT_FILES = (CLUSTERS_TSV, GENOME_STATUS_TSV, CLUSTER_SUMMARY_TSV)
+# Params key on the dereplicate record while an unpack replaces its outputs;
+# removed when the record is re-stamped, so a later interrupted dereplicate
+# run is told apart from an interrupted unpack.
+_UNPACKING = "unpacking"
 # One path component, well below the 255-byte file-name limit.
 _NAME_MAX = 100
 _NAME_RE = re.compile(rf"[A-Za-z0-9][A-Za-z0-9._-]{{0,{_NAME_MAX - 1}}}")
@@ -173,20 +177,22 @@ def _check_unpackable(ctx: WorkdirContext, run_path: Path) -> list[str]:
 def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     rep_names = _check_unpackable(ctx, run_path)
     prior = ctx.config.stages.get("dereplicate")
-    if prior is not None and not prior.completed and "stock" not in prior.params:
+    if prior is not None and not prior.completed and _UNPACKING not in prior.params:
         # An incomplete record describes a dereplicate run that did not
         # finish, not the stored run being restored: carry nothing over from
-        # it. An interrupted unpack leaves ``stock`` in the params (set
-        # below), and a repeat keeps what that unpack was carrying.
+        # it. An interrupted unpack leaves the in-progress marker in the
+        # params (set below), and a repeat keeps what that unpack carried.
         prior = None
     carried = (prior.tool, dict(prior.params), dict(prior.tool_versions)) if prior else None
+    if carried is not None:
+        carried[1].pop(_UNPACKING, None)
     if prior is not None:
         # The dereplicate stage's outputs are replaced below: mark its record
         # incomplete first, so an unpack that stops half-way is not reported
         # as a finished dereplication.
         prior.completed = None
         prior.fingerprint = None
-        prior.params = {**prior.params, "stock": run_path.name}
+        prior.params = {**prior.params, _UNPACKING: run_path.name}
         ctx.save_config()
     # The summary is not restored: it is rebuilt below from the restored
     # clusters and the live manifest.
