@@ -131,3 +131,15 @@ def select_assembler(reg: Registry[Assembler], reads: ReadSet) -> str | None:
         if Assembler.accepts(probe, reads) and tool_available(cls.capabilities):
             return name
     return None
+
+
+def accepting_assemblers(reg: Registry[Assembler], reads: ReadSet) -> list[str]:
+    """Registered adapters that accept a run, whether or not their tool is installed."""
+    names = []
+    for name in sorted(reg.names()):
+        if reg.is_broken(name):
+            continue
+        cls = reg.get(name)
+        if Assembler.accepts(cls.__new__(cls), reads):
+            names.append(name)
+    return names

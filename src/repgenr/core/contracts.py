@@ -622,7 +622,9 @@ def write_excused_runs(path: Path, rows: list[ExcusedRun]) -> None:
         writer = _tsv_writer(fo)
         writer.writerow(["run_accession", "step", "reason"])
         for r in rows:
-            writer.writerow([r.run_accession, r.step, r.reason])
+            # A tool failure's reason carries the output tail on further lines;
+            # fold it onto one line so each run stays one TSV row.
+            writer.writerow([r.run_accession, r.step, " ".join(r.reason.split())])
 
 
 def read_excused_runs(path: Path) -> list[ExcusedRun]:

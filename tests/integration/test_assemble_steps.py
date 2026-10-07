@@ -114,6 +114,35 @@ def test_assemble_run_records_an_excuse_instead_of_failing(tmp_path: Path, fakes
         assert len(excused) == 1 and excused[0].step == step and reason in excused[0].reason
 
 
+def test_a_missing_assembler_is_excused_by_assemble_run_and_gathered(
+    tmp_path: Path, fakes, monkeypatch
+) -> None:
+    # assemble-run excuses a run whose accepting assembler is not installed
+    # with its own reason, and reads-gather carries it like any other excuse.
+    from repgenr.assemblers import base as assemblers_base
+
+    monkeypatch.setattr(FakeAssembler, "read_types", frozenset({"ILLUMINA"}))
+    monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: caps.name == "fakeasm")
+    rows = [read_row(tmp_path, "SRR1"), read_row(tmp_path, "ONT1", "OXFORD_NANOPORE", "SINGLE")]
+    reads = _reads_tsv(tmp_path, rows)
+    assemblies = tmp_path / "assemblies"
+    done = {
+        run: assemble_run(
+            AssembleRunParams(reads_tsv=reads, run=run, out_dir=assemblies / run, assembler="auto"),
+            _LOG,
+        )
+        for run in ("SRR1", "ONT1")
+    }
+    assert done == {"SRR1": True, "ONT1": False}
+    out = tmp_path / "out"
+    n = reads_gather(
+        ReadsGatherParams(reads_tsv=reads, assemblies_dir=assemblies, out_dir=out), _LOG
+    )
+    assert n == 1
+    excused = read_excused_runs(out / EXCUSED_RUNS_TSV)
+    assert [(e.run_accession, e.reason) for e in excused] == [("ONT1", "assembler_not_installed")]
+
+
 def test_assemble_run_rejects_an_unknown_run(tmp_path: Path, fakes) -> None:
     reads = _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1")])
     with pytest.raises(UserInputError, match="SRR9"):
