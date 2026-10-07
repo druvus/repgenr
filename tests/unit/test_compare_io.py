@@ -153,3 +153,56 @@ def test_dendrogram_of_many_genomes_caps_the_page_height(tmp_path: Path) -> None
         leaves = write_dendrogram([f"g{i}" for i in range(n)], sim, tmp_path / "d.pdf")
     assert len(leaves) == n
     assert heights == [200.0]
+
+
+def _assert_valid_upgma(dist: np.ndarray, z: np.ndarray) -> None:
+    """Replay the merges: each joins a current closest pair at its average-linkage
+    distance, with the right size, and every leaf ends in the root exactly once."""
+    n = dist.shape[0]
+    assert z.shape == (n - 1, 4)
+    members: dict[int, list[int]] = {i: [i] for i in range(n)}
+    for step, (a, b, height, size) in enumerate(z):
+        a, b = int(a), int(b)
+        assert a in members and b in members and a != b, f"merge {step} reuses a cluster"
+
+        def link(x: list[int], y: list[int]) -> float:
+            return float(dist[np.ix_(x, y)].mean())
+
+        current = list(members)
+        closest = min(
+            link(members[p], members[q]) for i, p in enumerate(current) for q in current[i + 1 :]
+        )
+        assert height == pytest.approx(link(members[a], members[b]), abs=1e-12)
+        assert height == pytest.approx(closest, abs=1e-12), f"merge {step} is not a closest pair"
+        merged = members.pop(a) + members.pop(b)
+        assert size == len(merged)
+        members[n + step] = merged
+    assert list(members) == [2 * n - 2]
+    assert sorted(members[2 * n - 2]) == list(range(n))
+    assert sorted(leaf_order(z)) == list(range(n))
+    assert np.all(np.diff(z[:, 2]) >= -1e-12)  # heights never decrease
+
+
+def _tied_inputs() -> list[np.ndarray]:
+    out = []
+    flat = np.ones((7, 7))
+    np.fill_diagonal(flat, 0.0)
+    out.append(flat)  # every pair at the same distance
+    out.append(np.zeros((6, 6)))  # identical genomes
+    blocks = np.full((9, 9), 0.05)
+    for lo, hi in ((0, 3), (3, 6), (6, 9)):
+        blocks[lo:hi, lo:hi] = 0.0  # three clone blocks, equal between blocks
+    np.fill_diagonal(blocks, 0.0)
+    out.append(blocks)
+    rng = np.random.default_rng(7)
+    for n in (5, 12, 25):
+        m = rng.integers(0, 3, size=(n, n)).astype(float)  # few levels, many ties
+        m = np.maximum(m, m.T)
+        np.fill_diagonal(m, 0.0)
+        out.append(m)
+    return out
+
+
+@pytest.mark.parametrize("dist", _tied_inputs(), ids=lambda d: f"n{d.shape[0]}")
+def test_average_linkage_is_valid_on_tied_inputs(dist: np.ndarray) -> None:
+    _assert_valid_upgma(dist, average_linkage(dist))

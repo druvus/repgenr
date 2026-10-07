@@ -322,3 +322,24 @@ def test_log_auto_choice_names_the_tool(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="t"):
         glance_mod.log_auto_choice(logging.getLogger("t"), "sourmash")
     assert "selected 'sourmash'" in caplog.text
+
+
+def test_no_tool_message_without_a_container_backend() -> None:
+    msg = glance_mod.no_compare_tool_message(_registry({"drep": (True, False)}))
+    assert "none of drep is on the PATH" in msg
+    assert "--container docker" in msg
+
+
+def test_no_tool_message_under_an_active_container_backend(monkeypatch) -> None:
+    # With a backend already active, suggesting one is no help: availability
+    # there means a declared image.
+    import repgenr.core.containers as containers
+
+    class _Active:
+        active = True
+
+    monkeypatch.setattr(containers, "get_config", lambda: _Active())
+    msg = glance_mod.no_compare_tool_message(_registry({"drep": (True, False)}))
+    assert "container backend is active" in msg
+    assert "none of drep declares a container image" in msg
+    assert "is on the PATH" not in msg and "--container docker" not in msg

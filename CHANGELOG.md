@@ -134,7 +134,8 @@ All notable changes to RepGenR are documented here. The format follows
   resume fingerprint hold the concrete tool, so `auto` and naming the same
   tool resume each other. With neither tool available, glance exits 4 and
   names the tools that can compare, after the workdir and genome checks
-  (which still exit 3). Before, the default was `drep`.
+  (which still exit 3); under an active container backend the message says
+  that none of them declares a container image. Before, the default was `drep`.
 - `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
   fractions from 0 to 1, and that `--keep-files` keeps the dRep working
   directory `glance_wd/` (it used the shared "download and scratch

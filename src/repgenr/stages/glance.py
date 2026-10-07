@@ -67,14 +67,21 @@ def resolve_auto_tool(reg=None) -> str | None:
 
 
 def no_compare_tool_message(reg=None) -> str:
+    from ..core.containers import get_config
     from ..dereplicators.base import compare_supporters
 
-    supporters = compare_supporters(reg)
+    names = ", ".join(compare_supporters(reg)) or "(none registered)"
+    if get_config().active:
+        # Under a backend availability means a declared image, not the PATH.
+        return (
+            "glance --tool auto found no comparison tool to run: the container "
+            f"backend is active, and none of {names} declares a container image. "
+            "Name one with --tool, or run without --container to use a tool on the PATH."
+        )
     return (
-        "glance --tool auto found no comparison tool to run: none of "
-        f"{', '.join(supporters) or '(none registered)'} is on the PATH. Install one of "
-        "them, use a container backend (--container docker or singularity), or name "
-        "one with --tool."
+        f"glance --tool auto found no comparison tool to run: none of {names} is on "
+        "the PATH. Install one of them, use a container backend (--container docker "
+        "or singularity), or name one with --tool."
     )
 
 
