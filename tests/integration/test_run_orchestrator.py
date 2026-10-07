@@ -303,3 +303,36 @@ def test_run_with_snptype_rejects_an_unknown_snptyper_up_front(monkeypatch, tmp_
         assert result.exit_code == 2, result.output
         assert "--snptyper" in result.output
     assert calls == []
+
+
+def test_run_with_snptype_passes_mask_to_the_snptype_stage(monkeypatch, tmp_path) -> None:
+    """--with-snptype --mask gubbins masks the standalone snptype stage; with the
+    aligner MSA source the phylo stage does not see the mask."""
+    built: dict[str, object] = {}
+
+    def fake_run(stage, workdir, build, *, create=False):
+        built[stage] = build()
+
+    monkeypatch.setattr(cmd_run, "_run", fake_run)
+    monkeypatch.setattr(cmd_run, "_preflight_tools", lambda *a, **k: None)
+    result = _runner.invoke(
+        app,
+        [
+            *("run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "francisella"),
+            *("--with-snptype", "--mask", "gubbins"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert built["snptype"].mask == "gubbins"
+    assert "mask" not in built["phylo"].extra
+
+
+def test_run_mask_without_snptype_source_is_still_rejected(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(
+        app,
+        ["run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "x", "--mask", "gubbins"],
+    )
+    assert result.exit_code == 2
+    assert "--mask applies only with --msa-source snptype" in result.output
+    assert calls == []

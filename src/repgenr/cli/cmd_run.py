@@ -352,9 +352,12 @@ def run(
             **_parse_key_values(tool_arg, "--tool-arg"),
             **_virus_extra(derep_tool, viral),
         }
+        # With --with-snptype and the aligner MSA source, --mask belongs to the
+        # standalone snptype stage only; phylo would reject it there.
+        mask_for_phylo = mask != "none" and (msa_source == "snptype" or not with_snptype)
         phylo_extra = {
             **_parse_key_values(aligner_arg, "--aligner-arg"),
-            **({"mask": mask} if mask != "none" else {}),
+            **({"mask": mask} if mask_for_phylo else {}),
         }
         dereplicate_params(
             tool=derep_tool,
