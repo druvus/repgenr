@@ -27,7 +27,8 @@ class FlyeAssembler(Assembler):
         ignored_params=frozenset({"memory_gb"}),
     )
     read_types = frozenset({"OXFORD_NANOPORE", "PACBIO_SMRT"})
-    layouts = frozenset({"SINGLE"})
+    # ENA labels some long-read runs PAIRED; Flye takes every file of a run.
+    layouts = frozenset({"SINGLE", "PAIRED"})
 
     def assemble(
         self, reads: ReadSet, out_dir: Path, params: AssembleParams, logger: logging.Logger

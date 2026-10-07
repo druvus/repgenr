@@ -10,7 +10,7 @@ from ..assemblers.base import ReadSet
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from .base import Polisher, PolishParams, PolishResult, read_dirs
+from .base import Polisher, PolishParams, PolishResult, one_read_file, read_dirs
 
 # HiFi reads are already accurate; polishing them with racon does more harm than good.
 _HIFI_INSTRUMENTS = ("sequel ii", "revio")
@@ -51,6 +51,7 @@ class RaconPolisher(Polisher):
         logger: logging.Logger,
     ) -> PolishResult:
         out_dir.mkdir(parents=True, exist_ok=True)
+        reads = one_read_file(reads, out_dir)
         preset = "map-ont" if reads.platform == "OXFORD_NANOPORE" else "map-pb"
         query = reads.files[0]
         current = draft

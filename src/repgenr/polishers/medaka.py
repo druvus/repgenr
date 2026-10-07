@@ -20,9 +20,9 @@ from pathlib import Path
 from ..assemblers.base import ReadSet
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.errors import ToolExecutionError, UserInputError
+from ..core.errors import ToolExecutionError
 from ..core.plugins import ToolCapabilities
-from .base import Polisher, PolishParams, PolishResult, read_dirs
+from .base import Polisher, PolishParams, PolishResult, one_read_file, read_dirs
 
 _MODEL_TAG = "basecall_model_version_id="
 # ONT's bacterial methylation-aware model (R10.4.1, 400 bps), assumed when the
@@ -51,11 +51,8 @@ class MedakaPolisher(Polisher):
         params: PolishParams,
         logger: logging.Logger,
     ) -> PolishResult:
-        if len(reads.files) != 1:
-            raise UserInputError(
-                f"medaka takes one read file; run {reads.run_accession} has {len(reads.files)}."
-            )
         out_dir.mkdir(parents=True, exist_ok=True)
+        reads = one_read_file(reads, out_dir)
         result_dir = out_dir / "medaka_out"
         bacteria = (
             params.extra.get("bacteria", self.capabilities.default_params["bacteria"]) != "false"
