@@ -20,6 +20,8 @@ from .base import (
     HELP_ALIGNED_FRACTION,
     HELP_ALIGNER_ARG,
     HELP_BOOTSTRAP,
+    HELP_COLLAPSE_LENGTH,
+    HELP_COLLAPSE_SUPPORT,
     HELP_DEREP_TOOL_ARG,
     HELP_INCLUDE_DEREPLICATED,
     HELP_KEEP_FILES,
@@ -255,13 +257,13 @@ def tree2tax_relations_cmd(
         "--collapse-support",
         min=0.0,
         max=1.0,
-        help="Merge nodes whose support is below this fraction into their parent.",
+        help=HELP_COLLAPSE_SUPPORT,
     ),
     collapse_length: float | None = typer.Option(
         None,
         "--collapse-length",
         min=0.0,
-        help="Merge nodes whose branch is shorter than this length into their parent.",
+        help=HELP_COLLAPSE_LENGTH,
     ),
 ) -> None:
     """Emit FlexTaxD relations from a tree (stateless data-channel step).

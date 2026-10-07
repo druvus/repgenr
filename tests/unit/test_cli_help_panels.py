@@ -97,6 +97,8 @@ SHARED_FLAGS: list[tuple[str, str, str]] = (
     + [("tree2tax", "run", "--include-dereplicated")]
     + [("tree2tax", "tree2tax-relations", f) for f in ("--remove-outgroup", "--node-basename")]
     + [("tree2tax", "tree2tax-relations", f) for f in ("--root-name", "--include-dereplicated")]
+    + [("tree2tax", "run", f) for f in ("--collapse-support", "--collapse-length")]
+    + [("tree2tax", "tree2tax-relations", f) for f in ("--collapse-support", "--collapse-length")]
     + [("genome", "run", "--keep-files"), ("genome", "genome-fetch", "--keep-files")]
     + [("metadata", "run", "--workdir"), ("dereplicate", "phylo", "--workdir")]
     + [("genome-fetch", c, "--versions-out") for c in _STEP_VERSIONS]
@@ -111,8 +113,9 @@ def test_shared_flag_has_one_help_string(command_a: str, command_b: str, flag: s
 
 
 def test_platform_flags_differ() -> None:
-    assert CLICK.params
-    global_help = next(p.help for p in CLICK.params if "--platform" in p.opts)
+    global_param = next((p for p in CLICK.params if "--platform" in p.opts), None)
+    assert global_param is not None, "global --platform is missing"
+    global_help = global_param.help
     run_help = _help_of("run", "--platform")
     assert global_help and run_help
     assert global_help != run_help

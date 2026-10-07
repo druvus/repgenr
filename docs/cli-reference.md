@@ -93,11 +93,11 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
@@ -118,7 +118,7 @@ Show which pipeline stages have completed in a working directory.
 
 Select a taxon's genomes from GTDB (full table or the GTDB API).
 
-In 'run' this option is called --metadata-source.
+The --source option is called --metadata-source in 'run'.
 
 | option | default | description |
 |---|---|---|
@@ -151,7 +151,7 @@ Download and organize genomes selected by the metadata stage.
 
 Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
 
-In 'run' this option is called --viral-source.
+The --source option is called --viral-source in 'run'.
 
 | option | default | description |
 |---|---|---|
@@ -286,7 +286,7 @@ commands it selects the dereplicator.
 | `--tool` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--reference` |  | Reference genome filename. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
-| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable). |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
@@ -308,7 +308,7 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 
 ### tree2tax
@@ -321,7 +321,7 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
 
@@ -484,7 +484,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking (with --msa-source snptype): none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
 | `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
@@ -505,7 +505,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
-| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in tree2tax. |
+| `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |

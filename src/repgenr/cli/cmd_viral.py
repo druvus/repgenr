@@ -57,7 +57,7 @@ def vmetadata(
 ) -> None:
     """Retrieve viral metadata from NCBI Virus (default) or BV-BRC.
 
-    In 'run' this option is called --viral-source.
+    The --source option is called --viral-source in 'run'.
     """
     from .param_builders import vmetadata_params
 

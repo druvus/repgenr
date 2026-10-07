@@ -82,7 +82,7 @@ def metadata(
 ) -> None:
     """Select a taxon's genomes from GTDB (full table or the GTDB API).
 
-    In 'run' this option is called --metadata-source.
+    The --source option is called --metadata-source in 'run'.
     """
     from .param_builders import metadata_params
 

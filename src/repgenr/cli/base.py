@@ -87,7 +87,9 @@ HELP_ALLOW_INCOMPLETE = "Proceed with a warning when the input genome set is inc
 HELP_NODE_BASENAME = "Name internal nodes <basename><n> instead of by content hash."
 HELP_ROOT_NAME = "Label of the top node."
 HELP_REMOVE_OUTGROUP = "Leave the outgroup out of the taxonomy after rooting."
-HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative in tree2tax."
+HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative in the taxonomy."
+HELP_COLLAPSE_SUPPORT = "Merge nodes whose support is below this fraction into their parent."
+HELP_COLLAPSE_LENGTH = "Merge nodes whose branch is shorter than this length into their parent."
 HELP_VERSIONS_OUT = "Write resolved tool versions (YAML fragment) here."
 
 # Canonical stage order per lineage. Used to show progress (`status`) and by
@@ -353,7 +355,7 @@ def _mask_help() -> str:
     from ..maskers.base import registry
 
     return tool_choices_help(
-        registry, auto=False, prefix="Recombination masking (with --msa-source snptype): none, "
+        registry, auto=False, prefix="Recombination masking of the SNP alignment: none, "
     )
 
 

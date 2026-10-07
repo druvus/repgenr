@@ -361,5 +361,5 @@ def test_list_tools_shows_declared_genome_limits() -> None:
     lines = {ln.split(":")[0]: ln for ln in result.output.splitlines() if ": " in ln}
     assert "iqtree (up to 500 genomes)" in lines["treebuilders"]
     assert "mashtree (up to 10000 genomes)" in lines["treebuilders"]
-    assert "skder," in lines["dereplicators"] + ","
-    assert "skder (" not in lines["dereplicators"]
+    entries = lines["dereplicators"].split(": ", 1)[1].split(", ")
+    assert "skder" in entries
