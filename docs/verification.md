@@ -379,6 +379,13 @@ parser), so they also apply to commands other than the one named.
 | glance | A workdir without genomes exited 4 (dRep absent) instead of 3 | 645feaa |
 | glance | The stage record held no dRep version | e003775 |
 | glance | docs/usage.md said glance compares the representatives; it compares all genomes | 8cab3b7 |
+| glance | The plots counted each genome pair twice (dRep lists both orders), and the histogram's y axis was labelled MASH ANI instead of a pair count | 05f3cea |
+| glance | One genome failed inside dRep with exit 6; it now exits 3 before dRep runs | 3c3fd84 |
+| glance | `--plot-min` above `--plot-max`, or a bound outside 0-1, was accepted and removed the earlier plots; it now exits 2 | 27ddeea |
+| glance | `--help` did not give the plot bound units or say that `--keep-files` keeps `glance_wd/` | 6825439 |
+| glance | A missing dendrogram was not reported | 793d9d0 |
+| glance | A deleted dendrogram was not rebuilt by a repeat run (no deliverable declared) | 6ba057d |
+| status | An interrupted optional stage was shown as `(incomplete)` instead of `[interrupted]` | c7ba749 |
 | cluster-summary | A missing workdir created a manifest, or raised an OSError traceback | 50194c6 |
 | derep-stock | `pack` of a workdir without dereplication outputs stored an empty run | f84e11f |
 | derep-stock | `unpack` of an incomplete stored run emptied the live representatives before failing | 78d14cc |
@@ -398,6 +405,10 @@ they are recorded here and not fixed.
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
+| glance | Changing `--plot-min` or `--plot-max` reruns the whole dRep comparison, about 80 s for 1000 genomes, although only the plots change. |
+| glance | For 1000 genomes the dendrogram PDF is one page about 3.9 m tall; it is readable only when zoomed. |
+| glance | The genomes in `outgroup/` are not part of the comparison; glance compares `genomes/` only, as documented. |
+| Resume | The skip message says "use --force to re-run", but `--force` is a global option and must come before the command (`repgenr --force glance ...`); `repgenr glance --force` exits 2 with "No such option". |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
 
 ## Platform notes (macOS / Apple Silicon)

@@ -35,16 +35,11 @@ class GlanceParams:
 
 def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     logger = ctx.logger
-    from ..dereplicators.base import Dereplicator, registry
+    from ..dereplicators.base import compare_supporters, registry
 
     adapter = registry.create(params.tool)
-    if type(adapter).compare is Dereplicator.compare:
-        supporters = sorted(
-            name
-            for name in registry.names()
-            if not registry.is_broken(name)
-            and registry.get(name).compare is not Dereplicator.compare
-        )
+    supporters = compare_supporters()
+    if params.tool not in supporters:
         raise UserInputError(
             f"Dereplicator '{params.tool}' does not support glance comparisons. "
             f"Tools with compare support: {', '.join(supporters) or 'none'}."
@@ -52,6 +47,11 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
+    if len(genomes) < 2:
+        # dRep compare fails on an empty distance matrix with one genome.
+        raise WorkdirError(
+            f"glance needs at least two genomes; found {len(genomes)} under {ctx.genomes_dir}"
+        )
     versions = adapter.preflight()
 
     glance_wd = ctx.workdir / "glance_wd"
@@ -68,6 +68,12 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     out_pdf = ctx.workdir / "glance_clustering_dendrogram.pdf"
     if result.dendrogram is not None:
         shutil.copy2(result.dendrogram, out_pdf)
+    else:
+        logger.warning(
+            "The comparison returned no dendrogram; %s not written, and the next run "
+            "repeats the comparison",
+            out_pdf.name,
+        )
 
     if result.similarity_csv is not None:
         _plot(result.similarity_csv, ctx.workdir, params, logger)
@@ -88,39 +94,63 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     return out_pdf
 
 
-def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
+def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
+    """Similarity of each unordered genome pair in ``Mdb.csv`` within [low, high].
+
+    dRep lists every pair in both orders and each genome against itself; a
+    pair is counted once (its first readable row) and self-comparisons are
+    skipped.
+    """
     import csv
 
-    from matplotlib import pyplot as plt
-
-    values = []
+    index: dict[str, int] = {}
+    seen: set[int] = set()
+    values: list[float] = []
     with open(mdb, encoding="utf-8", newline="") as fo:
-        reader = csv.DictReader(fo)
-        for row in reader:
-            if row.get("genome1") == row.get("genome2"):
+        for row in csv.DictReader(fo):
+            g1, g2 = row.get("genome1"), row.get("genome2")
+            if g1 is None or g2 is None or g1 == g2:
+                continue
+            i = index.setdefault(g1, len(index))
+            j = index.setdefault(g2, len(index))
+            key = (min(i, j) << 32) | max(i, j)
+            if key in seen:
                 continue
             try:
                 sim = float(row["similarity"])
-            except (KeyError, ValueError):
+            except (KeyError, TypeError, ValueError):
                 continue
-            if params.plot_min <= sim <= params.plot_max:
+            # Marked only once parsed, so an unreadable row does not hide the
+            # valid row of the same pair in the other order.
+            seen.add(key)
+            if low <= sim <= high:
                 values.append(sim)
+    return values
 
+
+def _plot(mdb: Path, workdir: Path, params: GlanceParams, logger) -> None:
+    from matplotlib import pyplot as plt
+
+    values = _pair_similarities(mdb, params.plot_min, params.plot_max)
     if not values:
         logger.warning("No similarity values in range; skipping plots")
         return
 
-    title = f"MASH ANI all-vs-all ({len(values)} values)"
+    title = f"MASH ANI, all-vs-all ({len(values)} genome pairs)"
     fig, ax = plt.subplots()
     ax.boxplot(values)
+    ax.set_xticklabels([""])
     ax.set_ylabel("MASH ANI")
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(workdir / "glance_MASH_ANI_similarity_boxplot.png")
+    plt.close(fig)
 
     fig, ax = plt.subplots()
     ax.hist(values, bins=100)
-    ax.set_ylabel("MASH ANI")
+    ax.set_xlabel("MASH ANI")
+    ax.set_ylabel("Genome pairs")
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(workdir / "glance_MASH_ANI_similarity_histogram.png")
+    plt.close(fig)

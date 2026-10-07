@@ -7,9 +7,9 @@ from typing import Any
 
 import typer
 
+from ..core.errors import UserInputError
 from .base import (
     DEFAULT_THREADS,
-    HELP_KEEP_FILES,
     HELP_THREADS,
     HELP_WORKDIR,
     PANEL_ENV,
@@ -120,7 +120,10 @@ def status(
         for stage in extras:
             rec = recorded[stage]
             tool = f" [{rec.tool}]" if rec.tool else ""
-            typer.echo(f"    {stage}{tool}  {rec.completed or '(incomplete)'}")
+            when = rec.completed or (
+                "[interrupted] (did not finish; outputs may be partial; see repgenr.log)"
+            )
+            typer.echo(f"    {stage}{tool}  {when}")
 
     if next_stage is None:
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
@@ -159,13 +162,9 @@ def doctor(
 
 def _glance_tool_help() -> str:
     """Dereplicators that implement the comparison capability, from the registry."""
-    from ..dereplicators.base import Dereplicator, registry
+    from ..dereplicators.base import compare_supporters
 
-    names = [
-        n
-        for n in registry.names()
-        if not registry.is_broken(n) and registry.get(n).compare is not Dereplicator.compare
-    ]
+    names = compare_supporters()
     return f"Dereplicator with comparison support: {', '.join(names) or '(none registered)'}."
 
 
@@ -175,19 +174,37 @@ def glance(
     tool: str = typer.Option("drep", "--tool", help=_glance_tool_help()),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
     plot_max: float = typer.Option(
-        1.0, "--plot-max", help="Upper similarity bound of the values plotted."
+        1.0,
+        "--plot-max",
+        help="Upper bound of the Mash ANI values plotted, as a fraction from 0 to 1.",
     ),
     plot_min: float = typer.Option(
-        0.0, "--plot-min", help="Lower similarity bound of the values plotted."
+        0.0,
+        "--plot-min",
+        help="Lower bound of the Mash ANI values plotted, as a fraction from 0 to 1.",
     ),
-    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep the dRep working directory glance_wd/."
+    ),
 ) -> None:
-    """Quick all-vs-all ANI overview (dRep compare dendrogram + plots)."""
+    """Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
+
+    Needs dRep (on the PATH, or via the container backend) and no
+    dereplication; compares every genome in genomes/ and writes
+    glance_clustering_dendrogram.pdf and two Mash ANI plots,
+    glance_MASH_ANI_similarity_boxplot.png and
+    glance_MASH_ANI_similarity_histogram.png.
+    """
     from ..dereplicators.base import registry as _derep_registry
     from ..stages.glance import GlanceParams
 
     def build() -> GlanceParams:
         _require_choice(tool, set(_derep_registry.names()), "--tool")
+        if not 0.0 <= plot_min <= plot_max <= 1.0:
+            raise UserInputError(
+                "--plot-min and --plot-max are Mash ANI fractions with "
+                f"0 <= --plot-min <= --plot-max <= 1; got {plot_min} and {plot_max}."
+            )
         return GlanceParams(
             tool=tool,
             threads=threads,

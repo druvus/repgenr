@@ -115,6 +115,12 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
+  fractions from 0 to 1, and that `--keep-files` keeps the dRep working
+  directory `glance_wd/` (it used the shared "download and scratch
+  intermediates" wording). Its description says that glance needs dRep (on
+  the PATH, or via the container backend) but no dereplication, and names
+  the three output files.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
@@ -241,6 +247,27 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `status` lists an interrupted optional stage (for example a `glance` run
+  killed mid-way) as `[interrupted]` with the same hint as a stage of the
+  chain. It showed `(incomplete)`, a word the documentation does not use.
+- A repeat `glance` reruns when `glance_clustering_dendrogram.pdf` was
+  deleted, as other stages do for their deliverables, and `doctor` warns
+  about the missing file. Before, glance declared no deliverable, so the
+  repeat skipped and the dendrogram stayed missing until `--force`.
+- `glance` warns when the comparison tool returns no dendrogram, and that
+  the next run repeats the comparison. Before, the dendrogram was left out
+  without a message.
+- `glance` rejects `--plot-min` above `--plot-max`, or either bound outside
+  0 to 1, with exit 2. Before, such bounds selected no values, the run
+  exited 0 and removed the plots of the previous run.
+- `glance` on a workdir with one genome exits 3 with "glance needs at least
+  two genomes" before running dRep. Before, `dRep compare` failed inside
+  scipy (empty distance matrix) and glance exited 6.
+- `glance` plots count each genome pair once. dRep's `Mdb.csv` lists every
+  pair in both orders, so the histogram counts and the number in the plot
+  titles were twice the number of pairs. The histogram's x axis is now
+  labelled "MASH ANI" and its y axis "Genome pairs" (the y axis was labelled
+  "MASH ANI"), and the box plot no longer shows a "1" tick.
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
