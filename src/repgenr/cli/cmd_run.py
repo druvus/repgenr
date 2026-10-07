@@ -389,6 +389,11 @@ def run(
             reads_params(platform=platform)
             assemble_params(assembler=assembler)
         if with_snptype:
+            # The standalone snptype stage uses --snptyper whatever the MSA
+            # source; check the name here so a typo fails before any stage.
+            from ..snptypers.base import registry as _snp_registry
+
+            _require_choice(snptyper, set(_snp_registry.names()), "--snptyper")
             require_mask(mask)
         if not viral and not local and not reads and not level:
             raise UserInputError("The bacterial chain needs -l/--level (family/genus/species).")
