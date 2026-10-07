@@ -96,6 +96,8 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     )
     out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    # An excuse from an earlier attempt no longer applies to this one.
+    (out_dir / EXCUSED_RUNS_TSV).unlink(missing_ok=True)
     [outcome] = stage._plan(rows, stage_params, out_dir.parent, logger=logger)
     if stage_params.assembler == "auto":
         stage._excuse_missing_assemblers([outcome], logger)
@@ -113,6 +115,10 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     if params.versions_out is not None:
         write_versions_fragment(params.versions_out, versions)
     if outcome.excused is not None:
+        # A finished run excused by a higher floor keeps its contigs for the
+        # stage's later reuse, but here the marker would make genome-qc and
+        # reads-gather take it as finished.
+        (out_dir / _MARKER).unlink(missing_ok=True)
         write_excused_runs(out_dir / EXCUSED_RUNS_TSV, [outcome.excused])
         logger.info("assemble-run: %s excused (%s)", params.run, outcome.excused.reason)
         return False

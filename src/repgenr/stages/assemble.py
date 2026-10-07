@@ -510,6 +510,9 @@ def _refilter(
     elif stats == outcome.stats:
         trial.unlink()
         return
+    # The marker goes before the contigs change: a kill in between leaves no
+    # marker, so the run is assembled again rather than reused with wrong stats.
+    (run_dir / _DONE_MARKER).unlink(missing_ok=True)
     trial.replace(contigs)
     done["stats"] = asdict(stats)
     _write_marker(run_dir / _DONE_MARKER, done)
@@ -864,6 +867,9 @@ def check_quality_inputs(
 ) -> dict[str, str]:
     """Refuse missing databases and find the QC tools; return their versions."""
     versions: dict[str, str] = {}
+    # The environment variables stand in for the flags, as in classifier_for().
+    gtdb_sketch = gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    gtdb_lineages = gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
     if checkm2_db:
         if not Path(checkm2_db).expanduser().exists():
             raise UserInputError(
@@ -871,7 +877,11 @@ def check_quality_inputs(
             )
         versions.update(preflight_checkm2())
     if classifier:
-        assert gtdb_sketch is not None  # classifier_for() requires one
+        if not gtdb_sketch:
+            raise UserInputError(
+                f"--classifier {classifier} needs a reference sketch (--gtdb-sketch or "
+                f"{GTDB_SKETCH_ENV})."
+            )
         if not Path(gtdb_sketch).expanduser().exists():
             raise UserInputError(
                 f"--gtdb-sketch {gtdb_sketch} does not exist (from the flag or {GTDB_SKETCH_ENV})."

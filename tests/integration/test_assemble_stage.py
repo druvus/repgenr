@@ -803,3 +803,29 @@ def test_a_marker_without_settings_still_gets_a_higher_floor(
     assert _FakeAssembler.calls == ["SRR1"]
     assert next(ctx.genomes_dir.iterdir()).read_text(encoding="utf-8").count(">") == 1
     assert "settings" not in json.loads(marker_path.read_text())
+
+
+def test_a_kill_during_a_refilter_never_leaves_a_marker_over_other_contigs(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """The marker goes first: a kill after the contigs are replaced leaves no marker,
+    so the run is assembled again instead of reused with the wrong statistics."""
+    from repgenr.stages import assemble as stage
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    marker = workdir / "assemblies" / "SRR1" / "assembly.ok"
+    seen: list[bool] = []
+    original = stage._write_marker
+
+    def killed(path, data):
+        seen.append(path.exists())
+        raise KeyboardInterrupt  # the kill, after the contigs were replaced
+
+    monkeypatch.setattr(stage, "_write_marker", killed)
+    with pytest.raises(KeyboardInterrupt):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert seen == [False] and not marker.exists()
+    monkeypatch.setattr(stage, "_write_marker", original)
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
