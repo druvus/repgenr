@@ -241,6 +241,9 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `glance` on a workdir with one genome exits 3 with "glance needs at least
+  two genomes" before running dRep. Before, `dRep compare` failed inside
+  scipy (empty distance matrix) and glance exited 6.
 - `glance` plots count each genome pair once. dRep's `Mdb.csv` lists every
   pair in both orders, so the histogram counts and the number in the plot
   titles were twice the number of pairs. The histogram's x axis is now

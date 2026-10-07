@@ -392,7 +392,7 @@ dereplicator, and a fourth inspects the genomes before dereplication.
 representative with its members inside (`--no-representant` leaves the
 representative out); a member missing from `genomes/` is left out with a
 warning that names it. `repgenr glance` runs dRep's comparison over all genomes
-in `genomes/` and writes its dendrogram and plots (dRep only; it does not need
+in `genomes/` (at least two) and writes its dendrogram and plots (dRep only; it does not need
 a dereplication). `repgenr derep-stock
 --action pack --name <run>` stores the current clusters, statuses and
 representatives under `derep/stock/<run>`; `--action unpack` restores a

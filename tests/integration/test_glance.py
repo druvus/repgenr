@@ -195,3 +195,21 @@ def test_glance_histogram_axes_name_ani_and_pair_counts(workdir: Path, monkeypat
     assert hist_x == "MASH ANI" and hist_y == "Genome pairs"
     box_x, box_y, box_ticks = labels["glance_MASH_ANI_similarity_boxplot.png"]
     assert box_y == "MASH ANI" and box_ticks == [""] * len(box_ticks)
+
+
+def test_glance_with_one_genome_exits_3_before_the_tool_runs(workdir: Path, monkeypatch) -> None:
+    # dRep compare fails inside scipy on a single genome (empty distance
+    # matrix); glance names the cause instead of reporting a tool failure.
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.genomes_dir.mkdir(parents=True)
+    (ctx.genomes_dir / "a.fasta").write_text(">x\nACGT\n")
+    called: list[object] = []
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", lambda *a, **k: called.append(a))
+    with pytest.raises(WorkdirError, match="at least two genomes"):
+        glance_run(ctx, GlanceParams(threads=2))
+    assert not called

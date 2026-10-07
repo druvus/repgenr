@@ -52,6 +52,11 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     genomes = list_fasta(ctx.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genomes under {ctx.genomes_dir}")
+    if len(genomes) < 2:
+        # dRep compare fails on an empty distance matrix with one genome.
+        raise WorkdirError(
+            f"glance needs at least two genomes; found {len(genomes)} under {ctx.genomes_dir}"
+        )
     versions = adapter.preflight()
 
     glance_wd = ctx.workdir / "glance_wd"
