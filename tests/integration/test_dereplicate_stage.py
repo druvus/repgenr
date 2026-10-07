@@ -406,14 +406,19 @@ def test_a_deleted_secondary_output_is_rebuilt_without_force(
 
 @pytest.mark.parametrize("tool", ["skder", "auto"])
 def test_skder_ani_floor_refusal_keeps_the_finished_record(
-    workdir: Path, genome_files, fake_tool, tool: str
+    workdir: Path, genome_files, fake_tool, tool: str, monkeypatch
 ) -> None:
     """skDER's 80 percent floor is refused in the precheck (exit 2), before the
     harness marks the finished record incomplete; auto resolves to skDER here."""
     from typer.testing import CliRunner
 
     from repgenr.cli.main import app
+    from repgenr.core import plugins
     from repgenr.core.config import Config
+
+    # Hermetic auto: only skDER counts as runnable, whatever is on PATH and
+    # whichever test adapters are registered.
+    monkeypatch.setattr(plugins, "_tool_available", lambda caps: caps.name == "skder")
 
     wd = str(workdir)
     assert CliRunner().invoke(app, ["dereplicate", "-wd", wd, "--tool", "fake"]).exit_code == 0
