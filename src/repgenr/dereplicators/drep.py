@@ -167,7 +167,32 @@ class DrepDereplicator(Dereplicator):
                 "in repgenr.log show the step where it stopped.",
                 tool="dRep",
             )
-        return _parse_drep_output(drep_wd, logger)
+        result = _parse_drep_output(drep_wd, logger)
+        return _restore_input_names(result, {st.name: src for st, src in zip(staged, genomes)})
+
+
+def _restore_input_names(result: DerepResult, source_by_staged: dict[str, Path]) -> DerepResult:
+    """Report genomes under their input names, not dRep's staged copies.
+
+    A gzipped input is staged decompressed (``x.fasta.gz`` -> ``x.fasta``), so
+    dRep names it without ``.gz``; the stage checks every input name for a
+    status and links representatives from genomes/, so map the names back.
+    """
+
+    def name(staged: str) -> str:
+        src = source_by_staged.get(staged)
+        return src.name if src is not None else staged
+
+    return DerepResult(
+        representatives=[source_by_staged.get(p.name, p) for p in result.representatives],
+        clusters={name(rep): [name(m) for m in members] for rep, members in result.clusters.items()},
+        genome_status={name(g): state for g, state in result.genome_status.items()},
+        genome_information=[
+            {**row, "genome": name(str(row.get("genome", "")))}
+            for row in (result.genome_information or [])
+        ]
+        or result.genome_information,
+    )
 
 
 def _stage_genome(src: Path, dest_dir: Path) -> Path:

@@ -334,3 +334,29 @@ def test_drep_exit_0_without_results_is_a_tool_failure(genomes, tmp_path, monkey
     assert info.value.exit_code == 6
     assert str(info.value) == "dRep exited 0 without writing its results"
     assert "CheckM" in info.value.details()
+
+
+def test_drep_reports_gzipped_genomes_under_their_input_names(tmp_path, monkeypatch) -> None:
+    """dRep sees a decompressed copy (x.fasta); results name the input (x.fasta.gz)."""
+    import gzip
+
+    import repgenr.dereplicators.drep as drep_mod
+
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for name in ("g1.fasta", "g2.fasta.gz", "g3.fasta.gz", "g4.fasta"):
+        p = gdir / name
+        text = f">{name}\nACGTACGTACGT\n".encode()
+        p.write_bytes(gzip.compress(text) if name.endswith(".gz") else text)
+        genomes.append(p)
+
+    def fake(caps, command, *, logger, **kwargs):
+        _fake_drep([str(c) for c in command])
+        return 0
+
+    monkeypatch.setattr(drep_mod, "run_tool", fake)
+    result = drep_mod.DrepDereplicator().dereplicate(genomes, tmp_path / "out", DerepParams(), _LOG)
+    assert set(result.genome_status) == {g.name for g in genomes}
+    assert result.clusters == {"g1.fasta": ["g2.fasta.gz"], "g3.fasta.gz": ["g4.fasta"]}
+    assert sorted(p.name for p in result.representatives) == ["g1.fasta", "g3.fasta.gz"]
