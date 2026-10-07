@@ -293,6 +293,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `docs/output.md` and `docs/usage.md` agree with the runs: `scratch/` is
   written by five stages, tool intermediates of `dereplicate` are under
   `scratch/`, and `glance` compares all genomes.
+- `metadata` with a local GTDB table names `--gtdb-version` when it is missing
+  (it named `--version`) and reruns when the `--metadata-path` table changes.
+  `vmetadata --source bvbrc` reports an unreachable FTP server as exit 3.
 
 ### Changed
 - A run whose assembler is not installed is excused as

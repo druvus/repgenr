@@ -316,7 +316,10 @@ ok, and also counts the docs agreement check.
 |---|---|---|---|---|---|---|---|
 | run | ok | fixed | fixed | ok | ok | ok | fixed |
 | status | ok | ok | ok | n/a | n/a | ok | fixed |
-| genome-fetch | ok | ok | fixed | n/a | fixed | n/a | fixed |
+| metadata | ok | fixed | ok | fixed | fixed | not run | open |
+| genome | ok | ok | ok | not run | open | not run | open |
+| vmetadata | ok | ok | ok | ok | fixed | not run | open |
+| vgenome | open | ok | ok | ok | ok | not run | open |
 | ingest | ok | ok | ok | ok | ok | ok | ok |
 | reads | ok | ok | ok | ok | ok | not run | ok |
 | assemble | ok | ok | fixed | ok | fixed | n/a | fixed |
@@ -331,6 +334,7 @@ ok, and also counts the docs agreement check.
 | list-tools | ok | n/a | fixed | n/a | ok | ok | fixed |
 | doctor | ok | ok | ok | n/a | n/a | ok | ok |
 | versions | ok | fixed | ok | n/a | n/a | ok | fixed |
+| genome-fetch | ok | ok | fixed | n/a | fixed | n/a | fixed |
 | dereplicate-chunk | ok | ok | ok | n/a | ok | ok | ok |
 | dereplicate-merge | ok | ok | ok | n/a | ok | ok | ok |
 | phylo-build | fixed | ok | ok | n/a | ok | ok | fixed |
@@ -351,6 +355,10 @@ parser), so they also apply to commands other than the one named.
 | status | The "no run found" hint named only `metadata` and `vmetadata`; it now names all four starting points | 3c087a7 |
 | versions | A nonexistent workdir printed nothing and exited 0; it now exits 3 and writes no fragment | 3608ad9 |
 | list-tools | A rejected version flag (sibeliaz) was recorded as the tool's error line; it is now recorded as unknown | f1905d7 |
+| metadata | The tsv source named `--version` (the global flag) instead of `--gtdb-version` when the version was missing | 5bb9f0c |
+| metadata | Replacing the `--metadata-path` table was skipped on resume and kept a stale selection | 4337fab |
+| vmetadata | An unreachable BV-BRC FTP server gave a traceback with exit 1; it now exits 3 with a named error | cbf839b |
+| docs/usage.md | Exit code 3 was described only as workdir state; it also covers a failed remote request | 8e93630 |
 | docs/output.md | `scratch/` was attributed to snptype only; it is written by five stages | 2a9f38e |
 | genome-fetch | The `datasets` preflight was skipped without `--versions-out`, giving a traceback; it now exits 4 | 2762f39 |
 | genome-fetch | A `selection.tsv` without the needed columns raised KeyError; it now exits 3 and names the columns | faef47b |
@@ -402,6 +410,16 @@ they are recorded here and not fixed.
 | derep-unpack | A cluster member missing from `genomes/` is left out without a message, and a stored run without `cluster_summary.tsv` keeps the current summary. |
 | derep-stock | Deleting an already deleted run exits 0 without naming the unknown run. |
 | glance | Plots from an earlier run stay in place when no similarity falls in the plot range, and a dRep failure carries its full traceback in the error message. |
+| Entry stages | `genome` on a nonexistent workdir creates the directory and an empty manifest before exiting 3, while `vgenome` creates nothing. |
+| Entry stages | `ncbi_acc_download_list.txt` has no trailing newline, so `wc -l` undercounts and a `while read` loop drops the last accession. |
+| Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
+| Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
+| Network | A BV-BRC group download writes `download.fa` in place, so an interrupted transfer can leave a partial file that the next run reuses. |
+| Network | The BV-BRC path uses FTPS directly, so proxy variables do not block it, and `vmetadata --list` needs the network whatever `--source` says. |
+| Network | With the network down, Entrez enrichment retries every sublist three times, about 16 minutes for 1050 taxids, before it fails with exit 3. |
+| Help text | `metadata --metadata-path` does not say that `-r` and `--gtdb-version` are still required with a local table, and `vgenome --outgroup-treebuilder` does not name its accepted values (mashtree only). |
+| Docs | docs/output.md does not list `ncbi_acc_download_list.txt` and attributes `scratch/` to snptype only, although `genome` also writes `scratch/genome_download/`. |
+| Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
 
