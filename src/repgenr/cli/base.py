@@ -94,6 +94,7 @@ HELP_PRE_SECONDARY_ANI = "Stage-1 (intra-chunk) secondary ANI; defaults to --sec
 HELP_REDUCE = (
     "Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon)."
 )
+HELP_VIRUS = "Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it."
 HELP_TARGET_REPS = (
     "Target representative count: search --secondary-ani to land near it "
     "(0 = off; re-runs dereplication per search step)."
@@ -938,16 +939,32 @@ def _provisional_tool(params: object) -> str | None:
     return tool if isinstance(tool, str) else None
 
 
-def gated_extra(registry, tool: str, key: str, value: object) -> dict:
+def gated_extra(registry, tool: str, key: str, value: object, *, flag: str | None = None) -> dict:
     """Return ``{key: value}`` only when ``tool`` reads that extra.
 
     Injecting a key a tool ignores would change the resume fingerprint without
     changing the result. ``auto`` passes the key through; the stage warns after
-    it has picked a concrete tool.
+    it has picked a concrete tool. ``flag`` names the option the user gave
+    (for example ``--virus``): when set and the tool does not read the key, a
+    warning says the option has no effect and which tools read it. Callers
+    that inject the key themselves (``run --viral``) leave it unset.
     """
     if tool != "auto":
         caps = registry.get(tool).capabilities
         if key not in caps.accepted_extras:
+            if flag is not None:
+                readers = sorted(
+                    name
+                    for name in registry.names()
+                    if not registry.is_broken(name)
+                    and key in registry.get(name).capabilities.accepted_extras
+                )
+                logging.getLogger("repgenr").warning(
+                    "%s has no effect with --tool %s; it is read by: %s.",
+                    flag,
+                    tool,
+                    ", ".join(readers) or "no installed tool",
+                )
             return {}
     return {key: value}
 

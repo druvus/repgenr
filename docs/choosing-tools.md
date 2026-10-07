@@ -14,7 +14,7 @@ limit and not a measurement, the text says so.
 | Genus or wider (diverse) | `metadata` (GTDB), or `--source api` for one taxon | `skder`, or `sourmash` for large sets | Alignment-free | No | `mashtree` |
 | One species | `metadata`, or `ingest` for local genomes | `skder` or `galah` | Core-SNP with `--reference` set to a genome of that species, or whole-genome MSA for small sets | `--mask gubbins` when under 10% of alignment columns vary | `iqtree` |
 | Outbreak or clonal set | `ingest`, or `reads` and `assemble` | `skder` or `galah`, with the clone-block caveat in section 4 | Core-SNP with `ska2` (reference-free) or a mapping typer | `gubbins` with a mapping typer only; `ska2` cannot be masked | `iqtree` or `fasttree` |
-| Viral | `vmetadata` and `vgenome` (NCBI Virus) | `skder --virus` or `sourmash` | Alignment-free | No | `mashtree` |
+| Viral | `vmetadata` and `vgenome` (NCBI Virus) | `skder` or `sourmash` | Alignment-free | No | `mashtree` |
 
 What each row rests on:
 

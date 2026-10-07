@@ -33,6 +33,7 @@ from .base import (
     HELP_TARGET_REPS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    HELP_VIRUS,
     HELP_WORKDIR,
     HELP_WORKDIR_CREATED,
     PANEL_CORE,
@@ -165,7 +166,7 @@ def dereplicate(
         "--target-reps",
         help=HELP_TARGET_REPS,
     ),
-    virus: bool = typer.Option(False, "--virus", help="Pass virus-tuned parameters to the tool."),
+    virus: bool = typer.Option(False, "--virus", help=HELP_VIRUS),
     tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     allow_incomplete: bool = typer.Option(
         False,
@@ -197,7 +198,11 @@ def dereplicate(
             target_reps=target_reps,
             extra={
                 **_parse_key_values(tool_arg, "--tool-arg"),
-                **(gated_extra(_derep_registry, tool, "virus", True) if virus else {}),
+                **(
+                    gated_extra(_derep_registry, tool, "virus", True, flag="--virus")
+                    if virus
+                    else {}
+                ),
             },
             allow_incomplete=allow_incomplete,
             keeper=keeper,

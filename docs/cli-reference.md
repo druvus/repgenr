@@ -271,7 +271,7 @@ Cluster genomes by ANI and select representatives.
 | `--pre-secondary-ani` |  | Stage-1 (intra-chunk) secondary ANI; defaults to --secondary-ani. |
 | `--reduce` | `none` | Taxonomy-aware reduction after ANI: none, species, or genus (one representative per taxon). |
 | `--target-reps` | `0` | Target representative count: search --secondary-ani to land near it (0 = off; re-runs dereplication per search step). |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 | `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
@@ -453,7 +453,7 @@ Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
 | `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
@@ -473,7 +473,7 @@ Dereplicate the union of chunk representatives (gather step).
 | `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--virus` | off | Pass virus-tuned parameters to the tool. |
+| `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
