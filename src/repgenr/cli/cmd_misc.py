@@ -163,7 +163,7 @@ def _glance_tool_help() -> str:
         for n in registry.names()
         if not registry.is_broken(n) and registry.get(n).compare is not Dereplicator.compare
     ]
-    return f"{', '.join(names) or '(none registered)'} (dereplicators that support comparison)."
+    return f"Dereplicator with comparison support: {', '.join(names) or '(none registered)'}."
 
 
 @app.command(rich_help_panel=PANEL_INSPECT)

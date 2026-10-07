@@ -56,7 +56,6 @@ of downloading one. With `--source tsv` (the default) `-r/--release` and
 `--gtdb-version` are still required, because they select the table's release
 and domain and are recorded in the provenance.
 
-
 Or run the whole chain in one command (bacterial by default; `--viral` for the
 NCBI Virus path), then check progress at any time:
 
@@ -404,8 +403,7 @@ builds the alignment and writes `msa.fasta` without a tree, and `phylo-build
 --msa <file>` builds a tree from an alignment an earlier call produced. The
 Nextflow layer uses these to run the alignment and the tree as separate tasks.
 `--msa-only` leaves the SNP typer's `snp/` directory (and `scratch/`) in the
-step's output directory beside `msa.fasta`; they are left in place and not
-removed.
+step's output directory beside `msa.fasta`; they are left in place.
 
 ### SNP typing and masking
 
@@ -422,7 +420,8 @@ Branch lengths from a variable-site-only alignment (`snp/core_snp.fasta`) are
 inflated, because the alignment carries no ascertainment-bias correction.
 Compare topologies and supports rather than lengths, or build the tree from the
 whole-genome alignment (`snp/full_alignment.fasta`, written by `simple`,
-`snippy` and `parsnp`, not by `ska2`) where branch lengths matter.
+`snippy` and `parsnp`, not by `ska2`) where branch lengths matter (for example `phylo-build --msa
+snp/full_alignment.fasta`).
 
 Gubbins expects isolates of one species. The masker estimates how much of the
 alignment is variable, warns above 10%, and repeats the figure if Gubbins
