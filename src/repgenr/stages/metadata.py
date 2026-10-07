@@ -87,6 +87,8 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
 
     ctx.config.record_stage(
         "metadata",
+        # The GTDB web API or a GTDB metadata table; no external binary.
+        tool="gtdb-api" if params.source == "api" else "gtdb-table",
         params={
             "source": params.source,
             "release": params.release,

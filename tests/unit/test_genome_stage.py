@@ -102,7 +102,7 @@ def test_run_downloads_and_organizes(ctx, monkeypatch) -> None:
     # filenames recorded back into the manifest
     by_acc = {g.accession: g for g in ctx.manifest.all_genomes(include_outgroup=False)}
     assert by_acc["GCF_000001.1"].filename == fastas[0]
-    assert "genome" in ctx.config.stages
+    assert ctx.config.stages["genome"].tool == "datasets"
 
 
 def test_run_skips_present_and_prunes_stale(ctx, monkeypatch) -> None:

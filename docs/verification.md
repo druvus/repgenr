@@ -394,7 +394,6 @@ they are recorded here and not fixed.
 | Records | `ingest` does not record `drop_foreign` in its parameters, and an outgroup row in a `--selection` is dropped when `--outgroup` names another genome. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
 | Entry stages | `metadata --nodownload` reuses a table in the workdir that is not a declared resume input, so replacing it in place does not trigger a rerun. |
-| Entry stages | The vmetadata NCBI Virus record omits `released_after` from its parameters, and the four entry records carry no tool, only tool versions. |
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |

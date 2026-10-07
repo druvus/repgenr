@@ -424,6 +424,10 @@ def test_vgenome_group_segments_still_selects_an_outgroup(workdir: Path, monkeyp
     assert seen["length_range"] == (1700, 2300)
     rows = read_selection(workdir / "selection.tsv")
     assert {r.accession for r in rows if r.is_outgroup} == {"OUTSEG.1"}
+    # the outgroup search is vgenome's one external tool
+    record = ctx.config.stages["vgenome"]
+    assert record.tool == "mashtree"
+    assert record.tool_versions == {"mashtree": "1.0"}
 
 
 def test_vgenome_crash_mid_write_leaves_the_previous_genomes_intact(workdir: Path, monkeypatch):
@@ -457,3 +461,17 @@ def test_vgenome_crash_mid_write_leaves_the_previous_genomes_intact(workdir: Pat
     assert {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()} == before
     assert (workdir / "selection.tsv").read_text() == selection_before
     assert not [p for p in workdir.iterdir() if "staging" in p.name]
+
+
+def test_vgenome_without_outgroup_search_records_no_tool(workdir: Path) -> None:
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    dl = workdir / "virus_download_wd"
+    dl.mkdir(parents=True)
+    recs = _fake_records()
+    (dl / "download.fa").write_text("".join(f">{r.accession} desc\nACGTACGT\n" for r in recs))
+    write_records(dl / "virus_records.json", recs)
+    ctx = WorkdirContext(workdir, create=True)
+    vgenome_run(ctx, VgenomeParams(target_genus="lentivirus", length_all=True, no_outgroup=True))
+    assert ctx.config.stages["vgenome"].tool is None

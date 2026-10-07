@@ -384,6 +384,11 @@ All notable changes to RepGenR are documented here. The format follows
 - The `tree2tax` record in `repgenr.yaml` names `dendropy` as its tool with
   the library version, and `tree2tax-relations --versions-out` writes the same
   version; the record had no tool and no versions.
+- The entry records in `repgenr.yaml` name a tool, which `status` shows:
+  `metadata` records `gtdb-api` or `gtdb-table`, `genome` and the NCBI Virus
+  `vmetadata` record `datasets`, the BV-BRC `vmetadata` records `bvbrc`, and
+  `vgenome` records the outgroup tree builder when the outgroup search ran.
+  The NCBI Virus `vmetadata` record keeps `released_after` in its parameters.
 
 ### Changed
 - A run whose assembler is not installed is excused as

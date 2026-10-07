@@ -97,6 +97,10 @@ def test_ncbi_virus_filters_forwarded(tmp_path, fake_datasets, monkeypatch) -> N
     flat = [tok for cmd in fake_datasets for tok in cmd]
     for token in ("--complete-only", "--host", "homo sapiens", "--released-after", "01/31/2024"):
         assert token in flat
+    # the record names the downloader and every filter, released_after included
+    record = ctx.config.stages["vmetadata"]
+    assert record.tool == "datasets"
+    assert record.params["released_after"] == "01/31/2024"
 
 
 def test_ncbi_virus_empty_package_raises(tmp_path, monkeypatch) -> None:
@@ -160,7 +164,7 @@ def test_bvbrc_end_to_end(tmp_path, monkeypatch) -> None:
     assert (wd / "metadata_ncbi.tsv").exists()
     assert (wd / "metadata_ncbi_taxnames_data.json").exists()
     assert (ctx.workdir / "virus_metadata_base.tsv").exists()
-    assert "vmetadata" in ctx.config.stages
+    assert ctx.config.stages["vmetadata"].tool == "bvbrc"
 
 
 def _refuse_ftp(*args, **kwargs):

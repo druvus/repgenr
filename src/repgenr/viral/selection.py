@@ -129,6 +129,8 @@ def run_records(
     n_written = sum(1 for r in selection_rows if not r.is_outgroup)
     ctx.config.record_stage(
         "vgenome",
+        # The outgroup search is the one external tool; none when it did not run.
+        tool=params.outgroup_treebuilder if tool_versions else None,
         params={
             "source": "ncbi_virus",
             "selected": n_written,
