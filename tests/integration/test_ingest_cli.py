@@ -105,3 +105,17 @@ def test_doctor_accepts_gzipped_genomes(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "2 genome file(s) look sound" in result.output
+
+
+def test_doctor_names_links_left_dangling_by_a_moved_source(tmp_path: Path) -> None:
+    src = _source(tmp_path, ["a.fasta", "b.fasta"])
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    src.rename(tmp_path / "moved")
+
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+
+    assert result.exit_code == 1, result.output
+    assert "2 link(s)" in result.output
+    assert "source was moved or deleted" in result.output
+    assert "not FASTA" not in result.output
