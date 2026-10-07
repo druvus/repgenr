@@ -224,6 +224,11 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- `assemble` and `assemble-run` with `--polisher auto` print one warning per
+  platform when an adapter would polish the runs but its tool is not
+  installed (for example medaka for ONT), naming the adapters and the remedy.
+  The runs are still assembled, unpolished; before, this happened without a
+  message.
 - `reads --accession-file` treats text from a `#` to the end of the line as a
   comment, also after indentation or after an accession. `reads` (and `run
   --reads`) parse the accession file and check that a selection is given

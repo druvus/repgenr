@@ -189,7 +189,9 @@ public bacterial ONT runs since 2023 (`--tool-arg bacteria=false` uses
 medaka's general default model instead). The marker records which of the
 three applied. A polishing failure
 excuses the run with `polish_failed`; `assembly_stats.tsv` names the
-polisher per genome. Unpolished ONT assemblies carry indel errors that break
+polisher per genome. When `--polisher auto` finds an adapter for a run but
+its tool is not installed, the run is assembled unpolished and one warning
+per platform names the adapters. Unpolished ONT assemblies carry indel errors that break
 genes, which CheckM2 reads as lower completeness and higher contamination.
 
 Two optional checks run on the assemblies. With a CheckM2 database
@@ -198,7 +200,8 @@ with `checkm2 database --download`), every assembly is scored, the
 completeness and contamination reach `selection.tsv` and the manifest (so
 `--keeper quality` works as it does for GTDB genomes), and an assembly below
 `--min-completeness` (50) or above `--max-contamination` (10) is excused with
-`qc_failed`. With a GTDB sourmash sketch (`--gtdb-sketch` and
+`qc_failed`. An assembly for which CheckM2 reports no result is kept with a
+warning and without quality values. With a GTDB sourmash sketch (`--gtdb-sketch` and
 `--gtdb-lineages`, or `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`; the
 `gtdb-rs226-reps.k31-sc10k.sig.zip` sketch and its `lineages.csv` from
 `https://farm.cse.ucdavis.edu/~ctbrown/sourmash-db/gtdb-rs226/` serve), each

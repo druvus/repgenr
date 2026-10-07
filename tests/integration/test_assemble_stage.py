@@ -517,3 +517,25 @@ def test_a_failed_polish_excuses_the_run(workdir, tmp_path, fake_assembler, fake
     assert n == 1
     excused = read_excused_runs(workdir / EXCUSED_RUNS_TSV)
     assert excused[0].run_accession == "ONT1" and "polish_failed" in excused[0].reason
+
+
+def test_auto_polisher_warns_when_the_accepting_polisher_is_not_installed(
+    workdir, tmp_path, fake_assembler, monkeypatch, caplog
+) -> None:
+    from repgenr.polishers import base as polishers_base
+
+    monkeypatch.setattr(polishers_base, "tool_available", lambda caps: False)
+    ctx = _prepare(
+        workdir, [_ont_row(tmp_path), _ont_row(tmp_path, "ONT2"), _row(tmp_path, "SRR1")]
+    )
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        n = run(ctx, AssembleParams(assembler="fakeasm", polisher="auto"))
+    assert n == 3  # the runs are assembled unpolished, not excused
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    polish = [w for w in warnings if "polish" in w]
+    assert len(polish) == 1, warnings
+    assert "2 OXFORD_NANOPORE" in polish[0] and "medaka" in polish[0]
+    assert "--container" in polish[0] and "--polisher none" in polish[0]
+    stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
+    assert stats["ONT1"].polisher == ""
