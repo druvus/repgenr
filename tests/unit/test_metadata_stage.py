@@ -530,3 +530,11 @@ def test_api_card_failing_twice_is_unscored_with_one_warning(monkeypatch, caplog
     assert quality["GCF_000002.1"] == (None, None)
     warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1 and "GCF_000002.1" in warnings[0]
+
+
+def test_tsv_missing_gtdb_version_names_the_cli_flag(tmp_path, gtdb_tsv) -> None:
+    # The CLI flag is --gtdb-version; --version is the global "show version"
+    # option, so naming it in the error sends the user to the wrong flag.
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(UserInputError, match="--gtdb-version"):
+        metadata.run(ctx, _params(gtdb_tsv, version=None))
