@@ -130,7 +130,9 @@ class PhyloOutcome:
 # again. The stage fingerprint cannot do this: it covers the whole stage.
 MSA_STAMP = "msa_source.json"
 # 2: the snippy typer names its reference record by genome (was "Reference").
-_MSA_STAMP_VERSION = 2
+# 3: parsnp and cactus records carry genome stems (were file names with
+# '.ref', and '.' replaced by '_'); an older alignment would keep them.
+_MSA_STAMP_VERSION = 3
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:

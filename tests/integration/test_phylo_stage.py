@@ -720,13 +720,14 @@ def test_msa_stamped_by_an_earlier_version_is_not_reused(
     alignment that still names the reference 'Reference') is rebuilt."""
     from repgenr.stages import phylo as phylo_mod
 
-    assert phylo_mod._MSA_STAMP_VERSION >= 2
+    # 3: the parsnp and cactus record names changed (#223).
+    assert phylo_mod._MSA_STAMP_VERSION >= 3
     _make_reps(workdir)
     ctx = WorkdirContext(workdir)
     calls = _align_calls(monkeypatch)
     base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
     with monkeypatch.context() as m:
-        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 1)
+        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 2)
         run(ctx, PhyloParams(no_outgroup=True, **base))
     assert len(calls) == 1
     run(ctx, PhyloParams(no_outgroup=True, **base))
