@@ -736,7 +736,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 0 | Success. |
   | 1 | An unexpected error (traceback in the run log), or `doctor` found failures. |
   | 2 | Invalid or missing user input (also Typer's own usage errors). |
-  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. |
+  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
   | 4 | A required external tool is absent or below its version floor. |
   | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed. Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |
