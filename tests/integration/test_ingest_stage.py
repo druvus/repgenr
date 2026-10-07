@@ -250,3 +250,23 @@ def test_ingest_outgroup_flag_agreeing_with_selection_row(
     run(ctx, IngestParams(genomes_dir=str(src), selection=str(selection), outgroup=flag))
     assert (workdir / "outgroup_accession.txt").read_text().strip() == "OG1"
     assert (ctx.outgroup_dir / "og.fasta").exists()
+
+
+def test_ingest_external_outgroup_sharing_an_ingroup_name_is_an_error(
+    tmp_path: Path, workdir: Path
+) -> None:
+    """An outgroup file named like an ingroup genome used to drop that genome silently."""
+    src = _source(tmp_path, ["Fam_Gen_sp1_GCA_000001.1.fasta", "Fam_Gen_sp2_GCA_000002.1.fasta"])
+    other = tmp_path / "other"
+    other.mkdir()
+    same_name = other / "Fam_Gen_sp1_GCA_000001.1.fasta"
+    same_name.write_text(_SEQ)
+    same_accession = other / "Out_Grp_sp9_GCA_000002.1.fasta"
+    same_accession.write_text(_SEQ)
+    ctx = WorkdirContext(workdir, create=True)
+
+    with pytest.raises(UserInputError, match="also the ingroup genome Fam_Gen_sp1"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(same_name)))
+    with pytest.raises(UserInputError, match="also the ingroup genome Fam_Gen_sp2"):
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(same_accession)))
+    assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())

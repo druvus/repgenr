@@ -162,6 +162,7 @@ def _resolve_outgroup(
                 return replace(row, is_outgroup=True), by_name[row.filename]
         row = replace(_row_from_filename(candidate.name), is_outgroup=True)
         _refuse_conflict(from_selection, row, flag)
+        _refuse_external_clash(rows, row, flag)
         return row, candidate
     for row in rows:
         if flag in (row.filename, strip_fasta_suffix(row.filename), row.accession):
@@ -184,6 +185,25 @@ def _refuse_conflict(from_selection: list[SelectionRow], chosen: SelectionRow, f
         f"but --outgroup {flag!r} names {chosen.filename} ({chosen.accession}). "
         "Name the same genome in both, or drop one of them."
     )
+
+
+def _refuse_external_clash(rows: list[SelectionRow], chosen: SelectionRow, flag: str) -> None:
+    """Fail when an outgroup file from outside --genomes-dir shares an ingroup genome's
+    filename or accession.
+
+    Both name a genome in genomes/, the manifest and the tree, so the outgroup
+    would silently replace that ingroup genome rather than sit beside it.
+    """
+    for row in rows:
+        if row.is_outgroup:
+            continue
+        if row.filename == chosen.filename or row.accession == chosen.accession:
+            raise UserInputError(
+                f"--outgroup {flag!r} is a file outside --genomes-dir, but its name gives "
+                f"{chosen.filename} ({chosen.accession}), which is also the ingroup genome "
+                f"{row.filename} ({row.accession}). Rename the outgroup file, or name the "
+                "genome under --genomes-dir to set that genome aside."
+            )
 
 
 def _stage(src: Path, dst: Path, copy: bool) -> None:
