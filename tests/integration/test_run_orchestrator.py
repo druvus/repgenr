@@ -291,3 +291,48 @@ def test_run_rejects_reads_with_viral(monkeypatch, tmp_path) -> None:
     )
     assert result.exit_code != 0 and "--reads" in result.output
     assert calls == []
+
+
+def test_run_with_snptype_rejects_an_unknown_snptyper_up_front(monkeypatch, tmp_path) -> None:
+    """--with-snptype uses --snptyper even with the aligner MSA source, so a bad
+    name must exit 2 naming the flag (also under --dry-run), before any stage."""
+    calls = _record(monkeypatch)
+    base = ["run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "francisella"]
+    for extra in ([], ["--dry-run"]):
+        result = _runner.invoke(app, [*base, "--with-snptype", "--snptyper", "bogus", *extra])
+        assert result.exit_code == 2, result.output
+        assert "--snptyper" in result.output
+    assert calls == []
+
+
+def test_run_with_snptype_passes_mask_to_the_snptype_stage(monkeypatch, tmp_path) -> None:
+    """--with-snptype --mask gubbins masks the standalone snptype stage; with the
+    aligner MSA source the phylo stage does not see the mask."""
+    built: dict[str, object] = {}
+
+    def fake_run(stage, workdir, build, *, create=False):
+        built[stage] = build()
+
+    monkeypatch.setattr(cmd_run, "_run", fake_run)
+    monkeypatch.setattr(cmd_run, "_preflight_tools", lambda *a, **k: None)
+    result = _runner.invoke(
+        app,
+        [
+            *("run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "francisella"),
+            *("--with-snptype", "--mask", "gubbins"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert built["snptype"].mask == "gubbins"
+    assert "mask" not in built["phylo"].extra
+
+
+def test_run_mask_without_snptype_source_is_still_rejected(monkeypatch, tmp_path) -> None:
+    calls = _record(monkeypatch)
+    result = _runner.invoke(
+        app,
+        ["run", "-wd", str(tmp_path / "wd"), "-l", "genus", "-tg", "x", "--mask", "gubbins"],
+    )
+    assert result.exit_code == 2
+    assert "--mask applies only with --msa-source snptype" in result.output
+    assert calls == []

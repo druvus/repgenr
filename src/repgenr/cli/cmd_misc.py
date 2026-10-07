@@ -38,9 +38,15 @@ def versions(
     Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
     surface the resolved tool versions into versions.yml.
     """
-    from ..core.config import Config
+    from ..core.config import CONFIG_FILENAME, Config
+    from ..core.errors import WorkdirError
     from ..core.versions import write_versions_fragment
 
+    if not (workdir / CONFIG_FILENAME).exists():
+        # A wrong -wd would otherwise print nothing and exit 0.
+        err = WorkdirError(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
+        typer.echo(f"ERROR {err}", err=True)
+        raise typer.Exit(code=err.exit_code)
     cfg = Config.load(workdir)
     merged: dict[str, str] = {}
     for record in cfg.stages.values():
