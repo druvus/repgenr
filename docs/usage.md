@@ -343,8 +343,9 @@ Before skipping, a stage also checks that its main outputs exist (for example
 `tree2tax.tsv` and `genomes_map.tsv` for `tree2tax`; a directory must not be
 empty). If one was deleted, the stage logs
 `Stage 'X': deliverable <path> missing; re-running.` and runs again, so
-`--force` is not needed to rebuild it. `glance` is the exception: its plots
-depend on what the comparison tool returns, so none is checked. `repgenr
+`--force` is not needed to rebuild it. For `glance` only
+`glance_clustering_dendrogram.pdf` is checked, since its plots are absent
+when no value falls within the plot bounds. `repgenr
 doctor -wd <wd>` verifies a workdir's outputs against its records (missing or
 corrupt genomes, manifest drift, truncated deliverables, interrupted stages)
 and exits non-zero on failures; it lists a missing deliverable under the same

@@ -265,3 +265,19 @@ def test_glance_warns_when_the_tool_returns_no_dendrogram(workdir: Path, monkeyp
     log = (ctx.workdir / "repgenr.log").read_text(encoding="utf-8")
     assert "WARNING The comparison returned no dendrogram" in log
 
+
+def test_a_deleted_dendrogram_is_rebuilt_without_force(workdir: Path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _setup(workdir)
+    monkeypatch.setattr(drep_mod.DrepDereplicator, "preflight", lambda self: {})
+    monkeypatch.setattr(drep_mod, "run_tool", _fake_drep)
+    runner = CliRunner()
+    assert runner.invoke(app, ["glance", "-wd", str(workdir), "-t", "2"]).exit_code == 0
+    pdf = workdir / "glance_clustering_dendrogram.pdf"
+    pdf.unlink()
+    result = runner.invoke(app, ["glance", "-wd", str(workdir), "-t", "2"])
+    assert result.exit_code == 0, result.output
+    assert pdf.exists()

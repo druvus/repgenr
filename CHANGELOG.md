@@ -244,6 +244,10 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- A repeat `glance` reruns when `glance_clustering_dendrogram.pdf` was
+  deleted, as other stages do for their deliverables, and `doctor` warns
+  about the missing file. Before, glance declared no deliverable, so the
+  repeat skipped and the dendrogram stayed missing until `--force`.
 - `glance` warns when the comparison tool returns no dendrogram. Before, the
   dendrogram was left out without a message.
 - `glance` rejects `--plot-min` above `--plot-max`, or either bound outside

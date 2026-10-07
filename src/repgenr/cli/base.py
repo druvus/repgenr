@@ -336,9 +336,10 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],
     "phylo": lambda ctx, p: [ctx.tree_dir / TREE_NWK],
     "tree2tax": lambda ctx, p: [ctx.workdir / TREE2TAX_TSV, ctx.workdir / GENOMES_MAP_TSV],
-    # glance writes its dendrogram and plots only when the comparison tool
-    # returns the matching tables, so no output is guaranteed to exist.
-    "glance": lambda ctx, p: [],
+    # glance's plots are absent when no similarity falls within the plot
+    # bounds, so only the dendrogram is checked (a tool that returns none is
+    # warned about and reruns each time).
+    "glance": lambda ctx, p: [ctx.workdir / "glance_clustering_dendrogram.pdf"],
     # With --no-representant and only singleton clusters, unpacked/ is
     # legitimately left empty, so it is checked only when representatives
     # are unpacked too (every cluster then yields a subdirectory).
