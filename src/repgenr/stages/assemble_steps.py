@@ -96,12 +96,13 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     )
     out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    [outcome] = stage._plan(rows, stage_params, out_dir.parent)
+    [outcome] = stage._plan(rows, stage_params, out_dir.parent, logger=logger)
     if stage_params.assembler == "auto":
         stage._excuse_missing_assemblers([outcome], logger)
     if stage_params.polisher == "auto":
         stage._warn_missing_polishers([outcome], logger)
-    versions = stage._preflight([outcome], logger)
+    versions = dict(outcome.versions)
+    versions.update(stage._preflight([outcome], logger))
     if outcome.excused is None and outcome.stats is None:
         scratch = out_dir.parent / f"{out_dir.name}.scratch"
         outcome = stage._fetch_and_assemble(
@@ -259,7 +260,7 @@ def reads_gather(params: ReadsGatherParams, logger: logging.Logger) -> int:
     # Rebuild the per-run outcomes from the markers and the excuse files. The
     # directory is resolved so the genome links point at absolute paths.
     assemblies_dir = params.assemblies_dir.resolve()
-    outcomes = stage._plan(rows, AssembleParams(), assemblies_dir)
+    outcomes = stage._plan(rows, AssembleParams(), assemblies_dir, check_settings=False)
     for o in outcomes:
         excuse_file = assemblies_dir / o.row.run_accession / EXCUSED_RUNS_TSV
         if o.stats is None and excuse_file.exists():

@@ -38,6 +38,7 @@ from ..core.contracts import (
     ReadRow,
     SelectionRow,
     accession_from_filename,
+    atomic_replace,
     genome_filename,
     read_reads,
     sanitise_taxon_tokens,
@@ -120,6 +121,8 @@ class _Outcome:
     label: tuple[str, str, str] | None = None
     label_source: str = "metadata"
     taxonomy_flag: str = ""
+    # Tool versions a reused marker recorded (its run needs no preflight).
+    versions: dict = field(default_factory=dict)
 
 
 def run(ctx: WorkdirContext, params: AssembleParams) -> int:
@@ -136,13 +139,14 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     assemblies.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
 
-    plan = _plan(rows, params, assemblies)
+    plan = _plan(rows, params, assemblies, logger=logger)
     if params.assembler == "auto":
         _excuse_missing_assemblers(plan, logger)
         _require_something_to_assemble(plan)
     if params.polisher == "auto":
         _warn_missing_polishers(plan, logger)
-    versions = _preflight(plan, logger)
+    versions = {k: v for o in plan for k, v in o.versions.items()}
+    versions.update(_preflight(plan, logger))
     pending = [o for o in plan if o.excused is None and o.stats is None]
     check_free_disk(
         ctx.workdir,
@@ -246,9 +250,11 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     write_assembly_stats(ctx.workdir / ASSEMBLY_STATS_TSV, [_stats_row(o) for o in assembled])
     outgroup_row = next((r for r in selection_rows if r.is_outgroup), None)
 
+    assemblers_used = sorted({o.assembler for o in assembled if o.assembler})
     ctx.config.record_stage(
         "assemble",
-        tool=params.assembler,
+        # The assemblers that built the accepted genomes; params keep the request.
+        tool=",".join(assemblers_used) or params.assembler,
         params={
             **asdict(params),
             # The databases as resolved (flag or environment variable).
@@ -256,7 +262,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "gtdb_sketch": gtdb_sketch,
             "gtdb_lineages": gtdb_lineages,
             "classifier_effective": classifier_name,
-            "assemblers_used": sorted({o.assembler for o in assembled if o.assembler}),
+            "assemblers_used": assemblers_used,
             "polishers_used": sorted({o.polisher for o in assembled if o.polisher}),
             "n_assembled": len(assembled),
             "n_excused": len(excused),
@@ -296,8 +302,21 @@ def _default_jobs(pending: list[_Outcome]) -> int:
 # --- planning -------------------------------------------------------------------
 
 
-def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list[_Outcome]:
-    """Decide, per run, whether it is done, excused up front, or to be assembled."""
+def _plan(
+    rows: list[ReadRow],
+    params: AssembleParams,
+    assemblies: Path,
+    *,
+    check_settings: bool = True,
+    logger: logging.Logger | None = None,
+) -> list[_Outcome]:
+    """Decide, per run, whether it is done, excused up front, or to be assembled.
+
+    A finished run is reused when its marker's settings agree with ``params``
+    (``check_settings``; ``reads-gather`` only collects results and passes
+    False). A higher contig floor is applied to the finished contigs; any
+    other difference assembles the run again.
+    """
     if params.assembler != "auto" and params.assembler not in registry.names():
         raise UserInputError(
             f"Unknown assembler {params.assembler!r}; available: {', '.join(registry.names())}."
@@ -310,14 +329,8 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
     plan = []
     for row in rows:
         outcome = _Outcome(row=row)
-        marker = assemblies / row.run_accession / _DONE_MARKER
-        if marker.exists() and (assemblies / row.run_accession / _CONTIGS_NAME).exists():
-            done = json.loads(marker.read_text(encoding="utf-8"))
-            outcome.assembler = done["assembler"]
-            outcome.polisher = done.get("polisher") or None
-            outcome.polish_rounds = done.get("polish_rounds", 0)
-            outcome.stats = ContigStats(**done["stats"])
-            outcome.tool_stats = done.get("tool_stats", {})
+        if _reuse_finished(outcome, params, assemblies / row.run_accession, check_settings, logger):
+            pass
         elif not row.fastq_urls:
             outcome.excused = ExcusedRun(row.run_accession, "fetch", "no_fastq_mirror")
         else:
@@ -338,6 +351,162 @@ def _plan(rows: list[ReadRow], params: AssembleParams, assemblies: Path) -> list
                     outcome.polisher = params.polisher
         plan.append(outcome)
     return plan
+
+
+# --- reuse of finished runs ---------------------------------------------------------
+
+
+def _read_marker(path: Path) -> dict | None:
+    """A finished run's marker, or None when absent or unreadable (cut short by a kill)."""
+    try:
+        done = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(done, dict) or "assembler" not in done or "stats" not in done:
+        return None
+    return done
+
+
+def _settings(params: AssembleParams) -> dict:
+    """The result-affecting settings a marker records, as requested."""
+    return {
+        "assembler": params.assembler,
+        "polisher": params.polisher,
+        "polish_rounds": params.polish_rounds,
+        "min_contig_length": params.min_contig_length,
+        "extra": dict(sorted(params.extra.items())),
+    }
+
+
+def _accepted_extras(name: str | None, reg) -> frozenset[str]:  # noqa: ANN001
+    if not name or name not in reg.names():
+        return frozenset()
+    return reg.get(name).capabilities.accepted_extras
+
+
+def _polisher_request(name: str, row: ReadRow) -> str:
+    """A polisher request as it applies to one run: 'none' when nothing would polish it."""
+    reads = ReadSet(row.run_accession, row.platform, row.instrument_model, row.layout, (), 0)
+    if name == "none" or not accepting_polishers(polisher_registry, reads):
+        return "none"
+    if name != "auto" and name in polisher_registry.names():
+        cls = polisher_registry.get(name)
+        if not cls.__new__(cls).accepts(reads):
+            return "none"
+    return name
+
+
+def _setting_changes(done: dict, params: AssembleParams, row: ReadRow) -> list[str]:
+    """How ``params`` differ from the settings a finished run was built with.
+
+    A request that names the tool the marker records agrees with it, so
+    ``--assembler skesa`` reuses a run that ``auto`` assembled with skesa.
+    """
+    old = done["settings"]
+    changes = []
+    if old["assembler"] != params.assembler and params.assembler != done["assembler"]:
+        changes.append(f"assembler {old['assembler']} -> {params.assembler}")
+    old_pol = _polisher_request(old["polisher"], row)
+    new_pol = _polisher_request(params.polisher, row)
+    if old_pol != new_pol and new_pol != (done.get("polisher") or "none"):
+        changes.append(f"polisher {old['polisher']} -> {params.polisher}")
+    elif done.get("polisher") and old["polish_rounds"] != params.polish_rounds:
+        changes.append(f"polish_rounds {old['polish_rounds']} -> {params.polish_rounds}")
+    keys = _accepted_extras(done["assembler"], registry) | _accepted_extras(
+        done.get("polisher"), polisher_registry
+    )
+    old_extra = {k: str(v) for k, v in old["extra"].items() if k in keys}
+    new_extra = {k: str(v) for k, v in params.extra.items() if k in keys}
+    if old_extra != new_extra:
+        changes.append(f"--tool-arg {old_extra} -> {new_extra}")
+    return changes
+
+
+def _reuse_finished(
+    outcome: _Outcome,
+    params: AssembleParams,
+    run_dir: Path,
+    check_settings: bool,
+    logger: logging.Logger | None,
+) -> bool:
+    """Fill ``outcome`` from a finished run in ``run_dir``; False when it must be assembled."""
+    contigs = run_dir / _CONTIGS_NAME
+    done = _read_marker(run_dir / _DONE_MARKER)
+    if done is None or not contigs.exists():
+        return False
+    row = outcome.row
+    old_floor = None
+    # Markers written before the settings were recorded are reused as they are.
+    if check_settings and "settings" in done:
+        changes = _setting_changes(done, params, row)
+        old_floor = done["settings"]["min_contig_length"]
+        if old_floor > params.min_contig_length:
+            changes.append(f"min_contig_length {old_floor} -> {params.min_contig_length}")
+        if changes:
+            if logger is not None:
+                logger.info(
+                    "%s: finished with other settings (%s); assembling again",
+                    row.run_accession,
+                    "; ".join(changes),
+                )
+            return False
+    outcome.assembler = done["assembler"]
+    outcome.polisher = done.get("polisher") or None
+    outcome.polish_rounds = done.get("polish_rounds", 0)
+    outcome.stats = ContigStats(**done["stats"])
+    outcome.tool_stats = done.get("tool_stats", {})
+    outcome.versions = dict(done.get("tool_versions") or {})
+    if not outcome.versions and done.get("version"):
+        outcome.versions = {done["assembler"]: done["version"]}
+    if old_floor is not None and old_floor < params.min_contig_length:
+        _refilter(outcome, done, run_dir, params.min_contig_length, logger)
+    return True
+
+
+def _refilter(
+    outcome: _Outcome,
+    done: dict,
+    run_dir: Path,
+    min_length: int,
+    logger: logging.Logger | None,
+) -> None:
+    """Apply a higher contig floor to finished contigs, which hold every contig
+    above the old floor in assembly order, so the result equals filtering the
+    raw assembly. A floor that keeps nothing excuses the run and leaves its
+    files as they are, for a later, lower floor."""
+    run = outcome.row.run_accession
+    contigs = run_dir / _CONTIGS_NAME
+    trial = run_dir / f"{_CONTIGS_NAME}.refilter"
+    stats = filter_contigs(contigs, trial, min_length=min_length, prefix=run)
+    if stats.n_contigs == 0:
+        trial.unlink(missing_ok=True)
+        outcome.stats = None
+        outcome.excused = ExcusedRun(
+            run, "assemble", f"assembly_failed: no contig of {min_length} bp or more"
+        )
+        return
+    trial.replace(contigs)
+    done["stats"] = asdict(stats)
+    done["settings"]["min_contig_length"] = min_length
+    _write_marker(run_dir / _DONE_MARKER, done)
+    outcome.stats = stats
+    if logger is not None:
+        logger.info("%s: contigs filtered again at %d bp", run, min_length)
+
+
+def _write_marker(path: Path, marker: dict) -> None:
+    with atomic_replace(path) as fo:
+        fo.write(json.dumps(marker, indent=1))
+
+
+def _marker_versions(versions: dict[str, str], names: list[tuple[str, object]]) -> dict[str, str]:
+    """The entries of ``versions`` that belong to the named adapters (by tool and binary)."""
+    keys: set[str] = set()
+    for name, reg in names:
+        caps = reg.get(name).capabilities  # type: ignore[attr-defined]
+        keys.add(caps.name)
+        keys.update(b.name for b in caps.required_binaries)
+    return {k: v for k, v in versions.items() if k in keys}
 
 
 ASSEMBLER_NOT_INSTALLED = "assembler_not_installed"
@@ -464,6 +633,8 @@ def _fetch_and_assemble(
 ) -> _Outcome:
     """Fetch and assemble one run into ``out_dir`` (contigs and the done marker)."""
     row = outcome.row
+    # The marker names finished contigs; a run assembled again has none until it ends.
+    (out_dir / _DONE_MARKER).unlink(missing_ok=True)
     if run_scratch.exists():
         remove_tree(run_scratch)
     run_scratch.mkdir(parents=True)
@@ -537,10 +708,16 @@ def _fetch_and_assemble(
             "assemble",
             f"assembly_failed: no contig of {params.min_contig_length} bp or more",
         )
+        (out_dir / _CONTIGS_NAME).unlink(missing_ok=True)
+        if not params.keep_files:
+            remove_tree(run_scratch)
         return outcome
 
     outcome.stats = stats
     outcome.tool_stats = dict(result.tool_stats)
+    tools: list[tuple[str, object]] = [(outcome.assembler, registry)]
+    if outcome.polisher is not None:
+        tools.append((outcome.polisher, polisher_registry))
     marker = {
         "assembler": outcome.assembler,
         "version": versions.get(adapter.capabilities.name, ""),
@@ -549,8 +726,10 @@ def _fetch_and_assemble(
         "polish_stats": polish_stats,
         "stats": asdict(stats),
         "tool_stats": outcome.tool_stats,
+        "tool_versions": _marker_versions(versions, tools),
+        "settings": _settings(params),
     }
-    (out_dir / _DONE_MARKER).write_text(json.dumps(marker, indent=1), encoding="utf-8")
+    _write_marker(out_dir / _DONE_MARKER, marker)
     if params.keep_files:
         pass
     elif params.keep_reads:

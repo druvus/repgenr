@@ -435,7 +435,7 @@ def test_finished_runs_do_not_need_the_assembler_again(workdir, tmp_path, fake_a
 
     _FakeAssembler.preflight = spy  # type: ignore[method-assign]
     try:
-        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=400))
+        run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0))
     finally:
         _FakeAssembler.preflight = original  # type: ignore[method-assign]
     assert calls == []
@@ -539,3 +539,99 @@ def test_auto_polisher_warns_when_the_accepting_polisher_is_not_installed(
     assert "--container" in polish[0] and "--polisher none" in polish[0]
     stats = {s.run_accession: s for s in read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)}
     assert stats["ONT1"].polisher == ""
+
+
+# --- reuse of finished runs ------------------------------------------------------------
+
+
+def test_a_lower_contig_floor_assembles_finished_runs_again(
+    workdir, tmp_path, fake_assembler, caplog
+) -> None:
+    """The finished contigs were filtered at the old floor; a lower one needs the raw
+    assembly again, so the marker is not reused."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=500))
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+    genome = next(ctx.genomes_dir.iterdir()).read_text(encoding="utf-8")
+    assert genome.count(">") == 2  # the 4 bp contig now passes
+    assert any("min_contig_length 500 -> 2" in r.getMessage() for r in caplog.records)
+
+
+def test_a_higher_contig_floor_refilters_finished_runs(workdir, tmp_path, fake_assembler) -> None:
+    """Raising the floor needs no new assembly: the kept contigs are filtered again."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=2))
+    with pytest.raises(WorkdirError, match="None of the 2 runs"):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=5000))
+    assert sorted(_FakeAssembler.calls) == ["SRR1", "SRR2"]  # not assembled again
+    excused = read_excused_runs(workdir / EXCUSED_RUNS_TSV)
+    assert [e.reason for e in excused] == ["assembly_failed: no contig of 5000 bp or more"] * 2
+    # The refused floor left the finished contigs in place, so 1000 refilters them too.
+    run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=1000))
+    assert sorted(_FakeAssembler.calls) == ["SRR1", "SRR2"]
+    marker = json.loads((workdir / "assemblies" / "SRR1" / "assembly.ok").read_text())
+    assert marker["settings"]["min_contig_length"] == 1000
+
+
+def test_a_different_assembler_or_tool_arg_assembles_again(
+    workdir, tmp_path, fake_assembler, fake_polisher
+) -> None:
+    from assemble_fakes import FakePolisher
+
+    ctx = _prepare(workdir, [_ont_row(tmp_path)])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol"))
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol", polish_rounds=3))
+    assert FakePolisher.calls == ["ONT1", "ONT1"]
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="none"))
+    assert _FakeAssembler.calls == ["ONT1", "ONT1", "ONT1"]
+    # A tool argument no adapter of the run reads (a classifier's) changes nothing.
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="none", extra={"ksize": "21"}))
+    assert _FakeAssembler.calls == ["ONT1", "ONT1", "ONT1"]
+    stats = read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)[0]
+    assert stats.polisher == "" and stats.total_length == 1200
+
+
+def test_a_resumed_run_keeps_the_tool_versions_and_names_the_assembler(
+    workdir, tmp_path, fake_assembler, fake_polisher
+) -> None:
+    ctx = _prepare(workdir, [_ont_row(tmp_path), _row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol"))
+    first = ctx.config.stages["assemble"]
+    assert first.tool == "fakeasm" and first.params["assembler"] == "fakeasm"
+    run(ctx, AssembleParams(assembler="fakeasm", polisher="fakepol", max_contamination=5.0))
+    record = ctx.config.stages["assemble"]
+    assert record.tool_versions == {"fakeasm": "1.0", "fakepol": "0.1"}
+    assert record.tool == "fakeasm"
+
+
+def test_auto_records_the_assemblers_used(workdir, tmp_path, fake_assembler, monkeypatch) -> None:
+    from repgenr.assemblers import base as assemblers_base
+
+    monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: caps.name == "fakeasm")
+    monkeypatch.setattr(assemblers_base, "_PREFERENCE", ("fakeasm",))
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="auto"))
+    record = ctx.config.stages["assemble"]
+    assert record.tool == "fakeasm" and record.params["assembler"] == "auto"
+
+
+def test_an_unreadable_marker_is_assembled_again(workdir, tmp_path, fake_assembler) -> None:
+    """A marker cut short by a kill is not a finished run (no JSON traceback)."""
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    (workdir / "assemblies" / "SRR1" / "assembly.ok").write_text('{"assem', encoding="utf-8")
+    run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+
+
+def test_a_run_without_long_enough_contigs_leaves_no_reads(
+    workdir, tmp_path, fake_assembler
+) -> None:
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    with pytest.raises(WorkdirError):
+        run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=5000))
+    assert not (ctx.scratch_dir / "assemble" / "SRR1").exists()
+    assert not (workdir / "assemblies" / "SRR1" / "contigs.fasta").exists()
