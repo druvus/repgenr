@@ -118,8 +118,9 @@ All notable changes to RepGenR are documented here. The format follows
 - `glance --help` states that `--plot-min` and `--plot-max` are Mash ANI
   fractions from 0 to 1, and that `--keep-files` keeps the dRep working
   directory `glance_wd/` (it used the shared "download and scratch
-  intermediates" wording). Its description says that glance needs dRep on
-  the PATH but no dereplication, and names the three output files.
+  intermediates" wording). Its description says that glance needs dRep (on
+  the PATH, or via the container backend) but no dereplication, and names
+  the three output files.
 - A failed external tool prints one console line that names the tool and its
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
@@ -253,8 +254,9 @@ All notable changes to RepGenR are documented here. The format follows
   deleted, as other stages do for their deliverables, and `doctor` warns
   about the missing file. Before, glance declared no deliverable, so the
   repeat skipped and the dendrogram stayed missing until `--force`.
-- `glance` warns when the comparison tool returns no dendrogram. Before, the
-  dendrogram was left out without a message.
+- `glance` warns when the comparison tool returns no dendrogram, and that
+  the next run repeats the comparison. Before, the dendrogram was left out
+  without a message.
 - `glance` rejects `--plot-min` above `--plot-max`, or either bound outside
   0 to 1, with exit 2. Before, such bounds selected no values, the run
   exited 0 and removed the plots of the previous run.

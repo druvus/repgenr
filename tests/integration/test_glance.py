@@ -173,6 +173,16 @@ def test_glance_counts_each_genome_pair_once(tmp_path: Path) -> None:
     assert sorted(_pair_similarities(mdb, 0.92, 1.0)) == [0.95, 0.98]
 
 
+def test_glance_pair_with_an_unparsable_first_row_keeps_the_reverse_row(tmp_path: Path) -> None:
+    from repgenr.stages.glance import _pair_similarities
+
+    mdb = tmp_path / "Mdb.csv"
+    mdb.write_text(
+        "genome1,genome2,dist,similarity\na.fasta,b.fasta,,\nb.fasta,a.fasta,0.05,0.95\n"
+    )
+    assert _pair_similarities(mdb, 0.0, 1.0) == [0.95]
+
+
 def test_glance_histogram_axes_name_ani_and_pair_counts(workdir: Path, monkeypatch) -> None:
     # The histogram's x axis carries the ANI values and its y axis the pair
     # counts; the box plot's single box has no meaningless "1" tick.
@@ -214,6 +224,17 @@ def test_glance_with_one_genome_exits_3_before_the_tool_runs(workdir: Path, monk
         glance_run(ctx, GlanceParams(threads=2))
     assert not called
 
+    # Through the CLI: exit 3 and no glance record left in repgenr.yaml.
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    result = CliRunner().invoke(app, ["glance", "-wd", str(workdir), "-t", "2"])
+    assert result.exit_code == 3, result.output
+    assert "glance" not in Config.load(workdir).stages
+    assert not called
+
 
 def test_glance_rejects_inverted_or_out_of_range_plot_bounds(workdir: Path, monkeypatch) -> None:
     # Bounds outside 0-1 (for example a percentage) or --plot-min above
@@ -252,7 +273,8 @@ def test_glance_help_names_the_bound_units_and_the_kept_directory() -> None:
     assert "Mash ANI values plotted, as a fraction from 0 to 1" in text
     assert "Keep the dRep working directory glance_wd/." in text
     # The description says what glance needs and what it writes.
-    assert "dRep on the PATH" in text and "no dereplication" in text
+    assert "Needs dRep (on the PATH, or via the container backend)" in text
+    assert "no dereplication" in text
     assert "glance_clustering_dendrogram.pdf" in text
 
 
@@ -269,6 +291,7 @@ def test_glance_warns_when_the_tool_returns_no_dendrogram(workdir: Path, monkeyp
     assert not (ctx.workdir / "glance_clustering_dendrogram.pdf").exists()
     log = (ctx.workdir / "repgenr.log").read_text(encoding="utf-8")
     assert "WARNING The comparison returned no dendrogram" in log
+    assert "the next run repeats the comparison" in log
 
 
 def test_a_deleted_dendrogram_is_rebuilt_without_force(workdir: Path, monkeypatch) -> None:

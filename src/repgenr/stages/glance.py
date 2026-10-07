@@ -69,7 +69,11 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     if result.dendrogram is not None:
         shutil.copy2(result.dendrogram, out_pdf)
     else:
-        logger.warning("The comparison returned no dendrogram; %s not written", out_pdf.name)
+        logger.warning(
+            "The comparison returned no dendrogram; %s not written, and the next run "
+            "repeats the comparison",
+            out_pdf.name,
+        )
 
     if result.similarity_csv is not None:
         _plot(result.similarity_csv, ctx.workdir, params, logger)
@@ -94,7 +98,8 @@ def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
     """Similarity of each unordered genome pair in ``Mdb.csv`` within [low, high].
 
     dRep lists every pair in both orders and each genome against itself; a
-    pair is counted once (its first row) and self-comparisons are skipped.
+    pair is counted once (its first readable row) and self-comparisons are
+    skipped.
     """
     import csv
 
@@ -111,11 +116,13 @@ def _pair_similarities(mdb: Path, low: float, high: float) -> list[float]:
             key = (min(i, j) << 32) | max(i, j)
             if key in seen:
                 continue
-            seen.add(key)
             try:
                 sim = float(row["similarity"])
-            except (KeyError, ValueError):
+            except (KeyError, TypeError, ValueError):
                 continue
+            # Marked only once parsed, so an unreadable row does not hide the
+            # valid row of the same pair in the other order.
+            seen.add(key)
             if low <= sim <= high:
                 values.append(sim)
     return values

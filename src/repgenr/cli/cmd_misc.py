@@ -189,9 +189,10 @@ def glance(
 ) -> None:
     """Quick all-vs-all ANI overview (dRep compare dendrogram + plots).
 
-    Needs dRep on the PATH and no dereplication; compares every genome in
-    genomes/ and writes glance_clustering_dendrogram.pdf and two Mash ANI
-    plots, glance_MASH_ANI_similarity_boxplot.png and
+    Needs dRep (on the PATH, or via the container backend) and no
+    dereplication; compares every genome in genomes/ and writes
+    glance_clustering_dendrogram.pdf and two Mash ANI plots,
+    glance_MASH_ANI_similarity_boxplot.png and
     glance_MASH_ANI_similarity_histogram.png.
     """
     from ..dereplicators.base import registry as _derep_registry
