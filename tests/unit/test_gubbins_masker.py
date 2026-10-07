@@ -196,6 +196,7 @@ def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
-    with pytest.raises(ToolExecutionError, match="within-species") as ei:
+    with pytest.raises(ToolExecutionError) as ei:
         mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
+    assert "within-species" in ei.value.details()
     assert ei.value.returncode == 1  # the tool's status survives for the retry rule

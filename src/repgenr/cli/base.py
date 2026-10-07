@@ -548,7 +548,15 @@ def stage_errors(logger: logging.Logger) -> Iterator[None]:
     except typer.Exit:
         raise
     except ToolExecutionError as exc:
-        logger.error("%s", exc)
+        log_files = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+        if log_files:
+            log_name = Path(log_files[0].baseFilename).name
+            logger.error("%s; see the run log (%s) for the command and output", exc, log_name)
+            logger.debug("%s", exc.details())
+        else:
+            # No persistent log (data-channel step): keep the tail visible.
+            logger.error("%s", exc)
+            logger.error("%s", exc.details())
         raise typer.Exit(code=_tool_exit_code(exc.returncode)) from exc
     except RepGenRError as exc:
         logger.error("%s", exc)

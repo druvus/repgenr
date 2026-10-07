@@ -8,6 +8,8 @@ without a process exit.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 
 class RepGenRError(Exception):
     """Base class for all expected, user-facing RepGenR failures.
@@ -47,15 +49,38 @@ class ToolExecutionError(RepGenRError):
 
     exit_code = 6
 
-    def __init__(self, command: list[str], returncode: int, output: str | None = None):
+    def __init__(
+        self,
+        command: list[str],
+        returncode: int,
+        output: str | None = None,
+        *,
+        tool: str | None = None,
+        timeout: float | None = None,
+    ):
         self.command = command
         self.returncode = returncode
         self.output = output
-        rendered = " ".join(command)
-        msg = f"command failed (exit {returncode}): {rendered}"
-        if output:
-            msg += f"\n--- output tail ---\n{output}"
+        self.timeout = timeout
+        # The adapter's tool name when known: a containerized command starts
+        # with the engine, which says nothing about what failed.
+        self.tool = tool or (Path(command[0]).name if command else "tool")
+        if timeout is not None:
+            msg = f"{self.tool} timed out after {timeout:g}s (killed, exit {returncode})"
+        else:
+            msg = f"{self.tool} failed (exit {returncode})"
         super().__init__(msg)
+
+    @property
+    def output_tail(self) -> str:
+        return self.output or ""
+
+    def details(self) -> str:
+        """The command line and the output tail, for the run log."""
+        text = "command: " + " ".join(self.command)
+        if self.output:
+            text += f"\n--- output tail ---\n{self.output}"
+        return text
 
 
 class PluginError(RepGenRError):

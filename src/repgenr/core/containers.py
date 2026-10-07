@@ -162,7 +162,7 @@ def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired as exc:
-        raise ToolExecutionError(cmd, -1, output="wave timed out after 600s") from exc
+        raise ToolExecutionError(cmd, -1, output="wave timed out after 600s", timeout=600) from exc
     if proc.returncode != 0:
         raise ToolExecutionError(cmd, proc.returncode, output=proc.stderr.strip())
     lines = proc.stdout.strip().splitlines()

@@ -176,8 +176,9 @@ def test_wave_timeout_raises_tool_error(monkeypatch, _wave_env) -> None:
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     cfg = ContainerConfig(backend="docker", wave_enabled=True)
-    with pytest.raises(containers.ToolExecutionError, match="timed out"):
+    with pytest.raises(containers.ToolExecutionError) as ei:
         resolve_image(_wave_caps(), cfg)
+    assert "timed out" in ei.value.details()
 
 
 def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
@@ -189,8 +190,9 @@ def test_wave_empty_stdout_raises_tool_error(monkeypatch, _wave_env) -> None:
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     cfg = ContainerConfig(backend="docker", wave_enabled=True)
-    with pytest.raises(containers.ToolExecutionError, match="no image"):
+    with pytest.raises(containers.ToolExecutionError) as ei:
         resolve_image(_wave_caps(), cfg)
+    assert "no image" in ei.value.details()
 
 
 # --- retrying tool runner -----------------------------------------------------
@@ -385,3 +387,16 @@ def test_mounts_follow_a_symlinked_directory_on_the_path(tmp_path, monkeypatch) 
 
     mounts = c._default_mounts(c.ContainerConfig(backend="docker"), task, [], [str(via_link)])
     assert Path(os.path.realpath(real)) in mounts
+
+
+def test_containerized_failure_names_the_adapter_tool_not_the_engine(monkeypatch) -> None:
+    caps = ToolCapabilities(name="spades.py", container="quay.io/x/spades:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers,
+        "wrap_command",
+        lambda image, argv, **kw: ["sh", "-c", "echo oops >&2; exit 3"],
+    )
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        containers.run_tool(caps, ["spades.py", "-o", "x"], logger=_LOG)
+    assert str(ei.value) == "spades.py failed (exit 3)"

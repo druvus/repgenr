@@ -186,9 +186,11 @@ def run(
             os.replace(out_tmp, out_target)
     if timed_out:
         tail.append(f"[killed after {limit}s timeout]")
-        raise ToolExecutionError(cmd, returncode, output="\n".join(tail))
+        raise ToolExecutionError(
+            cmd, returncode, output="\n".join(tail), tool=log_prefix, timeout=limit
+        )
     if check and returncode != 0:
-        raise ToolExecutionError(cmd, returncode, output="\n".join(tail))
+        raise ToolExecutionError(cmd, returncode, output="\n".join(tail), tool=log_prefix)
     return returncode
 
 

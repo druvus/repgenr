@@ -719,8 +719,11 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
 - **Apple Silicon / arm64.** BioContainers are amd64; pass
   `--platform linux/amd64` (and enable Rosetta) so emulated images run.
 - **A stage failed; where are the details?** Errors print a concise message; the
-  full traceback is in `<workdir>/repgenr.log`. Re-run with `--verbose` to see it
-  on the console. `repgenr status -wd <WD>` shows what completed and what is next.
+  full traceback is in `<workdir>/repgenr.log`. A failed external tool prints one
+  line naming the tool and its exit status; the command line and the output
+  tail are in the same log. Re-run with `--verbose` to see them on the console
+  (a data-channel step has no log and always prints the tail).
+  `repgenr status -wd <WD>` shows what completed and what is next.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. The
   `--source api` mode fetches only the target taxon (no full-table download).
@@ -739,4 +742,4 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. |
   | 4 | A required external tool is absent or below its version floor. |
   | 5 | A requested tool adapter could not be found or loaded. |
-  | 6 | An external tool failed. Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |
+  | 6 | An external tool failed (one console line; the command and output tail are in `repgenr.log`). Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |

@@ -37,13 +37,14 @@ def test_failed_command_preserves_previous_stdout_file(tmp_path: Path) -> None:
 def test_timed_out_command_preserves_previous_stdout_file(tmp_path: Path) -> None:
     out = tmp_path / "tree.nwk"
     out.write_text("(previous,good);\n", encoding="utf-8")
-    with pytest.raises(ToolExecutionError, match="timeout"):
+    with pytest.raises(ToolExecutionError) as ei:
         process.run(
             [sys.executable, "-c", "import time; print('(part'); time.sleep(30)"],
             logger=_LOG,
             stdout_path=out,
             timeout=0.5,
         )
+    assert "timeout" in ei.value.details()
     assert out.read_text(encoding="utf-8") == "(previous,good);\n"
     assert list(tmp_path.iterdir()) == [out]
 

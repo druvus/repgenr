@@ -393,7 +393,6 @@ they are recorded here and not fixed.
 | Resume | The resume fingerprint covers parameters, inputs and the environment, not outputs, so a stage whose output was deleted by hand is skipped and `--force` is needed. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3, while the exit-code table reserves 6 for a failed external tool. |
 | Errors | A stage that fails cleanly leaves no record in `repgenr.yaml`, so `status` shows it as next and not interrupted, and `doctor` reports no failure while `tree/` holds partial files. |
-| Errors | Exit 6 messages carry the command line and an output tail, so they span several lines. |
 | Errors | `phylo --treebuilder mashtree` on a single-representative set fails inside mashtree, and `snptype` with no variable sites exits 3; a genome-count check would give a clearer message. |
 | Phylogeny | mashtree can drop degenerate genomes and exit 0, and no check compares the leaves of the tree with the input genomes. |
 | Phylogeny | A `tree.nwk` with text after the final `;` is accepted by `tree2tax` but flagged as truncated by `doctor`. |
