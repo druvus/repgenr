@@ -79,9 +79,8 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
         rows = rows[: params.max_runs]
     if not rows:
         raise UserInputError(
-            f"No sequencing runs selected ({candidates} candidates before the platform, size "
-            "and per-sample filters). Loosen --platform/--min-bases/--drop-selection or "
-            "check the taxon."
+            f"No sequencing runs selected ({candidates} candidates before filtering"
+            f"{_active_filters(params)}). Loosen these options or check the taxon."
         )
 
     rows = _label(rows, logger)
@@ -99,6 +98,22 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     ctx.save_config()
     logger.info("Selected %d sequencing runs; wrote %s", len(rows), READS_TSV)
     return len(rows)
+
+
+def _active_filters(params: ReadsParams) -> str:
+    """Name each filter that was in effect, for the no-match message."""
+    parts = []
+    if params.platform != "any":
+        parts.append(f"--platform {params.platform}")
+    if params.min_bases:
+        parts.append(f"--min-bases {params.min_bases}")
+    if params.max_bases is not None:
+        parts.append(f"--max-bases {params.max_bases}")
+    if params.drop_selection:
+        parts.append(f"--drop-selection {','.join(params.drop_selection)}")
+    if params.one_per_sample:
+        parts.append("--one-per-sample")
+    return f" by {', '.join(parts)}" if parts else ""
 
 
 def _read_accession_file(path: str | None) -> list[str]:

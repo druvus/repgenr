@@ -8,9 +8,6 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
-    HELP_TARGET_FAMILY,
-    HELP_TARGET_GENUS,
-    HELP_TARGET_SPECIES,
     HELP_THREADS,
     HELP_WORKDIR,
     HELP_WORKDIR_CREATED,
@@ -23,16 +20,23 @@ from .base import (
     app,
 )
 
+_HELP_TAXON = (
+    "Restrict the selection to this {}. Only the most specific of -tf/-tg/-ts "
+    "given is used; they are not combined."
+)
+
 
 @app.command(rich_help_panel=PANEL_ENTRY)
 def reads(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR_CREATED),
     target_family: str | None = typer.Option(
-        None, "-tf", "--target-family", help=HELP_TARGET_FAMILY
+        None, "-tf", "--target-family", help=_HELP_TAXON.format("family")
     ),
-    target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),
+    target_genus: str | None = typer.Option(
+        None, "-tg", "--target-genus", help=_HELP_TAXON.format("genus")
+    ),
     target_species: str | None = typer.Option(
-        None, "-ts", "--target-species", help=HELP_TARGET_SPECIES
+        None, "-ts", "--target-species", help=_HELP_TAXON.format("species")
     ),
     accession: list[str] = typer.Option(
         [],

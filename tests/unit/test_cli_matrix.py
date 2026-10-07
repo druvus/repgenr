@@ -383,3 +383,22 @@ def test_rendered_matrix_in_sync() -> None:
     assert RENDERED_PATH.read_text(encoding="utf-8") == render(MATRIX), (
         "run: python scripts/render_cli_matrix.py"
     )
+
+
+def test_list_defaults_render_comma_separated() -> None:
+    from scripts.render_cli_matrix import _option_rows
+
+    mini = typer.Typer()
+
+    @mini.command()
+    def one(drop: list[str] = typer.Option(["MDA", "WGA"], "--drop", help="h")) -> None:  # noqa: B008
+        """x"""
+
+    @mini.command()
+    def two() -> None:
+        """y"""
+
+    cmd = typer.main.get_command(mini).commands["one"]
+    row = next(r for r in _option_rows(cmd) if "`--drop`" in r)
+    assert "`MDA,WGA`" in row
+    assert "[" not in row

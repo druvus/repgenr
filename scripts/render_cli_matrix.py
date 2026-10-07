@@ -87,6 +87,15 @@ def _click_tree():
     return typer.main.get_command(app)
 
 
+def _format_default(value) -> str:
+    """A default as table text; list defaults are comma-separated."""
+    if value in (None, [], ()):
+        return ""
+    if isinstance(value, (list, tuple)):
+        return f"`{','.join(str(v) for v in value)}`"
+    return f"`{value}`"
+
+
 def _option_rows(cmd) -> list[str]:
     rows = ["| option | default | description |", "|---|---|---|"]
     for p in cmd.params:
@@ -99,7 +108,7 @@ def _option_rows(cmd) -> list[str]:
         elif getattr(p, "is_flag", False):
             default = "off" if not p.default else "on"
         else:
-            default = "" if p.default in (None, [], ()) else f"`{p.default}`"
+            default = _format_default(p.default)
         rows.append(f"| {names} | {default} | {_cell(p.help or '')} |")
     return rows
 

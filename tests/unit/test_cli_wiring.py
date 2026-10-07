@@ -697,3 +697,44 @@ def test_outgroup_treebuilder_help_names_accepted_values() -> None:
     for name in distance_matrix_builders():
         assert plain.count(name) >= 1
     assert "Accepted" in plain
+
+
+def _help_of(command: str, option: str) -> str:
+    import typer.main
+
+    cmd = typer.main.get_command(app).commands[command]  # type: ignore[attr-defined]
+    return next(p.help for p in cmd.params if option in getattr(p, "opts", ()))
+
+
+def test_glance_tool_help_lists_only_comparison_capable_dereplicators() -> None:
+    from repgenr.dereplicators.base import Dereplicator, registry
+
+    text = _help_of("glance", "--tool")
+    supporters = [
+        n
+        for n in registry.names()
+        if not registry.is_broken(n) and registry.get(n).compare is not Dereplicator.compare
+    ]
+    assert supporters
+    for name in registry.names():
+        assert (name in text) == (name in supporters)
+
+
+@pytest.mark.parametrize("option", ["-tf", "-tg", "-ts"])
+def test_reads_taxon_help_says_most_specific_is_used(option) -> None:
+    text = _help_of("reads", option)
+    assert "most specific" in text
+    assert "not combined" in text
+
+
+def test_node_basename_help_mentions_hash_names() -> None:
+    text = _help_of("tree2tax", "--node-basename")
+    assert "hash" in text
+    assert "Without it" in text
+
+
+def test_metadata_path_help_says_release_and_version_still_required() -> None:
+    for command in ("metadata", "run"):
+        text = _help_of(command, "--metadata-path")
+        assert "-r" in text
+        assert "--gtdb-version" in text
