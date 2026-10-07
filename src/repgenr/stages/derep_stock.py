@@ -153,9 +153,9 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
         # A run packed before the summary existed: rebuild it from the
         # restored clusters, as the dereplicate stage would have written it.
         from .cluster_summary import summarise_clusters
-        from .dereplicate import _quality_lookup
+        from .dereplicate import quality_lookup
 
-        write_cluster_summary(summary, summarise_clusters(clusters, _quality_lookup(ctx)))
+        write_cluster_summary(summary, summarise_clusters(clusters, quality_lookup(ctx)))
         ctx.logger.info(
             "Stored run '%s' has no %s; rebuilt it from the restored clusters",
             run_path.name,

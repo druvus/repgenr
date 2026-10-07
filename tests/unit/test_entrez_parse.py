@@ -143,7 +143,7 @@ def test_an_unreachable_network_stops_after_the_first_sublist(monkeypatch) -> No
     taxids = [str(40000 + i) for i in range(250)]  # three sublists of 100
     with pytest.raises(WorkdirError, match="eutils.ncbi.nlm.nih.gov") as info:
         get_taxon_data_from_entrez(taxids, _LOG)
-    assert "unreachable" in str(info.value)
+    assert "No response from eutils.ncbi.nlm.nih.gov" in str(info.value)
     assert _DownSession.calls == 1
 
 

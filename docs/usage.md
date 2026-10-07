@@ -371,7 +371,8 @@ a dereplication). `repgenr derep-stock
 representatives under `derep/stock/<run>`; `--action unpack` restores a
 stored run, refreshes the manifest and re-stamps the `dereplicate` record so
 the next `dereplicate` recomputes (a stored run without
-`cluster_summary.tsv` gets one rebuilt from its clusters); `--action list` and `--action delete`
+`cluster_summary.tsv` gets one rebuilt from its clusters, and a live
+`genome_status.tsv` the stored run lacks is removed); `--action list` and `--action delete`
 manage the store. Deleting a run that is not stored exits 3 and lists the
 stored runs.
 
@@ -762,7 +763,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
   optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
   is retried per batch of taxids; a connection error (no network, or the
-  host cannot be reached) stops the lookup at the first batch with exit 3.
+  host does not answer) stops the lookup at the first batch with exit 3.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
 - **Exit codes.** A script can tell the failure classes apart without

@@ -226,7 +226,7 @@ All notable changes to RepGenR are documented here. The format follows
   `reads --drop-selection`) as comma-separated values.
 - Entrez taxonomy enrichment stops at the first batch of taxids that fails
   with a connection error (no HTTP status) and exits 3 with a message that
-  the network is unreachable and names the host. Before, every batch was
+  names the host that gave no response. Before, every batch was
   retried three times, about 16 minutes for 1050 taxids with the network
   down. HTTP errors are still retried per batch.
 - `glance` removes the previous dendrogram and plots once the comparison

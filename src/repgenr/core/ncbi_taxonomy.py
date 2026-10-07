@@ -99,15 +99,16 @@ def get_taxon_data_from_entrez(
                 taxa = _iter_taxa(_send_query(sublist))
             except WorkdirError as exc:
                 if isinstance(exc.__cause__, requests.ConnectionError):
-                    # No HTTP status at all: the network or the host is down,
-                    # and the shared session has already retried this request.
-                    # Retrying every remaining sublist would only repeat the
-                    # wait (about 16 minutes for 1050 taxids).
+                    # No HTTP status at all: the network or the host is down or
+                    # too slow to answer, and the shared session has already
+                    # retried this request. Retrying every remaining sublist
+                    # would only repeat the wait (about 16 minutes for 1050
+                    # taxids with the network down).
                     host = urlparse(_ENTREZ_BASE).hostname
                     raise WorkdirError(
-                        f"Network unreachable: could not connect to {host} for Entrez "
-                        f"taxonomy ({exc.__cause__}). Check the network or proxy "
-                        "settings and rerun."
+                        f"No response from {host} for Entrez taxonomy "
+                        f"({exc.__cause__}). Check the network or proxy settings "
+                        "and rerun."
                     ) from exc
                 logger.warning("Entrez sublist %d failed (%s); will retry", enum, exc)
                 last_error = exc

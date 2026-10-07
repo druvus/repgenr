@@ -288,7 +288,9 @@ def _derep_stock_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
         return [ctx.derep_dir / "stock" / (getattr(params, "name", None) or "") / CLUSTERS_TSV]
     if action == "unpack":
         return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
-    # delete leaves nothing behind by design.
+    # delete runs as a query and is never fingerprinted, so the resume check
+    # never reaches it; a delete record from an older version (read by
+    # doctor) has nothing to check.
     return []
 
 

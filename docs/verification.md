@@ -321,16 +321,16 @@ ok, and also counts the docs agreement check.
 | vmetadata | ok | ok | ok | ok | open | not run | open |
 | vgenome | open | ok | ok | ok | ok | not run | open |
 | ingest | ok | ok | ok | ok | ok | ok | ok |
-| reads | ok | ok | ok | ok | ok | not run | ok |
-| assemble | ok | ok | fixed | ok | fixed | not run | open |
+| reads | ok | fixed | ok | ok | ok | not run | fixed |
+| assemble | ok | ok | fixed | ok | fixed | not run | fixed |
 | dereplicate | ok | fixed | fixed | ok | ok | ok | fixed |
 | snptype | ok | ok | fixed | ok | ok | n/a | fixed |
 | phylo | fixed | ok | fixed | ok | ok | ok | fixed |
 | tree2tax | ok | fixed | fixed | fixed | ok | n/a | fixed |
-| glance | ok | fixed | fixed | ok | open | not run | open |
+| glance | ok | fixed | fixed | ok | fixed | not run | fixed |
 | cluster-summary | ok | fixed | ok | open | ok | ok | open |
-| derep-unpack | ok | ok | ok | open | ok | ok | open |
-| derep-stock | ok | fixed | fixed | fixed | fixed | ok | open |
+| derep-unpack | ok | ok | ok | fixed | fixed | ok | fixed |
+| derep-stock | ok | fixed | fixed | fixed | fixed | ok | fixed |
 | list-tools | ok | n/a | fixed | n/a | ok | ok | fixed |
 | doctor | ok | ok | ok | n/a | n/a | ok | ok |
 | versions | ok | fixed | ok | n/a | n/a | ok | fixed |
