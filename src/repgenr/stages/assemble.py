@@ -645,9 +645,8 @@ def _fetch_and_assemble(
     row = outcome.row
     # The marker names finished contigs; a run assembled again has none until it ends.
     (out_dir / _DONE_MARKER).unlink(missing_ok=True)
-    if run_scratch.exists():
-        remove_tree(run_scratch)
-    run_scratch.mkdir(parents=True)
+    _clear_scratch(row, run_scratch)
+    run_scratch.mkdir(parents=True, exist_ok=True)
     try:
         files = _fetch(row, run_scratch, logger)
     except RepGenRError as exc:
@@ -757,13 +756,45 @@ def _fetch_and_assemble(
     return outcome
 
 
+def _clear_scratch(row: ReadRow, run_scratch: Path) -> None:
+    """Empty a run's scratch from an earlier attempt, except its FASTQ files.
+
+    A run killed during assembly leaves its downloads behind; :func:`_fetch`
+    keeps those that still match their checksum, so a resume does not fetch
+    gigabytes again. Tool output and partial downloads are removed.
+    """
+    if not run_scratch.exists():
+        return
+    names = {Path(url).name for url in row.fastq_urls if url}
+    for entry in run_scratch.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            remove_tree(entry)
+        elif entry.name not in names:
+            entry.unlink(missing_ok=True)  # an AppleDouble twin goes with its file
+
+
+def _verified(path: Path, md5: str) -> bool:
+    try:
+        http.verify_md5(path, md5)
+    except WorkdirError:
+        return False
+    return True
+
+
 def _fetch(row: ReadRow, run_scratch: Path, logger: logging.Logger) -> tuple[Path, ...]:
-    """Bring the run's FASTQ files into scratch, verified when a checksum is known."""
+    """Bring the run's FASTQ files into scratch, verified when a checksum is known.
+
+    A file left by an interrupted attempt is kept when it matches its checksum.
+    """
     files = []
     md5s = list(row.fastq_md5) + [""] * (len(row.fastq_urls) - len(row.fastq_md5))
     for url, md5 in zip(row.fastq_urls, md5s, strict=True):
         dest = run_scratch / Path(url).name
         source = Path(url)
+        if dest.exists() and md5 and _verified(dest, md5):
+            logger.info("%s: keeping %s from an earlier attempt", row.run_accession, dest.name)
+            files.append(dest)
+            continue
         if source.exists():
             shutil.copy2(source, dest)
         else:

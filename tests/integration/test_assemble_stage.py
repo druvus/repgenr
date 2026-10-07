@@ -728,3 +728,49 @@ def test_sourmash_without_lineages_is_refused_before_assembling(
             ),
         )
     assert _FakeAssembler.calls == []
+
+
+def test_verified_reads_of_an_interrupted_run_are_not_fetched_again(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """A kill during assembly leaves the checksummed FASTQ files in scratch; the
+    rerun keeps them and fetches only a file that is missing or fails its checksum."""
+    from repgenr.stages import assemble as stage
+
+    row = _row(tmp_path, "SRR1")
+    ctx = _prepare(workdir, [row])
+    run_scratch = ctx.scratch_dir / "assemble" / "SRR1"
+    run_scratch.mkdir(parents=True)
+    kept = run_scratch / Path(row.fastq_urls[0]).name
+    kept.write_bytes(Path(row.fastq_urls[0]).read_bytes())
+    (run_scratch / Path(row.fastq_urls[1]).name).write_bytes(b"truncated")
+    (run_scratch / "asm").mkdir()
+    (run_scratch / "asm" / "partial.fa").write_text(">x\nA\n", encoding="utf-8")
+    copied: list[str] = []
+    original = stage.shutil.copy2
+    monkeypatch.setattr(
+        stage.shutil, "copy2", lambda src, dst: (copied.append(Path(src).name), original(src, dst))
+    )
+    assert run(ctx, AssembleParams(assembler="fakeasm")) == 1
+    assert copied == [Path(row.fastq_urls[1]).name]
+
+
+def test_scratch_clearing_tolerates_files_that_vanish(tmp_path, monkeypatch) -> None:
+    """On exFAT, macOS removes the AppleDouble twin '._asm' along with 'asm'."""
+    from repgenr.stages import assemble as stage
+
+    row = _row(tmp_path, "SRR1")
+    scratch = tmp_path / "scratch" / "SRR1"
+    (scratch / "asm").mkdir(parents=True)
+    (scratch / "._asm").write_bytes(b"x")
+    original = stage.remove_tree
+
+    def remove_with_twin(path):
+        original(path)
+        (path.parent / f"._{path.name}").unlink(missing_ok=True)
+
+    monkeypatch.setattr(stage, "remove_tree", remove_with_twin)
+    entries = sorted(scratch.iterdir(), key=lambda p: p.name != "asm")  # 'asm' first
+    monkeypatch.setattr(type(scratch), "iterdir", lambda self: iter(entries))
+    stage._clear_scratch(row, scratch)
+    assert not (scratch / "asm").exists() and not (scratch / "._asm").exists()
