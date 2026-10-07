@@ -89,3 +89,19 @@ def test_doctor_accepts_ingested_workdir(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "0 failure(s)" in result.output
+
+
+def test_doctor_accepts_gzipped_genomes(tmp_path: Path) -> None:
+    import gzip
+
+    src = tmp_path / "src"
+    src.mkdir()
+    for name in ("a.fasta.gz", "b.fasta.gz"):
+        (src / name).write_bytes(gzip.compress(_SEQ.encode()))
+    wd = tmp_path / "wd"
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+
+    assert result.exit_code == 0, result.output
+    assert "2 genome file(s) look sound" in result.output
