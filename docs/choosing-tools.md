@@ -40,7 +40,7 @@ What each row rests on:
   NCBI Virus with `sourmash` and `mashtree` (`test_run_viral_chain_end_to_end`,
   21 seconds). The largest viral run recorded is 1256 Hepeviridae (hepatitis E)
   genomes from BV-BRC: `skder` gave 799 representatives, followed by `mashtree`
-  and `tree2tax` (scaling audit). Other viral scaling is not measured.
+  and `tree2tax` (recorded in `docs/verification.md` before #150, commit 7309fe7; the scaling audit keeps the 1256 figure). Other viral scaling is not measured.
 
 ## 2. Then by size
 
@@ -126,7 +126,7 @@ its columns varied inside a species usually described as clonal. For a species
 run, set `--reference` to a genome of that species. The stage warns when it
 falls back to the default.
 
-Masking. `--mask gubbins` needs `--msa-source snptype` and a typer that writes a
+Masking. `--mask gubbins` needs `--msa-source snptype` (in `run`, `--with-snptype` also accepts `--mask`) and a typer that writes a
 whole-genome alignment, which `simple`, `snippy` and `parsnp` do. It replaces
 the core-SNP alignment with Gubbins' filtered polymorphic sites. `ska2` writes
 variable sites only, so it cannot be masked. Gubbins is for isolates of one
@@ -195,7 +195,7 @@ Notes:
 
 | | `repgenr run` | `nextflow run nextflow/main.nf` |
 |---|---|---|
-| Best for | One machine, up to about a thousand genomes (measured). | Scatter-gather dereplication above a few thousand genomes, HPC, cloud. |
+| Best for | One machine, up to about a thousand genomes (measured). | Scatter-gather dereplication above a few thousand genomes (a design recommendation, not a measurement), HPC, cloud. |
 | Parallelism | Threads within a stage. | Tasks per chunk and per assembled run. |
 | Resume | Per stage, from parameter and input fingerprints. `--force` overrides. | Nextflow's `-resume` and task cache. |
 | Representative choice | `--keeper quality\|tool` | `--derep_keeper quality\|tool` |
@@ -261,4 +261,4 @@ against the registered adapters by `tests/unit/test_docs_tool_limits.py`.
 
 These limits count genomes only. They do not model genome size, memory or
 thread count. Aligners and SNP typers declare limits that the scale warnings
-use, but `auto` selection applies only to dereplicators and tree builders.
+use, but limit-based `auto` selection applies only to dereplicators and tree builders.

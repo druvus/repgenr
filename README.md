@@ -8,8 +8,9 @@ FlexTaxD.
 
 Version 2 is a modular, importable Python package (Python 3.12+) with eight
 pluggable tool families and an optional Nextflow pipeline for scatter-gather
-runs on HPC and cloud. The largest end-to-end runs recorded are 1157 bacterial genomes
-(one genus, 12 minutes) and 1256 viral genomes (Hepeviridae); larger sizes are measured per tool in the
+runs on HPC and cloud. The largest end-to-end runs recorded are 1157
+bacterial genomes (one genus, 12 minutes) and 1256 viral genomes
+(Hepeviridae). Larger sizes are measured per tool in the
 [scaling audit](docs/audit/scaling-audit.md).
 
 ## Pipeline
@@ -52,7 +53,7 @@ the core (see [docs/developing.md](docs/developing.md)).
 
 ```bash
 pip install .                          # the package (Python 3.12+); tools are separate
-mamba env create -f environment.yml    # or: one conda environment with the tools (Linux x86_64)
+mamba env create -f environment.yml    # or: one conda environment with the tools (single-environment route)
 repgenr list-tools --check             # which tools are found, with versions
 ```
 

@@ -13,7 +13,7 @@ ways to provide the tools.
   adds the test, lint and type-check tools.
 - **The tools.** Dereplicators, aligners, SNP typers, the masker, tree
   builders, assemblers and polishers are separate programs. A stage that needs
-  one that is missing stops with exit code 4 and names it. See
+  one that is missing stops with exit code 4 and names it, except under `assemble --assembler auto`, which excuses runs whose assembler is missing (reason `assembler_not_installed`, with a warning) and exits 4 only when no run can be assembled. A missing `auto` polisher is skipped (see [usage.md](usage.md#starting-from-sequencing-reads)). See
   [the per-tool table](#per-tool-table) for what each adapter needs.
 
 ```bash
@@ -26,9 +26,9 @@ pip install -e ".[dev]"  # for development
 
 | Situation | Recommended method | Why |
 |---|---|---|
-| Linux x86_64 workstation | One conda environment from `environment.yml` | `environment.yml` targets this platform and covers every tool except Cactus and the databases. |
+| Linux x86_64 workstation | One conda environment from `environment.yml` | The single-environment route. `environment.yml` covers every tool except Cactus and the databases; it is not expected to solve on macOS (see section 2). |
 | HPC cluster | `--container singularity` with `--container-cache` on shared storage | Tools run from pinned images without site installs. Images are pulled once and reused. |
-| macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, skesa, shovill, flye, medaka, racon and CheckM2 | Those were run only inside containers on the audit machine (`verification.md`). skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins and the tree builders ran natively. |
+| macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, skesa, shovill, flye, medaka, racon and CheckM2 | Except racon and CheckM2, which have offline tests only, these were run inside containers on the audit machine (`verification.md`). skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins and the tree builders ran natively. |
 | Nextflow on a cluster | A site image or conda per profile; `-profile slurm,singularity` | The `slurm` profile sets only the executor. The container profiles set `--container` for every stage. |
 | Nextflow on a cloud executor | A site config with the executor, queue and an image that provides `repgenr` and the tools | No cloud profile ships, because the region, queue and image are site-specific (see [usage.md](usage.md#profiles)). |
 
@@ -37,7 +37,7 @@ pip install -e ".[dev]"  # for development
 ### 1. One conda environment
 
 `environment.yml` lists the package and every tool except Cactus and the
-databases. It targets Linux x86_64.
+databases. It is the single-environment route and is not expected to solve on macOS (see section 2). progressiveMauve from bioconda needs the adapter's `boost-cpp=1.74.0` pin, or the pinned image, so check that tool first with `repgenr list-tools --check`.
 
 ```bash
 mamba env create -f environment.yml
@@ -58,15 +58,14 @@ conda env export --no-builds > environment.lock.yml
 
 ### 2. Several conda environments and PATH
 
-On macOS, and on Apple Silicon in particular, one environment does not solve.
-The known conflicts are:
+On macOS the tools are split over several environments. The known reasons are:
 
 - `mashtree` depends on `perl-bio-samtools`, which pins samtools 0.1.x. The
   `simple` SNP typer needs samtools and bcftools 1.10 or later, so the two
   live in different environments.
 - On exFAT or NTFS volumes, macOS writes `._*` AppleDouble files. The adapters
-  ignore them, but skDER must run on a local filesystem, so keep its workdir
-  off an exFAT disk.
+  ignore them, but skDER and dRep must run on a local filesystem, so keep their
+  workdir off an exFAT disk.
 - Some tools have no osx-arm64 build. parsnp and harvesttools run from an
   osx-64 (Rosetta) environment.
 - progressiveMauve is not packaged for macOS at all. Use a container (below)
@@ -241,5 +240,5 @@ repgenr list-tools --check
 the genome limit. `--check` runs each adapter's preflight and prints `ok` with
 the versions found, or `missing` or `error` with the reason. It reports and
 exits with status 0. A stage run with a missing or outdated tool exits with
-status 4. The full exit-code table is in
+status 4, except under `assemble --assembler auto`, which excuses runs whose assembler is missing (reason `assembler_not_installed`, with a warning) and exits 4 only when no run can be assembled. A missing `auto` polisher is skipped (see [usage.md](usage.md#starting-from-sequencing-reads)). The full exit-code table is in
 [usage.md](usage.md#troubleshooting).
