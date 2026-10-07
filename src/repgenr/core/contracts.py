@@ -251,6 +251,7 @@ def read_selection(path: Path) -> list[SelectionRow]:
     rows: list[SelectionRow] = []
     with open(path, encoding="utf-8", newline="") as fo:
         reader = csv.DictReader(fo, delimiter="\t")
+        _require_columns(reader, path, ["accession", "filename"])
         for row in reader:
             rows.append(
                 SelectionRow(

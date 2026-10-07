@@ -148,3 +148,14 @@ def test_selection_without_quality_columns_still_reads(tmp_path):
         "accession\tfamily\tgenus\tspecies\tis_outgroup\tfilename\nA\tf\tg\ts\t0\tx.fasta\n"
     )
     assert read_selection(p)[0].completeness is None
+
+
+def test_read_selection_names_missing_columns(tmp_path: Path) -> None:
+    # A table that is not a selection.tsv is an input error naming the file and
+    # the absent columns (exit 3), not a KeyError traceback (exit 1).
+    from repgenr.core.errors import WorkdirError
+
+    path = tmp_path / "selection.tsv"
+    path.write_text("a\tb\nx\ty\n", encoding="utf-8")
+    with pytest.raises(WorkdirError, match=r"selection\.tsv.*accession.*filename"):
+        read_selection(path)
