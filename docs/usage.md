@@ -372,7 +372,8 @@ representatives under `derep/stock/<run>`; `--action unpack` restores a
 stored run, refreshes the manifest and re-stamps the `dereplicate` record so
 the next `dereplicate` recomputes (a stored run without
 `cluster_summary.tsv` gets one rebuilt from its clusters); `--action list` and `--action delete`
-manage the store.
+manage the store. Deleting a run that is not stored exits 3 and lists the
+stored runs.
 
 ### Limiting the selection
 

@@ -381,7 +381,8 @@ _REDIGEST_AFTER_RUN: dict[str, Any] = {
 
 # Query modes keyed on a value rather than a flag.
 QUERY_ONLY_PREDICATES: dict[str, Any] = {
-    "derep_stock": lambda p: getattr(p, "action", None) == "list",
+    # delete is never skipped: a repeat delete must report the unknown run.
+    "derep_stock": lambda p: getattr(p, "action", None) in ("list", "delete"),
 }
 
 

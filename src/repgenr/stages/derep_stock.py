@@ -61,7 +61,10 @@ def run(ctx: WorkdirContext, params: DerepStockParams) -> None:
         case "unpack":
             _unpack(ctx, run_path)
         case "delete":
+            # Not recorded: a delete leaves nothing to resume, and the CLI runs
+            # it as a query so a repeat delete is checked instead of skipped.
             _delete(run_path)
+            return
         case _:
             raise UserInputError(f"Unknown action '{params.action}'")
     ctx.config.record_stage(
@@ -74,7 +77,7 @@ def _list(store: Path, logger) -> None:
     if not store.exists() or not any(store.iterdir()):
         logger.info("No stored runs")
         return
-    for run_dir in sorted(p.name for p in store.iterdir() if p.is_dir()):
+    for run_dir in _stored_runs(store):
         logger.info(run_dir)
 
 
@@ -169,7 +172,17 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     ctx.logger.info("Unpacked run from %s", run_path)
 
 
+def _stored_runs(store: Path) -> list[str]:
+    if not store.is_dir():
+        return []
+    return sorted(p.name for p in store.iterdir() if p.is_dir())
+
+
 def _delete(run_path: Path) -> None:
     if not run_path.exists():
-        raise UserInputError(f"No stored run named '{run_path.name}'")
+        stored = _stored_runs(run_path.parent)
+        raise WorkdirError(
+            f"No stored run named '{run_path.name}'; stored runs: "
+            f"{', '.join(stored) if stored else 'none'}."
+        )
     remove_tree(run_path)

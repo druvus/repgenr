@@ -80,7 +80,7 @@ def test_error_paths(workdir: Path) -> None:
         derep_stock_run(ctx, DerepStockParams(action="pack", name=None))  # name required
     with pytest.raises(UserInputError):
         derep_stock_run(ctx, DerepStockParams(action="unpack", name="missing"))
-    with pytest.raises(UserInputError):
+    with pytest.raises(WorkdirError, match="'missing'; stored runs: none"):
         derep_stock_run(ctx, DerepStockParams(action="delete", name="missing"))
     with pytest.raises(UserInputError):
         derep_stock_run(ctx, DerepStockParams(action="bogus", name="run1"))
@@ -182,3 +182,19 @@ def test_unpack_of_a_run_without_summary_rebuilds_the_summary(workdir: Path) -> 
     derep_stock_run(ctx, DerepStockParams(action="unpack", name="old"))
     rows = read_cluster_summary(ctx.derep_dir / "cluster_summary.tsv")
     assert {r.representative for r in rows} == set(_REPS)
+
+
+def test_deleting_an_unknown_run_exits_3_and_lists_the_stored_runs(workdir: Path) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _setup_contract(workdir)
+    runner = CliRunner()
+    args = ["derep-stock", "-wd", str(workdir)]
+    assert runner.invoke(app, [*args, "--action", "pack", "--name", "keep"]).exit_code == 0
+    assert runner.invoke(app, [*args, "--action", "pack", "--name", "gone"]).exit_code == 0
+    assert runner.invoke(app, [*args, "--action", "delete", "--name", "gone"]).exit_code == 0
+    again = runner.invoke(app, [*args, "--action", "delete", "--name", "gone"])
+    assert again.exit_code == 3, again.output
+    assert "'gone'" in again.output and "keep" in again.output

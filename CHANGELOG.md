@@ -224,6 +224,10 @@ All notable changes to RepGenR are documented here. The format follows
 - The `reads` no-match message names every active filter, including
   `--max-bases`, and the command reference shows list defaults (for example
   `reads --drop-selection`) as comma-separated values.
+- `derep-stock --action delete` of a run that is not stored exits 3 with a
+  message naming the run and listing the stored runs. A repeat delete was
+  skipped by the resume check and exited 0; delete is no longer recorded or
+  skipped.
 - `derep-unpack` warns about each cluster member that is missing from
   `genomes/` (one line listing them when there are more than ten) instead of
   leaving it out silently. `derep-stock --action unpack` of a stored run
