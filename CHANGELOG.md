@@ -244,6 +244,9 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `status` lists an interrupted optional stage (for example a `glance` run
+  killed mid-way) as `[interrupted]` with the same hint as a stage of the
+  chain. It showed `(incomplete)`, a word the documentation does not use.
 - A repeat `glance` reruns when `glance_clustering_dendrogram.pdf` was
   deleted, as other stages do for their deliverables, and `doctor` warns
   about the missing file. Before, glance declared no deliverable, so the

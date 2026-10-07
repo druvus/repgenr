@@ -120,7 +120,10 @@ def status(
         for stage in extras:
             rec = recorded[stage]
             tool = f" [{rec.tool}]" if rec.tool else ""
-            typer.echo(f"    {stage}{tool}  {rec.completed or '(incomplete)'}")
+            when = rec.completed or (
+                "[interrupted] (did not finish; outputs may be partial; see repgenr.log)"
+            )
+            typer.echo(f"    {stage}{tool}  {when}")
 
     if next_stage is None:
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")

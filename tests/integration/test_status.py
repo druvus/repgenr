@@ -92,3 +92,17 @@ def test_status_marks_interrupted_stage(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "[interrupted] genome" in result.stdout
     assert "did not finish; outputs may be partial" in result.stdout
+
+
+def test_status_marks_an_interrupted_optional_stage_like_a_chain_stage(tmp_path: Path) -> None:
+    # A glance run killed mid-way leaves a record without a stamp; status
+    # names it interrupted, as it does for the stages of the chain.
+    cfg = Config()
+    cfg.record_stage("ingest", completed="2026-01-01T00:00:00")
+    cfg.record_stage("glance", tool="drep", params={"plot_min": 0.0})
+    cfg.save(tmp_path)
+
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "glance [drep]  [interrupted]" in result.stdout
+    assert "did not finish; outputs may be partial" in result.stdout
