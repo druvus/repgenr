@@ -131,3 +131,34 @@ def test_ragged_consensuses_are_truncated_to_the_shortest(tmp_path: Path) -> Non
     consensuses = {"ref": "ACGTACGT", "s1": "ACGA", "s2": "ACGT"}
     n = _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
     assert n == 1, "only the columns every genome has are compared"
+
+
+def test_no_variable_sites_message_names_the_cause(tmp_path: Path, monkeypatch) -> None:
+    """Identical genomes give a WorkdirError that names the cause and the options."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref = tmp_path / "refgenome.fasta"
+    ref.write_text(">c1\nACGTACGT\n")
+    genomes = [ref]
+    for name in ("g1", "g2"):
+        p = tmp_path / f"{name}.fasta"
+        p.write_text(">c1\nACGTACGT\n")
+        genomes.append(p)
+
+    monkeypatch.setattr(mod, "run_tool", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_call_one", lambda genome, *a, **k: "ACGTACGT")
+
+    with pytest.raises(WorkdirError) as exc:
+        mod.SimpleSnpTyper().call(
+            genomes, ref, tmp_path / "out", SnpParams(threads=1), logging.getLogger("t")
+        )
+    msg = str(exc.value)
+    assert "No variable sites" in msg
+    assert "3 genomes" in msg
+    assert "refgenome" in msg
+    assert "closer reference" in msg
+    assert "alignment-free" in msg

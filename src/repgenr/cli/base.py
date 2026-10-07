@@ -196,6 +196,23 @@ def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     ]
 
 
+def _metadata_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
+    if getattr(params, "metadata_path", None):
+        return [Path(params.metadata_path)]
+    release = getattr(params, "release", None)
+    version = getattr(params, "version", None)
+    reuses = getattr(params, "nodownload", False) and getattr(params, "source", "tsv") == "tsv"
+    if reuses and release and version:
+        from ..stages.metadata import workdir_tables
+
+        try:
+            # Both naming schemes; the absent one digests to a stable sentinel.
+            return workdir_tables(ctx.workdir, release, version)
+        except ValueError:
+            return []  # a malformed --release; the stage reports it
+    return []
+
+
 def _ingest_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     paths = [Path(params.genomes_dir).expanduser()]
     if getattr(params, "selection", None):
@@ -236,8 +253,8 @@ def _tree2tax_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
 # Stages not listed digest no inputs and fingerprint on params alone.
 STAGE_INPUTS: dict[str, Any] = {
     # metadata downloads its table unless --metadata-path names a local one,
-    # which is then its one file input.
-    "metadata": lambda ctx, p: [Path(p.metadata_path)] if getattr(p, "metadata_path", None) else [],
+    # or --nodownload reuses the one in the workdir; that table is its input.
+    "metadata": _metadata_inputs,
     # ingest reads paths outside the workdir; they are keyed absolute.
     "ingest": _ingest_inputs,
     # reads is network-only; an accession list is its one file input.
@@ -375,10 +392,12 @@ QUERY_ONLY_FLAGS: dict[str, tuple[str, ...]] = {
 
 
 # Invocations that rewrite their own declared inputs (derep-stock unpack
-# restores derep/): the record is stamped with digests taken after the run,
-# so an identical repeat matches the restored state and skips.
+# restores derep/; metadata --nodownload downloads the table it then reuses
+# when none is present yet): the record is stamped with digests taken after
+# the run, so an identical repeat matches the new state and skips.
 _REDIGEST_AFTER_RUN: dict[str, Any] = {
     "derep_stock": lambda p: getattr(p, "action", None) == "unpack",
+    "metadata": lambda p: getattr(p, "nodownload", False),
 }
 
 # Query modes keyed on a value rather than a flag.

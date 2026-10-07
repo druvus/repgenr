@@ -1,0 +1,62 @@
+nextflow_process {
+
+    name "TREE2TAX ext.args follows --no-outgroup in phylo_args"
+    script "../modules/local/dataflow/tree2tax.nf"
+    tag "stub"
+    process "TREE2TAX"
+    options "-stub"
+    config "./tree2tax_debug.config"
+
+    test("--no-outgroup in phylo_args alone reaches tree2tax-relations") {
+        when {
+            params {
+                phylo_args = "--treebuilder mashtree --no-outgroup"
+                tree2tax_args = "--node-basename N"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert line.contains('--node-basename N')
+            assert line.contains('--no-outgroup')
+        }
+    }
+
+    test("without --no-outgroup in phylo_args the outgroup is kept") {
+        when {
+            params {
+                phylo_args = "--treebuilder mashtree"
+                tree2tax_args = ""
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert !line.contains('--no-outgroup')
+        }
+    }
+}

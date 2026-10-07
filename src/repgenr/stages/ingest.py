@@ -106,6 +106,7 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
             "outgroup": params.outgroup,
             "outgroup_accession": outgroup_row.accession if outgroup_row is not None else None,
             "copy": params.copy,
+            "drop_foreign": params.drop_foreign,
             "total": len(ingroup),
         },
         completed=datetime.now(UTC).isoformat(),
@@ -138,8 +139,9 @@ def _resolve_outgroup(
     """The outgroup row and its source file, from the selection or ``--outgroup``.
 
     ``--outgroup`` names a source genome (filename, stem or accession) or points
-    at a FASTA file anywhere; it takes precedence over an outgroup row in the
-    selection.
+    at a FASTA file anywhere. When the selection also marks an outgroup, both
+    must name the same genome; a conflict is an error rather than a silent drop
+    of the selection's outgroup row.
     """
     from_selection = [r for r in rows if r.is_outgroup]
     if len(from_selection) > 1:
@@ -151,13 +153,36 @@ def _resolve_outgroup(
 
     candidate = Path(flag).expanduser()
     if candidate.is_file():
+        # A path to a genome under --genomes-dir is that genome's row, so its
+        # selection accession is kept rather than one parsed from the filename.
+        resolved = candidate.resolve()
+        for row in rows:
+            if by_name[row.filename].resolve() == resolved:
+                _refuse_conflict(from_selection, row, flag)
+                return replace(row, is_outgroup=True), by_name[row.filename]
         row = replace(_row_from_filename(candidate.name), is_outgroup=True)
+        _refuse_conflict(from_selection, row, flag)
         return row, candidate
     for row in rows:
         if flag in (row.filename, strip_fasta_suffix(row.filename), row.accession):
+            _refuse_conflict(from_selection, row, flag)
             return replace(row, is_outgroup=True), by_name[row.filename]
     raise UserInputError(
         f"--outgroup {flag!r} is neither a FASTA file nor a genome under --genomes-dir."
+    )
+
+
+def _refuse_conflict(from_selection: list[SelectionRow], chosen: SelectionRow, flag: str) -> None:
+    """Fail when ``--outgroup`` names another genome than the selection's outgroup row."""
+    if not from_selection:
+        return
+    marked = from_selection[0]
+    if (marked.filename, marked.accession) == (chosen.filename, chosen.accession):
+        return
+    raise UserInputError(
+        f"The selection marks {marked.filename} ({marked.accession}) as the outgroup, "
+        f"but --outgroup {flag!r} names {chosen.filename} ({chosen.accession}). "
+        "Name the same genome in both, or drop one of them."
     )
 
 

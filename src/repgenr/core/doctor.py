@@ -27,6 +27,7 @@ from .contracts import (
     TREE_NWK,
     accession_from_filename,
     list_fasta,
+    newick_is_complete,
     read_clusters,
     read_selection,
 )
@@ -251,8 +252,7 @@ def _check_tree(workdir: Path, config: Config) -> list[Finding]:
     tree = workdir / "tree" / TREE_NWK
     if not tree.exists():
         return []
-    content = tree.read_text(encoding="utf-8").strip()
-    if not content or not content.endswith(";"):
+    if not newick_is_complete(tree.read_text(encoding="utf-8")):
         return [
             Finding(
                 "fail",

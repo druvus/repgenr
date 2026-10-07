@@ -97,6 +97,8 @@ def run_select(
 
     ctx.config.record_stage(
         "vgenome",
+        # The outgroup search is the one external tool; none when it did not run.
+        tool=params.outgroup_treebuilder if tool_versions else None,
         params={"selected": n_written, "no_outgroup": params.no_outgroup},
         tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),

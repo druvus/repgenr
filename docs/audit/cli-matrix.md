@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 301 flags (301 with a live test or an n/a reason, 0 pending).
+28 commands, 302 flags (302 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -403,6 +403,7 @@ dispatch: `step:repgenr.stages.tree2tax.tree2tax_relations`
 | `--node-basename` |  | Tree2taxStepParams.node_basename | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--root-name` |  | Tree2taxStepParams.root_name | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--remove-outgroup` |  | Tree2taxStepParams.remove_outgroup | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--no-outgroup` |  | Tree2taxStepParams.no_outgroup | none | params.phylo_args | n/a: covered offline in tests/integration/test_dataflow_phylo_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxStepParams.include_dereplicated | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | Tree2taxStepParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--collapse-support` |  | Tree2taxStepParams.collapse_support | range | params.tree2tax_args | tests/live/test_steps.py::test_tree2tax_relations_collapse_flags | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/usage.md, docs/audit/cli-matrix.md |

@@ -158,3 +158,60 @@ def test_tree2tax_lists_segment_members_under_their_isolate(workdir: Path) -> No
     rows = {ln.split("\t")[0]: ln.split("\t")[1] for ln in gmap.read_text().splitlines()}
     assert rows["SEG1.1"] == rows["SEG2.1"] == rows["GCA_000001.1"] == "Fam_Gen_sp_GCA_000001.1"
     assert "GCA_000002.1" in rows
+
+
+def test_tree2tax_rejects_text_after_the_final_semicolon(workdir: Path) -> None:
+    """A tree with text after its final ';' is treated as truncated, as doctor does."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    _setup(workdir)
+    (workdir / "tree" / "tree.nwk").write_text(_NWK + "(extra\n")
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError, match=r"tree\.nwk.*truncated"):
+        tree2tax_run(ctx, Tree2taxParams())
+
+
+def _stray_outgroup(workdir: Path) -> None:
+    og = workdir / "outgroup"
+    og.mkdir(parents=True)
+    (og / "Fam_Gen_sp_GCA_000099.1.fasta").write_text(">x\nACGT\n")
+    (workdir / "outgroup_accession.txt").write_text("GCA_000099.1\n")
+
+
+def test_tree2tax_outgroup_not_a_leaf_is_an_error(workdir: Path) -> None:
+    """An outgroup that is not a leaf of the tree exits 3 and names the outgroup."""
+    import pytest
+
+    from repgenr.core.errors import WorkdirError
+
+    _setup(workdir)
+    _stray_outgroup(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(WorkdirError, match=r"Fam_Gen_sp_GCA_000099\.1 is not a leaf"):
+        tree2tax_run(ctx, Tree2taxParams())
+
+
+def test_tree2tax_follows_phylo_built_without_outgroup(workdir: Path) -> None:
+    """After `phylo --no-outgroup` the tree has no outgroup leaf; tree2tax leaves it unrooted."""
+    _setup(workdir)
+    _stray_outgroup(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.config.record_stage(
+        "phylo", tool="mashtree", params={"outgroup": None}, completed="2026-10-07T00:00:00"
+    )
+    t2t, _ = tree2tax_run(ctx, Tree2taxParams())
+    assert any(p == "root" for _, p in _edges(t2t))
+
+
+def test_tree2tax_records_dendropy_as_its_tool(workdir: Path) -> None:
+    """The record names the library that does the work and its version."""
+    from importlib.metadata import version
+
+    _setup(workdir)
+    ctx = WorkdirContext(workdir, create=True)
+    tree2tax_run(ctx, Tree2taxParams())
+    record = ctx.config.stages["tree2tax"]
+    assert record.tool == "dendropy"
+    assert record.tool_versions == {"dendropy": version("dendropy")}

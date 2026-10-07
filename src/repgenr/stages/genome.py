@@ -111,6 +111,7 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
 
     ctx.config.record_stage(
         "genome",
+        tool="datasets",
         params={"downloaded": len(to_download), "total": len(selected)},
         tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),

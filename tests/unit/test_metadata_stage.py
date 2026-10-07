@@ -90,7 +90,7 @@ def test_tsv_species_selection_end_to_end(tmp_path, gtdb_tsv) -> None:
     assert (ctx.workdir / "outgroup_accession.txt").read_text(
         encoding="utf-8"
     ).strip() == "GCF_000010.1"
-    assert "metadata" in ctx.config.stages
+    assert ctx.config.stages["metadata"].tool == "gtdb-table"
 
 
 def test_tsv_rep_dataset_selects_representatives_only(tmp_path, gtdb_tsv) -> None:
@@ -213,6 +213,7 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
     rows = _read_selection(ctx.workdir)
     outgroups = [r["accession"] for r in rows if r["is_outgroup"] in ("1", "True", "true")]
     assert outgroups == ["GCF_000010.1"]
+    assert ctx.config.stages["metadata"].tool == "gtdb-api"
 
 
 def _card(completeness=None, contamination=None, *, checkm2: bool = True) -> dict:

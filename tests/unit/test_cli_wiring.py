@@ -543,6 +543,19 @@ def test_tree2tax_relations_step_wiring(step_calls, tmp_path) -> None:
     (params,) = step_calls
     assert params.tree == tree
     assert params.node_basename == "NODE" and params.remove_outgroup is True
+    assert params.no_outgroup is False
+
+
+def test_tree2tax_relations_step_no_outgroup_wiring(step_calls, tmp_path) -> None:
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(a,b);\n", encoding="utf-8")
+    result = _runner.invoke(
+        app,
+        ["tree2tax-relations", "--tree", str(tree), "-o", str(tmp_path / "out"), "--no-outgroup"],
+    )
+    assert result.exit_code == 0, result.output
+    (params,) = step_calls
+    assert params.no_outgroup is True
 
 
 def test_run_viral_injects_virus_extra_only_when_accepted(dispatched, tmp_path) -> None:

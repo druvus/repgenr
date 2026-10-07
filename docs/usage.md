@@ -101,7 +101,8 @@ one command; `--selection`, `--outgroup` and `--copy` pass through to
 
 `--outgroup` names a genome under `--genomes-dir` (filename, stem or
 accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
-out of the ingroup.
+out of the ingroup. When `--selection` also marks an outgroup row, both must
+name the same genome; otherwise `ingest` exits 2 and names both.
 
 ### Starting from sequencing reads
 
@@ -297,6 +298,13 @@ characters other than letters, digits, `_` and `-` read as `_`, since some
 tools rewrite them. This matching is looser than `tree2tax`, which uses leaf
 names as written, so a tree that passes the check can still leave leaves that
 `tree2tax` does not map to a genome.
+
+`tree2tax` and `tree2tax-relations` root the tree on the outgroup and exit 3
+when the outgroup is not a leaf of the tree. After `phylo --no-outgroup`,
+`tree2tax` leaves the tree unrooted; `tree2tax-relations` does so when given
+`--no-outgroup`, which ignores `--outgroup-dir` and `--outgroup-accession`.
+The Nextflow pipeline passes `--no-outgroup` to `tree2tax-relations` when
+`phylo_args` contains it.
 
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
@@ -532,7 +540,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
 | `--phylo_split_msa` | `false` | Run the alignment and the tree as separate tasks. |
-| `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). |
+| `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). `--no-outgroup` is added when `phylo_args` contains it. |
 
 `--phylo_split_msa` splits the phylogeny into `PHYLO_MSA` and `PHYLO_TREE`.
 The alignment then keeps its own cache entry, so trying another tree builder or

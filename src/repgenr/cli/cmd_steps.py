@@ -246,6 +246,7 @@ def tree2tax_relations_cmd(
     node_basename: str | None = typer.Option(None, "--node-basename", help=HELP_NODE_BASENAME),
     root_name: str = typer.Option("root", "--root-name", help=HELP_ROOT_NAME),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help=HELP_REMOVE_OUTGROUP),
+    no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
@@ -288,6 +289,7 @@ def tree2tax_relations_cmd(
                 versions_out=versions_out,
                 collapse_support=collapse_support,
                 collapse_length=collapse_length,
+                no_outgroup=no_outgroup,
             ),
             logger,
         )

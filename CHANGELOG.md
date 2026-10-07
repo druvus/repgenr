@@ -230,6 +230,15 @@ All notable changes to RepGenR are documented here. The format follows
   tree builder, when they differ; mashtree can drop a degenerate genome and
   exit 0. The tree is kept for inspection and the stage is not recorded as
   completed.
+- `tree2tax` and `tree2tax-relations` exit 3 with a message naming the
+  outgroup when it is not a leaf of the tree; they logged a warning, left the
+  tree unrooted and exited 0. `tree2tax` after `phylo --no-outgroup` still
+  leaves the tree unrooted. `tree2tax-relations --no-outgroup` ignores the
+  staged outgroup, and the Nextflow pipeline passes it when `phylo_args`
+  contains `--no-outgroup`.
+- `ingest --outgroup` naming another genome than the outgroup row of
+  `--selection` exits 2 and names both; the selection's outgroup row was
+  dropped without a message.
 
 ### Fixed
 - The `reads` no-match message names every active filter, including
@@ -371,6 +380,27 @@ All notable changes to RepGenR are documented here. The format follows
 - `metadata` with a local GTDB table names `--gtdb-version` when it is missing
   (it named `--version`) and reruns when the `--metadata-path` table changes.
   `vmetadata --source bvbrc` reports an unreachable FTP server as exit 3.
+- `snptype --tool simple` with no variable sites names the genome count and
+  the reference, and suggests a closer reference, more divergent genomes, or
+  an alignment-free tree.
+- `tree2tax` and `tree2tax-relations` exit 3 on a `tree.nwk` with text after
+  its final `;`, the rule `doctor` uses to flag a truncated tree; dendropy
+  read the first tree and ignored the rest.
+- The `tree2tax` record in `repgenr.yaml` names `dendropy` as its tool with
+  the library version, and `tree2tax-relations --versions-out` writes the same
+  version; the record had no tool and no versions.
+- The entry records in `repgenr.yaml` name a tool, which `status` shows:
+  `metadata` records `gtdb-api` or `gtdb-table`, `genome` and the NCBI Virus
+  `vmetadata` record `datasets`, the BV-BRC `vmetadata` records `bvbrc`, and
+  `vgenome` records the outgroup tree builder when the outgroup search ran.
+  The NCBI Virus `vmetadata` record keeps `released_after` in its parameters.
+- The `ingest` record in `repgenr.yaml` includes `drop_foreign` in its
+  parameters.
+- `metadata --nodownload` reruns when the GTDB table it reuses from the
+  workdir is replaced, and logs the changed input; the table was not a
+  declared resume input, so the stage was skipped. An existing workdir run
+  with `--nodownload` reruns once, since its record holds no digest of the
+  table.
 
 ### Changed
 - A run whose assembler is not installed is excused as

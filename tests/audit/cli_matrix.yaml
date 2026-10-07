@@ -2875,6 +2875,16 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.tree2tax_args
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
+      --no-outgroup:
+        param: Tree2taxStepParams.no_outgroup
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.phylo_args
+        live: 'n/a: covered offline in tests/integration/test_dataflow_phylo_steps.py'
+        observable: the staged outgroup is ignored and the tree is left unrooted
       --include-dereplicated:
         param: Tree2taxStepParams.include_dereplicated
         validated: none

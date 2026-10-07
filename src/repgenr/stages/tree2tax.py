@@ -14,6 +14,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import dendropy
@@ -27,6 +28,7 @@ from ..core.contracts import (
     TREE2TAX_TSV,
     TREE_NWK,
     accession_from_filename,
+    newick_is_complete,
     read_clusters,
     read_segments,
     strip_fasta_suffix,
@@ -69,6 +71,9 @@ class Tree2taxStepParams:
     versions_out: Path | None = None
     collapse_support: float | None = None
     collapse_length: float | None = None
+    # The tree was built without an outgroup (phylo --no-outgroup): ignore the
+    # staged outgroup inputs and leave the tree unrooted.
+    no_outgroup: bool = False
 
 
 def _emit_relations(
@@ -95,16 +100,23 @@ def _emit_relations(
     ``genomes_map.tsv`` to the given paths. Returns the two paths and the
     number of internal nodes collapsed.
     """
+    source = tree_source if tree_source is not None else "the tree"
+    if not newick_is_complete(tree_text):
+        # Same rule as doctor: dendropy would read the first tree and ignore
+        # whatever follows its ';', which hides a truncated or concatenated file.
+        raise WorkdirError(
+            f"{source} is empty or truncated: it has no terminating ';' or has text "
+            "after its final ';'. Re-run phylo."
+        )
     # preserve_underscores: genome leaf names contain '_' (Family_Genus_species_Acc)
     # and newick otherwise turns underscores into spaces.
     try:
         tree = dendropy.Tree.get(data=tree_text, schema="newick", preserve_underscores=True)
     except (DataParseError, ValueError) as exc:
-        source = tree_source if tree_source is not None else "the tree"
         raise WorkdirError(f"{source} is not a valid Newick tree: {exc}") from exc
 
     if outgroup_leaf is not None:
-        _set_outgroup(tree, outgroup_leaf, logger)
+        _set_outgroup(tree, outgroup_leaf, source)
 
     # Collapse before naming so node names describe the collapsed topology.
     stats = _collapse_weak_nodes(
@@ -132,7 +144,9 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         # member from genomes_map.tsv without notice.
         raise WorkdirError(f"Clusters table not found: {params.clusters}.")
     outgroup_leaf = None
-    if params.outgroup_dir is not None and params.outgroup_accession is not None:
+    if params.no_outgroup:
+        logger.warning("No outgroup (--no-outgroup); tree is left unrooted")
+    elif params.outgroup_dir is not None and params.outgroup_accession is not None:
         outgroup_leaf = _resolve_outgroup_leaf_from(
             params.outgroup_dir, params.outgroup_accession, logger
         )
@@ -143,11 +157,11 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
     )
     params.out_dir.mkdir(parents=True, exist_ok=True)
     if params.versions_out is not None:
-        # No external tools on this step (pure dendropy); the empty fragment lets
-        # the Nextflow module still record repgenr.
+        # No external binaries on this step; the tree work is the dendropy
+        # library, recorded as the tool, as the workdir stage does.
         from ..core.versions import write_versions_fragment
 
-        write_versions_fragment(params.versions_out, {})
+        write_versions_fragment(params.versions_out, _dendropy_versions())
     out_tree2tax, out_map, _collapsed = _emit_relations(
         params.tree.read_text().strip(),
         outgroup_leaf,
@@ -194,6 +208,8 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
 
     ctx.config.record_stage(
         "tree2tax",
+        tool="dendropy",
+        tool_versions=_dendropy_versions(),
         params={
             "remove_outgroup": params.remove_outgroup,
             "include_dereplicated": params.include_dereplicated,
@@ -208,7 +224,21 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     return out_tree2tax, out_map
 
 
+def _dendropy_versions() -> dict[str, str]:
+    """The dendropy library version, recorded as this stage's tool version."""
+    try:
+        return {"dendropy": version("dendropy")}
+    except PackageNotFoundError:  # pragma: no cover - dendropy is a hard dependency
+        return {}
+
+
 def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:
+    phylo = ctx.config.stages.get("phylo")
+    if phylo is not None and phylo.completed and phylo.params.get("outgroup", "") is None:
+        # phylo ran without an outgroup (--no-outgroup, or none was found), so
+        # the tree has no outgroup leaf to root on.
+        logger.warning("phylo built the tree without an outgroup; tree is left unrooted")
+        return None
     acc_file = ctx.workdir / "outgroup_accession.txt"
     if not acc_file.exists() or not ctx.outgroup_dir.exists():
         logger.warning("No outgroup available; tree is left unrooted")
@@ -242,11 +272,16 @@ def _leaf_label(node) -> str:
     return node.taxon.label if node.taxon is not None else ""
 
 
-def _set_outgroup(tree: dendropy.Tree, leaf_label: str, logger) -> None:
+def _set_outgroup(tree: dendropy.Tree, leaf_label: str, source: object) -> None:
     node = tree.find_node_with_taxon_label(leaf_label)
-    if node is None:
-        logger.warning("Outgroup leaf %s not in tree; leaving unrooted", leaf_label)
-        return
+    if node is None or not node.is_leaf():
+        # Leaving the tree unrooted would give a taxonomy rooted at an
+        # arbitrary node with exit 0; a named outgroup must root the tree.
+        raise WorkdirError(
+            f"Outgroup {leaf_label} is not a leaf of the tree {source}. Rebuild the "
+            "tree with this outgroup; if the tree was built without one (phylo "
+            "--no-outgroup), pass --no-outgroup to tree2tax-relations."
+        )
     # Root on the outgroup's edge, not at its parent node: to_outgroup_position
     # keeps the parent as the root, and on an unrooted (trifurcating) tree from
     # mashtree, fasttree or the sourmash NJ that leaves the root with three

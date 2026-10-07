@@ -126,11 +126,14 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
         tool_versions = {}
     ctx.config.record_stage(
         "vmetadata",
+        # The NCBI Virus records come through the NCBI datasets CLI.
+        tool="datasets",
         params={
             "source": "ncbi_virus",
             "target": params.target,
             "complete_only": params.complete_only,
             "host": params.host,
+            "released_after": params.released_after,
             "sequences": len(records),
         },
         tool_versions=tool_versions,
@@ -198,6 +201,8 @@ def _run_bvbrc(ctx, params, download_wd, logger) -> int:
 
     ctx.config.record_stage(
         "vmetadata",
+        # Group FASTA from the BV-BRC FTP server; no external binary.
+        tool="bvbrc",
         params={
             "source": "bvbrc",
             "target": target,

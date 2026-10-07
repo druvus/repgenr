@@ -104,7 +104,13 @@ class SimpleSnpTyper(SnpTyper):
             "simple SNP typer: %d core SNP sites across %d genomes", n_sites, len(consensuses)
         )
         if n_sites == 0:
-            raise WorkdirError("No variable sites found; cannot build a SNP tree.")
+            raise WorkdirError(
+                f"No variable sites found among {len(consensuses)} genomes against the "
+                f"reference {reference.stem}, so no SNP tree can be built. The genomes "
+                "either are identical at every called position or did not align to the "
+                "reference. Try a closer reference (--reference), more divergent "
+                "genomes, or an alignment-free tree (phylo --treebuilder mashtree)."
+            )
 
         return SnpResult(
             core_snp_fasta=core_fasta,
