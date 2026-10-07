@@ -585,3 +585,23 @@ def test_leaf_key_matches_tool_rewritten_names() -> None:
     for label in (stem, "Fam_gen_sp_GCA_000001_1", f"{stem}.fasta", f"{stem}.fna.ref"):
         assert _leaf_key(label) == _leaf_key(stem)
     assert _leaf_key("Fam_gen_sp_GCA_000002.1") != _leaf_key(stem)
+
+
+def test_msa_stamped_by_an_earlier_version_is_not_reused(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """An alignment from before the stamp version changed (for example a snippy
+    alignment that still names the reference 'Reference') is rebuilt."""
+    from repgenr.stages import phylo as phylo_mod
+
+    assert phylo_mod._MSA_STAMP_VERSION >= 2
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+    with monkeypatch.context() as m:
+        m.setattr(phylo_mod, "_MSA_STAMP_VERSION", 1)
+        run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 2, "a stamp from an earlier version is not trusted"

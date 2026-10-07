@@ -129,7 +129,8 @@ class PhyloOutcome:
 # builder (or the bootstrap) can reuse it instead of aligning or SNP-calling
 # again. The stage fingerprint cannot do this: it covers the whole stage.
 MSA_STAMP = "msa_source.json"
-_MSA_STAMP_VERSION = 1
+# 2: the snippy typer names its reference record by genome (was "Reference").
+_MSA_STAMP_VERSION = 2
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
@@ -177,7 +178,7 @@ def _read_msa_stamp(artifact: Path, key: str) -> dict | None:
         stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if stamp.get("key") != key:
+    if stamp.get("v") != _MSA_STAMP_VERSION or stamp.get("key") != key:
         return None
     if stamp.get("artifact_digest") != file_digest(artifact):
         return None
