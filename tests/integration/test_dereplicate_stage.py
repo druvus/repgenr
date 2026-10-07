@@ -386,3 +386,19 @@ def test_drep_virus_mode_reaches_anim_through_the_stage(
         run(ctx, DereplicateParams(tool="drep", extra={"virus": True}))
     (cmd,) = seen
     assert cmd[cmd.index("--S_algorithm") + 1] == "ANImf"
+
+
+@pytest.mark.parametrize("name", ["genome_status.tsv", "cluster_summary.tsv"])
+def test_a_deleted_secondary_output_is_rebuilt_without_force(
+    workdir: Path, genome_files, fake_tool, name: str
+) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    args = ["dereplicate", "-wd", str(workdir), "--tool", "fake"]
+    assert CliRunner().invoke(app, args).exit_code == 0
+    (workdir / "derep" / name).unlink()
+    again = CliRunner().invoke(app, args)
+    assert again.exit_code == 0, again.output
+    assert (workdir / "derep" / name).exists()

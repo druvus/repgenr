@@ -27,6 +27,7 @@ from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     CORE_SNP_FASTA,
+    GENOME_STATUS_TSV,
     GENOMES_MAP_TSV,
     READS_TSV,
     SELECTION_TSV,
@@ -359,7 +360,14 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     # genome reads selection.tsv and the manifest; it writes the genome files.
     "genome": _genome_deliverables,
     "vgenome": lambda ctx, p: _genome_set_deliverables(ctx),
-    "dereplicate": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir],
+    # All four outputs: doctor fails on a missing genome_status.tsv and asks
+    # for a rerun, which must then not be skipped.
+    "dereplicate": lambda ctx, p: [
+        ctx.derep_dir / CLUSTERS_TSV,
+        ctx.derep_dir / GENOME_STATUS_TSV,
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV,
+        ctx.representatives_dir,
+    ],
     "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],
     "phylo": lambda ctx, p: [ctx.tree_dir / TREE_NWK],
     "tree2tax": lambda ctx, p: [ctx.workdir / TREE2TAX_TSV, ctx.workdir / GENOMES_MAP_TSV],
