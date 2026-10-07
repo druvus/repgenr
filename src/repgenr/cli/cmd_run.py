@@ -27,6 +27,7 @@ from .base import (
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    PANEL_PIPELINE,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
     PIPELINE_READS,
@@ -126,7 +127,7 @@ def _msa_source_summary(treebuilder: str, msa_source: str, aligner: str, snptype
     return f", aligner={aligner}"
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PIPELINE)
 def run(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
     viral: bool = typer.Option(

@@ -9,6 +9,7 @@ import typer
 from .base import (
     DEFAULT_THREADS,
     HELP_THREADS,
+    PANEL_CORE,
     _aligner_help,
     _mask_help,
     _parse_key_values,
@@ -20,7 +21,7 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CORE)
 def snptype(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     tool: str = typer.Option("simple", "--tool", help=_snp_help()),
@@ -58,7 +59,7 @@ def snptype(
     _run("snptype", workdir, build)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CORE)
 def phylo(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     treebuilder: str = typer.Option("iqtree", "--treebuilder", help=_tree_help()),
@@ -113,7 +114,7 @@ def phylo(
     _run("phylo", workdir, build)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CORE)
 def tree2tax(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     node_basename: str | None = typer.Option(None, "--node-basename", help="Prefix for nodes."),

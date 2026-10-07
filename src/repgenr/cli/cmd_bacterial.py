@@ -17,6 +17,8 @@ from .base import (
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    PANEL_CORE,
+    PANEL_ENTRY,
     _derep_help,
     _parse_key_values,
     _run,
@@ -25,7 +27,7 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def metadata(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
     dataset: str = typer.Option(..., "-d", "--dataset", help="all or rep."),
@@ -89,7 +91,7 @@ def metadata(
     _run("metadata", workdir, build, create=True)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def genome(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     accession_list_only: bool = typer.Option(
@@ -106,7 +108,7 @@ def genome(
     _run("genome", workdir, build)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_CORE)
 def dereplicate(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     tool: str = typer.Option("skder", "--tool", help=_derep_help()),

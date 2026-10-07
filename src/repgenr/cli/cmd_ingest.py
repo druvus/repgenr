@@ -6,10 +6,10 @@ from pathlib import Path
 
 import typer
 
-from .base import _run, app
+from .base import PANEL_ENTRY, _run, app
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def ingest(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
     genomes_dir: Path = typer.Option(

@@ -10,6 +10,9 @@ from .base import (
     DEFAULT_THREADS,
     HELP_KEEP_FILES,
     HELP_THREADS,
+    PANEL_ENV,
+    PANEL_INSPECT,
+    PANEL_PIPELINE,
     PIPELINE_BACTERIAL,
     PIPELINE_LOCAL,
     PIPELINE_READS,
@@ -21,7 +24,7 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENV)
 def versions(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     versions_out: Path | None = typer.Option(
@@ -47,7 +50,7 @@ def versions(
             typer.echo(f"{tool}: {ver}")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_PIPELINE)
 def status(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
 ) -> None:
@@ -106,7 +109,7 @@ def status(
         typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENV)
 def doctor(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
 ) -> None:
@@ -132,7 +135,7 @@ def doctor(
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_INSPECT)
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     tool: str = typer.Option("drep", "--tool", help=_derep_help(auto=False)),
@@ -162,7 +165,7 @@ def glance(
     _run("glance", workdir, build)
 
 
-@app.command(name="derep-unpack")
+@app.command(name="derep-unpack", rich_help_panel=PANEL_INSPECT)
 def derep_unpack(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     no_representant: bool = typer.Option(
@@ -178,7 +181,7 @@ def derep_unpack(
     _run("derep_unpack", workdir, build)
 
 
-@app.command(name="cluster-summary")
+@app.command(name="cluster-summary", rich_help_panel=PANEL_INSPECT)
 def cluster_summary(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
 ) -> None:
@@ -188,7 +191,7 @@ def cluster_summary(
     _run("cluster_summary", workdir, ClusterSummaryParams)
 
 
-@app.command(name="derep-stock")
+@app.command(name="derep-stock", rich_help_panel=PANEL_INSPECT)
 def derep_stock(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     action: str = typer.Option(..., "--action", help="list, pack, unpack or delete."),
@@ -205,7 +208,7 @@ def derep_stock(
     _run("derep_stock", workdir, build)
 
 
-@app.command(name="list-tools")
+@app.command(name="list-tools", rich_help_panel=PANEL_ENV)
 def list_tools(
     check: bool = typer.Option(
         False,

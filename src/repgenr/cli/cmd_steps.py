@@ -21,6 +21,7 @@ from .base import (
     HELP_PRIMARY_ANI,
     HELP_SECONDARY_ANI,
     HELP_THREADS,
+    PANEL_STEPS,
     _aligner_help,
     _assembler_help,
     _classifier_help,
@@ -38,7 +39,7 @@ from .base import (
 )
 
 
-@app.command(name="genome-fetch")
+@app.command(name="genome-fetch", rich_help_panel=PANEL_STEPS)
 def genome_fetch_cmd(
     selection: Path = typer.Option(
         ..., "--selection", help="selection.tsv from the metadata stage."
@@ -65,7 +66,7 @@ def genome_fetch_cmd(
         )
 
 
-@app.command(name="dereplicate-chunk")
+@app.command(name="dereplicate-chunk", rich_help_panel=PANEL_STEPS)
 def dereplicate_chunk_cmd(
     genomes_fofn: Path = typer.Option(
         ..., "--genomes-fofn", help="File of genome FASTA paths, one per line."
@@ -131,7 +132,7 @@ def dereplicate_chunk_cmd(
         )
 
 
-@app.command(name="phylo-build")
+@app.command(name="phylo-build", rich_help_panel=PANEL_STEPS)
 def phylo_build_cmd(
     genomes_dir: Path = typer.Option(
         ..., "--genomes-dir", help="Directory of genome FASTA files to build the tree from."
@@ -223,7 +224,7 @@ def phylo_build_cmd(
         )
 
 
-@app.command(name="tree2tax-relations")
+@app.command(name="tree2tax-relations", rich_help_panel=PANEL_STEPS)
 def tree2tax_relations_cmd(
     tree: Path = typer.Option(..., "--tree", help="Rooted/unrooted tree in Newick (tree.nwk)."),
     out_dir: Path = typer.Option(
@@ -287,7 +288,7 @@ def tree2tax_relations_cmd(
         )
 
 
-@app.command(name="dereplicate-merge")
+@app.command(name="dereplicate-merge", rich_help_panel=PANEL_STEPS)
 def dereplicate_merge_cmd(
     out_dir: Path = typer.Option(..., "-o", "--out", help="Output dir for the merged result."),
     chunk_dir: list[Path] = typer.Option(
@@ -379,7 +380,7 @@ def dereplicate_merge_cmd(
 # --- reads chain ------------------------------------------------------------------
 
 
-@app.command(name="assemble-run")
+@app.command(name="assemble-run", rich_help_panel=PANEL_STEPS)
 def assemble_run_cmd(
     reads_tsv: Path = typer.Option(..., "--reads-tsv", help="reads.tsv from the reads stage."),
     run: str = typer.Option(
@@ -445,7 +446,7 @@ def assemble_run_cmd(
         )
 
 
-@app.command(name="genome-qc")
+@app.command(name="genome-qc", rich_help_panel=PANEL_STEPS)
 def genome_qc_cmd(
     assemblies: Path = typer.Option(
         ..., "--assemblies", help="Directory of assemble-run output dirs, one per run."
@@ -501,7 +502,7 @@ def genome_qc_cmd(
         )
 
 
-@app.command(name="reads-gather")
+@app.command(name="reads-gather", rich_help_panel=PANEL_STEPS)
 def reads_gather_cmd(
     reads_tsv: Path = typer.Option(..., "--reads-tsv", help="reads.tsv from the reads stage."),
     assemblies: Path = typer.Option(

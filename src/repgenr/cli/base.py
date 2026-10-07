@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from typer.core import TyperGroup
 
 from .. import __version__
 from ..core.context import WorkdirContext
@@ -26,12 +27,6 @@ from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
-
-app = typer.Typer(
-    add_completion=False,
-    no_args_is_help=True,
-    help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
-)
 
 # Top-level run options shared by every subcommand (set in the callback).
 _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
@@ -62,6 +57,51 @@ PIPELINE_VIRAL = ("vmetadata", "vgenome", "dereplicate", "phylo", "tree2tax")
 PIPELINE_LOCAL = ("ingest", "dereplicate", "phylo", "tree2tax")
 # Reads chain: sequencing runs selected from ENA/SRA and assembled.
 PIPELINE_READS = ("reads", "assemble", "dereplicate", "phylo", "tree2tax")
+
+PANEL_PIPELINE = "Pipeline"
+PANEL_ENTRY = "Entry points: select and fetch genomes"
+PANEL_CORE = "Core stages"
+PANEL_INSPECT = "Inspect a dereplication"
+PANEL_ENV = "Environment and diagnostics"
+PANEL_STEPS = "Nextflow data-channel steps"
+
+# Panel -> commands in display order. The single source of truth for the
+# grouped --help, the rendered command reference, and the panel test.
+COMMAND_PANELS: dict[str, tuple[str, ...]] = {
+    PANEL_PIPELINE: ("run", "status"),
+    PANEL_ENTRY: ("metadata", "genome", "vmetadata", "vgenome", "ingest", "reads", "assemble"),
+    PANEL_CORE: ("dereplicate", "snptype", "phylo", "tree2tax"),
+    PANEL_INSPECT: ("glance", "cluster-summary", "derep-unpack", "derep-stock"),
+    PANEL_ENV: ("list-tools", "doctor", "versions"),
+    PANEL_STEPS: (
+        "genome-fetch",
+        "dereplicate-chunk",
+        "dereplicate-merge",
+        "phylo-build",
+        "tree2tax-relations",
+        "assemble-run",
+        "genome-qc",
+        "reads-gather",
+    ),
+}
+
+COMMAND_ORDER: tuple[str, ...] = tuple(c for cmds in COMMAND_PANELS.values() for c in cmds)
+
+
+class _PanelOrderedGroup(TyperGroup):
+    """--help lists commands in COMMAND_ORDER (pipeline order), not import order."""
+
+    def list_commands(self, ctx):  # type: ignore[no-untyped-def]
+        rank = {n: i for i, n in enumerate(COMMAND_ORDER)}
+        return sorted(self.commands, key=lambda n: (rank.get(n, len(rank)), n))
+
+
+app = typer.Typer(
+    cls=_PanelOrderedGroup,
+    add_completion=False,
+    no_args_is_help=True,
+    help="RepGenR: modular genome dereplication, alignment, SNP typing and phylogenetics.",
+)
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:

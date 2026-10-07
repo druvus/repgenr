@@ -12,6 +12,7 @@ from .base import (
     HELP_NO_OUTGROUP,
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
+    PANEL_ENTRY,
     _run,
     app,
 )
@@ -28,7 +29,7 @@ def _validate_released_after(value: str | None) -> str | None:
     return value
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def vmetadata(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
     target: str | None = typer.Option(None, "--target", help="Virus taxon/group/family."),
@@ -69,7 +70,7 @@ def vmetadata(
     _run("vmetadata", workdir, build, create=True)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def vgenome(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     target_genus: str | None = typer.Option(None, "-tg", "--target-genus", help=HELP_TARGET_GENUS),

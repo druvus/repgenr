@@ -12,6 +12,7 @@ from .base import (
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
     HELP_THREADS,
+    PANEL_ENTRY,
     _assembler_help,
     _classifier_help,
     _parse_key_values,
@@ -21,7 +22,7 @@ from .base import (
 )
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def reads(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory (created)."),
     target_family: str | None = typer.Option(
@@ -90,7 +91,7 @@ def reads(
     _run("reads", workdir, build, create=True)
 
 
-@app.command()
+@app.command(rich_help_panel=PANEL_ENTRY)
 def assemble(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help="Working directory."),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
