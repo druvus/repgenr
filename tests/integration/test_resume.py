@@ -96,3 +96,160 @@ def test_unregistered_stage_still_skips_on_params(tmp_path: Path, monkeypatch) -
     cli._run("faketest", tmp_path, lambda: _P(), create=True)
     cli._run("faketest", tmp_path, lambda: _P(), create=True)
     assert calls == [1]
+
+
+# -- deliverable checks: a completed stage whose outputs were deleted reruns --
+
+
+def _flush_log(workdir: Path) -> str:
+    import logging
+
+    for h in logging.getLogger("repgenr").handlers:
+        h.flush()
+    return (workdir / "repgenr.log").read_text(encoding="utf-8")
+
+
+def test_deliverable_directory_must_be_non_empty(tmp_path: Path) -> None:
+    from repgenr.core.context import WorkdirContext
+
+    ctx = WorkdirContext(tmp_path, create=True)
+    try:
+        ctx.genomes_dir.mkdir()
+        (tmp_path / "selection.tsv").write_text("x\n", encoding="utf-8")
+        (tmp_path / "manifest.sqlite").write_text("", encoding="utf-8")
+        params = types.SimpleNamespace(genomes_dir=str(tmp_path / "src"))
+        missing = cli.missing_deliverables(ctx, "ingest", params)
+        assert missing == [ctx.genomes_dir]
+        (ctx.genomes_dir / "a.fasta").write_text(">a\nA\n", encoding="utf-8")
+        assert cli.missing_deliverables(ctx, "ingest", params) == []
+    finally:
+        ctx.close()
+
+
+def _assert_rerun_on_missing_deliverable(
+    workdir: Path, stage: str, build_params, deliverable: Path, run_marker: str
+) -> None:
+    import shutil
+
+    cli._run(stage, workdir, build_params, create=True)  # cold run
+    log = _flush_log(workdir)
+    assert log.count(run_marker) == 1
+    assert deliverable.exists()
+
+    cli._run(stage, workdir, build_params, create=True)  # identical -> skip
+    log = _flush_log(workdir)
+    assert log.count("already completed") == 1
+    assert log.count(run_marker) == 1
+
+    if deliverable.is_dir():
+        shutil.rmtree(deliverable)
+    else:
+        deliverable.unlink()
+    cli._run(stage, workdir, build_params, create=True)  # deliverable gone -> rerun
+    log = _flush_log(workdir)
+    rel = deliverable.relative_to(workdir)
+    assert f"Stage '{stage}': deliverable {rel} missing; re-running." in log
+    assert log.count(run_marker) == 2
+    assert log.count("already completed") == 1
+    assert deliverable.exists()
+
+    cli._run(stage, workdir, build_params, create=True)  # untouched -> skip again
+    log = _flush_log(workdir)
+    assert log.count("already completed") == 2
+    assert log.count(run_marker) == 2
+
+
+def _resume_env(monkeypatch) -> None:
+    import logging
+
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(cli._RUN_STATE, "log_level", logging.INFO)
+
+
+def test_ingest_reruns_when_genomes_dir_deleted(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.stages.ingest import IngestParams
+
+    _resume_env(monkeypatch)
+    src = tmp_path / "src"
+    src.mkdir()
+    for i in range(2):
+        (src / f"Fam_Gen_sp_GCA_00000{i}.1.fasta").write_text(">s\nACGTACGT\n")
+    wd = tmp_path / "wd"
+    _assert_rerun_on_missing_deliverable(
+        wd,
+        "ingest",
+        lambda: IngestParams(genomes_dir=str(src)),
+        wd / "genomes",
+        "Ingested 2",
+    )
+
+
+def test_dereplicate_reruns_when_clusters_tsv_deleted(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.manifest import GenomeRecord
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.dereplicators.base import (
+        STATUS_REPRESENTATIVE,
+        Dereplicator,
+        DerepResult,
+        registry,
+    )
+    from repgenr.stages.dereplicate import DereplicateParams
+
+    class _NoRep(Dereplicator):
+        capabilities = ToolCapabilities(name="deliverablenorep", supports_native_scaling=True)
+
+        def preflight(self) -> dict[str, str]:
+            return {"deliverablenorep": "1.0"}
+
+        def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+            genomes = list(genomes)
+            return DerepResult(
+                representatives=list(genomes),
+                clusters={g.name: [] for g in genomes},
+                genome_status={g.name: STATUS_REPRESENTATIVE for g in genomes},
+            )
+
+    _resume_env(monkeypatch)
+    registry._load()
+    registry.register("deliverablenorep", _NoRep, replace=True)
+    try:
+        gdir = tmp_path / "genomes"
+        gdir.mkdir()
+        for i in range(2):
+            (gdir / f"Fam_g_s_GCF_10000{i}.1.fasta").write_text(">x\nACGT\n", encoding="utf-8")
+        seed = WorkdirContext(tmp_path, create=True)
+        seed.manifest.upsert_many(
+            [
+                GenomeRecord(accession=f"GCF_10000{i}.1", filename=f"Fam_g_s_GCF_10000{i}.1.fasta")
+                for i in range(2)
+            ]
+        )
+        seed.close()
+        _assert_rerun_on_missing_deliverable(
+            tmp_path,
+            "dereplicate",
+            lambda: DereplicateParams(tool="deliverablenorep"),
+            tmp_path / "derep" / "clusters.tsv",
+            "Dereplicating 2 genomes",
+        )
+    finally:
+        registry._classes.pop("deliverablenorep", None)
+
+
+def test_tree2tax_reruns_when_genomes_map_deleted(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.stages.tree2tax import Tree2taxParams
+
+    _resume_env(monkeypatch)
+    tree_dir = tmp_path / "tree"
+    tree_dir.mkdir()
+    (tree_dir / "tree.nwk").write_text(
+        "((Fam_gen_sp_GCA_000001:0.1,Fam_gen_sp_GCA_000002:0.1):0.2,Fam_gen_sp_GCA_000003:0.5);\n"
+    )
+    _assert_rerun_on_missing_deliverable(
+        tmp_path,
+        "tree2tax",
+        lambda: Tree2taxParams(include_dereplicated=False),
+        tmp_path / "genomes_map.tsv",
+        "Wrote ",
+    )

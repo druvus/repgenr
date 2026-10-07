@@ -181,6 +181,24 @@ def test_changed_inputs_are_a_warning(tmp_path: Path) -> None:
     )
 
 
+def test_missing_deliverable_is_a_warning_named_like_the_resume_message(
+    tmp_path: Path,
+) -> None:
+    """A completed stage whose deliverable was deleted will re-run; doctor names
+    the same workdir-relative path that the resume log line does."""
+    wd = _base_workdir(tmp_path)
+    cfg = Config.load(wd)
+    cfg.record_stage("phylo", tool="fasttree", params={}, completed="2026-01-01T00:03:00")
+    cfg.save(wd)
+    findings = diagnose(wd)
+    hits = [f for f in findings if f.area == "phylo" and "deliverable" in f.message]
+    assert len(hits) == 1
+    assert hits[0].level == "warn"
+    assert "deliverable tree/tree.nwk missing" in hits[0].message
+    # The healthy base stages report no missing deliverable.
+    assert not any("deliverable" in f.message for f in findings if f.area != "phylo")
+
+
 def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -> None:
     """doctor's stale-input check must use the same per-stage manifest digest
     dereplicate's own resume fingerprint stamps (include_derep=False, since
@@ -215,8 +233,13 @@ def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -
     )
     cfg.save(wd)
 
+    # The record has no derep/ outputs on disk, so only the stale-input
+    # findings (not the missing-deliverable ones) are under test here.
+    def _stale(findings) -> list:
+        return [f for f in findings if f.area == "dereplicate" and "changed" in f.message]
+
     findings = diagnose(wd)
-    assert not any(f.area == "dereplicate" and f.level == "warn" for f in findings)
+    assert not _stale(findings)
 
     # A real quality-only manifest edit must still be caught as stale.
     manifest2 = Manifest(wd / "manifest.sqlite")
@@ -233,8 +256,9 @@ def test_dereplicate_completion_with_derep_status_is_not_stale(tmp_path: Path) -
     manifest2.close()
 
     findings2 = diagnose(wd)
-    dereplicate_warnings = [f for f in findings2 if f.area == "dereplicate" and f.level == "warn"]
+    dereplicate_warnings = _stale(findings2)
     assert len(dereplicate_warnings) == 1
+    assert dereplicate_warnings[0].level == "warn"
     assert "manifest" in dereplicate_warnings[0].message
 
 

@@ -119,6 +119,12 @@ All notable changes to RepGenR are documented here. The format follows
   exit status and points to `repgenr.log`. The command line and the output
   tail are written to the run log and shown on the console under `--verbose`;
   a data-channel step, which has no run log, still prints the tail.
+- Resume now checks a stage's main outputs before skipping it. A stage whose
+  parameters, inputs and environment are unchanged but whose deliverable was
+  deleted (for example `derep/clusters.tsv` or `genomes_map.tsv`) logs
+  `Stage 'X': deliverable <path> missing; re-running.` and runs again instead
+  of being skipped, so `--force` is no longer needed for this case. `doctor`
+  reports the same paths as warnings.
 - One help string per shared flag: duplicated option texts are now shared
   constants, so `run` and the single commands read the same. `--mask` lists
   the registered maskers on snptype, phylo, run and phylo-build, and the three

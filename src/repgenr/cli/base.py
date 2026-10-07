@@ -23,10 +23,20 @@ from typer.core import TyperGroup
 
 from .. import __version__
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, READS_TSV, SELECTION_TSV, TREE_NWK
+from ..core.contracts import (
+    CLUSTER_SUMMARY_TSV,
+    CLUSTERS_TSV,
+    CORE_SNP_FASTA,
+    GENOMES_MAP_TSV,
+    READS_TSV,
+    SELECTION_TSV,
+    TREE2TAX_TSV,
+    TREE_NWK,
+)
 from ..core.errors import RepGenRError, ToolExecutionError, UserInputError, WorkdirError
 from ..core.inputs import inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
+from ..core.manifest import MANIFEST_FILENAME
 
 # Top-level run options shared by every subcommand (set in the callback).
 _RUN_STATE: dict[str, Any] = {"force": False, "log_level": logging.INFO}
@@ -253,6 +263,89 @@ STAGE_INPUTS: dict[str, Any] = {
     "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV],
     "derep_stock": _derep_stock_inputs,
 }
+
+
+def _vmetadata_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
+    download_wd = ctx.workdir / "virus_download_wd"
+    paths = [download_wd / "metadata_base.tsv"]
+    source = getattr(params, "source", None)
+    if source == "ncbi_virus":
+        paths.append(download_wd / "virus_records.json")
+    elif source == "bvbrc":
+        paths += [download_wd / "download.fa", download_wd / "metadata_ncbi.tsv"]
+    return paths
+
+
+def _derep_stock_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
+    action = getattr(params, "action", "")
+    if action == "pack":
+        return [ctx.derep_dir / "stock" / (getattr(params, "name", None) or "") / CLUSTERS_TSV]
+    if action == "unpack":
+        return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
+    # delete leaves nothing behind by design.
+    return []
+
+
+def _genome_set_deliverables(ctx: WorkdirContext) -> list[Path]:
+    """What every entry path that writes a genome set leaves in the workdir."""
+    return [ctx.genomes_dir, ctx.workdir / SELECTION_TSV, ctx.workdir / MANIFEST_FILENAME]
+
+
+# What each stage writes that downstream stages or the user rely on: stage ->
+# callable(ctx, params) -> paths. A completed stage whose fingerprint matches
+# is skipped only when all of these exist (a directory must also be
+# non-empty); otherwise it reruns, so outputs deleted by hand are rebuilt
+# without --force. The callables read only the ctx attributes that
+# core.doctor's stand-in context provides, and params may be the recorded
+# params dict as a namespace (doctor), so conditional entries use getattr.
+STAGE_DELIVERABLES: dict[str, Any] = {
+    "metadata": lambda ctx, p: [ctx.workdir / SELECTION_TSV, ctx.workdir / MANIFEST_FILENAME],
+    "ingest": lambda ctx, p: _genome_set_deliverables(ctx),
+    "reads": lambda ctx, p: [ctx.workdir / READS_TSV],
+    "assemble": lambda ctx, p: _genome_set_deliverables(ctx),
+    "vmetadata": _vmetadata_deliverables,
+    # genome reads selection.tsv and the manifest; it writes the genome files.
+    "genome": lambda ctx, p: [ctx.genomes_dir, ctx.workdir / MANIFEST_FILENAME],
+    "vgenome": lambda ctx, p: _genome_set_deliverables(ctx),
+    "dereplicate": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir],
+    "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],
+    "phylo": lambda ctx, p: [ctx.tree_dir / TREE_NWK],
+    "tree2tax": lambda ctx, p: [ctx.workdir / TREE2TAX_TSV, ctx.workdir / GENOMES_MAP_TSV],
+    # glance writes its dendrogram and plots only when the comparison tool
+    # returns the matching tables, so no output is guaranteed to exist.
+    "glance": lambda ctx, p: [],
+    # With --no-representant and only singleton clusters, unpacked/ is
+    # legitimately left empty, so it is checked only when representatives
+    # are unpacked too (every cluster then yields a subdirectory).
+    "derep_unpack": lambda ctx, p: (
+        [] if getattr(p, "no_representant", False) else [ctx.derep_dir / "unpacked"]
+    ),
+    "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTER_SUMMARY_TSV],
+    "derep_stock": _derep_stock_deliverables,
+}
+
+
+def _deliverable_present(path: Path) -> bool:
+    if path.is_dir():
+        return any(path.iterdir())
+    return path.exists()
+
+
+def missing_deliverables(ctx: Any, stage_name: str, params: Any) -> list[Path]:
+    """Declared deliverables of ``stage_name`` that are absent (or empty dirs)."""
+    spec = STAGE_DELIVERABLES.get(stage_name)
+    if spec is None:
+        return []
+    return [path for path in spec(ctx, params) if not _deliverable_present(path)]
+
+
+def deliverable_label(workdir: Path, path: Path) -> str:
+    """A deliverable path as shown to the user: relative to the workdir."""
+    try:
+        return str(path.relative_to(workdir))
+    except ValueError:
+        return str(path)
+
 
 # Stages whose result also depends on the manifest's genome rows (taxonomy,
 # derep status, CheckM quality), digested from ordered query results.
@@ -603,7 +696,8 @@ def _run(stage_name: str, workdir: Path, build_params, *, create: bool = False) 
 
     Resume: a stage that already completed with the same parameters, the same
     inputs (per STAGE_INPUTS digests), and the same container identity is
-    skipped, unless ``--force`` is set. Re-running an upstream stage changes a
+    skipped, unless ``--force`` is set or one of its STAGE_DELIVERABLES is
+    missing. Re-running an upstream stage changes a
     downstream stage's input digests, so the downstream stage reruns
     automatically. A stage that crashed before recording completion has no
     ``completed`` stamp and so always re-runs.
@@ -641,12 +735,22 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, build_params, logger) -> No
     prior = ctx.config.stages.get(stage_name)
     if not _RUN_STATE["force"] and prior is not None and prior.completed:
         if prior.fingerprint == fingerprint:
-            logger.info(
-                "Stage '%s' already completed with the same parameters and "
-                "inputs; skipping (use --force to re-run).",
-                stage_name,
-            )
-            return
+            missing = missing_deliverables(ctx, stage_name, params)
+            if not missing:
+                logger.info(
+                    "Stage '%s' already completed with the same parameters and "
+                    "inputs; skipping (use --force to re-run).",
+                    stage_name,
+                )
+                return
+            # The fingerprint excludes outputs, so check them separately: a
+            # deliverable deleted by hand must be rebuilt, not skipped.
+            for path in missing:
+                logger.info(
+                    "Stage '%s': deliverable %s missing; re-running.",
+                    stage_name,
+                    deliverable_label(ctx.workdir, path),
+                )
         # A key present on one side only means the stage now reads a different
         # set of inputs (a flag such as --include-dereplicated, or an outgroup
         # added), not that a file's content changed; say which.

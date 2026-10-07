@@ -390,7 +390,6 @@ they are recorded here and not fixed.
 
 | Area | Observation |
 |---|---|
-| Resume | The resume fingerprint covers parameters, inputs and the environment, not outputs, so a stage whose output was deleted by hand is skipped and `--force` is needed. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
 | Errors | A stage that fails cleanly leaves no record in `repgenr.yaml`, so `status` shows it as next and not interrupted, and `doctor` reports no failure while `tree/` holds partial files. |
 | Errors | `snptype` with no variable sites exits 3; a message that names the cause would help. |

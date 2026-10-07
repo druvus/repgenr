@@ -393,7 +393,8 @@ Verify a workdir's outputs against its records (read-only health check).
 `status` reports what repgenr.yaml claims; `doctor` checks the claims
 against the filesystem and the manifest: interrupted stages, missing or
 corrupt genomes, manifest drift, representative/cluster mismatches,
-truncated deliverables, and stages whose inputs changed since completion.
+truncated or missing deliverables, and stages whose inputs changed since
+completion.
 Exits 1 when any failure is found and 3 when the workdir does not exist.
 
 | option | default | description |
