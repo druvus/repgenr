@@ -270,3 +270,30 @@ def test_ingest_external_outgroup_sharing_an_ingroup_name_is_an_error(
     with pytest.raises(UserInputError, match="also the ingroup genome Fam_Gen_sp2"):
         run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(same_accession)))
     assert not ctx.genomes_dir.exists() or not any(ctx.genomes_dir.iterdir())
+
+
+def test_ingest_duplicate_accessions_are_an_error(tmp_path: Path, workdir: Path) -> None:
+    """Two files with one accession used to leave the manifest one row short."""
+    src = _source(
+        tmp_path,
+        ["Fam_Gen_sp1_GCA_000001.1.fasta", "Fam_Gen_sp1_GCA_000001.1.fna", "iso_a_x_v1.fa"],
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match=r"1 genome\(s\) share an accession: GCA_000001.1"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
+    assert not (workdir / "selection.tsv").exists()
+
+
+def test_ingest_selection_listing_a_file_twice_is_an_error(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["a.fasta"])
+    sel = tmp_path / "sel.tsv"
+    write_selection(
+        sel,
+        [
+            SelectionRow("A1", "F", "G", "s", False, "a.fasta"),
+            SelectionRow("A2", "F", "G", "s", False, "a.fasta"),
+        ],
+    )
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="share a filename: a.fasta"):
+        run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))

@@ -72,6 +72,7 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
     outgroup_row, outgroup_file = _resolve_outgroup(rows, by_name, params.outgroup)
     outgroup_name = outgroup_row.filename if outgroup_row is not None else None
     ingroup = [r for r in rows if not r.is_outgroup and r.filename != outgroup_name]
+    _refuse_duplicates([*ingroup, *([outgroup_row] if outgroup_row is not None else [])])
 
     ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
     _prune(ctx.genomes_dir, {r.filename for r in ingroup}, logger)
@@ -126,6 +127,36 @@ def _rows_from_selection(path: Path, by_name: dict[str, Path]) -> list[Selection
             f"(e.g. {', '.join(missing[:3])})."
         )
     return rows
+
+
+def _refuse_duplicates(rows: list[SelectionRow]) -> None:
+    """Fail when two genomes share an accession or a selection names one file twice.
+
+    The manifest is keyed by accession, so a shared accession kept one row of
+    several while genomes/ and selection.tsv kept them all. Non-canonical names
+    with four or more tokens (``sample_1_run_A.fasta``) are parsed as
+    Family_genus_species_ACCESSION and can collide this way.
+    """
+    for attr, label in (("accession", "an accession"), ("filename", "a filename")):
+        seen: dict[str, str] = {}
+        clashes: list[str] = []
+        for row in rows:
+            key = getattr(row, attr)
+            if key in seen:
+                clashes.append(f"{key} ({seen[key]}, {row.filename})")
+            else:
+                seen[key] = row.filename
+        if clashes:
+            shown = "; ".join(clashes[:3]) + (
+                f" (+{len(clashes) - 3} more)" if len(clashes) > 3 else ""
+            )
+            hint = (
+                " Give each genome its own accession with --selection, or rename the files "
+                "(Family_genus_species_ACCESSION.fasta)."
+                if attr == "accession"
+                else " List each file once in --selection."
+            )
+            raise UserInputError(f"{len(clashes)} genome(s) share {label}: {shown}.{hint}")
 
 
 def _row_from_filename(name: str) -> SelectionRow:
