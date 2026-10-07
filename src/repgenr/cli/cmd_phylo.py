@@ -26,6 +26,7 @@ from .base import (
     PANEL_CORE,
     _aligner_help,
     _mask_help,
+    _mask_help_msa,
     _parse_key_values,
     _require_choice,
     _run,
@@ -97,7 +98,7 @@ def phylo(
     mask: str = typer.Option(
         "none",
         "--mask",
-        help=_mask_help(),
+        help=_mask_help_msa(),
     ),
     allow_incomplete: bool = typer.Option(
         False,

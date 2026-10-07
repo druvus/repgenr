@@ -35,7 +35,7 @@ Run the whole pipeline end to end (bacterial by default, --viral for viruses).
 
 Some option names differ from the single commands. Here --tool selects the
 dereplicator, while 'snptype --tool' selects the SNP typer (--snptyper on
-phylo and run). --metadata-source is 'metadata --source' and --viral-source
+phylo, run and phylo-build). --metadata-source is 'metadata --source' and --viral-source
 is 'vmetadata --source'. --platform filters the sequencing platform with
 --reads, while the global --platform sets the container platform.
 
@@ -52,7 +52,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--platform` | `any` | With --reads: any, illumina, ont or pacbio. |
 | `--max-runs` |  | With --reads: keep at most N runs, the largest by bases. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-d`, `--dataset` | `rep` | all or rep. |
+| `-d`, `--dataset` | `rep` | GTDB dataset: all or rep. |
 | `-l`, `--level` |  | family, genus or species. |
 | `-tf`, `--target-family` |  | Restrict the selection to this family. |
 | `-tg`, `--target-genus` |  | Restrict the selection to this genus. |
@@ -63,14 +63,14 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
-| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
+| `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
 | `--target` |  | Virus taxon (viral). |
 | `--viral-source` | `ncbi_virus` | ncbi_virus or bvbrc. |
 | `--complete-only` | off | ncbi_virus: only COMPLETE sequences (viral). |
 | `--host` |  | ncbi_virus: restrict to a host species (viral). |
 | `--released-after` |  | ncbi_virus: MM/DD/YYYY (viral). |
 | `--group-segments` | off | Group viral segments. |
-| `--keep-files` | off | Keep download and scratch intermediates. |
+| `--keep-files` | off | Keep the genome-download intermediates (bacterial chain). |
 | `--tool` | `skder` | auto, drep, galah, skder, sourmash. |
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
@@ -93,7 +93,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates (0 = off; IQ-TREE needs >=1000). |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--node-basename` |  | Name internal nodes <basename><n> instead of by content hash. |
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
@@ -123,7 +123,7 @@ The --source option is called --metadata-source in 'run'.
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `-d`, `--dataset` | required | all or rep. |
+| `-d`, `--dataset` | required | GTDB dataset: all or rep. |
 | `-l`, `--level` | required | family, genus or species. |
 | `--source` | `tsv` | tsv (download full table) or api (GTDB API, target only). |
 | `-r`, `--release` |  | GTDB release (tsv source). |
@@ -134,7 +134,7 @@ The --source option is called --metadata-source in 'run'.
 | `--outgroup-accession` |  | Accession to fetch and set aside as the outgroup. |
 | `--metadata-path` |  | Use this GTDB metadata table instead of downloading. |
 | `--nodownload` | off | Reuse a GTDB table already present in the workdir. |
-| `--limit` |  | Keep at most N genomes, round-robin over species by CheckM quality. |
+| `--limit` |  | Keep at most N GTDB genomes, round-robin over species by CheckM quality. |
 | `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
 
 ### genome
@@ -308,7 +308,7 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 
 ### tree2tax
@@ -484,7 +484,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
-| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
+| `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |

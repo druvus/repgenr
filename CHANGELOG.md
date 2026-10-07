@@ -116,8 +116,9 @@ All notable changes to RepGenR are documented here. The format follows
 
 ### Changed
 - One help string per shared flag: duplicated option texts are now shared
-  constants, so `run` and the single commands read the same. The `--mask` help
-  names the `--msa-source snptype` condition everywhere. The known option-name
+  constants, so `run` and the single commands read the same. `--mask` lists
+  the registered maskers on snptype, phylo, run and phylo-build, and the three
+  alignment commands say it needs `--msa-source snptype`. The known option-name
   differences (`--tool`, `--platform`, `--metadata-source`, `--viral-source`,
   and `--outgroup-accession` on the step commands) are described in the
   command help and the reference. No option was renamed.

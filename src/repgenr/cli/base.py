@@ -54,8 +54,8 @@ HELP_GTDB_RELEASE = "GTDB release (tsv source)."
 HELP_GTDB_VERSION = "GTDB table: bac120 or ar53 (tsv source)."
 HELP_METADATA_PATH = "Use this GTDB metadata table instead of downloading."
 HELP_NODOWNLOAD = "Reuse a GTDB table already present in the workdir."
-HELP_LIMIT = "Keep at most N genomes, round-robin over species by CheckM quality."
-HELP_DATASET = "all or rep."
+HELP_LIMIT = "Keep at most N GTDB genomes, round-robin over species by CheckM quality."
+HELP_DATASET = "GTDB dataset: all or rep."
 HELP_LEVEL = "family, genus or species."
 HELP_ALL_GENOMES = "Use all genomes, not only the representatives."
 HELP_BOOTSTRAP = "Bootstrap replicates (0 = off; IQ-TREE needs >=1000)."
@@ -357,6 +357,11 @@ def _mask_help() -> str:
     return tool_choices_help(
         registry, auto=False, prefix="Recombination masking of the SNP alignment: none, "
     )
+
+
+def _mask_help_msa() -> str:
+    """--mask help on the commands where it applies only with --msa-source snptype."""
+    return _mask_help() + " Needs --msa-source snptype."
 
 
 def _require_choice(value: str, choices: AbstractSet[str], label: str) -> None:

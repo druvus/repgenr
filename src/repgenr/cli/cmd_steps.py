@@ -40,7 +40,7 @@ from .base import (
     _assembler_help,
     _classifier_help,
     _derep_help,
-    _mask_help,
+    _mask_help_msa,
     _parse_key_values,
     _polisher_help,
     _read_path_fofn,
@@ -162,7 +162,7 @@ def phylo_build_cmd(
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
-    mask: str = typer.Option("none", "--mask", help=_mask_help()),
+    mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
     msa_only: bool = typer.Option(
         False,
         "--msa-only",

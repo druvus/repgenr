@@ -30,7 +30,6 @@ from .base import (
     HELP_GTDB_RELEASE,
     HELP_GTDB_VERSION,
     HELP_INCLUDE_DEREPLICATED,
-    HELP_KEEP_FILES,
     HELP_KEEPER,
     HELP_LEVEL,
     HELP_LIMIT,
@@ -64,7 +63,7 @@ from .base import (
     _aligner_help,
     _assembler_help,
     _derep_help,
-    _mask_help,
+    _mask_help_msa,
     _parse_key_values,
     _require_choice,
     _run,
@@ -242,7 +241,9 @@ def run(
     ),
     group_segments: bool = typer.Option(False, "--group-segments", help="Group viral segments."),
     # --- genome download ---
-    keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    keep_files: bool = typer.Option(
+        False, "--keep-files", help="Keep the genome-download intermediates (bacterial chain)."
+    ),
     # --- dereplication ---
     derep_tool: str = typer.Option("skder", "--tool", help=_derep_help()),
     primary_ani: float = typer.Option(0.90, "--primary-ani", help=HELP_PRIMARY_ANI),
@@ -285,7 +286,7 @@ def run(
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
-    mask: str = typer.Option("none", "--mask", help=_mask_help()),
+    mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
     # --- taxonomy output ---
     node_basename: str | None = typer.Option(
         None,
@@ -327,7 +328,7 @@ def run(
 
     Some option names differ from the single commands. Here --tool selects the
     dereplicator, while 'snptype --tool' selects the SNP typer (--snptyper on
-    phylo and run). --metadata-source is 'metadata --source' and --viral-source
+    phylo, run and phylo-build). --metadata-source is 'metadata --source' and --viral-source
     is 'vmetadata --source'. --platform filters the sequencing platform with
     --reads, while the global --platform sets the container platform.
     """

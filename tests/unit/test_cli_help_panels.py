@@ -80,11 +80,11 @@ _STEP_VERSIONS = [
 SHARED_FLAGS: list[tuple[str, str, str]] = (
     [("metadata", "run", f) for f in ("--gtdb-version", "--release", "--metadata-path")]
     + [("metadata", "run", f) for f in ("--nodownload", "--limit", "--dataset", "--level")]
-    + [("snptype", "phylo", f) for f in ("--all-genomes", "--reference", "--mask")]
+    + [("snptype", "phylo", f) for f in ("--all-genomes", "--reference")]
     + [("snptype", "phylo", "--allow-incomplete")]
     + [("phylo", "run", f) for f in ("--all-genomes", "--no-outgroup", "--bootstrap")]
     + [("phylo", "run", f) for f in ("--reference", "--msa-source", "--aligner-arg", "--mask")]
-    + [("phylo", "run", "--allow-incomplete"), ("snptype", "run", "--mask")]
+    + [("phylo", "run", "--allow-incomplete")]
     + [("phylo", "phylo-build", f) for f in ("--no-outgroup", "--bootstrap", "--reference")]
     + [("phylo", "phylo-build", f) for f in ("--msa-source", "--aligner-arg", "--mask")]
     + [("dereplicate", "run", f) for f in ("--tool-arg", "--keeper", "--pre-primary-ani")]
@@ -99,7 +99,7 @@ SHARED_FLAGS: list[tuple[str, str, str]] = (
     + [("tree2tax", "tree2tax-relations", f) for f in ("--root-name", "--include-dereplicated")]
     + [("tree2tax", "run", f) for f in ("--collapse-support", "--collapse-length")]
     + [("tree2tax", "tree2tax-relations", f) for f in ("--collapse-support", "--collapse-length")]
-    + [("genome", "run", "--keep-files"), ("genome", "genome-fetch", "--keep-files")]
+    + [("genome", "genome-fetch", "--keep-files")]
     + [("metadata", "run", "--workdir"), ("dereplicate", "phylo", "--workdir")]
     + [("genome-fetch", c, "--versions-out") for c in _STEP_VERSIONS]
 )
