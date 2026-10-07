@@ -87,6 +87,7 @@ def run_select(
         tool_versions, outgroup_id = _determine_outgroup(
             ctx, records, sequences, base, kept, length_range, params, logger
         )
+    _outgroup.clear_stale_outgroup(ctx, f"{outgroup_id}.fasta" if outgroup_id else None)
     if outgroup_id is not None:
         og_taxid = next((r.taxid for r in records if r.name == outgroup_id), "")
         rows.append(_selection_row(outgroup_id, og_taxid, ncbi, is_outgroup=True))

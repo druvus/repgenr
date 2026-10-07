@@ -105,7 +105,9 @@ def run_records(
         og, tool_versions = _determine_outgroup_records(
             ctx, records, kept, (lo, hi), params, seqs, logger
         )
-    if og is not None:
+    if og is None:
+        _outgroup.clear_stale_outgroup(ctx, None)
+    else:
         selection_rows.append(
             SelectionRow(
                 og.accession,
@@ -230,35 +232,90 @@ def _segment_labels(recs) -> set[str]:
     return {r.segment for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"}
 
 
+def _segment_rank(r) -> tuple:
+    """Which of several records of one segment an isolate keeps: complete
+    first, then the longest, then the lowest accession (deterministic)."""
+    return (r.completeness != "COMPLETE", -r.length, r.accession)
+
+
+def _isolate_segment_sets(records, logger):
+    """Split records into isolate segment sets and singletons.
+
+    Records group by (species, isolate): isolate names repeat across species
+    (live, Mammarenavirus: 'Acar 3080' carries a Lassa S and a Mobala L), so
+    the name alone concatenated two species. A group is a segment set only
+    with at least two distinct segment labels; within it, an unlabelled record
+    stays a singleton and a segment submitted more than once (Lassa 'Josiah':
+    three L and three S records) is kept once.
+    """
+    by_key: dict[tuple[str, str], list] = {}
+    singletons: list = []
+    for r in records:
+        if r.isolate:
+            by_key.setdefault((r.species, r.isolate), []).append(r)
+        else:
+            singletons.append(r)
+    groups: dict[tuple[str, str], list] = {}
+    duplicates = 0
+    for key, recs in by_key.items():
+        labelled = [r for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"]
+        if len(_segment_labels(recs)) < 2:
+            singletons.extend(recs)
+            continue
+        singletons.extend(r for r in recs if r not in labelled)
+        per_segment: dict[str, list] = {}
+        for r in labelled:
+            per_segment.setdefault(r.segment, []).append(r)
+        kept = [min(rs, key=_segment_rank) for rs in per_segment.values()]
+        duplicates += len(labelled) - len(kept)
+        groups[key] = kept
+    if duplicates:
+        logger.info(
+            "Left out %d repeated segment record(s): each isolate keeps one record per segment",
+            duplicates,
+        )
+    return groups, singletons
+
+
+def _isolate_tokens(groups) -> dict[tuple[str, str], str]:
+    """A unique accession-like token per isolate group.
+
+    Two groups whose names sanitise alike ('Candid #1' and 'Candid-1') or that
+    share an isolate name across species get the first member accession
+    appended, so filenames and manifest accessions never collide.
+    """
+    base = {key: _isolate_token(key[1]) for key in groups}
+    counts: dict[str, int] = {}
+    for token in base.values():
+        counts[token] = counts.get(token, 0) + 1
+    out: dict[tuple[str, str], str] = {}
+    for key, token in base.items():
+        if counts[token] > 1:
+            first = min(r.accession for r in groups[key])
+            token = f"{token}-{re.sub(r'[^A-Za-z0-9.-]', '', first)}"
+        out[key] = token
+    return out
+
+
 def _write_isolate_groups(genomes_dir, records, seqs, logger, segments=None):
     """Combine each isolate's segments into one genome; keep singletons as-is.
 
-    Records sharing an ``isolate`` name (segmented viruses) are concatenated in
-    descending length order (a deterministic, segment-number-free ordering) into a
-    single canonical genome; isolates with one sequence (and records without an
-    isolate) are written individually.
+    An isolate's segments (one record per segment, see
+    :func:`_isolate_segment_sets`) are concatenated in descending length order
+    (a deterministic, segment-number-free ordering) into a single canonical
+    genome; every other record is written individually.
     """
-    groups: dict[str, list] = {}
-    singletons: list = []
-    for r in records:
-        (groups.setdefault(r.isolate, []) if r.isolate else singletons).append(r)
-    for iso, recs in list(groups.items()):
-        # An isolate is a segment set only when its records carry at least two
-        # distinct segment labels. NCBI marks every non-segmented record
-        # "ANONYMOUS", and isolate names repeat across re-submissions (or are
-        # junk such as "RNA"), so grouping on the name alone concatenated
-        # whole genomes of non-segmented viruses.
-        if iso and (len(recs) <= 1 or len(_segment_labels(recs)) < 2):
-            singletons.extend(recs)
-            del groups[iso]
+    groups, singletons = _isolate_segment_sets(records, logger)
+    tokens = _isolate_tokens(groups)
 
     rows: list[SelectionRow] = []
     grouped = 0
-    for iso, recs in groups.items():
+    for key, recs in groups.items():
+        iso = key[1]
         rep = recs[0]
-        acc = _isolate_token(iso)
+        acc = tokens[key]
         name = genome_filename(rep.family, rep.genus, rep.species, acc)
-        ordered = sorted(recs, key=lambda r: -r.length)
+        ordered = sorted(recs, key=lambda r: (-r.length, r.accession))
         seq = "".join(str(seqs[r.accession].seq) for r in ordered)
         (genomes_dir / name).write_text(f">{acc} {iso} ({len(ordered)} segments)\n{seq}\n")
         rows.append(SelectionRow(acc, rep.family, rep.genus, rep.species, False, name))
@@ -300,21 +357,29 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
         for sp, rs in cand_by_species.items()
         if len(rs) >= params.outgroup_candidates_taxid_min_genomes
     }
+    # The tool versions are recorded only when the distance matrix ran.
     if not candidates:
         logger.warning("No outgroup candidates found; proceeding without an outgroup.")
-        return None, versions
+        return None, {}
 
     outgroup_wd, gdir = _outgroup.prepare_workdir(ctx)
     lo, hi = length_range
     mid = (lo + hi) / 2
     rec_by_acc: dict[str, VirusRecord] = {}
 
+    def _fits(length: int) -> bool:
+        # Grouped isolates mix segments of very different lengths, so the
+        # window is their whole span widened by the tolerance; a
+        # single-record selection uses its midpoint plus/minus the tolerance.
+        tolerance = _outgroup.RECORDS_LENGTH_TOLERANCE
+        if params.group_segments:
+            return lo * (1 - tolerance) <= length <= hi * (1 + tolerance)
+        return _outgroup.within_length_tolerance(length, mid, tolerance)
+
     def _emit(prefix: str, recs: list, cap: int) -> None:
         written = 0
         for r in recs:
-            if written >= cap or not _outgroup.within_length_tolerance(
-                r.length, mid, _outgroup.RECORDS_LENGTH_TOLERANCE
-            ):
+            if written >= cap or not _fits(r.length):
                 continue
             (gdir / f"{prefix}_{r.accession}.fasta").write_text(
                 f">{r.accession}\n{seqs[r.accession].seq}\n"
@@ -329,7 +394,8 @@ def _determine_outgroup_records(ctx, records, kept, length_range, params, seqs, 
     genome_files = sorted(gdir.glob("*.fasta"))
     if len([f for f in genome_files if f.name.startswith("O_")]) == 0:
         logger.warning("No length-compatible outgroup candidates; proceeding without one.")
-        return None, versions
+        _outgroup.cleanup_workdir(outgroup_wd, params.keep_files)
+        return None, {}
     matrix = _outgroup.run_distance_matrix(builder, genome_files, int(mid), outgroup_wd, logger)
     label = select_outgroup_from_matrix(matrix, logger) if matrix.exists() else None
     if label is None:
@@ -367,9 +433,7 @@ def _write_outgroup(ctx, og, seqs, logger) -> None:
     ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
     name = genome_filename(og.family, og.genus, og.species, og.accession)
     # Remove outgroups from earlier selections before writing the current one.
-    for stale in ctx.outgroup_dir.iterdir():
-        if stale.is_file() and stale.name != name and not stale.name.startswith("."):
-            stale.unlink()
+    _outgroup.clear_stale_outgroup(ctx, name)
     rec = seqs[og.accession]
     (ctx.outgroup_dir / name).write_text(f">{rec.description}\n{rec.seq}\n")
     (ctx.workdir / "outgroup_accession.txt").write_text(og.accession + "\n")

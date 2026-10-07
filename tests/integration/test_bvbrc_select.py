@@ -200,3 +200,25 @@ def test_run_select_crash_mid_write_leaves_the_previous_genomes_intact(workdir: 
         bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
     assert {p.name: p.read_text() for p in ctx.genomes_dir.iterdir()} == before
     assert not [p for p in workdir.iterdir() if "staging" in p.name]
+
+
+def test_run_select_without_outgroup_removes_an_earlier_outgroup(workdir: Path) -> None:
+    """A later --no-outgroup run leaves no outgroup behind for phylo to root on."""
+    ctx = WorkdirContext(workdir, create=True)
+    download_wd = ctx.workdir / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    fasta = download_wd / "download.fa"
+    fasta.write_text(_FASTA)
+    base_tsv, ncbi_tsv = _write_metadata(download_wd)
+    pinned = VgenomeParams(
+        target_genus="mastadenovirus", length_range="250-350", outgroup_accession="99999.1"
+    )
+    bvbrc.run_select(ctx, pinned, fasta, base_tsv, ncbi_tsv, _LOG)
+    stale = ctx.outgroup_dir / "older_run.fasta"
+    stale.write_text(">x\nACGT\n")
+    bvbrc.run_select(ctx, pinned, fasta, base_tsv, ncbi_tsv, _LOG)
+    assert [p.name for p in ctx.outgroup_dir.iterdir()] == ["acc3.fasta"]
+    params = VgenomeParams(target_genus="mastadenovirus", no_outgroup=True, length_range="250-350")
+    bvbrc.run_select(ctx, params, fasta, base_tsv, ncbi_tsv, _LOG)
+    assert not (workdir / "outgroup_accession.txt").exists()
+    assert not list(ctx.outgroup_dir.iterdir())

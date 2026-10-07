@@ -118,3 +118,18 @@ def cleanup_workdir(outgroup_wd: Path, keep_files: bool) -> None:
     """Remove the outgroup scratch dir unless the user asked to keep it."""
     if not keep_files:
         shutil.rmtree(outgroup_wd, ignore_errors=True)
+
+
+def clear_stale_outgroup(ctx, keep: str | None) -> None:
+    """Leave only the current outgroup under outgroup/.
+
+    ``keep`` is the current outgroup's filename, or None when this run chose
+    none (--no-outgroup, or no candidate): outgroup_accession.txt is then
+    removed too, so later stages never root on an earlier run's outgroup.
+    """
+    if ctx.outgroup_dir.is_dir():
+        for path in ctx.outgroup_dir.iterdir():
+            if path.is_file() and path.name != keep and not path.name.startswith("."):
+                path.unlink()
+    if keep is None:
+        (ctx.workdir / "outgroup_accession.txt").unlink(missing_ok=True)
