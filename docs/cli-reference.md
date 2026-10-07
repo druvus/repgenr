@@ -373,6 +373,8 @@ Store, load, list or delete named dereplication runs.
 
 List the available pluggable tools in each family.
 
+A tool that declares a recommended scale is shown as 'name (up to N
+genomes)'; auto-selection and the scale warnings use the same limit.
 With --check, every adapter's required binaries are looked up (version
 floors included) and reported per tool, so an environment can be
 verified before a run without a working directory.

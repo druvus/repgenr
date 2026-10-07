@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -209,6 +210,17 @@ def derep_stock(
     _run("derep_stock", workdir, build)
 
 
+def _tool_label(reg: Any, name: str) -> str:
+    """The name, plus the adapter's declared genome limit when it has one."""
+    from ..core.plugins import _capabilities_of
+
+    if reg.is_broken(name):
+        return f"{name} (broken)"
+    cap = _capabilities_of(reg, name)
+    limit = None if cap is None else cap.recommended_max_genomes
+    return name if limit is None else f"{name} (up to {limit} genomes)"
+
+
 @app.command(name="list-tools", rich_help_panel=PANEL_ENV)
 def list_tools(
     check: bool = typer.Option(
@@ -219,6 +231,8 @@ def list_tools(
 ) -> None:
     """List the available pluggable tools in each family.
 
+    A tool that declares a recommended scale is shown as 'name (up to N
+    genomes)'; auto-selection and the scale warnings use the same limit.
     With --check, every adapter's required binaries are looked up (version
     floors included) and reported per tool, so an environment can be
     verified before a run without a working directory.
@@ -242,7 +256,7 @@ def list_tools(
         ("classifiers", classifiers),
         ("polishers", polishers),
     ):
-        entries = [f"{name} (broken)" if reg.is_broken(name) else name for name in reg.names()]
+        entries = [_tool_label(reg, name) for name in reg.names()]
         typer.echo(f"{label}: {', '.join(entries) or '(none)'}")
         if not check:
             continue
