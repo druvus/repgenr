@@ -148,12 +148,13 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     versions = {k: v for o in plan for k, v in o.versions.items()}
     versions.update(_preflight(plan, logger))
     pending = [o for o in plan if o.excused is None and o.stats is None]
-    check_free_disk(
-        ctx.workdir,
-        sum(sum(o.row.fastq_bytes) for o in pending) * _DISK_FACTOR,
-        logger,
-        what=f"assemble {len(pending)} sequencing runs",
-    )
+    if pending:  # a rerun over finished runs downloads nothing
+        check_free_disk(
+            ctx.workdir,
+            sum(sum(o.row.fastq_bytes) for o in pending) * _DISK_FACTOR,
+            logger,
+            what=f"assemble {len(pending)} sequencing runs",
+        )
     requested = params.jobs if params.jobs is not None else _default_jobs(pending)
     jobs = max(1, min(requested, len(pending) or 1))
     threads_each = max(1, params.threads // jobs)

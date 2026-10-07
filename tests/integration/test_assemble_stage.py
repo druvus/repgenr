@@ -654,3 +654,17 @@ def test_a_run_without_long_enough_contigs_leaves_no_reads(
         run(ctx, AssembleParams(assembler="fakeasm", min_contig_length=5000))
     assert not (ctx.scratch_dir / "assemble" / "SRR1").exists()
     assert not (workdir / "assemblies" / "SRR1" / "contigs.fasta").exists()
+
+
+def test_a_rerun_with_nothing_to_fetch_needs_no_free_disk(
+    workdir, tmp_path, fake_assembler, monkeypatch
+) -> None:
+    """A QC or classification rerun over finished runs downloads nothing."""
+    import shutil as _shutil
+    from collections import namedtuple
+
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(_shutil, "disk_usage", lambda path: usage(1, 1, 1))
+    assert run(ctx, AssembleParams(assembler="fakeasm", max_contamination=5.0)) == 1
