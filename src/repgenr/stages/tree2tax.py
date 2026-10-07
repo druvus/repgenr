@@ -184,6 +184,15 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
     tree_file = ctx.tree_dir / TREE_NWK
     if not tree_file.exists():
         raise WorkdirError(f"Tree not found: {tree_file}. Run the phylo stage first.")
+    phylo = ctx.config.stages.get("phylo")
+    if phylo is not None and not phylo.completed:
+        # tree.nwk is replaced only when a build succeeds, so the file is a
+        # whole tree, but from an earlier phylo run than the one recorded.
+        logger.warning(
+            "The last phylo run did not finish; %s is the tree of an earlier run. "
+            "Re-run phylo before tree2tax to use the current settings.",
+            tree_file,
+        )
 
     outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}

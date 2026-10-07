@@ -228,3 +228,21 @@ def test_tree2tax_rejects_two_concatenated_trees(workdir: Path) -> None:
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(WorkdirError, match=r"more than one tree"):
         tree2tax_run(ctx, Tree2taxParams())
+
+
+def test_tree2tax_warns_when_the_last_phylo_run_did_not_finish(workdir: Path, caplog) -> None:
+    """An interrupted phylo keeps the previous tree.nwk; tree2tax says so."""
+    import logging
+
+    _setup(workdir)
+    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-t2t"))
+    ctx.config.record_stage("phylo", tool="fasttree", completed=None)
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_run(ctx, Tree2taxParams())
+    assert any("did not finish" in r.getMessage() for r in caplog.records)
+
+    caplog.clear()
+    ctx.config.record_stage("phylo", tool="fasttree", completed="2026-10-07T00:00:00")
+    with caplog.at_level(logging.WARNING, logger="test-t2t"):
+        tree2tax_run(ctx, Tree2taxParams())
+    assert not any("did not finish" in r.getMessage() for r in caplog.records)
