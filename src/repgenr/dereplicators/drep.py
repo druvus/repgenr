@@ -85,6 +85,7 @@ class DrepDereplicator(Dereplicator):
         return CompareResult(
             similarity_csv=mdb if mdb.exists() else None,
             dendrogram=dendrogram if dendrogram.exists() else None,
+            measure="MASH ANI",
         )
 
     def dereplicate(
