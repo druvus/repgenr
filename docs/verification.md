@@ -390,7 +390,9 @@ they are recorded here and not fixed.
 
 | Area | Observation |
 |---|---|
+| Phylogeny | cactus renames its samples ('.' to '_'), while `tree2tax` resolves the outgroup leaf by file stem, so with a versioned accession such as `GCF_000001.1` the outgroup never matches a leaf. tree2tax warned and left the tree unrooted; it now exits 3 naming the outgroup. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
+| assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
 | Network | The BV-BRC path uses FTPS directly and does not use HTTP proxy settings, and `vmetadata --list` needs the network whatever `--source` says. A BV-BRC group download is written to a temporary file and renamed after the size check, so an interrupted transfer leaves no partial `download.fa`. |
 | Tests | `--live-config <path>` into the main checkout from a worktree loads two conftest files and fails; `--live-config=<path>` works. |
 | Environment | dRep 3.4.5 fails on exFAT volumes because macOS writes `._*` files into its cache; use an APFS workdir for glance and `dereplicate --tool drep`. |
