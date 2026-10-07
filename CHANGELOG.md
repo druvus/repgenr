@@ -147,6 +147,21 @@ All notable changes to RepGenR are documented here. The format follows
 - `vgenome --group-segments` groups records per (species, isolate) and keeps
   one record per segment; its outgroup search uses the kept records' length
   span widened by 15 percent.
+- (#223) On SIGTERM or SIGHUP, repgenr stops the external tools it is running,
+  starts no queued tool, removes the partial output and exits with 128 plus
+  the signal number (143 for SIGTERM, 129 for SIGHUP); the stage stays
+  marked as interrupted. Before, the interpreter ended at once and left the
+  tool running (seen with FastTree). A pool of parallel tasks
+  (`parallel_map`) now cancels its queued items when one task fails.
+- `run` (#223): `--with-snptype --msa-source snptype` runs the `snptype` stage after
+  `phylo` instead of before it, so the tables left in `snp/` are the ones the
+  `snptype` record describes. As a consequence, a later `phylo` run that
+  changes only the tree builder types the genomes again, since `snp/` no
+  longer holds phylo's own alignment.
+- `phylo` (#223): the MSA stamp version is 3: an alignment cached before the ParSNP and
+  cactus record names changed is rebuilt once.
+- `phylo` (#223) warns when an alignment-free tree builder (mashtree, sourmash) is
+  given `--msa-source snptype` or `--mask`, which it does not use.
 - `glance --tool` defaults to `auto`: dRep when it can run (on the `PATH` or
   through the container backend, the test `dereplicate --tool auto` uses),
   sourmash otherwise. The log names the tool picked, and the stage record and
@@ -320,6 +335,23 @@ All notable changes to RepGenR are documented here. The format follows
   without an outgroup left an earlier outgroup in `outgroup/` and
   `outgroup_accession.txt`; mashtree was recorded as the tool when it did not
   run.
+- `tree2tax` and `doctor` (#223) refuse a `tree.nwk` that holds more than one tree;
+  before, two concatenated trees passed and tree2tax used the first.
+- `snptype`, `phylo` (#223): ParSNP alignment records are named by genome stem (harvesttools wrote
+  `x.fasta` and `x.fasta.ref`), and cactus alignment records are renamed
+  back from cactus sample names ('.' replaced by '_'). With either tool,
+  tree2tax could not find the outgroup leaf and exited 3, IQ-TREE's `-o` missed
+  a versioned outgroup (cactus), and the Gubbins outgroup exclusion missed it
+  (ParSNP). phylo also writes the input names back into `tree.nwk` when a
+  tool renamed leaves that its leaf check accepts, changing only those labels.
+  ParSNP query genomes are hardlinked into scratch instead of copied.
+- `phylo --msa-source snptype` (#223) removes the `snptype` record, with a warning,
+  when its typing pass replaces the tables the `snptype` stage wrote in
+  `snp/`; before, the record stayed, a repeat `snptype` skipped and `doctor`
+  reported nothing.
+- `tree2tax` (#223) warns when the last phylo run did not finish, since `tree.nwk` is
+  then the tree of an earlier run. An outgroup accession that no file in the
+  outgroup directory matches is reported as such, not as a missing leaf.
 - `derep-stock --action pack` stores the completed `dereplicate` record
   (tool, parameters, tool versions, completion time) as
   `derep/stock/<name>/record.json`, and `--action unpack` re-stamps the
