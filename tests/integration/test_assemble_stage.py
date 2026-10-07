@@ -136,6 +136,24 @@ def test_an_excused_tool_failure_stays_on_one_tsv_line(
     assert reason.startswith("assembly_failed:") and "boom" in reason
 
 
+def test_auto_without_an_installed_assembler_is_a_missing_tool(
+    workdir: Path, tmp_path: Path, monkeypatch
+) -> None:
+    # A run some adapter accepts, with none of them installed, is a missing
+    # tool (exit 4), not a run excused as an unsupported platform.
+    from repgenr.assemblers import base as assemblers_base
+    from repgenr.core.errors import MissingBinaryError
+
+    monkeypatch.setattr(assemblers_base, "tool_available", lambda caps: False)
+    ctx = _prepare(
+        workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "ONT1", "OXFORD_NANOPORE", "SINGLE")]
+    )
+    with pytest.raises(MissingBinaryError, match="skesa") as info:
+        run(ctx, AssembleParams(assembler="auto"))
+    assert "flye" in str(info.value)
+    assert not (workdir / EXCUSED_RUNS_TSV).exists()
+
+
 def test_outgroup_fasta_is_staged(workdir: Path, tmp_path: Path, fake_assembler) -> None:
     og = tmp_path / "Fam_Gen_sp_GCF_000009.1.fasta"
     og.write_text(">og\nACGT\n", encoding="utf-8")
