@@ -585,3 +585,61 @@ def test_classifier_sketch_request_follows_its_extras() -> None:
     adapter = registry.create("sourmash")
     assert adapter.sketch_request({}) == (31, 1000)
     assert adapter.sketch_request({"ksize": "21", "scaled": "500"}) == (21, 500)
+
+
+def test_a_first_consumer_hashes_each_genome_once(tmp_path, fake_sourmash, monkeypatch) -> None:
+    ctx = _workdir(tmp_path / "wd")
+    genomes = [*_genomes(ctx), next(ctx.outgroup_dir.glob("*.fasta"))]
+    hashed: list[str] = []
+    real = sketches.file_digest
+
+    def counting(path):  # noqa: ANN001, ANN202
+        hashed.append(Path(path).name)
+        return real(path)
+
+    monkeypatch.setattr(sketches, "file_digest", counting)
+    got = resolve_sketches(ctx, genomes, _LOG, 2, consumer="t")
+    assert len(got) == 4 and len(fake_sourmash.calls) == 4
+    assert sorted(hashed) == sorted(g.name for g in genomes)
+
+
+def test_temporary_sketch_names_are_unique_and_cleared(tmp_path) -> None:
+    directory = tmp_path / "sketches"
+    directory.mkdir()
+    out = directory / "x.sig.zip"
+    first, second = sketches._partial(out), sketches._partial(out)
+    assert first != second and not first.exists()
+    assert first.name.startswith(".x.partial.") and first.name.endswith(".sig.zip")
+    first.write_text("half", encoding="utf-8")
+    (directory / ".y.partial.sig.zip").write_text("half", encoding="utf-8")  # earlier form
+    out.write_text("done", encoding="utf-8")
+    sketches._clear_partials(directory)
+    assert sorted(p.name for p in directory.iterdir()) == ["x.sig.zip"]
+
+
+def test_the_digest_cache_keeps_only_genomes_of_the_set(tmp_path, fake_sourmash) -> None:
+    import json
+
+    ctx = _workdir(tmp_path / "wd", outgroup=False)
+    outside = tmp_path / "linked" / "Fam_Gen_sp_GCA_000003.1.fasta"  # a linked genome
+    outside.parent.mkdir()
+    outside.write_text(">x\nACGTACGT\n", encoding="utf-8")
+    link = ctx.genomes_dir / outside.name
+    link.symlink_to(outside)
+    records = [
+        GenomeRecord(
+            f"GCA_{i:06d}.1", f"Fam_Gen_sp_GCA_{i:06d}.1.fasta", "local", "Fam", "Gen", "sp"
+        )
+        for i in range(4)
+    ]
+    ctx.manifest.replace_genomes(records)
+    resolve_sketches(ctx, _genomes(ctx), _LOG, 2, consumer="t")
+    cache = ctx.workdir / "sketches" / sketches.DIGESTS_JSON
+    assert str(outside.resolve()) in json.loads(cache.read_text())
+    # The linked genome leaves the set; its file still exists elsewhere.
+    link.unlink()
+    ctx.manifest.replace_genomes(records[:3])
+    resolve_sketches(ctx, _genomes(ctx), _LOG, 2, consumer="t")
+    entries = json.loads(cache.read_text())
+    assert str(outside.resolve()) not in entries and len(entries) == 3
+    assert not [p for p in cache.parent.iterdir() if p.name.endswith(".tmp")]

@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import sqlite3
+import tempfile
 import threading
 from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
@@ -264,8 +265,24 @@ def _is_current(rec: SketchRecord | None, rel: str, digest: str, out: Path) -> b
 
 
 def _partial(out: Path) -> Path:
+    """A unique hidden temporary name beside ``out`` (``.<name>.partial.<random>.sig.zip``).
+
+    Unique per call, so two processes writing the same sketch never share a
+    temporary file; each renames its own into place. The name is reserved by
+    mkstemp and the empty file removed again, because sourmash and a hard
+    link both need to create the file themselves.
+    """
     stem = out.name[: -len(SKETCH_SUFFIX)]
-    return out.with_name(f".{stem}{_PARTIAL}{SKETCH_SUFFIX}")
+    fd, name = tempfile.mkstemp(dir=out.parent, prefix=f".{stem}{_PARTIAL}.", suffix=SKETCH_SUFFIX)
+    os.close(fd)
+    tmp = Path(name)
+    tmp.unlink()
+    return tmp
+
+
+def _is_partial(name: str) -> bool:
+    # The unique form, and the fixed .<name>.partial.sig.zip of earlier releases.
+    return name.startswith(".") and _PARTIAL in name and name.endswith(SKETCH_SUFFIX)
 
 
 def _clear_partials(directory: Path) -> None:
@@ -273,7 +290,7 @@ def _clear_partials(directory: Path) -> None:
     if not directory.is_dir():
         return
     for entry in directory.iterdir():
-        if entry.name.startswith(".") and entry.name.endswith(_PARTIAL + SKETCH_SUFFIX):
+        if _is_partial(entry.name):
             entry.unlink(missing_ok=True)
 
 
@@ -291,7 +308,6 @@ def _sketch_one(
     target: SketchTarget, out: Path, logger: logging.Logger, *, name: str | None = None
 ) -> None:
     tmp = _partial(out)
-    tmp.unlink(missing_ok=True)
     try:
         run_tool(
             SOURMASH_TOOL,
@@ -312,7 +328,6 @@ def _sketch_one(
 
 def _copy_one(source: Path, out: Path, logger: logging.Logger, rename: str | None = None) -> None:
     tmp = _partial(out)
-    tmp.unlink(missing_ok=True)
     try:
         if rename is None:
             process.link_or_copy(source, tmp)
@@ -341,6 +356,7 @@ def sketch_genomes(
     *,
     force: bool = False,
     reuse: Mapping[str, SketchSource] | None = None,
+    digests: _DigestCache | None = None,
 ) -> SketchSummary:
     """Sketch the genomes whose sketch is missing or stale, ``threads`` at a time.
 
@@ -361,7 +377,8 @@ def sketch_genomes(
     reuse = reuse or {}
     summary = SketchSummary()
     # Unchanged genomes (size, mtime) are not hashed again; --force hashes all.
-    cache = _DigestCache(directory / DIGESTS_JSON)
+    # A caller that hashed already passes its cache (``digests``) and saves it.
+    cache = digests if digests is not None else _DigestCache(directory / DIGESTS_JSON)
 
     def work(target: SketchTarget) -> tuple[SketchTarget, str, SketchRecord]:
         out = sketch_path(ctx, target.path)
@@ -424,15 +441,18 @@ def sketch_genomes(
         pool.shutdown(wait=True, cancel_futures=True)
         raise
     pool.shutdown(wait=True)
-    _save_cache(cache, logger)
+    if digests is None:
+        _save_cache(
+            cache, [*(t.path for t in sketch_targets(ctx)), *(t.path for t in genomes)], logger
+        )
     if failures:
         raise failures[0]
     return summary
 
 
-def _save_cache(cache: _DigestCache, logger: logging.Logger) -> None:
+def _save_cache(cache: _DigestCache, keep: Collection[Path], logger: logging.Logger) -> None:
     try:
-        cache.save()
+        cache.save(keep)
     except OSError as exc:  # a cache, not a deliverable: the next run hashes again
         logger.debug("Digest cache not written: %s", exc)
 
@@ -738,7 +758,9 @@ def resolve_sketches(
     not part of the set (no manifest row, not under ``outgroup/``) is left out;
     the consumer sketches it.
     """
-    known = {t.path.name: t for t in sketch_targets(ctx)}
+    all_targets = sketch_targets(ctx)
+    known = {t.path.name: t for t in all_targets}
+    known_paths = [t.path for t in all_targets]
     targets: list[SketchTarget] = []
     for genome in genomes:
         hit = known.get(genome.name)
@@ -764,7 +786,7 @@ def resolve_sketches(
     if todo:
         if tool_available(SOURMASH_TOOL):
             try:
-                sketch_genomes(ctx, todo, threads, logger)
+                sketch_genomes(ctx, todo, threads, logger, digests=cache)
             except (ToolExecutionError, WorkdirError, OSError) as exc:
                 if process.stop_requested.is_set():
                     raise
@@ -782,7 +804,7 @@ def resolve_sketches(
                 len(todo),
             )
     if (ctx.workdir / SKETCHES_DIR).is_dir():
-        _save_cache(cache, logger)
+        _save_cache(cache, [*known_paths, *(t.path for t in targets)], logger)
     left = len(genomes) - len(reused) - len(written)
     logger.info(
         "%s: sketches: %d reused, %d written%s",
@@ -801,7 +823,8 @@ class _DigestCache:
     metadata; an edit that keeps both the size and the modification time is
     therefore not seen (``repgenr --force sketch`` writes every sketch again).
     Keys are resolved paths, so a representative linked to its genome shares
-    the entry. Entries of files that no longer exist are dropped on save.
+    the entry. On save only the files of the current genome set (and those
+    just hashed) are kept.
     """
 
     def __init__(self, path: Path) -> None:
@@ -836,11 +859,28 @@ class _DigestCache:
             self.entries[key] = (st.st_size, st.st_mtime_ns, value)
         return value
 
-    def save(self) -> None:
-        kept = {k: list(v) for k, v in sorted(self.entries.items()) if Path(k).is_file()}
-        with atomic_replace(self.path) as fo:
-            json.dump(kept, fo, sort_keys=True)
-            fo.write("\n")
+    def save(self, keep: Collection[Path]) -> None:
+        """Write the entries of the files in ``keep`` (genomes of the set) that exist.
+
+        The temporary file has a unique name, so two processes saving at
+        once each replace the cache with a whole file.
+        """
+        wanted = {str(p.resolve()) for p in keep}
+        kept = {
+            k: list(v) for k, v in sorted(self.entries.items()) if k in wanted and Path(k).is_file()
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(
+            dir=self.path.parent, prefix=f"{self.path.name}.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fo:
+                json.dump(kept, fo, sort_keys=True)
+                fo.write("\n")
+            os.replace(name, self.path)
+        except BaseException:
+            Path(name).unlink(missing_ok=True)
+            raise
 
 
 def workdir_provider(
