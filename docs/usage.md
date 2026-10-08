@@ -134,11 +134,11 @@ repgenr tree2tax -wd $WD --include-dereplicated
 ```
 
 `repgenr run --genomes-dir ./my_genomes ...` runs the same local chain in
-one command; `--selection`, `--outgroup` and `--copy` pass through to
-`ingest`, and the GTDB selection flags are not needed.
+one command; `--from-workdir`, `--selection`, `--outgroup` and `--copy` pass
+through to `ingest`, and the GTDB selection flags are not needed.
 
-`--outgroup` names a genome under `--genomes-dir` (filename, stem or
-accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
+`--outgroup` names a genome under `--genomes-dir` or in a `--from-workdir`
+(filename, stem or accession) or a FASTA file anywhere; it is staged under `outgroup/` and kept
 out of the ingroup. When `--selection` also marks an outgroup row, both must
 name the same genome; otherwise `ingest` exits 2 and names both. A file from
 outside `--genomes-dir` whose name gives the filename or accession of an
@@ -197,6 +197,53 @@ copies. A changed source (files added, removed or rewritten) re-runs `ingest`
 on its next invocation, prunes genomes no longer present, and marks
 `dereplicate` and later stages for a re-run; an unchanged set keeps the
 dereplication status recorded in the manifest.
+
+#### Combining working directories
+
+`--from-workdir WD` (repeatable, alone or together with `--genomes-dir`)
+takes the genome set of an earlier working directory: the rows of its
+`selection.tsv` and the files they name under its `genomes/`. This combines
+genomes selected from GTDB in one working directory with genomes assembled
+from sequencing runs in another, so that both are dereplicated together:
+
+```bash
+# GTDB genomes
+repgenr metadata -wd WD1 --source api -d all -l species -tg francisella -ts tularensis
+repgenr genome -wd WD1
+# Assemblies from sequencing runs
+repgenr reads -wd WD2 -ts "Francisella tularensis" --platform illumina
+repgenr assemble -wd WD2 --checkm2-db /db/checkm2/uniref100.KO.1.dmnd \
+    --gtdb-sketch /db/gtdb/gtdb-rs226-reps.k31.sig.zip
+# Both sets in a third working directory
+repgenr ingest -wd WD3 --from-workdir WD1 --from-workdir WD2 --outgroup GCF_003574425.1
+repgenr dereplicate -wd WD3 --tool skder --keeper gtdb
+```
+
+What carries over from each source row is its accession, taxonomy, filename,
+CheckM completeness and contamination, and `gtdb_representative`, so
+`--keeper quality` and `--keeper gtdb` work on the combined set. The manifest
+keeps the source of each genome (`gtdb`, `sra`, `local` and so on) when the
+source working directory has a manifest, and records `local` when it does not;
+genomes from `--genomes-dir` are `local`. `--selection` applies to
+`--genomes-dir` only. Per-run files of the reads working directory
+(`assembly_stats.tsv`, `excused_runs.tsv`, `reads.tsv`) stay there and are
+not copied.
+
+The outgroup of a source working directory is not carried over; `ingest`
+logs one line for each source that had one. `--outgroup` sets the outgroup of
+the new working directory and may name a genome of any source (filename, stem
+or accession, under `genomes/` or `outgroup/` of a source working directory,
+or under `--genomes-dir`), or a FASTA file elsewhere. A genome found in two
+sources (the same accession, or the same filename with different accessions)
+stops `ingest` with exit 2 and names both sources; neither takes precedence.
+A selection row whose file is missing, or a `--from-workdir` that is the
+target working directory, also exits 2. The selection and the `genomes/`
+directory of each source are resume inputs, so a change in a source working
+directory reruns `ingest`; the source manifest is not, so a change of a
+source label alone needs `--force`.
+
+`assemble --append` is the alternative within one working directory: it adds
+the assemblies to the GTDB selection already there.
 
 ### Starting from sequencing reads
 
@@ -292,7 +339,12 @@ and reads-derived set dereplicates together. Because `metadata` and `ingest`
 replace the selection and the genome stage prunes what the manifest no
 longer lists, both refuse to re-run while appended genomes are present;
 `--drop-foreign` discards them deliberately, and `assemble --append` can put
-them back afterwards.
+them back afterwards. An `ingest` that takes the same genomes again with
+`--from-workdir` does not drop them and is not refused. Genomes with source
+`sra` that an earlier `ingest --from-workdir` brought in are not protected
+this way, unless `assemble` has also run in that working directory. To keep
+the two sets in separate working directories instead, combine them with
+`ingest --from-workdir` (see "Combining working directories").
 
 Long-read assemblies are polished with the run's own reads before the
 contig filter: `--polisher auto` (the default) runs medaka for ONT runs

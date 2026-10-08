@@ -998,6 +998,18 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: genomes/ holds one link per source FASTA
+      --from-workdir:
+        param: IngestParams.from_workdirs
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline tests in tests/integration/test_ingest_from_workdir.py'
+        observable: genomes/, selection.tsv and the manifest hold the genome sets of the
+          source workdirs, with their sources
       --selection:
         param: IngestParams.selection
         value: '{alt_file}'
@@ -1989,6 +2001,20 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_run_local_chain
         observable: ingest, dereplicate, phylo and tree2tax recorded; no metadata stage
+      --from-workdir:
+        param: IngestParams.from_workdirs
+        value: '{alt_dir}'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: forwarded to the stage builder unchanged (wiring test); the stage flag is covered
+          offline in tests/integration/test_ingest_from_workdir.py'
+        with_args:
+        - --genomes-dir
+        - '{dir}'
       --reads:
         param: 'n/a: selects the reads chain (reads and assemble replace metadata and genome); wiring test'
         validated: none

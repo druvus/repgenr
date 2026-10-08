@@ -169,6 +169,12 @@ def run(
         "--genomes-dir",
         help="Start from local genome FASTAs (the ingest chain) instead of downloading.",
     ),
+    from_workdir: list[Path] = typer.Option(
+        [],
+        "--from-workdir",
+        help="Start the ingest chain from the genome set of an earlier working directory "
+        "(selection.tsv and genomes/); repeatable, and may be combined with --genomes-dir.",
+    ),
     selection: Path | None = typer.Option(
         None,
         "--selection",
@@ -178,11 +184,14 @@ def run(
     outgroup: str | None = typer.Option(
         None,
         "--outgroup",
-        help="With --genomes-dir: the outgroup genome, a name under the directory "
-        "or a path to a FASTA file.",
+        help="With --genomes-dir or --from-workdir: the outgroup genome, a name found in "
+        "those sources or a path to a FASTA file.",
     ),
     copy: bool = typer.Option(
-        False, "--copy", help="With --genomes-dir: copy the files into genomes/ instead of linking."
+        False,
+        "--copy",
+        help="With --genomes-dir or --from-workdir: copy the files into genomes/ instead "
+        "of linking.",
     ),
     # --- selection: sequencing reads (ENA/SRA) ---
     reads: bool = typer.Option(
@@ -396,15 +405,16 @@ def run(
             extra=phylo_extra,
             on_run=True,
         )
-        local = genomes_dir is not None
+        local = genomes_dir is not None or bool(from_workdir)
         if local and viral:
             raise UserInputError(
-                "--genomes-dir starts the local chain (ingest); it cannot be combined with --viral."
+                "--genomes-dir and --from-workdir start the local chain (ingest); they cannot "
+                "be combined with --viral."
             )
         if reads and (viral or local):
             raise UserInputError(
-                "--reads starts the reads chain; it cannot be combined with --viral "
-                "or --genomes-dir."
+                "--reads starts the reads chain; it cannot be combined with --viral, "
+                "--genomes-dir or --from-workdir."
             )
         if reads:
             # Also parses --accession-file and checks that a selection is given.
@@ -448,7 +458,8 @@ def run(
             f"accession_file={accession_file}, platform={platform}, max_runs={max_runs}, "
             f"assembler={assembler}"
             if reads
-            else f"genomes_dir={genomes_dir}, selection={selection}, outgroup={outgroup}"
+            else f"genomes_dir={genomes_dir}, from_workdir={[str(w) for w in from_workdir]}, "
+            f"selection={selection}, outgroup={outgroup}"
             if local
             else f"target={target}, genus={target_genus}, species={target_species}"
             if viral
@@ -501,7 +512,8 @@ def run(
             "ingest",
             workdir,
             lambda: ingest_params(
-                genomes_dir=str(genomes_dir),
+                genomes_dir=None if genomes_dir is None else str(genomes_dir),
+                from_workdirs=[str(wd) for wd in from_workdir],
                 selection=None if selection is None else str(selection),
                 outgroup=outgroup,
                 copy=copy,

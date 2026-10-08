@@ -95,6 +95,12 @@ def _gtdb_note(params: dict) -> str:
     return ""
 
 
+def _ingest_note(params: dict) -> str:
+    """The source workdirs of an ingest that merged earlier working directories."""
+    workdirs = params.get("from_workdirs") or []
+    return f"from workdirs: {', '.join(workdirs)}" if workdirs else ""
+
+
 STATUS_SCHEMA = "repgenr.status/1"
 DOCTOR_SCHEMA = "repgenr.doctor/1"
 ENTRY_HINT = (
@@ -187,7 +193,7 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
     Shared by the text and JSON renderers of `status`. Each stage entry has
     name, in_chain, state (done, stale, interrupted or pending), reason (the
     stale reason), tool, completed, fingerprint and detail (the GTDB note of
-    metadata).
+    metadata, the source workdirs of ingest).
     """
     from ..core.config import CONFIG_FILENAME
     from ..core.doctor import holds_outputs, stale_stages
@@ -248,6 +254,8 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
         detail = None
         if stage == "metadata" and not rec.interrupted:
             detail = _gtdb_note(rec.params) or None
+        elif stage == "ingest" and not rec.interrupted:
+            detail = _ingest_note(rec.params) or None
         return {
             "name": stage,
             "in_chain": in_chain,

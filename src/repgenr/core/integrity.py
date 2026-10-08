@@ -145,19 +145,29 @@ def check_representatives_consistency(
 FOREIGN_SOURCES = frozenset({"sra"})
 
 
-def refuse_foreign_rows(ctx, stage: str, *, drop_foreign: bool, logger: logging.Logger) -> None:
+def refuse_foreign_rows(
+    ctx,
+    stage: str,
+    *,
+    drop_foreign: bool,
+    logger: logging.Logger,
+    keep: set[str] | frozenset[str] = frozenset(),
+) -> None:
     """Stop ``stage`` from silently discarding genomes another entry path appended.
 
     ``metadata`` and ``ingest`` replace the manifest and the genome stage prunes
     what the manifest no longer lists, so reads-derived genomes added with
     ``assemble --append`` would vanish. Refuse unless the user passed
-    ``--drop-foreign``, in which case say what is being dropped.
+    ``--drop-foreign``, in which case say what is being dropped. Accessions in
+    ``keep`` are not protected: ingest passes the genomes it stages again and
+    those it took earlier with ``--from-workdir`` rather than ones appended
+    in this workdir.
     """
     try:
         foreign = [
             g.accession
             for g in ctx.manifest.all_genomes(include_outgroup=True)
-            if g.source in FOREIGN_SOURCES
+            if g.source in FOREIGN_SOURCES and g.accession not in keep
         ]
     except Exception:  # no manifest yet, or an unreadable one: nothing to protect
         return

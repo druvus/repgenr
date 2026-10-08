@@ -7,6 +7,22 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `ingest --from-workdir WD` (repeatable, alone or with `--genomes-dir`;
+  also on `run`) takes the genome set of an earlier working directory: its
+  `selection.tsv` rows, with taxonomy, CheckM quality and
+  `gtdb_representative` unchanged, and the files under its `genomes/`. The
+  manifest keeps each genome's source (`gtdb`, `sra`, ...) from the source
+  manifest, or `local` without one, so a GTDB working directory and a
+  reads/assemble working directory can be combined and dereplicated together
+  with `--keeper gtdb`. The outgroup of a source is not carried over (one log
+  line per source); `--outgroup` may name a genome of any source. A genome in
+  two sources, a missing file, or the target working directory as a source
+  exits 2. The selection and `genomes/` of each source are resume inputs; the
+  ingest record lists `from_workdirs` and the genome count per source, and
+  `status` shows the source working directories. `--genomes-dir` is no longer
+  required, and `--selection` without it exits 2. The new parameter changes
+  the resume fingerprint of `ingest`, so an existing ingest record reruns
+  once.
 - `--keeper gtdb` (#252) for `dereplicate`, `run`, `bacterial`,
   `dereplicate-chunk` and `dereplicate-merge` (Nextflow `--derep_keeper gtdb`):
   within each cluster a GTDB species representative is kept; a cluster without

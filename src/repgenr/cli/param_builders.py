@@ -106,20 +106,32 @@ def _absolute(path: str) -> str:
 
 def ingest_params(
     *,
-    genomes_dir: str,
+    genomes_dir: str | None = None,
+    from_workdirs: Any = _UNSET,
     selection: Any = _UNSET,
     outgroup: Any = _UNSET,
     copy: Any = _UNSET,
     drop_foreign: Any = _UNSET,
 ) -> IngestParams:
+    from ..core.errors import UserInputError
     from ..stages.ingest import IngestParams
+
+    workdirs = [str(wd) for wd in from_workdirs] if from_workdirs is not _UNSET else []
+    if genomes_dir is None and not workdirs:
+        raise UserInputError("ingest needs --genomes-dir, --from-workdir, or both.")
+    if isinstance(selection, str) and genomes_dir is None:
+        raise UserInputError(
+            "--selection names genomes under --genomes-dir; give --genomes-dir with it "
+            "(a --from-workdir brings its own selection.tsv)."
+        )
 
     # The paths are recorded and digested as resume inputs, and doctor
     # re-derives the inputs from the record, so a relative path must not
     # depend on the directory the command was started from. abspath, not
     # resolve(): see the firmlink note in stages.ingest._stage. --outgroup is
     # made absolute only when it names a file; otherwise it is a genome name.
-    genomes_dir = _absolute(genomes_dir)
+    if genomes_dir is not None:
+        genomes_dir = _absolute(genomes_dir)
     if isinstance(selection, str):
         selection = _absolute(selection)
     if isinstance(outgroup, str) and os.path.isfile(os.path.expanduser(outgroup)):
@@ -127,6 +139,7 @@ def ingest_params(
     return _build(
         IngestParams,
         genomes_dir=genomes_dir,
+        from_workdirs=[_absolute(wd) for wd in workdirs],
         selection=selection,
         outgroup=outgroup,
         copy=copy,
