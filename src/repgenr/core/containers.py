@@ -155,6 +155,40 @@ def check_engine_ready(config: ContainerConfig | None = None) -> None:
     _ENGINE_READY.add(key)
 
 
+# Docker CPU counts per configuration (Docker Desktop runs tools in a VM whose
+# CPU count can be lower than the host's).
+_ENGINE_CPUS: dict[tuple, int] = {}
+
+
+def available_cpus(caps: ToolCapabilities) -> int:
+    """CPUs the tool sees where it runs: the host's, or the Docker engine's.
+
+    Singularity shares the host's CPUs. When Docker does not answer, the host
+    count is used.
+    """
+    host = os.cpu_count() or 1
+    config = _CONFIG
+    if config.backend != DOCKER or runs_on_host(caps):
+        return host
+    key = config.cache_key()
+    if key not in _ENGINE_CPUS:
+        count = host
+        try:
+            proc = subprocess.run(
+                [config.engine_binary(), "info", "--format", "{{.NCPU}}"],
+                capture_output=True,
+                text=True,
+                timeout=_ENGINE_TIMEOUT,
+                stdin=subprocess.DEVNULL,
+            )
+            if proc.returncode == 0 and proc.stdout.strip().isdigit():
+                count = max(1, int(proc.stdout.strip()))
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _ENGINE_CPUS[key] = count
+    return _ENGINE_CPUS[key]
+
+
 def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None) -> str | None:
     """Return the image URI for an adapter, or None to run natively.
 

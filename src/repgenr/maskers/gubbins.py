@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool, runs_on_host
+from ..core.containers import available_cpus, run_tool, runs_on_host
 from ..core.errors import ToolExecutionError, UserInputError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Masker, MaskParams
@@ -234,9 +234,21 @@ class GubbinsMasker(Masker):
         else:
             gubbins_input = cleaned
         requested = params.extra.get("gubbins_tree_builder")
+        # Gubbins hands its thread count to the tree builder, and IQ-TREE
+        # refuses more threads than CPU cores; the default is 16.
+        threads = params.threads
+        cpus = available_cpus(self.capabilities)
+        if threads > cpus:
+            logger.info(
+                "Gubbins: %d threads requested, %d CPU(s) available; using %d.",
+                threads,
+                cpus,
+                cpus,
+            )
+            threads = cpus
         tree_builder, threads = resolve_tree_builder(
             str(requested) if requested else None,
-            params.threads,
+            threads,
             logger,
             on_host=runs_on_host(self.capabilities),
         )
