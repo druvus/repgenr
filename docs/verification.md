@@ -462,9 +462,9 @@ parser), so they also apply to commands other than the one named.
 | assemble | A rerun over finished runs refused on a nearly full disk although it downloads nothing | #226 |
 | assemble | A CheckM2 `qc_failed` excuse was not logged; it is warned about, and failed downloads are named with how to retry them (`--force`) | #226 |
 | reads | Runs found by accession were taken whatever their strategy, so an RNA-Seq run (SRR24576250) was selected as a genome; they now pass the WGS genomic filter | #226 |
-| ingest | Only `.fasta.gz` was accepted among compressed suffixes, so `.fna.gz` (the NCBI FTP default) and `.fa.gz` were skipped with a warning; both are genome suffixes in every stage, staged compressed like `.fasta.gz` | #PR |
-| metadata | `--source api` recorded `release: null` and nothing else to date the taxonomy; the record holds `api_query_date` (UTC), shown by `status` and `versions` next to the table path's release | #PR |
-| genome, vmetadata | On a blocked network `datasets` made three attempts of about 8.5 minutes each before exit 6; a request to `api.ncbi.nlm.nih.gov` with a 15 s connect timeout now stops the stage with exit 3 before `datasets` runs | #PR |
+| ingest | Only `.fasta.gz` was accepted among compressed suffixes, so `.fna.gz` (the NCBI FTP default) and `.fa.gz` were skipped with a warning; both are genome suffixes in every stage, staged compressed like `.fasta.gz` | #229 |
+| metadata | `--source api` recorded `release: null` and nothing else to date the taxonomy; the record holds `api_query_date` (UTC), shown by `status` and `versions` next to the table path's release | #229 |
+| genome, vmetadata | On a blocked network `datasets` made three attempts of about 8.5 minutes each before exit 6; a request to `api.ncbi.nlm.nih.gov` with a 15 s connect timeout now stops the stage with exit 3 before `datasets` runs | #229 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

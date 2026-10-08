@@ -7,14 +7,14 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- `ingest` (#PR): genome files ending in `.fna.gz` (the NCBI FTP default) and
+- `ingest` (#229): genome files ending in `.fna.gz` (the NCBI FTP default) and
   `.fa.gz` are accepted beside `.fasta.gz` (one suffix list in
   `core.contracts.FASTA_SUFFIXES`), and were previously skipped with a
   warning. They are staged compressed, like `.fasta.gz`; `derep-unpack` names
   their cluster directories without the whole suffix. An earlier `ingest`
   that skipped such files is not rerun on its own, since its source directory
   is unchanged; `repgenr --force ingest` stages them.
-- `metadata --source api` (#PR): the stage record holds `api_query_date`, the
+- `metadata --source api` (#229): the stage record holds `api_query_date`, the
   UTC time of the GTDB API query, since the API reports no release number
   (`release` stays null). `status` shows the GTDB release or the query date
   after the metadata line, and `versions` prints `gtdb_release` or
@@ -155,6 +155,7 @@ All notable changes to RepGenR are documented here. The format follows
   with `tree/`, and the published alignment moves from `phylo/snp/` to
   `phylo/tree/msa/`.
 - `genome`, `vmetadata` (#PR): before the first `datasets` call, one request
+- `genome`, `vmetadata` (#229): before the first `datasets` call, one request
   with the 15 s connect timeout checks that `api.ncbi.nlm.nih.gov` answers,
   using the proxy settings from the environment. On a blocked network the
   stage now exits 3 at once naming the host; before, `datasets` made three
