@@ -38,7 +38,7 @@ All notable changes to RepGenR are documented here. The format follows
   (about 30 s per 1000 genomes on an exFAT disk); links, missing and untracked
   genomes are still checked, and the genome line says the content was not
   read.
-- Install (#PR): `envs/` holds seven conda environment files that solve: a
+- Install (#238): `envs/` holds seven conda environment files that solve: a
   core environment (`envs/core.yml`, Python 3.12, RepGenR and every tool that
   shares its solve) and six satellites for tools that do not (Gubbins,
   mashtree, snippy, parsnp with harvesttools, CheckM2, progressiveMauve). Each
@@ -256,7 +256,7 @@ All notable changes to RepGenR are documented here. The format follows
   lines). The Gubbins masker warns when an outgroup name to leave out
   matches no alignment record, since the outgroup is then part of the
   recombination scan.
-- Install (#PR): `environment.yml` is removed; it did not solve on linux-64
+- Install (#238): `environment.yml` is removed; it did not solve on linux-64
   (Gubbins needs Python 3.8 to 3.10; mashtree and snippy need zlib older than
   1.3). Create `envs/core.yml` and the satellites you need instead. Satellite
   `bin` directories go after core on `PATH`, never before, so that mashtree's
