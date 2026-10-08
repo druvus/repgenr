@@ -88,3 +88,32 @@ def register_tool():
     yield _register
     for registry, name in registered:
         registry.unregister(name)
+
+
+@pytest.fixture()
+def write_deliverables():
+    """Create placeholder outputs for each recorded stage of a workdir.
+
+    Tests that build repgenr.yaml by hand and check `status` need the
+    declared deliverables on disk, or status reports the stages as stale.
+    """
+    from types import SimpleNamespace
+
+    from repgenr.cli.base import STAGE_DELIVERABLES
+    from repgenr.core.config import Config
+    from repgenr.core.doctor import _layout
+
+    def _write(wd: Path) -> None:
+        ctx = _layout(wd)
+        for name, record in Config.load(wd).stages.items():
+            spec = STAGE_DELIVERABLES.get(name)
+            for path in spec(ctx, SimpleNamespace(**record.params)) if spec else []:
+                if path.suffix:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if not path.exists():
+                        path.write_text("x\n", encoding="utf-8")
+                else:
+                    path.mkdir(parents=True, exist_ok=True)
+                    (path / "placeholder.fasta").write_text(">x\nA\n", encoding="utf-8")
+
+    return _write

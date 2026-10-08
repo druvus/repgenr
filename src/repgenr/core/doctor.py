@@ -422,8 +422,14 @@ def _layout(workdir: Path) -> SimpleNamespace:
     )
 
 
-def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
-    """Completed stages whose declared deliverables are missing (they will re-run).
+# Records exempt from the staleness checks: a derep-stock record logs the
+# last pack or unpack, whose inputs are the live derep outputs; a later
+# dereplicate changes them by design, and the stored run is unaffected.
+_STALENESS_EXEMPT = frozenset({"derep_stock"})
+
+
+def _missing_by_stage(workdir: Path, config: Config) -> dict[str, list[str]]:
+    """Completed stage -> its declared deliverables that are missing.
 
     Uses the same table (STAGE_DELIVERABLES) and the same workdir-relative
     names as the resume check in the stage harness.
@@ -431,31 +437,25 @@ def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
     from ..cli.base import deliverable_label, missing_deliverables  # deferred: core<-cli
 
     ctx = _layout(workdir)
-    out: list[Finding] = []
+    out: dict[str, list[str]] = {}
     for name, record in config.stages.items():
-        if not record.completed:
+        if record.interrupted:
             continue
         params = SimpleNamespace(**record.params)
         labels = [deliverable_label(workdir, p) for p in missing_deliverables(ctx, name, params)]
-        if not labels:
-            continue
-        what = (
-            f"deliverable {labels[0]} missing"
-            if len(labels) == 1
-            else f"{len(labels)} deliverables missing ({_examples(labels)})"
-        )
-        out.append(Finding("warn", name, f"{what}; the stage will re-run on its next invocation."))
+        if labels:
+            out[name] = labels
     return out
 
 
-def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
-    """Completed stages whose recorded input digests no longer match reality."""
+def _changed_by_stage(workdir: Path, config: Config) -> dict[str, list[str]]:
+    """Completed stage -> its recorded inputs whose digest no longer matches."""
     from ..cli.base import _MANIFEST_INPUT_STAGES, STAGE_INPUTS  # deferred: core<-cli
 
     ctx = _layout(workdir)
-    out: list[Finding] = []
+    out: dict[str, list[str]] = {}
     for name, record in config.stages.items():
-        if not record.completed or not record.inputs:
+        if record.interrupted or not record.inputs or name in _STALENESS_EXEMPT:
             continue
         spec = STAGE_INPUTS.get(name)
         if spec is None:
@@ -474,15 +474,49 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
             key for key in {*record.inputs, *digests} if record.inputs.get(key) != digests.get(key)
         )
         if changed:
-            out.append(
-                Finding(
-                    "warn",
-                    name,
-                    f"input(s) changed since completion ({_examples(changed)}); "
-                    "the stage will re-run on its next invocation.",
-                )
-            )
+            out[name] = changed
     return out
+
+
+def stale_stages(workdir: Path, config: Config) -> dict[str, str]:
+    """Completed stages that will re-run on their next invocation, with why.
+
+    A recorded input changed since completion, or a declared deliverable is
+    missing. ``status`` shows these as stale and ``doctor`` warns about them,
+    from the same two checks, so the commands agree.
+    """
+    reasons: dict[str, list[str]] = {}
+    for name, keys in _changed_by_stage(workdir, config).items():
+        reasons.setdefault(name, []).append(f"input changed: {_examples(keys)}")
+    for name, labels in _missing_by_stage(workdir, config).items():
+        reasons.setdefault(name, []).append(f"missing: {_examples(labels)}")
+    return {name: "; ".join(parts) for name, parts in reasons.items()}
+
+
+def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose declared deliverables are missing (they will re-run)."""
+    out: list[Finding] = []
+    for name, labels in _missing_by_stage(workdir, config).items():
+        what = (
+            f"deliverable {labels[0]} missing"
+            if len(labels) == 1
+            else f"{len(labels)} deliverables missing ({_examples(labels)})"
+        )
+        out.append(Finding("warn", name, f"{what}; the stage will re-run on its next invocation."))
+    return out
+
+
+def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose recorded input digests no longer match reality."""
+    return [
+        Finding(
+            "warn",
+            name,
+            f"input(s) changed since completion ({_examples(changed)}); "
+            "the stage will re-run on its next invocation.",
+        )
+        for name, changed in _changed_by_stage(workdir, config).items()
+    ]
 
 
 def _check_leftovers(workdir: Path, config: Config) -> list[Finding]:

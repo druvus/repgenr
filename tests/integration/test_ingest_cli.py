@@ -66,10 +66,11 @@ def test_ingest_cli_rejects_missing_source(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-def test_status_reports_local_chain_after_ingest(tmp_path: Path) -> None:
+def test_status_reports_local_chain_after_ingest(tmp_path: Path, write_deliverables) -> None:
     cfg = Config()
     cfg.record_stage("ingest", completed="2026-01-01T00:00:00")
     cfg.save(tmp_path)
+    write_deliverables(tmp_path)
 
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
 
