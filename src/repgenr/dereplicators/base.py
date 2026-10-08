@@ -161,7 +161,8 @@ def write_genome_info(path: Path, rows: Iterable[tuple[str, float, float]]) -> P
     """Write a dRep-style genome info table (genome,completeness,contamination).
 
     dRep and galah both read this layout; each matches the genome column in its
-    own way (dRep the file's basename, galah its name without the extension).
+    own way (dRep the basename of the file it reads, galah the name without its
+    FASTA suffix, as ``strip_fasta_suffix`` gives).
     """
     with open(path, "w", encoding="utf-8", newline="") as fo:
         writer = csv.writer(fo, lineterminator="\n")

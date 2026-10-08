@@ -476,6 +476,11 @@ class SourmashDereplicator(Dereplicator):
         return True
 
 
+# Signature names are ``Path.stem`` of the genome file (``x.fna.gz`` -> ``x.fna``),
+# used alike in the manysketch CSV, the picklist, this index and the pairwise
+# labels. They are internal to this adapter and need not follow
+# ``strip_fasta_suffix``; genomes are reported under their file names.
+#
 # Index written beside each zip that manysketch produced in a shared cache:
 # which signature names it holds and with which sketch parameters. Zips
 # assembled by sig cat get no index, so they are never offered as a source and

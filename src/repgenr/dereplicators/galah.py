@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import strip_fasta_suffix
 from ..core.plugins import ToolCapabilities
 from ..core.process import write_fofn
 from .base import (
@@ -133,14 +134,17 @@ def _write_galah_genome_info(
     contamination, less small penalties for contig count and ambiguous bases)
     for both the representative and the greedy membership, instead of by
     input order. galah stops when a genome has no row, so a partial table is
-    never written. Rows name the genome without its last extension, which is
-    how galah matches them (verified with galah 0.4.2 and 0.5.2).
+    never written. Rows name the genome without its FASTA suffix, ``.gz``
+    included (``x.fna.gz`` -> ``x``), which is how galah matches them and the
+    same rule as :func:`~repgenr.core.contracts.strip_fasta_suffix` (verified
+    for every suffix in ``FASTA_SUFFIXES`` with galah 0.4.2 and 0.5.2; a row
+    named ``x.fna`` for ``x.fna.gz`` is not found and galah stops).
     """
     if not genomes or not all(Path(g).name in quality for g in genomes):
         return None
     path = write_genome_info(
         out_dir / "genome_info.csv",
-        ((Path(g).stem, *quality[Path(g).name]) for g in genomes),
+        ((strip_fasta_suffix(Path(g).name), *quality[Path(g).name]) for g in genomes),
     )
     logger.info(
         "galah uses the manifest completeness and contamination of %d genomes (--genome-info)",

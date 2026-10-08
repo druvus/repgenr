@@ -79,10 +79,10 @@ def test_galah_without_quality_lists_the_largest_genome_first(tmp_path, monkeypa
 
 def test_galah_with_quality_for_every_genome_gets_genome_info(tmp_path, monkeypatch) -> None:
     # galah ranks by quality itself, for the representative and the greedy
-    # membership; rows name the genome without its last extension.
+    # membership; rows name the genome without its FASTA suffix.
     fragment = _write(tmp_path / "g" / "a_fragment.fasta", 400)
     complete = _write(tmp_path / "g" / "b_complete.fasta", 1000)
-    gz = tmp_path / "g" / "c_gz.fasta.gz"
+    gz = tmp_path / "g" / "c_gz.fna.gz"
     gz.write_bytes(gzip.compress(b">c\nACGT\n"))
     seen: list[list[str]] = []
     tables: list = []
@@ -90,19 +90,20 @@ def test_galah_with_quality_for_every_genome_gets_genome_info(tmp_path, monkeypa
     quality = {
         "a_fragment.fasta": (40.0, 0.0),
         "b_complete.fasta": (99.0, 0.1),
-        "c_gz.fasta.gz": (95.5, 1.0),
+        "c_gz.fna.gz": (95.5, 1.0),
     }
 
     galah_mod.GalahDereplicator().dereplicate(
         [fragment, complete, gz], tmp_path / "out", DerepParams(quality=quality), _LOG
     )
-    assert seen == [["a_fragment.fasta", "b_complete.fasta", "c_gz.fasta.gz"]]
+    assert seen == [["a_fragment.fasta", "b_complete.fasta", "c_gz.fna.gz"]]
     assert tables == [
         [
             ["genome", "completeness", "contamination"],
             ["a_fragment", "40", "0"],
             ["b_complete", "99", "0.1"],
-            ["c_gz.fasta", "95.5", "1"],
+            # galah strips the whole FASTA suffix, .gz included
+            ["c_gz", "95.5", "1"],
         ]
     ]
 
