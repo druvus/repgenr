@@ -836,8 +836,8 @@ record.
 cap is not the first N rows of the GTDB table: candidates are grouped by
 species and taken round-robin, the best-quality genome of every species first,
 then each species' next best, until N. Within a species genomes rank by CheckM
-completeness minus five times contamination (the same score the keeper uses),
-unscored genomes last, then the GTDB species-representative flag, then
+completeness minus five times contamination (the keeper score without its N50
+term, since no genome is downloaded yet), unscored genomes last, then the GTDB species-representative flag, then
 accession, so the result is deterministic. A heavily sequenced species
 therefore cannot fill the cap on its own. With `-d rep` there is one genome
 per species and the rule reduces to a quality ranking across species. On the
