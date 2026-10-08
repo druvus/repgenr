@@ -48,15 +48,32 @@ def versions(
         err = WorkdirError(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
         typer.echo(f"ERROR {err}", err=True)
         raise typer.Exit(code=err.exit_code)
+    from ..stages.metadata import gtdb_provenance
+
     cfg = Config.load(workdir)
     merged: dict[str, str] = {}
     for record in cfg.stages.values():
         merged.update(record.tool_versions)
+    metadata_record = cfg.stages.get("metadata")
+    if metadata_record is not None:
+        merged.update(gtdb_provenance(metadata_record.params))
     if versions_out is not None:
         write_versions_fragment(versions_out, merged)
     else:
         for tool, ver in sorted(merged.items()):
             typer.echo(f"{tool}: {ver}")
+
+
+def _gtdb_note(params: dict) -> str:
+    """The GTDB release, or the date of the API query, after the metadata line."""
+    from ..stages.metadata import gtdb_provenance
+
+    gtdb = gtdb_provenance(params)
+    if "gtdb_release" in gtdb:
+        return f"  (GTDB release {gtdb['gtdb_release']})"
+    if "gtdb_api_query_date" in gtdb:
+        return f"  (GTDB API queried {gtdb['gtdb_api_query_date']})"
+    return ""
 
 
 @app.command(rich_help_panel=PANEL_PIPELINE)
@@ -99,7 +116,8 @@ def status(
         rec = recorded.get(stage)
         if rec is not None and rec.completed:
             tool = f" [{rec.tool}]" if rec.tool else ""
-            typer.echo(f"  [done]    {stage}{tool}  {rec.completed}")
+            note = _gtdb_note(rec.params) if stage == "metadata" else ""
+            typer.echo(f"  [done]    {stage}{tool}  {rec.completed}{note}")
         elif rec is not None and (rec.params or rec.tool):
             # A record without a completed stamp but with provenance: the stage
             # started a (re-)run and failed or was killed; outputs may be partial.

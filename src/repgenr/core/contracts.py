@@ -61,10 +61,11 @@ ASSEMBLY_STATS_TSV = "assembly_stats.tsv"
 EXCUSED_RUNS_TSV = "excused_runs.tsv"
 
 
-# Recognised genome FASTA extensions, longest-first so suffix stripping is
-# unambiguous (``.fasta.gz`` before ``.fasta``). One definition shared by every
-# stage and adapter that lists or names genome files.
-FASTA_SUFFIXES = (".fasta.gz", ".fasta", ".fa", ".fna", ".fas")
+# Recognised genome FASTA extensions, the gzip forms first so suffix stripping
+# is unambiguous (``.fasta.gz`` before ``.fasta``). ``.fna.gz`` is what the NCBI
+# FTP site delivers. One definition shared by every stage and adapter that
+# lists or names genome files.
+FASTA_SUFFIXES = (".fasta.gz", ".fna.gz", ".fa.gz", ".fasta", ".fa", ".fna", ".fas")
 
 
 def newick_is_complete(text: str) -> bool:

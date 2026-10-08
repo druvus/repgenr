@@ -71,7 +71,11 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     refuse_foreign_rows(ctx, "metadata", drop_foreign=params.drop_foreign, logger=logger)
     _validate(params)
 
+    api_query_date: str | None = None
     if params.source == "api":
+        # The API exposes no GTDB release number (its /meta/version is the
+        # software version), so the date of the query is recorded in its place.
+        api_query_date = datetime.now(UTC).isoformat(timespec="seconds")
         ignored = [
             flag
             for flag, value in (
@@ -104,6 +108,7 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
         params={
             "source": params.source,
             "release": params.release,
+            "api_query_date": api_query_date,
             "version": params.version,
             "dataset": params.dataset,
             "level": params.level,
@@ -117,6 +122,20 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
     )
     ctx.save_config()
     return len(selected)
+
+
+def gtdb_provenance(params: dict) -> dict[str, str]:
+    """The GTDB reference behind a metadata record, for ``versions`` and ``status``.
+
+    The table path names its release (``gtdb_release``); the API path has no
+    release number and names the UTC date of its query (``gtdb_api_query_date``).
+    A record from before the query date was recorded yields nothing for the API.
+    """
+    if params.get("source") == "api":
+        queried = params.get("api_query_date")
+        return {"gtdb_api_query_date": str(queried)} if queried else {}
+    release = params.get("release")
+    return {"gtdb_release": str(release)} if release else {}
 
 
 GTDB_VERSIONS = ("bac120", "ar53")

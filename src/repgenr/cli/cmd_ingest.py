@@ -15,8 +15,8 @@ def ingest(
     genomes_dir: Path = typer.Option(
         ...,
         "--genomes-dir",
-        help="Directory of genome FASTA files (.fasta, .fa, .fna, .fas or .fasta.gz; "
-        "subdirectories are not searched) to stage under genomes/.",
+        help="Directory of genome FASTA files (.fasta, .fa, .fna, .fas, .fasta.gz, .fna.gz "
+        "or .fa.gz; subdirectories are not searched) to stage under genomes/.",
     ),
     selection: Path | None = typer.Option(
         None,

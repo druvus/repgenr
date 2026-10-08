@@ -13,6 +13,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ..core import process
 from ..core.binaries import BinarySpec
@@ -20,7 +21,7 @@ from ..core.containers import run_tool_with_retries
 from ..core.context import WorkdirContext
 from ..core.contracts import FASTA_SUFFIXES, MISSING_ACCESSIONS_TXT, atomic_path, genome_filename
 from ..core.errors import ToolExecutionError, WorkdirError
-from ..core.http import verify_md5
+from ..core.http import NCBI_DATASETS_URL, require_reachable, verify_md5
 from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
 from ..core.process import check_free_disk, remove_tree
@@ -198,6 +199,8 @@ def download_accessions(
     scratch_dir.mkdir(parents=True, exist_ok=True)
     total = len(accessions)
     _check_disk(scratch_dir, total, logger)
+    if accessions:
+        require_reachable(NCBI_DATASETS_URL, what="NCBI datasets")
     n_batches = (total + _DOWNLOAD_BATCH_SIZE - 1) // _DOWNLOAD_BATCH_SIZE
     missing: list[str] = []
     for bi, start in enumerate(range(0, total, _DOWNLOAD_BATCH_SIZE)):
@@ -255,6 +258,11 @@ def _download_one_batch(
         acc_file.unlink(missing_ok=True)
         return list(batch)
     process.unzip(zip_path, extract)
+    # Rehydrate fetches the files from the URLs in the package's fetch.txt;
+    # their hosts depend on the datasets version (api.ncbi.nlm.nih.gov for
+    # 18.x), so the hosts named there are probed, not a fixed one.
+    for url in _fetch_hosts(extract):
+        require_reachable(url, what="datasets rehydrate")
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
         n_items=len(batch),
@@ -312,6 +320,20 @@ def _download_one_batch(
     return missing
 
 
+def _fetch_hosts(extract: Path) -> list[str]:
+    """One URL per distinct host in a dehydrated package's ``fetch.txt``."""
+    fetch = extract / "ncbi_dataset" / "fetch.txt"
+    if not fetch.is_file():
+        return []
+    by_host: dict[str, str] = {}
+    for line in fetch.read_text(encoding="utf-8", errors="replace").splitlines():
+        url = line.split("\t", 1)[0].strip()
+        parts = urlsplit(url)
+        if parts.scheme in ("http", "https") and parts.hostname:
+            by_host.setdefault(parts.hostname, f"{parts.scheme}://{parts.hostname}/")
+    return [by_host[h] for h in sorted(by_host)]
+
+
 def _package_checksums(extract: Path) -> dict[str, str]:
     """``md5sum.txt`` of a datasets package: path relative to the package -> md5."""
     md5_file = extract / "md5sum.txt"
@@ -341,6 +363,7 @@ def _download_outgroup(ctx, outgroup, logger) -> None:
 def _fetch_outgroup(ctx, outgroup, out_path: Path, logger) -> None:
     zip_path = ctx.workdir / "ncbi_download_outgroup.zip"
     hint = "choose another with 'repgenr metadata --outgroup-accession'."
+    require_reachable(NCBI_DATASETS_URL, what="NCBI datasets")
     try:
         _run_cmd(
             [

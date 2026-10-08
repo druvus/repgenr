@@ -70,7 +70,12 @@ version that GTDB does not publish exits 2 after trying the current
 its cause and does not try the second layout.
 
 `--source api` serves GTDB's current release and ignores `-r`, `--gtdb-version`,
-`--metadata-path` and `--nodownload` (a warning names them). GTDB taxon names
+`--metadata-path` and `--nodownload` (a warning names them). The API does not
+report a release number, so the stage record holds `release: null` and, in its
+place, `api_query_date`, the UTC time of the query (ISO 8601). `status` shows
+it after the metadata line and `versions` prints it as `gtdb_api_query_date`;
+for the table path they show the release (`gtdb_release`). To relate a query
+date to a GTDB release, compare it with the release dates on the GTDB website. GTDB taxon names
 are case-sensitive: the target's first letter is raised and a species epithet
 is lowered, so `-tg francisella -ts Tularensis` finds `s__Francisella
 tularensis`; suffixes such as `Bacillus_A` or `copri_A` must be typed as GTDB
@@ -148,10 +153,17 @@ distinct accessions with `--selection`. The `is_outgroup` column of a
 selection takes `1`/`0` (also `true`/`false`, `yes`/`no`).
 
 Only the files directly under `--genomes-dir` with a suffix `.fasta`, `.fa`,
-`.fna`, `.fas` or `.fasta.gz` are read; other files (`x.fna.gz`, `X.FASTA`)
-are listed in a warning and skipped, and subdirectories are not searched
-(an NCBI Datasets download keeps each genome in its own directory, so collect
-the `.fna` files into one directory first). An empty or unreadable genome
+`.fna`, `.fas`, `.fasta.gz`, `.fna.gz` or `.fa.gz` are read, so the
+`.fna.gz` files of the NCBI FTP site can be ingested as they are; other files
+(`X.FASTA`, `x.fas.gz`) are listed in a warning and skipped. Compressed
+genomes are staged unchanged and later stages receive them compressed. The
+dereplicators (sourmash, skDER, galah; dRep through a decompressed copy), the
+`mashtree` and `sourmash` tree builders and the `ska2` typer read them. The
+`simple` and `parsnp` typers and the SibeliaZ aligner do not read gzip input
+and fail, so decompress the genomes before `ingest` when the tree is built
+from an alignment or from `simple` or `parsnp`.
+Subdirectories are not searched (an NCBI Datasets download keeps each genome
+in its own directory, so collect the `.fna` files into one directory first). An empty or unreadable genome
 file (a dangling link included) stops `ingest` with exit 2 before anything is
 staged, and the record of an earlier `ingest` is left as it was; `doctor`
 checks that the staged files hold FASTA.
@@ -1044,9 +1056,24 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   them; a re-run asks for them again. Each rehydrated genome is checked
   against the package's `md5sum.txt`, and a mismatch is recorded the same way.
   An outgroup NCBI does not serve exits 3; choose another with
-  `metadata --outgroup-accession`. The `datasets` CLI has its own network
-  timeouts: on a blocked network each of its three attempts can take several
-  minutes before `genome` or `vmetadata` exits 6.
+  `metadata --outgroup-accession`.
+- **NCBI datasets on a blocked network.** Before the first `datasets` call,
+  `genome` and `vmetadata` (NCBI Virus source) send one request to
+  `api.ncbi.nlm.nih.gov` with the 15 s connect timeout. Before each
+  `datasets rehydrate`, `genome` sends one request to every host named in
+  the package's `fetch.txt` (with datasets 18.x that is again
+  `api.ncbi.nlm.nih.gov`). When a host cannot be connected to, the stage
+  exits 3 at once and names it, instead of waiting through three `datasets`
+  attempts of several minutes each. The request uses the proxy settings in
+  `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`, as the GTDB and Entrez
+  requests and `datasets` itself do. Only a failed connection or a connect
+  timeout counts as unreachable. An HTTP error status, a read timeout and a
+  TLS error count as reachable. A TLS error can mean only that Python's
+  certificate bundle lacks a proxy's certificate authority that the system
+  store holds, which `datasets` uses; `REQUESTS_CA_BUNDLE` points Python at
+  another bundle. `REPGENR_SKIP_NET_PROBE=1` skips the check. A failure
+  later, inside `datasets`, still exits 6. `vgenome` works from the
+  `vmetadata` download and makes no network request.
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
   optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
   is retried per batch of taxids; a connection error (no network, or the
@@ -1061,7 +1088,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 0 | Success. |
   | 1 | An unexpected error (traceback in the run log), or `doctor` found failures. |
   | 2 | Invalid or missing user input (also Typer's own usage errors). |
-  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
+  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, NCBI Datasets, BV-BRC, ENA) failed, e.g. because the network is unreachable. `genome` and `vmetadata` on NCBI Virus check that the NCBI Datasets host answers before running the `datasets` CLI; a network failure inside `datasets` is reported as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
   | 4 | A required external tool is absent or below its version floor. |
   | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed (one console line; the command and output tail are in `repgenr.log`). Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |

@@ -18,6 +18,8 @@ from repgenr.core import http
 from repgenr.core.errors import WorkdirError
 
 _LOG = logging.getLogger("test")
+# Taken at import, before the autouse fixture in tests/conftest.py stubs it.
+_REAL_PROBE_SESSION = http._probe_session
 
 
 class _FakeResp:
@@ -204,3 +206,106 @@ def test_requests_use_a_short_connect_timeout(monkeypatch, tmp_path: Path) -> No
     http.get_json("https://x/y")
     http.download("https://x/y", tmp_path / "f")
     assert seen and all(isinstance(t, tuple) and t[0] <= 30 and t[1] >= 120 for t in seen)
+
+
+class _ProbeSession:
+    def __init__(self, exc: Exception | None = None):
+        self.exc = exc
+        self.calls: list[tuple[str, dict]] = []
+
+    def get(self, url, **kw):
+        self.calls.append((url, kw))
+        if self.exc is not None:
+            raise self.exc
+        return None
+
+    def close(self) -> None:
+        pass
+
+
+def _status_response(status: int) -> requests.Response:
+    resp = requests.Response()
+    resp.status_code = status
+    resp.url = http.NCBI_DATASETS_URL
+    return resp
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_an_error_status_counts_as_reachable(monkeypatch, status: int) -> None:
+    """A server that answers, even with 4xx/5xx, is reachable; datasets handles the rest."""
+
+    class _Answers(_ProbeSession):
+        def get(self, url, **kw):
+            super().get(url, **kw)
+            return _status_response(status)
+
+    probe = _Answers()
+    monkeypatch.setattr(http, "_probe_session", lambda: probe)
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert len(probe.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        # requests trusts its own CA bundle, datasets (Go) the system store: a
+        # proxy CA in the system store alone fails here but not in datasets.
+        requests.exceptions.SSLError("certificate verify failed"),
+        requests.ReadTimeout("read timed out"),
+    ],
+)
+def test_tls_errors_and_read_timeouts_count_as_reachable(monkeypatch, exc) -> None:
+    monkeypatch.setattr(http, "_probe_session", lambda: _ProbeSession(exc))
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+
+
+def test_an_unreachable_proxy_is_unreachable(monkeypatch) -> None:
+    exc = requests.exceptions.ProxyError("Unable to connect to proxy")
+    monkeypatch.setattr(http, "_probe_session", lambda: _ProbeSession(exc))
+    with pytest.raises(WorkdirError, match="REQUESTS_CA_BUNDLE") as info:
+        http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert http.SKIP_PROBE_ENV in str(info.value)
+
+
+def test_the_probe_can_be_switched_off(monkeypatch) -> None:
+    probe = _ProbeSession(requests.ConnectionError("refused"))
+    monkeypatch.setattr(http, "_probe_session", lambda: probe)
+    monkeypatch.setenv(http.SKIP_PROBE_ENV, "1")
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert probe.calls == []
+
+
+def test_require_reachable_passes_when_the_host_answers(monkeypatch) -> None:
+    probe = _ProbeSession()
+    monkeypatch.setattr(http, "_probe_session", lambda: probe)
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    [(url, kw)] = probe.calls
+    assert url == http.NCBI_DATASETS_URL
+    # One attempt with the shared 15 s connect timeout.
+    assert kw["timeout"][0] == 15
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [requests.ConnectTimeout("timed out"), requests.ConnectionError("refused")],
+)
+def test_require_reachable_names_the_host_when_it_does_not_answer(monkeypatch, exc) -> None:
+    """datasets on a blocked network made three attempts of about 8.5 minutes each."""
+    monkeypatch.setattr(http, "_probe_session", lambda: _ProbeSession(exc))
+    with pytest.raises(WorkdirError, match="api.ncbi.nlm.nih.gov") as info:
+        http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert info.value.exit_code == 3
+    assert "HTTPS_PROXY" in str(info.value)
+
+
+def test_probe_session_reads_the_proxy_environment(monkeypatch) -> None:
+    """The probe goes through the same proxies as datasets and core.http."""
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
+    s = _REAL_PROBE_SESSION()
+    try:
+        settings = s.merge_environment_settings(http.NCBI_DATASETS_URL, {}, None, None, None)
+    finally:
+        s.close()
+    assert settings["proxies"]["https"] == "http://proxy.example:3128"

@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import gzip
 import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,7 @@ def test_tsv_species_selection_end_to_end(tmp_path, gtdb_tsv) -> None:
         encoding="utf-8"
     ).strip() == "GCF_000010.1"
     assert ctx.config.stages["metadata"].tool == "gtdb-table"
+    assert ctx.config.stages["metadata"].params["api_query_date"] is None
 
 
 def test_tsv_rep_dataset_selects_representatives_only(tmp_path, gtdb_tsv) -> None:
@@ -214,6 +216,12 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
     outgroups = [r["accession"] for r in rows if r["is_outgroup"] in ("1", "True", "true")]
     assert outgroups == ["GCF_000010.1"]
     assert ctx.config.stages["metadata"].tool == "gtdb-api"
+    # The API exposes no release number; the query date stands in for it.
+    record = ctx.config.stages["metadata"].params
+    assert record["release"] is None
+    queried = datetime.fromisoformat(record["api_query_date"])
+    assert queried.utcoffset() == timedelta(0)
+    assert abs(datetime.now(UTC) - queried) < timedelta(minutes=5)
 
 
 def _card(completeness=None, contamination=None, *, checkm2: bool = True) -> dict:

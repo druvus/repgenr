@@ -15,15 +15,19 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .errors import WorkdirError
+
+_log = logging.getLogger(__name__)
 
 # (connect, read) seconds. A server that does not accept a connection within
 # the connect timeout is unreachable (blocked network, dead proxy); with the
@@ -73,6 +77,62 @@ def session() -> requests.Session:
     s.mount("http://", adapter)
     s.headers.update({"User-Agent": "repgenr"})
     return s
+
+
+# The NCBI Datasets API host that the ``datasets`` CLI talks to. The CLI has
+# no connect timeout of its own: on a blocked network each attempt waited about
+# 8.5 minutes, three attempts in all, before the stage failed.
+NCBI_DATASETS_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/version"
+_PROBE_TIMEOUT: tuple[float, float] = (_CONNECT_TIMEOUT, 30)
+
+
+def _probe_session() -> requests.Session:
+    """A session without the retry policy, for the single reachability request.
+
+    ``trust_env`` is left on, so HTTPS_PROXY, HTTP_PROXY and NO_PROXY apply as
+    they do for :func:`session` and for the tools that use the same network.
+    """
+    return requests.Session()
+
+
+# Set to 1 to skip :func:`require_reachable`, e.g. where the probe's request
+# is refused by a network policy that still lets the tool itself through.
+SKIP_PROBE_ENV = "REPGENR_SKIP_NET_PROBE"
+
+
+def require_reachable(url: str, *, what: str, timeout: Timeout = _PROBE_TIMEOUT) -> None:
+    """Raise :class:`WorkdirError` (exit 3) when the host of ``url`` cannot be reached.
+
+    One small GET request without retries, before handing the network to an
+    external tool that retries slowly on its own. Only a failure to connect (a
+    refused or reset connection, a failed name lookup, an unreachable proxy, a
+    connect timeout) counts as unreachable. Any HTTP answer, an error status
+    included, shows the host is reachable; so do a TLS error, which may only
+    mean that requests does not trust a certificate the system store holds
+    (the tool may use the system store), and a read timeout on a slow answer.
+    ``REPGENR_SKIP_NET_PROBE=1`` skips the request.
+    """
+    if os.environ.get(SKIP_PROBE_ENV, "").strip().lower() in ("1", "true", "yes"):
+        return
+    host = urlsplit(url).hostname or url
+    s = _probe_session()
+    try:
+        s.get(url, timeout=timeout, allow_redirects=False)
+    except requests.exceptions.SSLError as exc:
+        _log.debug("Reachability probe of %s: TLS error counted as reachable (%s)", host, exc)
+    except requests.ConnectionError as exc:
+        # ConnectTimeout and ProxyError are ConnectionErrors; SSLError is
+        # handled above. ReadTimeout is not a ConnectionError.
+        raise WorkdirError(
+            f"Cannot reach {host}, which {what} needs ({exc}). Check the network "
+            "connection and, behind a proxy, the HTTPS_PROXY and NO_PROXY settings "
+            "(and REQUESTS_CA_BUNDLE for a proxy with its own certificate authority). "
+            f"{SKIP_PROBE_ENV}=1 skips this check."
+        ) from exc
+    except requests.RequestException as exc:
+        _log.debug("Reachability probe of %s: %s counted as reachable", host, exc)
+    finally:
+        s.close()
 
 
 def _get(url: str, *, params: dict | None, timeout: Timeout) -> requests.Response:

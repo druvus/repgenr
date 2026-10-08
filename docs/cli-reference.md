@@ -200,7 +200,7 @@ Populate a working directory from local genomes (no download).
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `--genomes-dir` | required | Directory of genome FASTA files (.fasta, .fa, .fna, .fas or .fasta.gz; subdirectories are not searched) to stage under genomes/. |
+| `--genomes-dir` | required | Directory of genome FASTA files (.fasta, .fa, .fna, .fas, .fasta.gz, .fna.gz or .fa.gz; subdirectories are not searched) to stage under genomes/. |
 | `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
 | `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir, or a path to a FASTA file elsewhere. |
 | `--copy` | off | Copy the files into genomes/ instead of symlinking them. |

@@ -21,7 +21,7 @@ workflow {
 
     def meta = [id: 'local', mode: 'bacterial']
     def ch_genomes = channel
-        .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas}")
+        .fromPath("${params.genomes_dir}/*.{fasta,fa,fna,fas,fasta.gz,fna.gz,fa.gz}")
         .filter { f -> !f.name.startsWith('._') }   // skip macOS AppleDouble files
         .collect()
         .map { files -> tuple(meta, files) }

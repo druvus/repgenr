@@ -7,6 +7,19 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `ingest` (#229): genome files ending in `.fna.gz` (the NCBI FTP default) and
+  `.fa.gz` are accepted beside `.fasta.gz` (one suffix list in
+  `core.contracts.FASTA_SUFFIXES`), and were previously skipped with a
+  warning. They are staged compressed, like `.fasta.gz`; `derep-unpack` names
+  their cluster directories without the whole suffix. An earlier `ingest`
+  that skipped such files is not rerun on its own, since its source directory
+  is unchanged; `repgenr --force ingest` stages them.
+- `metadata --source api` (#229): the stage record holds `api_query_date`, the
+  UTC time of the GTDB API query, since the API reports no release number
+  (`release` stays null). `status` shows the GTDB release or the query date
+  after the metadata line, and `versions` prints `gtdb_release` or
+  `gtdb_api_query_date`, so the Nextflow `versions.yml` of the metadata step
+  carries it too.
 - `glance --tool sourmash`: sourmash is a second comparison backend for
   `glance`. It sketches every genome with the parameters `dereplicate --tool
   sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts the
@@ -141,6 +154,17 @@ All notable changes to RepGenR are documented here. The format follows
   process emits `tree_msa` (was `snp`), `PHYLO` publishes the typing pass
   with `tree/`, and the published alignment moves from `phylo/snp/` to
   `phylo/tree/msa/`.
+- `genome`, `vmetadata` (#229): before the first `datasets` call, one request
+  with the 15 s connect timeout checks that `api.ncbi.nlm.nih.gov` answers,
+  using the proxy settings from the environment; `genome` also checks the
+  hosts in each package's `fetch.txt` before `datasets rehydrate`. On a
+  blocked network the stage now exits 3 at once naming the host; before,
+  `datasets` made three attempts of about 8.5 minutes each and the stage
+  exited 6. Only a failed connection or connect timeout counts as
+  unreachable; an HTTP error status, a read timeout or a TLS error does not.
+  `REPGENR_SKIP_NET_PROBE=1` skips the check.
+- `versions --versions-out` writes a date-like value (the GTDB API query
+  date) double-quoted, so a YAML 1.1 loader keeps it as a string.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.

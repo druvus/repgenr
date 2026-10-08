@@ -355,3 +355,93 @@ def test_present_outgroup_is_not_downloaded_again(ctx, monkeypatch) -> None:
     genome.run(ctx, GenomeParams())
     assert not any("GCF_000010.1" in c for c in calls)
     assert present.read_text(encoding="utf-8") == ">og\nACGT\n"
+
+
+class _Unreachable:
+    def get(self, url, **kw):
+        import requests
+
+        raise requests.ConnectTimeout("timed out")
+
+    def close(self) -> None:
+        pass
+
+
+def test_blocked_network_stops_before_datasets(ctx, monkeypatch) -> None:
+    """datasets on a blocked network made three attempts of about 8.5 minutes each."""
+    from repgenr.core import http
+
+    calls = _fake_run_cmd(monkeypatch)
+    monkeypatch.setattr(http, "_probe_session", _Unreachable)
+    with pytest.raises(WorkdirError, match="api.ncbi.nlm.nih.gov") as info:
+        genome.run(ctx, GenomeParams())
+    assert info.value.exit_code == 3
+    assert calls == []
+
+
+def test_blocked_network_stops_before_the_outgroup_download(ctx, monkeypatch) -> None:
+    from repgenr.core import http
+
+    calls = _fake_run_cmd(monkeypatch)
+    ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
+    for g in _SELECTED:
+        (ctx.genomes_dir / genome._output_name(g)).write_text(">s\nACGT\n", encoding="utf-8")
+    monkeypatch.setattr(http, "_probe_session", _Unreachable)
+    with pytest.raises(WorkdirError, match="api.ncbi.nlm.nih.gov"):
+        genome.run(ctx, GenomeParams())
+    assert calls == []
+
+
+def test_nothing_to_download_needs_no_network(ctx, monkeypatch) -> None:
+    from repgenr.core import http
+
+    calls = _fake_run_cmd(monkeypatch)
+    ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
+    for g in _SELECTED:
+        (ctx.genomes_dir / genome._output_name(g)).write_text(">s\nACGT\n", encoding="utf-8")
+    ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
+    (ctx.outgroup_dir / genome._output_name(_OUTGROUP)).write_text(">o\nACGT\n", encoding="utf-8")
+    monkeypatch.setattr(http, "_probe_session", _Unreachable)
+    assert genome.run(ctx, GenomeParams()) == 2
+    assert calls == []
+
+
+def test_rehydrate_hosts_from_fetch_txt_are_probed_before_rehydrate(ctx, monkeypatch) -> None:
+    """Rehydrate fetches from the URLs in fetch.txt; their host is checked first."""
+    import requests
+
+    from repgenr.core import http
+
+    calls = _fake_run_cmd(monkeypatch)
+    real_fake = genome._run_cmd
+
+    def with_fetch_txt(cmd, **kw):
+        result = real_fake(cmd, **kw)
+        cmd = [str(c) for c in cmd]
+        if "--dehydrated" in cmd:
+            zip_path = Path(cmd[cmd.index("--filename") + 1])
+            with zipfile.ZipFile(zip_path, "a") as zf:
+                zf.writestr(
+                    "ncbi_dataset/fetch.txt",
+                    "https://files.example.org/a/x.fna\t10\tdata/x.fna\n"
+                    "https://files.example.org/a/y.fna\t10\tdata/y.fna\n",
+                )
+        return result
+
+    monkeypatch.setattr(genome, "_run_cmd", with_fetch_txt)
+    probed: list[str] = []
+
+    class _Session:
+        def get(self, url, **kw):
+            probed.append(url)
+            if "files.example.org" in url:
+                raise requests.ConnectionError("refused")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(http, "_probe_session", _Session)
+    with pytest.raises(WorkdirError, match="files.example.org"):
+        genome.run(ctx, GenomeParams())
+    assert probed == [http.NCBI_DATASETS_URL, "https://files.example.org/"]
+    assert not [c for c in calls if c[:2] == ["datasets", "rehydrate"]]

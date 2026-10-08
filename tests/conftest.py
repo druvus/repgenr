@@ -27,6 +27,31 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
                 pytest.skip(f"requires external binary '{binary}'")
 
 
+class _ReachableSession:
+    """Stands in for the reachability probe's session: every host answers."""
+
+    def get(self, url, **kwargs):
+        return None
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_reachability_probe(request: pytest.FixtureRequest, monkeypatch) -> None:
+    """Keep the core.http reachability probe off the network outside the live suite.
+
+    Stages probe the NCBI datasets host before calling ``datasets``; unit and
+    integration tests fake ``datasets`` itself, so the probe answers as if the
+    host were reachable. Tests of the probe replace ``_probe_session`` again.
+    """
+    if request.node.get_closest_marker("live"):
+        return
+    from repgenr.core import http
+
+    monkeypatch.setattr(http, "_probe_session", _ReachableSession)
+
+
 @pytest.fixture
 def workdir(tmp_path: Path) -> Path:
     return tmp_path / "wd"

@@ -462,6 +462,9 @@ parser), so they also apply to commands other than the one named.
 | assemble | A rerun over finished runs refused on a nearly full disk although it downloads nothing | #226 |
 | assemble | A CheckM2 `qc_failed` excuse was not logged; it is warned about, and failed downloads are named with how to retry them (`--force`) | #226 |
 | reads | Runs found by accession were taken whatever their strategy, so an RNA-Seq run (SRR24576250) was selected as a genome; they now pass the WGS genomic filter | #226 |
+| ingest | Only `.fasta.gz` was accepted among compressed suffixes, so `.fna.gz` (the NCBI FTP default) and `.fa.gz` were skipped with a warning; both are genome suffixes in every stage, staged compressed like `.fasta.gz` | #229 |
+| metadata | `--source api` recorded `release: null` and nothing else to date the taxonomy; the record holds `api_query_date` (UTC), shown by `status` and `versions` next to the table path's release | #229 |
+| genome, vmetadata | On a blocked network `datasets` made three attempts of about 8.5 minutes each before exit 6; a request to `api.ncbi.nlm.nih.gov` with a 15 s connect timeout now stops the stage with exit 3 before `datasets` runs | #229 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -490,13 +493,10 @@ they are recorded here and not fixed.
 | derep-stock | A stored run keeps links to the representative files, but unpack restores by name from `genomes/`; a genome replaced under the same name since the pack is restored in its current form. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
 | ingest | `status` shows `dereplicate` as done after the genome set changed; only `doctor` and the next run detect the stale input. |
-| ingest | Only `.fasta.gz` is accepted among compressed suffixes; `.fna.gz` and `.fa.gz` (the NCBI FTP default) are skipped with a warning. Widening the suffix list changes the genome contract of every stage and is left as a proposal. |
 | ingest | Any name with four or more `_`-separated tokens is read as Family_genus_species_ACCESSION (`sample_1_run_A.fasta` gives accession `A`); documented, with `--selection` as the remedy. |
 | Resume | `metadata --metadata-path`, `reads --accession-file` and `assemble --outgroup` record relative paths as given, as ingest did before this audit. |
 | vgenome | On the NCBI Virus path the species is the record's organism name, which is often a strain or an older name (Orthohantavirus: `Hantaanvirus-CGAa1011`; Mammarenavirus: `Argentinian mammarenavirus` and `Mammarenavirus juninense` under one taxid). One species then splits into several species tokens, which affects `--target-species`, the median-of-medians window and the outgroup candidates. A lineage-derived binomial is proposed in the deep-audit report. |
 | vgenome | NCBI Virus segment labels are not normalised (`M`, `M; medium`, `middle`), so one segment can count as two labels when an isolate mixes them. |
-| metadata | `--source api` records no GTDB release: the API exposes no release number, so provenance shows `release: null`. |
-| genome, vmetadata | `datasets` has its own network timeouts; through an unreachable proxy one attempt took about 8.5 minutes, so the three attempts take some 25 minutes before exit 6. |
 | dereplicate | On `mixed_1000_clustered` (20 truth clusters) skder, galah, sourmash sparse and sourmash dense all recover the truth partition at the defaults (adjusted Rand index 1.0); sparse and dense pick different representatives within clusters, as choosing-tools.md states. |
 | dereplicate | Without manifest quality, galah picks a 40 percent fragment as the representative of its cluster (input order), and sourmash keeps the fragment as its own cluster (k-mer similarity counts the missing part). `--keeper quality` with manifest quality corrects the first. |
 | dereplicate | `--target-reps` with `--process-size` re-sketches the union of chunk representatives at each search step, since the union changes with the threshold; on 50 genomes the search took 87 s against 22 s unchunked. |
