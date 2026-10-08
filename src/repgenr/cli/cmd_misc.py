@@ -135,7 +135,10 @@ def status(
     for stage in chain:
         rec = recorded.get(stage)
         tool = f" [{rec.tool}]" if rec is not None and rec.tool else ""
-        note = _gtdb_note(rec.params) if rec is not None and stage == "metadata" else ""
+        finished = rec is not None and not rec.interrupted
+        note = (
+            _gtdb_note(rec.params) if rec is not None and finished and stage == "metadata" else ""
+        )
         if rec is not None and not rec.interrupted and stage not in stale:
             typer.echo(f"  [done]    {stage}{tool}  {rec.completed}{note}")
             continue
@@ -176,9 +179,9 @@ def status(
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
     else:
         typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
-        note = _next_stage_note(workdir, next_stage, recorded)
-        if note:
-            typer.echo(note)
+        hint = _next_stage_note(workdir, next_stage, recorded)
+        if hint:
+            typer.echo(hint)
 
 
 def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str | None:
@@ -197,7 +200,7 @@ def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str
     return (
         f"Note: derep/representatives holds {count} genome(s) and a tree needs at least "
         f"{MIN_TREE_GENOMES}; run phylo with --all-genomes, or dereplicate again with a "
-        "higher ANI threshold."
+        "higher --secondary-ani."
     )
 
 

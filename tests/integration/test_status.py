@@ -198,3 +198,11 @@ def test_derep_stock_record_is_not_stale_after_a_new_dereplication(tmp_path: Pat
     assert "[stale]" not in result.stdout
     doctor = _runner.invoke(app, ["doctor", "-wd", str(wd)])
     assert "derep_stock: input(s) changed" not in doctor.stdout
+
+
+def test_stale_metadata_line_keeps_the_gtdb_note(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("metadata", tool="gtdb-table", params={"release": "232.0"}, completed="t")
+    cfg.save(tmp_path)  # selection.tsv and the manifest are absent: stale
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert "[stale]   metadata [gtdb-table]  t  (GTDB release 232.0)  (missing:" in result.stdout
