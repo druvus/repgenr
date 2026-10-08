@@ -710,6 +710,9 @@ def run_tool(
             stdout_path=stdout_path,
             log_prefix=log_prefix or caps.name,
             timeout=timeout,
+            # The console shows the tool's argv; the engine preamble (mounts,
+            # labels, user) is in the run log.
+            console_command=argv,
         )
         if returncode != 0 and process.stop_requested.is_set():
             # check=False: the killed client returned instead of raising.
@@ -787,6 +790,8 @@ def run_chain(
             env=merged_env,
             log_prefix=caps.name,
             timeout=timeout,
+            # Each step was logged above; the console names the script only.
+            console_command=["sh", "-c", f"<{len(argvs)} commands above>"],
         )
     except ToolExecutionError as exc:
         _stop_after_failure(exc, wrapped, config)
