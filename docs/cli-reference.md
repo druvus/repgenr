@@ -100,7 +100,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |
 | `--collapse-length` |  | Merge nodes whose branch is shorter than this length into their parent. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 | `--dry-run` | off | Print the stages and key parameters, then exit. |
 
@@ -238,7 +238,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
 | `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM; also the budget that caps concurrent classifier gathers (about 0.6 GB each). |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
@@ -269,7 +269,7 @@ Cluster genomes by ANI and select representatives.
 | `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
 | `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
 | `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
@@ -295,7 +295,7 @@ commands it selects the dereplicator.
 | `--reference` |  | Reference genome filename. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
 | `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable). |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 
@@ -315,7 +315,7 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
 
@@ -351,7 +351,7 @@ sourmash thresholds.
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
 | `--tool` | `auto` | Dereplicator with comparison support: auto, drep, sourmash. auto uses dRep when it can run (on the PATH or via the container backend), otherwise sourmash. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--plot-max` | `1.0` | Upper bound of the ANI values plotted, as a fraction from 0 to 1. |
 | `--plot-min` | `0.0` | Lower bound of the ANI values plotted, as a fraction from 0 to 1. |
 | `--keep-files` | off | Keep the comparison tool's working directory glance_wd/. |
@@ -472,7 +472,7 @@ Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
 | `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
@@ -492,7 +492,7 @@ Dereplicate the union of chunk representatives (gather step).
 | `-pani`, `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `-sani`, `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `-af`, `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
@@ -521,7 +521,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
@@ -559,7 +559,7 @@ Fetch and assemble one run of a reads.tsv (stateless data-channel step).
 | `--run` | required | The run accession (a row of reads.tsv) to assemble. |
 | `-o`, `--out` | required | Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv. |
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--memory-gb` | `16` | Memory hint for the assembly, in GB, for tools that cap RAM. |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
 | `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
@@ -577,7 +577,7 @@ Score (CheckM2) and classify a batch of assemblies (stateless data-channel step)
 |---|---|---|
 | `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
 | `-o`, `--out` | required | Output dir for quality.tsv and classification.tsv. |
-| `-t`, `--threads` | `16` | Threads for the external tool. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 | `--memory-gb` | `16` | Memory budget in GB; caps concurrent classifier gathers at about 0.6 GB each. |
 | `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
 | `--classifier` | `auto` | Classifier: none, auto, sourmash. |

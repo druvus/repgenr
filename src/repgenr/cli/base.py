@@ -57,7 +57,7 @@ DEFAULT_THREADS = 16
 # Help texts shared by several commands, so the same flag reads the same
 # everywhere and the CLI matrix (tests/audit/cli_matrix.yaml) can hold one
 # sentence per flag.
-HELP_THREADS = "Threads for the external tool."
+HELP_THREADS = "Threads for the external tool (default 16, or the CPU limit when lower)."
 HELP_PRIMARY_ANI = "Primary (pre-clustering) ANI threshold in (0, 1]."
 HELP_SECONDARY_ANI = "Secondary (final cluster) ANI threshold in (0, 1]."
 HELP_ALIGNED_FRACTION = "Minimum aligned fraction in (0, 1] for a pair to be compared."
@@ -812,6 +812,41 @@ def main(
     _warn_ineffective_container_options(
         container, container_engine, container_cache, platform, wave
     )
+
+
+def resolve_threads(ctx: typer.Context, param: typer.CallbackParam, value: int) -> int:
+    """Callback of every ``-t/--threads``: follow the CPU limit of the process.
+
+    Without ``-t`` the count is :data:`DEFAULT_THREADS`, lowered to the CPUs
+    this process may use (affinity mask and cgroup CPU quota), so a container
+    or pod limited to a few CPUs does not run 16 threads on them. An explicit
+    value is kept, with a warning when it exceeds that limit. Logging is not
+    configured yet when the callback runs, so this writes to stderr directly.
+    """
+    from ..core.resources import usable_cpus
+
+    if ctx.resilient_parsing or param.name is None:
+        return value
+    limit = usable_cpus()
+    # Compared by name: Typer vendors its own copy of Click's ParameterSource.
+    source = ctx.get_parameter_source(param.name)
+    if source is None or source.name in {"DEFAULT", "DEFAULT_MAP"}:
+        if limit < value:
+            if _RUN_STATE["log_level"] <= logging.INFO:
+                typer.echo(
+                    f"INFO Using {limit} threads, the CPU limit of this process "
+                    f"(default {value}; -t/--threads sets the count).",
+                    err=True,
+                )
+            return limit
+        return value
+    if value > limit:
+        typer.echo(
+            f"WARNING -t/--threads {value} exceeds the {limit} CPU(s) this process may "
+            "use; the tools then share them.",
+            err=True,
+        )
+    return value
 
 
 def _warn_ineffective_container_options(

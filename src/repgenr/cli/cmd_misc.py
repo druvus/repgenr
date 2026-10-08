@@ -25,6 +25,7 @@ from .base import (
     _run,
     app,
     require_existing_workdir,
+    resolve_threads,
 )
 
 
@@ -430,7 +431,9 @@ def _glance_tool_help() -> str:
 def glance(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     tool: str = typer.Option("auto", "--tool", help=_glance_tool_help()),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     plot_max: float = typer.Option(
         1.0,
         "--plot-max",

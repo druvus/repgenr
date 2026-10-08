@@ -620,12 +620,28 @@ def test_a_relative_checkm_data_path_is_made_absolute(tmp_path, monkeypatch) -> 
 
 def test_available_cpus_on_the_host_follows_the_affinity_mask(monkeypatch) -> None:
     # A scheduler or taskset may confine repgenr to fewer CPUs than the host has.
+    from repgenr.core import resources
+
     caps = ToolCapabilities(name="gubbins")
+    monkeypatch.setattr(resources, "cgroup_cpu_quota", lambda: None)
     monkeypatch.setattr(containers.os, "sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
     monkeypatch.setattr(containers.os, "cpu_count", lambda: 64)
     assert containers.available_cpus(caps) == 3
     monkeypatch.delattr(containers.os, "sched_getaffinity", raising=False)
     assert containers.available_cpus(caps) == 64
+
+
+def test_available_cpus_on_the_host_follows_the_cgroup_quota(monkeypatch) -> None:
+    # docker run --cpus 2 or a Kubernetes limit: every CPU is visible, but the
+    # process receives the time of two.
+    from repgenr.core import resources
+
+    caps = ToolCapabilities(name="gubbins")
+    monkeypatch.setattr(
+        containers.os, "sched_getaffinity", lambda pid: set(range(11)), raising=False
+    )
+    monkeypatch.setattr(resources, "cgroup_cpu_quota", lambda: 2.0)
+    assert containers.available_cpus(caps) == 2
 
 
 def test_docker_containers_carry_pid_and_host_labels() -> None:

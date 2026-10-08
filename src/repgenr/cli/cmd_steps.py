@@ -51,6 +51,7 @@ from .base import (
     _tree_help,
     app,
     gated_extra,
+    resolve_threads,
     stage_errors,
 )
 
@@ -92,7 +93,9 @@ def dereplicate_chunk_cmd(
     aligned_fraction: float = typer.Option(
         0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     virus: bool = typer.Option(False, "--virus", help=HELP_VIRUS),
     tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
@@ -166,7 +169,9 @@ def phylo_build_cmd(
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     mask: str = typer.Option("none", "--mask", help=_mask_help_msa()),
     msa_only: bool = typer.Option(
         False,
@@ -315,7 +320,9 @@ def dereplicate_merge_cmd(
     aligned_fraction: float = typer.Option(
         0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     virus: bool = typer.Option(False, "--virus", help=HELP_VIRUS),
     tool_arg: list[str] = typer.Option([], "--tool-arg", help=HELP_DEREP_TOOL_ARG),
     selection_tsv: Path | None = typer.Option(
@@ -402,7 +409,9 @@ def assemble_run_cmd(
         ..., "-o", "--out", help="Output dir: contigs.fasta and assembly.ok, or excused_runs.tsv."
     ),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     memory_gb: int = typer.Option(
         16,
         "--memory-gb",
@@ -464,7 +473,9 @@ def genome_qc_cmd(
     out_dir: Path = typer.Option(
         ..., "-o", "--out", help="Output dir for quality.tsv and classification.tsv."
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     memory_gb: int = typer.Option(
         16,
         "--memory-gb",
