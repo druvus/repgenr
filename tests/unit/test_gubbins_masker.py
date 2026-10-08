@@ -329,3 +329,51 @@ def test_available_cpus_is_the_engine_count_under_docker(monkeypatch) -> None:
     assert containers.available_cpus(caps) == 6
     monkeypatch.setattr(containers, "_CONFIG", containers.ContainerConfig())
     assert containers.available_cpus(caps) >= 1
+
+
+def test_exclude_name_matching_no_record_is_warned(tmp_path: Path, monkeypatch, caplog) -> None:
+    """A typer that names the outgroup 'og.fasta' (Path.stem of og.fasta.gz)
+    must not have Gubbins scan the outgroup without a warning."""
+    calls: list[list] = []
+
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        calls.append([str(a) for a in argv])
+        prefix = str(kw["cwd"] / "gubbins")
+        Path(prefix + ".recombination_predictions.gff").write_text(
+            "##gff-version 3\n", encoding="utf-8"
+        )
+        # Nothing was left out, so the masker reads Gubbins' own filtered sites.
+        Path(prefix + ".filtered_polymorphic_sites.fasta").write_text(">a\nA\n", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nATTTA\n>og.fasta\nGGGGG\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        mod.GubbinsMasker().mask(
+            full,
+            tmp_path / "gub",
+            MaskParams(threads=2, exclude=frozenset({"og"})),
+            logging.getLogger("t"),
+        )
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("no alignment record is named og" in w for w in warnings), warnings
+    assert "og.fasta" in set(mod.read_fasta(Path(calls[0][-1]))), "nothing was left out"
+
+
+def test_matched_exclude_name_is_not_warned(tmp_path: Path, monkeypatch, caplog) -> None:
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        Path(str(kw["cwd"] / "gubbins") + ".recombination_predictions.gff").write_text(
+            "##gff-version 3\n", encoding="utf-8"
+        )
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nATTTA\n>og\nGGGGG\n", encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        mod.GubbinsMasker().mask(
+            full,
+            tmp_path / "gub",
+            MaskParams(threads=2, exclude=frozenset({"og"})),
+            logging.getLogger("t"),
+        )
+    assert not any("no alignment record" in r.getMessage() for r in caplog.records)

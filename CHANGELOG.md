@@ -230,8 +230,13 @@ All notable changes to RepGenR are documented here. The format follows
   `x.fasta` in `align/msa.fasta` and in their intermediates, and the masker
   received both name forms of the outgroup. Plain genomes keep their names.
   An aligner alignment that a previous run left with such names is rebuilt
-  once instead of reused; the MSA stamp version is unchanged, so other
-  alignments are still reused.
+  once instead of reused. The MSA stamp version is unchanged, so other
+  alignments are still reused; the stamp now records the alignment's record
+  names, which a reuse compares with the inputs without reading the
+  alignment (a stamp written before is completed once from the header
+  lines). The Gubbins masker warns when an outgroup name to leave out
+  matches no alignment record, since the outgroup is then part of the
+  recombination scan.
 - `phylo --msa-source snptype` (#228) writes its typing pass under
   `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
   under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the

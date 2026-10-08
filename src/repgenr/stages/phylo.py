@@ -21,6 +21,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import mmap
+import os
 import re
 import shutil
 from collections.abc import Mapping, Sequence
@@ -206,9 +208,42 @@ def _write_msa_stamp(artifact: Path, key: str, versions: dict[str, str]) -> None
         "artifact": artifact.name,
         "artifact_digest": file_digest(artifact),
         "versions": versions,
+        # The record names, so a reuse checks them without reading the MSA.
+        "records": sorted(set(fasta_record_names(artifact))),
     }
+    _save_msa_stamp(artifact, stamp)
+
+
+def _save_msa_stamp(artifact: Path, stamp: dict) -> None:
     with atomic_path(artifact.parent / MSA_STAMP) as tmp:
         tmp.write_text(json.dumps(stamp, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def fasta_record_names(path: Path) -> list[str]:
+    """The record names (first header token) of a FASTA file, in file order.
+
+    Searches the memory-mapped file for line starts with '>', so sequence
+    lines are skipped without being split into lines or decoded.
+    """
+    with open(path, "rb") as fh:
+        if os.fstat(fh.fileno()).st_size == 0:
+            return []
+        with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            names: list[str] = []
+            if mm[:1] == b">":
+                pos = 0
+            else:
+                found = mm.find(b"\n>")
+                pos = found + 1 if found >= 0 else -1
+            while pos >= 0:
+                end = mm.find(b"\n", pos)
+                if end < 0:
+                    end = len(mm)
+                fields = mm[pos + 1 : end].decode("utf-8", "replace").split()
+                names.append(fields[0] if fields else "")
+                found = mm.find(b"\n>", end)
+                pos = found + 1 if found >= 0 else -1
+            return names
 
 
 def _msa_with_reuse(
@@ -225,10 +260,10 @@ def _msa_with_reuse(
     artifact = _msa_artifact(dirs, params)
     if reuse:
         stamp = _read_msa_stamp(artifact, key)
-        if stamp is not None and not _msa_records_named(artifact, genomes, outgroup_file):
+        if stamp is not None and not _msa_records_named(artifact, stamp, genomes, outgroup_file):
             # An aligner MSA from before every adapter used record_name names a
             # gzipped genome x.fasta.gz 'x.fasta'. Rebuilding only such an MSA
-            # spares the workdirs a stamp version change would realign.
+            # spares the workdirs that a stamp version change would realign.
             logger.info(
                 "The alignment at %s names records other than the genomes' record "
                 "names; it is rebuilt.",
@@ -248,21 +283,23 @@ def _msa_with_reuse(
     return msa, versions
 
 
-def _msa_records_named(artifact: Path, genomes: Sequence[Path], outgroup_file: Path | None) -> bool:
+def _msa_records_named(
+    artifact: Path, stamp: dict, genomes: Sequence[Path], outgroup_file: Path | None
+) -> bool:
     """True when every record of ``artifact`` is the record name of an input.
 
-    Reads only the header lines. A subset, not equality: a typer may leave out
-    a genome it could not type, and the tree leaf check reports that.
+    The names come from the stamp, which _read_msa_stamp has matched to the
+    artifact's content digest. A stamp written before the stamp recorded them
+    is completed once from the header lines, so the next reuse reads nothing.
+    A subset, not equality: a typer may leave out a genome it could not type,
+    and the tree leaf check reports that.
     """
+    records = stamp.get("records")
+    if not isinstance(records, list):
+        records = sorted(set(fasta_record_names(artifact)))
+        _save_msa_stamp(artifact, {**stamp, "records": records})
     inputs = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
-    names = {record_name(g) for g in inputs}
-    with open(artifact, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            if line.startswith(">"):
-                fields = line[1:].split()
-                if not fields or fields[0] not in names:
-                    return False
-    return True
+    return set(records) <= {record_name(g) for g in inputs}
 
 
 def build_msa(

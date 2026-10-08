@@ -861,6 +861,53 @@ def test_aligner_msa_named_by_path_stem_is_rebuilt(
     assert len(calls) == 1, "the rebuilt alignment is reused"
 
 
+def test_fasta_record_names_reads_only_headers(tmp_path: Path) -> None:
+    from repgenr.stages.phylo import fasta_record_names
+
+    f = tmp_path / "a.fasta"
+    f.write_bytes(b">x desc\r\nACGT\nAC>GT\n>y\n" + b"A" * 200_000 + b"\n>\n>z")
+    assert fasta_record_names(f) == ["x", "y", "", "z"]
+    f.write_bytes(b"junk\n>x\nA\n")
+    assert fasta_record_names(f) == ["x"]
+    f.write_bytes(b"")
+    assert fasta_record_names(f) == []
+    f.write_bytes(b"ACGT\n")
+    assert fasta_record_names(f) == []
+
+
+def test_reused_msa_is_checked_from_the_stamp_without_reading_it(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """The stamp holds the record names, so a reuse does not scan the MSA; a
+    stamp written without them is completed once."""
+    import json
+
+    from repgenr.stages import phylo as phylo_mod
+
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    stamp_path = workdir / "align" / "msa_source.json"
+    stamp = json.loads(stamp_path.read_text())
+    assert stamp["records"] == [f"Fam_gen_sp_GCA_00000{i}" for i in range(1, 4)]
+
+    # A stamp from before the names were recorded is completed once.
+    del stamp["records"]
+    stamp_path.write_text(json.dumps(stamp))
+    run(ctx, PhyloParams(no_outgroup=True, bootstrap=10, **base))
+    assert len(calls) == 1
+    assert "records" in json.loads(stamp_path.read_text())
+
+    def no_scan(path):
+        raise AssertionError("a reuse with recorded names must not scan the MSA")
+
+    monkeypatch.setattr(phylo_mod, "fasta_record_names", no_scan)
+    run(ctx, PhyloParams(no_outgroup=True, bootstrap=20, **base))
+    assert len(calls) == 1, "reused"
+
+
 # -- the stage harness: which failures leave an [interrupted] record ---------
 
 
