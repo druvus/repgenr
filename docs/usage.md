@@ -607,8 +607,7 @@ fingerprint format changed).
 `quality`), and so do the Nextflow steps `dereplicate-chunk` and
 `dereplicate-merge` (`--derep_keeper`). After the chosen dereplicator clusters
 the genomes, the keeper step re-picks each cluster's representative by
-`completeness - 5 x contamination` (`src/repgenr/stages/derep_keeper.py`),
-which corrects the tendency of connectivity-based tools to keep the
+assembly quality (`src/repgenr/stages/derep_keeper.py`), which corrects the tendency of connectivity-based tools to keep the
 most-sequenced (not the best-quality) genome in a cluster. The values come
 from the manifest: GTDB selections carry CheckM values (`--source api` fetches
 them from each genome's card, one request per selected genome), `assemble
@@ -619,24 +618,41 @@ When no genome under `genomes/` has quality the stage warns, and
 `repgenr.yaml` records `keeper_effective: tool` next to the requested `keeper`
 and the swap count.
 
-The rule is strict. A member replaces the representative only when its score
-is higher; on equal scores the adapter's representative stays, so which of
-two equally scored genomes represents a cluster depends on the tool. A genome
-without values never replaces a scored representative, a cluster without any
-scored genome keeps the adapter's choice, and a scored genome replaces an
-unscored representative whatever its score. With quality for only part of the
-set, a scored fragment can therefore replace an unscored complete genome;
-check `cluster_summary.tsv` (`rep_completeness`) in that case or use
-`--keeper tool`. The score ignores contiguity: between genomes scored within a
-fraction of a point, as is common for closed and draft genomes of one species,
-a draft can replace a closed genome.
+The score follows dRep's default weights for the terms that need no further
+tool: `completeness - 5 x contamination + 0.5 x log10(N50)`, with the N50
+read once per genome from its FASTA (gzipped or not). The N50 term separates
+genomes whose CheckM values differ by less than CheckM's precision: on 30
+GTDB *F. tularensis* genomes, all scored between 99.44 and 100, a 29-contig
+draft at 100/0.00 outscored closed genomes at 100/0.03 on CheckM alone, but
+not with the N50 term. Genomes are compared in this order:
+
+1. higher score;
+2. higher completeness;
+3. lower contamination;
+4. higher N50;
+5. genome filename, in sort order.
+
+Only genomes with completeness and contamination compete; a genome without
+them never becomes the representative. When the adapter's representative has
+values, the best genome in the cluster wins, that representative included, so
+the result does not depend on which genome the tool picked. When it has none,
+a scored genome replaces it only if it is high quality by the MIMAG
+thresholds (completeness above 90, contamination below 5). A scored fragment
+therefore does not displace an unscored complete genome; the log names the
+clusters left with the tool's representative for this reason. A cluster
+without any scored genome keeps the adapter's choice.
 
 The workdir stage applies the keeper once, to the final clusters of a chunked
 run. The Nextflow steps apply it within each chunk and again after the merge,
 so the merge pass compares the chunk keepers rather than the tools' picks.
-Both end with the best-scoring genome of each final cluster, but the clusters
-themselves can differ slightly, since the merge pass compares different
-genomes.
+Both end with the keeper of each final cluster, but the clusters themselves
+can differ slightly, since the merge pass compares different genomes. Each
+chunk records the N50 of its scored genomes in `genome_n50.tsv`, so the merge
+step scores members whose files it does not receive.
+
+The keeper rule changed in this release (N50 term, high-quality condition,
+tie order). Existing workdirs keep their representatives until dereplicate is
+rerun with `--force`, since the resume fingerprint does not include the rule.
 
 The same manifest values also reach the dereplicator, whichever keeper rule is
 chosen (the Nextflow chunk and merge steps read them from `selection.tsv`),
@@ -660,8 +676,9 @@ except when the new file carries an older timestamp (copied with `cp -p` or
 directory after such a replacement.
 
 `--reduce species|genus` collapses the ANI representatives to one per taxon
-after dereplication, choosing the keeper by quality when scores are known and
-`--keeper` is `quality`, and by cluster size otherwise; `--target-reps N` searches the secondary ANI to
+after dereplication. The representative of the largest cluster is the
+default keeper of a taxon; with `--keeper quality` and scores known, the
+keeper rule above re-picks among the taxon's representatives; `--target-reps N` searches the secondary ANI to
 land near N representatives. Both exist on `dereplicate` and, since the
 merge step is where the final set is decided, on `dereplicate-merge`, which
 the Nextflow layer drives through `--derep_reduce` and `--derep_target_reps`.

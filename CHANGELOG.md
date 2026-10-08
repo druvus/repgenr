@@ -225,6 +225,23 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- Quality keeper (#254): the score is `completeness - 5 x contamination +
+  0.5 x log10(N50)`, dRep's default weights, with the N50 read once per
+  genome from its FASTA (gzip-aware). Equal scores go to higher completeness,
+  then lower contamination, then higher N50, then the filename, so skDER,
+  sourmash and galah end with the same keepers on the same clusters; the
+  tool's pick no longer wins ties. A scored genome replaces an unscored
+  representative only when it is high quality (completeness above 90,
+  contamination below 5), and an INFO line names the clusters left to the
+  tool. The same rule applies to `--reduce` (the largest cluster's
+  representative is the default keeper of a taxon) and to `best_member` in
+  `cluster_summary.tsv`, which gains `rep_n50` and `best_score` after
+  `n_genomes`. `dereplicate-chunk` writes `genome_n50.tsv` for the merge step.
+  On 30 GTDB r232 *F. tularensis* genomes, a 29-contig draft at 100/0.00 no
+  longer replaces closed genomes at 100/0.03. Representatives of an existing
+  workdir change only when dereplicate is rerun with `--force`; the resume
+  fingerprint is unchanged. `cluster-summary` and `derep-stock unpack` write
+  the new columns.
 - `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.

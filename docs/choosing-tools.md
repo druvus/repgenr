@@ -109,8 +109,13 @@ Guidance:
   `genome_status.tsv` and in no cluster.
 - The representative inside a clone block depends on the tool, its back-end and
   the accession names, not on genome quality. The default `--keeper quality`
-  re-picks each cluster's representative by completeness minus 5 times
-  contamination, using the values in the manifest, whichever tool clustered.
+  re-picks each cluster's representative by `completeness - 5 x contamination
+  + 0.5 x log10(N50)` (dRep's default weights), using the values in the
+  manifest and the N50 of each genome file, whichever tool clustered. Ties go
+  to higher completeness, then lower contamination, then higher N50, then the
+  filename, so skDER, sourmash and galah end with the same keepers when they
+  form the same clusters. An unscored representative is replaced only by a
+  high-quality genome (completeness above 90, contamination below 5).
   `--keeper tool` keeps the adapter's choice.
 - On the synthetic set `clonal_50_clustered` (groups of 20, 15 and 15 genomes,
   within-group ANI about 0.995 or higher, between-group about 0.96 or lower),
