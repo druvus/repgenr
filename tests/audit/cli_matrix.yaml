@@ -1058,7 +1058,9 @@ commands:
       --images:
         aliases: []
         param: 'n/a: query command, no stage parameters'
-        validated: none
+        validated: callback
+        # A boolean flag: the invalid use is --images without --check.
+        invalid: without --check
         docs:
         - docs/cli-reference.md
         - docs/install.md
