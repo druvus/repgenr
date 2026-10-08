@@ -198,6 +198,7 @@ All notable changes to RepGenR are documented here. The format follows
   Python's bare fallback line.
 - `doctor` (#PRNUM): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
 - `status` (#PRNUM): a `repgenr.yaml` that records no stage is no longer read
+- `status` (#245): a `repgenr.yaml` that records no stage is no longer read
   as the bacterial chain ("Next: repgenr metadata"); `status` names the entry
   stages, and suggests `doctor` when the workdir holds outputs. A record with
   stages but no entry stage (for example only `dereplicate`) is shown as

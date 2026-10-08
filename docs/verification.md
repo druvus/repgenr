@@ -511,7 +511,7 @@ parser), so they also apply to commands other than the one named.
 | snptype | `--mask gubbins` passed the default 16 threads to Gubbins, whose IQ-TREE tree builder refuses more threads than cores (11 on the audit machine); the masker now caps them at the CPUs where Gubbins runs | #235 |
 | install | install.md presented `environment.yml` as the Linux single-environment route, but a linux-64 dry-run does not solve (Gubbins needs Python 3.8 to 3.10; mashtree's BioPerl chain needs zlib older than 1.3, against harvesttools and medaka); the docs now say so | #235 |
 | doctor, status | `doctor` exited 1 for failures found and for an unexpected error alike, and neither command had machine-readable output; `doctor` now exits 7 for failures, and both accept `--json` | #242 |
-| status, doctor | An emptied `repgenr.yaml` was read as the bacterial chain ("Next: repgenr metadata"), and a record without a resume fingerprint (an older version, or restored by `derep-stock unpack`) was shown as done with no hint that its next invocation recomputes it; status now names the entry stages or follows the shared stages, and both commands note such a record | #PRNUM |
+| status, doctor | An emptied `repgenr.yaml` was read as the bacterial chain ("Next: repgenr metadata"), and a record without a resume fingerprint (an older version, or restored by `derep-stock unpack`) was shown as done with no hint that its next invocation recomputes it; status now names the entry stages or follows the shared stages, and both commands note such a record | #245 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
