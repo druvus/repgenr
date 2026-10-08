@@ -59,14 +59,21 @@ def test_tool_that_reads_gzip_gets_the_inputs_unchanged(tmp_path: Path) -> None:
     assert not (tmp_path / "staged").exists()
 
 
-def test_two_inputs_with_one_record_name_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("caps", [_PLAIN, _GZ], ids=["no_gzip", "reads_gzip"])
+@pytest.mark.parametrize("other", ["x.fasta", "x.fna"])
+def test_two_inputs_with_one_record_name_are_refused(
+    tmp_path: Path, caps: ToolCapabilities, other: str
+) -> None:
+    """record_name gives x for x.fasta and x.fasta.gz alike; their records and
+    leaves could not be told apart, whichever tool runs."""
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
     one = _gz(tmp_path / "a" / "x.fasta.gz")
-    two = tmp_path / "b" / "x.fna"
+    two = tmp_path / "b" / other
     two.write_bytes(_CONTENT)
-    with pytest.raises(UserInputError, match="x"):
-        stage_plain_inputs([one, two], _PLAIN, tmp_path / "staged", _LOG)
+    with pytest.raises(UserInputError, match="share the record name 'x'"):
+        stage_plain_inputs([one, two], caps, tmp_path / "staged", _LOG)
+    assert not (tmp_path / "staged").exists()
 
 
 def test_one_path_given_twice_is_staged_once(tmp_path: Path) -> None:

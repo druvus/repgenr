@@ -593,13 +593,12 @@ def stage_plain_inputs(
     to ``dest_dir/<record name>.fasta``, written through a temporary sibling,
     and plain inputs map to themselves. The copy keeps the record name, so
     alignments and trees name the genome as they would the original. Two
-    inputs with one record name are refused, since their records could not be
-    told apart. ``dest_dir`` is created only when a copy is written; the
-    caller removes it when the tool has finished.
+    inputs with one record name (``x.fasta`` and ``x.fasta.gz``) are refused
+    for every tool, since their records and tree leaves could not be told
+    apart. ``dest_dir`` is created only when a copy is written; the caller
+    removes it when the tool has finished.
     """
     unique = list(dict.fromkeys(paths))
-    if caps.reads_gzip:
-        return {p: p for p in unique}
     by_name: dict[str, Path] = {}
     for p in unique:
         other = by_name.setdefault(record_name(p), p)
@@ -608,6 +607,8 @@ def stage_plain_inputs(
                 f"Two input genomes share the record name '{record_name(p)}': {other} "
                 f"and {p}. Remove or rename one of them."
             )
+    if caps.reads_gzip:
+        return {p: p for p in unique}
     staged: dict[Path, Path] = {}
     for p in unique:
         if not is_gzip(p):

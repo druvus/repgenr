@@ -624,8 +624,10 @@ All notable changes to RepGenR are documented here. The format follows
   alignment reuse key and the stage fingerprint use the original paths, so no
   workdir reruns because of this. When SibeliaZ is called directly with gzip
   input and writes an empty MAF, the error now names the gzipped input. Two
-  input genomes with one record name (`x.fasta` and `x.fna`) are refused with
-  exit 2 when a tool that cannot read gzip is used.
+  input genomes with one record name (`x.fasta` and `x.fasta.gz`, or
+  `x.fna`) are refused with exit 2 before an aligner, SNP typer or
+  genome-input tree builder runs, since their records and tree leaves could
+  not be told apart.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment
