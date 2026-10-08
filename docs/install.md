@@ -111,8 +111,11 @@ variable: `REPGENR_CONTAINER`, `REPGENR_CONTAINER_ENGINE`,
 
 - `--container docker|singularity` selects the backend.
   `--container-engine` replaces the binary (apptainer, podman).
-- `--container-cache <dir>` is where Singularity images and the Wave cache
-  live. Put it on a large disk.
+- `--container-cache <dir>` is where Singularity images and their cache
+  live. Put it on a large disk. Docker ignores it, and Wave image references
+  are resolved once per process, not stored. A container option given without
+  `--container` (or its variable set while running natively) has no effect and
+  is named in a warning.
 - `--platform linux/amd64` runs amd64 images on an arm64 host. Docker Desktop
   on Apple Silicon needs the Apple Virtualization framework with "Use Rosetta
   for x86/amd64 emulation" enabled. Docker's QEMU emulation cannot run some

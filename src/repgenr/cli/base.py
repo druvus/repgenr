@@ -740,7 +740,7 @@ def main(
         None,
         "--container-cache",
         envvar="REPGENR_CONTAINER_CACHE",
-        help="Directory for Singularity .sif images / Wave cache (large; can be external).",
+        help="Directory for Singularity .sif images and their cache (large; can be external).",
     ),
     platform: str | None = typer.Option(
         None,
@@ -787,6 +787,39 @@ def main(
         cache_dir=container_cache,
         wave_enabled=wave,
     )
+    _warn_ineffective_container_options(container, container_engine, container_cache, platform, wave)
+
+
+def _warn_ineffective_container_options(
+    backend: str, engine: str | None, cache: str | None, platform: str | None, wave: bool
+) -> None:
+    """Name container options (or their REPGENR_* variables) that change nothing.
+
+    Logging is not configured yet when the callback runs, so this writes to
+    stderr directly.
+    """
+    if backend == "none":
+        given = [
+            flag
+            for flag, value in (
+                ("--container-engine", engine),
+                ("--container-cache", cache),
+                ("--platform", platform),
+                ("--wave", wave),
+            )
+            if value
+        ]
+        for flag in given:
+            typer.echo(
+                f"WARNING {flag} has no effect without --container docker or singularity.",
+                err=True,
+            )
+    elif backend == "docker" and cache:
+        typer.echo(
+            "WARNING --container-cache is used only by --container singularity; "
+            "Docker keeps images in its own storage.",
+            err=True,
+        )
 
 
 def _tool_exit_code(returncode: int) -> int:

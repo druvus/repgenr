@@ -41,7 +41,7 @@ class ContainerConfig:
     backend: str = NATIVE
     engine: str | None = None  # explicit engine binary; defaults per backend
     platform: str | None = None  # e.g. "linux/amd64" for emulated BioContainers
-    cache_dir: Path | None = None  # where Singularity .sif / Wave cache live
+    cache_dir: Path | None = None  # where Singularity .sif images and caches live
     wave_enabled: bool = False
     extra_mounts: tuple[Path, ...] = field(default_factory=tuple)
 

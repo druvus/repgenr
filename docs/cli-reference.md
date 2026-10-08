@@ -20,7 +20,7 @@ and `run --viral-source` correspond to `metadata --source` and `vmetadata
 | `--version` | off | Show version and exit. |
 | `--container` | `none` | Run external tools in containers: none, docker, or singularity. |
 | `--container-engine` |  | Engine binary override (e.g. apptainer, podman). |
-| `--container-cache` |  | Directory for Singularity .sif images / Wave cache (large; can be external). |
+| `--container-cache` |  | Directory for Singularity .sif images and their cache (large; can be external). |
 | `--platform` |  | Container platform, e.g. linux/amd64 for emulated BioContainers on arm64. |
 | `--wave`, `--no-wave` | off | Resolve images for multi-tool adapters via the Seqera Wave CLI. |
 | `--force`, `-f`, `--no-force` | off | Re-run a stage even if it already completed with the same parameters. |

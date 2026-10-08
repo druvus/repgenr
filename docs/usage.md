@@ -1152,7 +1152,7 @@ repgenr --container singularity --container-cache /Volumes/LaCie/repgenr_sif \
 |--------|---------|---------|
 | `--container {none,docker,singularity}` | `REPGENR_CONTAINER` | execution backend |
 | `--container-engine <bin>` | `REPGENR_CONTAINER_ENGINE` | engine override (apptainer, podman) |
-| `--container-cache <dir>` | `REPGENR_CONTAINER_CACHE` | Singularity `.sif` / Wave cache (can be external) |
+| `--container-cache <dir>` | `REPGENR_CONTAINER_CACHE` | Singularity `.sif` images and cache (can be external) |
 | `--platform <plat>` | `REPGENR_CONTAINER_PLATFORM` | e.g. `linux/amd64` to emulate BioContainers on Apple Silicon |
 | `--wave / --no-wave` | `REPGENR_WAVE` | resolve multi-tool/arm64 images via the Seqera Wave CLI |
 
