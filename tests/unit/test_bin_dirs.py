@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import stat
 from pathlib import Path
 
@@ -145,8 +146,20 @@ def test_a_malformed_entry_is_rejected(entry) -> None:
         bindirs.parse_entries([entry])
 
 
+# Rich draws usage errors in a box at the terminal width, with colour under
+# CI; a plain, wide terminal keeps messages on one line, and _flat() removes
+# what remains of the box, colour and wrapping before a substring check.
+_PLAIN = {"TERM": "dumb", "NO_COLOR": "1", "COLUMNS": "200"}
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_BOX = re.compile(r"[\s\u2500-\u257f]+")
+
+
+def _flat(text: str) -> str:
+    return _BOX.sub("", _ANSI.sub("", text))
+
+
 def _list_tools(args, env=None):
-    return _runner.invoke(app, [*args, "list-tools"], env=env)
+    return _runner.invoke(app, [*args, "list-tools"], env={**_PLAIN, **(env or {})})
 
 
 def test_the_cli_option_and_variable_configure_the_directories(tmp_path) -> None:
@@ -169,13 +182,13 @@ def test_an_unknown_tool_is_a_usage_error(tmp_path, via_env) -> None:
     else:
         result = _list_tools(["--bin-dir", f"nosuchtool={tmp_path}"])
     assert result.exit_code == 2
-    assert "nosuchtool" in result.output
+    assert "nosuchtool" in _flat(result.output)
 
 
 def test_a_missing_directory_is_a_usage_error(tmp_path) -> None:
     result = _list_tools(["--bin-dir", f"gubbins={tmp_path / 'absent'}"])
     assert result.exit_code == 2
-    assert "absent" in result.output
+    assert "absent:notadirectory" in _flat(result.output)
 
 
 def test_non_registry_tools_are_accepted(tmp_path) -> None:
@@ -186,10 +199,10 @@ def test_non_registry_tools_are_accepted(tmp_path) -> None:
 def test_a_directory_for_a_tool_that_runs_in_an_image_is_reported(tmp_path) -> None:
     result = _list_tools(["--container", "docker", "--bin-dir", f"gubbins={tmp_path}"])
     assert result.exit_code == 0, result.output
-    assert "--bin-dir gubbins has no effect" in result.stderr
+    assert _flat("--bin-dir gubbins has no effect") in _flat(result.stderr)
     # skder has no pinned image, so without --wave it runs on the host.
     result = _list_tools(["--container", "docker", "--bin-dir", f"skder={tmp_path}"])
-    assert "no effect" not in result.stderr
+    assert "noeffect" not in _flat(result.stderr)
 
 
 def test_bin_dirs_raise_on_bad_input_outside_the_cli(tmp_path) -> None:
@@ -229,6 +242,7 @@ def test_the_stage_record_names_the_directory_a_tool_used(
             "dirtyper",
             "--all-genomes",
         ],
+        env=_PLAIN,
     )
     assert result.exit_code == 0, result.output
     record = Config.load(workdir).stages["snptype"]
