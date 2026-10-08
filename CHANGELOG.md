@@ -128,7 +128,7 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
-- `phylo --msa-source snptype` (#PRNUM) writes its typing pass under
+- `phylo --msa-source snptype` (#228) writes its typing pass under
   `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
   under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the
   `snptype` stage alone. Before, the typing pass replaced the `snptype` stage's

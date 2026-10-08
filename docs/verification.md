@@ -447,7 +447,7 @@ parser), so they also apply to commands other than the one named.
 | phylo, phylo-build | A tree whose leaves a tool renamed (extension, '.ref', characters replaced) passed the leaf check but not tree2tax; phylo now writes the input names back into `tree.nwk` | #223 |
 | phylo | `phylo --msa-source snptype` replaced the tables the `snptype` stage wrote in `snp/`, while the `snptype` record stayed; a repeat `snptype` skipped and `doctor` reported nothing. phylo now removes that record with a warning | #223 |
 | run | `--with-snptype --msa-source snptype` ran `snptype` before `phylo`, whose typing pass then replaced its tables; `snptype` now runs after `phylo` in that case | #223 |
-| phylo, run | The two #223 rows above are superseded: the typing pass of `phylo --msa-source snptype` writes under `tree/msa/`, so `snp/` has one writer, the `snptype` record is kept and `run` types before `phylo` again (verified on clonal_50_clustered) | #PRNUM |
+| phylo, run | The two #223 rows above are superseded: the typing pass of `phylo --msa-source snptype` writes under `tree/msa/`, so `snp/` has one writer, the `snptype` record is kept and `run` types before `phylo` again (verified on clonal_50_clustered) | #228 |
 | tree2tax | After an interrupted phylo rebuild, tree2tax used the previous tree without notice; it now warns | #223 |
 | phylo | `--msa-source snptype` and `--mask` with an alignment-free builder were dropped without notice; the stage now warns | #223 |
 | tree2tax, tree2tax-relations | An outgroup accession matching no file in the outgroup directory was reported as "not present among tree leaves" | #223 |
