@@ -447,6 +447,8 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | `--tool drep` needed CheckM even when the manifest had completeness and contamination for every genome; these are now passed as `--genomeInfo` | #233 |
 | dereplicate | Chunked `--tool sourmash --target-reps` sketched the merge-level union again at each search step; it is now assembled from the chunk zips with `sourmash sig cat` | #233 |
 | dereplicate | Chunks of one run could be scored from different sources (dRep `--genomeInfo` in a fully scored chunk, CheckM in another); the quality decision now covers the whole run | #233 |
+| dereplicate-merge | `--keeper tool --reduce species` ranked the representatives of a species by `selection.tsv` quality, while the stage uses cluster size under `--keeper tool`; on clonal_50 with a scored 40 percent fragment the merge step kept the fragment and the stage the 19-member cluster | (this PR) |
+| dereplicate | `keeper_effective: quality` was recorded, and the no-quality warning skipped, when the manifest held quality only for genomes outside `genomes/` such as the outgroup | (this PR) |
 | tree2tax, doctor | A `tree.nwk` holding two concatenated trees passed the completeness check, and tree2tax used the first; both now refuse it (exit 3 in tree2tax) | #223 |
 | snptype, phylo | ParSNP records kept harvesttools' names (`x.fasta`, `x.fasta.ref`); phylo accepted the tree, but tree2tax could not find the outgroup leaf and exited 3, and the Gubbins outgroup exclusion missed it. Records are now named by genome stem (verified on the 50-genome set) | #223 |
 | snptype | ParSNP copied every query genome into scratch; they are now hardlinked | #223 |
@@ -544,6 +546,10 @@ they are recorded here and not fixed.
 | doctor | The first-bytes FASTA check reads every genome: 28 s for 1000 genomes on an exFAT USB volume (about 35 ms per file, not cached between runs); 8 to 16 threads gave 1.3 to 1.7 times. `status` reads no genome content and takes 0.4 s there. `doctor --quick` skips the check (#242). |
 | doctor | Opening the WAL-mode manifest lets SQLite create or touch `manifest.sqlite-shm` and `-wal`; no data changes. |
 | Environment | dRep 3.4.5 in the local environment fails in fastANI parsing (`read_csv` no longer accepts `delim_whitespace` in the installed pandas); ANImf (`--virus`) runs. The container pin is dRep 3.7.1. |
+| dereplicate | With quality for only part of a cluster, the keeper promotes any scored genome over an unscored representative: a 40 percent fragment scored 40/0 replaced the complete genome galah had chosen by file size (skDER and galah, unchunked, chunked and the Nextflow steps). Documented in usage.md; a change of rule is proposed. |
+| dereplicate | On equal scores the representative depends on the tool: of g000022 (95/0) and g000030 (100/1), skDER and galah kept g000030 and sourmash and dRep g000022. |
+| dereplicate | On 30 GTDB r232 F. tularensis genomes (scores 99.44 to 100) `--keeper quality` replaced closed one-contig genomes (GCF_000833375.1 from skDER, GCF_000014645.1 from sourmash) and galah's two-contig pick with the 29-contig GCF_016603775.1 (100/0.00 against 100/0.03); the score has no contiguity term. |
+| dereplicate | The workdir stage applies the keeper once to the final clusters; the Nextflow steps apply it per chunk and after the merge. Final representatives agreed on clonal_50 with skDER, sourmash and galah at -s 25, apart from ties among equal scores. |
 
 ## Gzipped genomes in the aligners and typers (2026-10-08)
 
