@@ -104,7 +104,7 @@ because a satellite tool calls its helpers by name and core's come first:
   environment. This combination has not been tested.
 - Gubbins calls `iqtree` by name, so it runs core's IQ-TREE 3 instead of the
   IQ-TREE 2.4 of its own environment. On a small test set the result was the
-  same, but the Gubbins log then reports the IQ-TREE 3 version.
+  same, but the Gubbins log then records no IQ-TREE version ("for" in its place).
 
 The per-tool `--bin-dir` option (#247) closes both gaps.
 
