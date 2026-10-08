@@ -1,0 +1,8 @@
+# No osx-arm64 build; use osx-64 under Rosetta on Apple Silicon. Platforms: linux-64, osx-64.
+name: repgenr-parsnp
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - parsnp>=2.0
+  - harvesttools>=1.3

@@ -14,8 +14,9 @@ authors = [{ name = "jaclew" }]
 # not a library others resolve against), so capping guards a fresh install from a
 # surprise breaking major (e.g. numpy 3, biopython 2) without the downstream
 # resolver friction caps cause for libraries. Raise a cap when that major is
-# vetted. For fully reproducible scientific runs, pin via the conda lock (see
-# environment.yml), which also covers the external bioinformatics tools.
+# vetted. For fully reproducible scientific runs, pin via a conda lock exported
+# from the environments in envs/ (see docs/install.md), which also covers the
+# external bioinformatics tools.
 dependencies = [
     "typer>=0.12,<1.0",
     "PyYAML>=6.0,<7.0",

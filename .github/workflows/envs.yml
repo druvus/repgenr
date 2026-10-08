@@ -1,0 +1,66 @@
+name: Conda environments
+
+# Dry-run solve of every envs/*.yml file. Floors are fixed while bioconda and
+# conda-forge move, so the weekly run reports a file that stops solving.
+# All solves run on ubuntu-latest; CONDA_SUBDIR selects the target platform and
+# the virtual-package overrides stand in for the target system.
+
+on:
+  pull_request:
+    paths:
+      - "envs/**"
+      - ".github/workflows/envs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "envs/**"
+      - ".github/workflows/envs.yml"
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  solve:
+    name: ${{ matrix.env }} (${{ matrix.subdir }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [core, gubbins, mashtree, snippy, parsnp, checkm2, mauve]
+        subdir: [linux-64]
+        include:
+          - env: core
+            subdir: osx-arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: ISO week (repodata cache key)
+        id: week
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache conda package index
+        uses: actions/cache@v4
+        with:
+          path: ~/conda_pkgs_dir/cache
+          key: repodata-${{ matrix.subdir }}-${{ steps.week.outputs.week }}
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          auto-activate-base: true
+          activate-environment: ""
+          pkgs-dirs: ~/conda_pkgs_dir
+
+      - name: Dry-run solve
+        shell: bash -el {0}
+        env:
+          CONDA_SUBDIR: ${{ matrix.subdir }}
+          CONDA_OVERRIDE_GLIBC: "2.28"
+          CONDA_OVERRIDE_OSX: "13.0"
+        run: |
+          conda --version
+          conda env create --dry-run -n probe -f envs/${{ matrix.env }}.yml

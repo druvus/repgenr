@@ -301,3 +301,21 @@ against the registered adapters by `tests/unit/test_docs_tool_limits.py`.
 These limits count genomes only. They do not model genome size, memory or
 thread count. Aligners and SNP typers declare limits that the scale warnings
 use, but limit-based `auto` selection applies only to dereplicators and tree builders.
+
+## 10. Which environment provides each tool
+
+A tool you choose must be installed. The conda files under `envs/` split the
+tools over a core environment and six satellites, because they do not solve
+as one environment (see [install.md](install.md#1-core-and-satellite-environments)).
+Append a satellite's `bin` directory after core on `PATH`, never before it.
+
+| Environment | Tools |
+|---|---|
+| `repgenr` (`envs/core.yml`) | skder, galah, sourmash, drep, sibeliaz, simple, ska2, iqtree, fasttree, raxmlng, skesa, shovill, flye, medaka, racon, and `datasets` for the downloads |
+| `repgenr-gubbins` | gubbins |
+| `repgenr-mashtree` | mashtree |
+| `repgenr-snippy` | snippy |
+| `repgenr-parsnp` | parsnp |
+| `repgenr-checkm2` | checkm2 (the reads chain quality step) |
+| `repgenr-mauve` | progressivemauve |
+| none (image only) | cactus |

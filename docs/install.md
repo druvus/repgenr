@@ -26,78 +26,98 @@ pip install -e ".[dev]"  # for development
 
 | Situation | Recommended method | Why |
 |---|---|---|
-| Linux x86_64 workstation | Per-tool conda environments on `PATH` (section 2), or containers | `environment.yml` lists every tool except Cactus and the databases, but it does not currently solve as one environment (see section 1). |
+| Linux x86_64 workstation | The core conda environment plus the satellites you need, appended after core on `PATH` (sections 1 and 2), or containers | All seven files under `envs/` solve on linux-64. Cactus and the databases are not included. |
 | HPC cluster | `--container singularity` with `--container-cache` on shared storage | Tools run from pinned images without site installs. Images are pulled once and reused. |
-| macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, shovill, medaka and CheckM2 | These were run inside containers on the audit machine (`verification.md`); the CheckM2 host builds fail on macOS. skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins, the tree builders, skesa, flye and racon ran natively. |
+| macOS on Apple Silicon | The core environment (osx-arm64) with satellites appended on `PATH`; containers for progressiveMauve, Cactus, snippy, dRep, shovill, medaka and CheckM2 | These were run inside containers on the audit machine (`verification.md`); the CheckM2 host builds fail on macOS. skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins, the tree builders, skesa, flye and racon ran natively. |
 | Nextflow on a cluster | A site image or conda per profile; `-profile slurm,singularity` | The `slurm` profile sets only the executor. The container profiles set `--container` for every stage. |
 | Nextflow on a cloud executor | A site config with the executor, queue and an image that provides `repgenr` and the tools | No cloud profile ships, because the region, queue and image are site-specific (see [usage.md](usage.md#profiles)). |
 
 ## Three ways to provide the tools
 
-### 1. One conda environment
+### 1. Core and satellite environments
 
-`environment.yml` lists the package and every tool except Cactus and the
-databases. It is meant as the single-environment route, but a linux-64
-dry-run on 2026-10-08 did not solve. Every Gubbins build on bioconda needs
-Python 3.8 to 3.10, while RepGenR needs 3.12 or later. Without Gubbins the
-solve still fails: mashtree's BioPerl chain (`perl-bio-samtools`) needs zlib
-older than 1.3, which conflicts with harvesttools (zlib 1.3.1 or later) and
-medaka (samtools 1.14 or later). Until the file is split, use one
-environment per tool group on `PATH` (section 2) or the containers (section 3).
-It is not expected to solve on macOS either (see section 2). progressiveMauve from bioconda needs the adapter's `boost-cpp=1.74.0` pin, or the pinned image, so check that tool first with `repgenr list-tools --check`.
+The tools do not solve as one conda environment. Gubbins needs Python 3.8 to
+3.10, mashtree and snippy need zlib older than 1.3, and progressiveMauve needs
+boost 1.74. The files under `envs/` therefore define a core environment with
+RepGenR and every tool that shares its solve, plus six satellite environments.
+Each file's first line names its platforms and why it is separate. CI
+dry-runs each solve on every change to `envs/` and once a week
+(`.github/workflows/envs.yml`).
+
+| File | Environment | Contents | Platforms that solve |
+|---|---|---|---|
+| `envs/core.yml` | `repgenr` | Python 3.12, RepGenR, sourmash and branchwater, skDER, skani, galah, dRep, datasets, SibeliaZ, minimap2, samtools, bcftools, ska2, skesa, shovill, flye, medaka, racon, FastTree, IQ-TREE, RAxML-NG | linux-64, osx-arm64 |
+| `envs/gubbins.yml` | `repgenr-gubbins` | Gubbins (Python 3.10, with its own IQ-TREE 2 and RAxML) | linux-64, osx-64, osx-arm64 |
+| `envs/mashtree.yml` | `repgenr-mashtree` | mashtree (brings samtools 0.1.19) | linux-64, osx-64, osx-arm64 |
+| `envs/snippy.yml` | `repgenr-snippy` | snippy 4.6 | linux-64, osx-64 |
+| `envs/parsnp.yml` | `repgenr-parsnp` | parsnp, harvesttools | linux-64, osx-64 |
+| `envs/checkm2.yml` | `repgenr-checkm2` | CheckM2 (TensorFlow, kept apart from medaka's PyTorch) | linux-64 |
+| `envs/mauve.yml` | `repgenr-mauve` | progressiveMauve with boost-cpp 1.74.0 | linux-64 |
+
+Create the core environment and only the satellites you need. The core file
+installs the package in editable mode from the checkout:
 
 ```bash
-mamba env create -f environment.yml
-mamba activate repgenr
+mamba env create -f envs/core.yml
+mamba env create -f envs/gubbins.yml      # one line per satellite you need
 ```
 
-The versions in `environment.yml` are lower bounds. They match the minimum
-versions RepGenR checks before a run and guard against known-incompatible old
-tools. They do not make an environment reproducible. For a reproducible
-environment, create a pinned lock file from a solved environment, one per
-platform, for example:
+On linux-64, dRep in the core environment brings CheckM (`checkm-genome`). On
+osx-arm64 the solve gives dRep without CheckM, so run dRep there with
+`--ignoreGenomeQuality` or from its image. Cactus has no conda package (see
+[Cactus](#cactus)). On Apple Silicon, create the osx-64 satellites with
+`CONDA_SUBDIR=osx-64` and run them under Rosetta.
+
+The versions in the files are lower bounds. They match the minimum versions
+RepGenR checks before a run (a test keeps them in step) and guard against
+known-incompatible old tools. They do not make an environment reproducible.
+For a reproducible environment, export a pinned list from a solved
+environment, one per platform, for example:
 
 ```bash
-conda env export --no-builds > environment.lock.yml
+conda env export -n repgenr --no-builds > repgenr.lock.yml
 ```
 
 (`conda-lock` serves the same purpose.)
 
-### 2. Several conda environments and PATH
+### 2. Satellites on PATH, after core
 
-On macOS the tools are split over several environments. The known reasons are:
-
-- `mashtree` depends on `perl-bio-samtools`, which pins samtools 0.1.x. The
-  `simple` SNP typer needs samtools and bcftools 1.10 or later, so the two
-  live in different environments.
-- On exFAT or NTFS volumes, macOS writes `._*` AppleDouble files. The adapters
-  ignore them, but skDER and dRep must run on a local filesystem, so keep their
-  workdir off an exFAT disk.
-- Some tools have no osx-arm64 build. parsnp and harvesttools run from an
-  osx-64 (Rosetta) environment.
-- progressiveMauve is not packaged for macOS at all. Use a container (below)
-  or a Linux host.
-
-Create one environment per group and put the environments' `bin` directories
-on `PATH`. The first match wins, so list the environment that holds the newer
-samtools and bcftools before the one that holds mashtree:
+RepGenR finds tools on `PATH`, and the first match wins. Activate the core
+environment and append each satellite's `bin` directory after it, never
+before:
 
 ```bash
-export PATH=$HOME/miniforge3/envs/repgenr_snp/bin:$HOME/miniforge3/envs/repgenr_core/bin:$PATH
-export PATH=$HOME/miniforge3/envs/repgenr_parsnp_x64/bin:$PATH   # osx-64 env for parsnp
-
+mamba activate repgenr
+P=$(conda info --base)/envs
+export PATH="$PATH:$P/repgenr-gubbins/bin:$P/repgenr-mashtree/bin:$P/repgenr-snippy/bin"
 repgenr list-tools --check
 ```
 
-The environment names above are examples. A single command can also be run
-inside a named environment without activating it:
+Appended satellites supply only what core lacks (`run_gubbins.py`, `iqtree2`,
+`mashtree`, `snippy`, `parsnp`, `checkm2`, `progressiveMauve`). Core's samtools
+and bcftools then come first, ahead of the samtools 0.1.19 in the mashtree
+environment, which the `simple` SNP typer would reject. A satellite
+placed before core shadows core's tools in this way. One known gap remains:
+snippy then calls core's samtools and bcftools instead of the versions in its
+own environment. This combination has not been tested.
+
+Two further points:
+
+- On exFAT or NTFS volumes, macOS writes `._*` AppleDouble files. The adapters
+  ignore them, but skDER and dRep must run on a local filesystem, so keep their
+  workdir off an exFAT disk.
+- progressiveMauve is not packaged for macOS. Use its image (below) or a Linux
+  host.
+
+A single command can also be run inside a named environment without
+activating it:
 
 ```bash
-conda run -n repgenr_core --no-capture-output repgenr phylo -wd $WD --treebuilder mashtree
+conda run -n repgenr --no-capture-output repgenr phylo -wd $WD --treebuilder iqtree
 ```
 
 The live test suite uses the same idea: its config has a `[bin_dirs]` table
-that puts tools from other environments on `PATH` (see `tests/live/README.md`).
+that appends tools from other environments to `PATH` (see `tests/live/README.md`).
 
 ### 3. Containers
 
@@ -208,11 +228,12 @@ Silicon) and is taken from the adapter status table in
 there, not that the tool cannot work on another platform. The container pin is
 the image in the adapter's declared capabilities; `none` means the adapter
 carries no pin and needs `--wave` to run in an image. Minimum versions are in
-`environment.yml`.
+the `envs/` files, and the environment that holds each tool is listed in
+[choosing-tools.md](choosing-tools.md).
 
 | Family | Tool | conda package | Native on macOS arm64 | Container pin | Databases or extras |
 |---|---|---|---|---|---|
-| Dereplicator | drep | `drep`, `checkm-genome` | no | `drep:3.7.1` | CheckM reference data through `CHECKM_DATA_PATH`, or `--ignoreGenomeQuality` |
+| Dereplicator | drep | `drep` (brings `checkm-genome` on linux-64) | no | `drep:3.7.1` | CheckM reference data through `CHECKM_DATA_PATH`, or `--ignoreGenomeQuality` |
 | Dereplicator | skder | `skder`, `skani` | yes | none (Wave) | none |
 | Dereplicator | galah | `galah` | yes | `galah:0.4.2` | none |
 | Dereplicator | sourmash | `sourmash` | yes | `sourmash:4.9.4` | `sourmash_plugin_branchwater` for the sparse back-end (extra `sparse`) |
@@ -241,7 +262,7 @@ The genome download steps also need `ncbi-datasets-cli`.
 
 ## Cactus
 
-Cactus has no conda package in `environment.yml` and no native install path
+Cactus has no conda package in `envs/` and no native install path
 in these docs. The adapter pins the project image
 (`quay.io/comparative-genomics-toolkit/cactus:v2.9.3`), so use
 `--container docker|singularity`. On Apple Silicon this needs the Rosetta

@@ -1,0 +1,8 @@
+# progressiveMauve links boost 1.74; conflicts with core boost. Platforms: linux-64.
+name: repgenr-mauve
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - progressivemauve
+  - boost-cpp=1.74.0

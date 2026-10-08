@@ -1,0 +1,7 @@
+# Gubbins needs Python 3.8-3.10. Ships its own iqtree2/raxml; put after core on PATH. Platforms: linux-64, osx-64, osx-arm64.
+name: repgenr-gubbins
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - gubbins>=3.0

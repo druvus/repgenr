@@ -1,0 +1,7 @@
+# TensorFlow stack; kept out of core. Needs its database (checkm2 database --download). Platforms: linux-64.
+name: repgenr-checkm2
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - checkm2>=1.0.1

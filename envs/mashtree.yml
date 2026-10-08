@@ -1,0 +1,7 @@
+# mashtree's BioPerl chain needs zlib<1.3 and brings samtools 0.1.19; put after core on PATH. Platforms: linux-64, osx-64, osx-arm64.
+name: repgenr-mashtree
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - mashtree>=1.2

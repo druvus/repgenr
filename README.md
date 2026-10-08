@@ -56,10 +56,19 @@ pip install .                          # the package (Python 3.12+); tools are s
 repgenr list-tools --check             # which tools are found, with versions
 ```
 
-The tools come from several conda environments on `PATH` or from containers.
-`environment.yml` lists them all but does not currently solve as one
-environment. The environments, containers (including Apple Silicon) and the
-databases some tools need are described in [docs/install.md](docs/install.md).
+The tools come from conda environments or from containers. `envs/core.yml`
+holds RepGenR and most tools; six satellite files (`envs/gubbins.yml`,
+`envs/mashtree.yml` and others) hold tools that do not solve with it. Append a
+satellite's `bin` directory after core on `PATH`, never before it:
+
+```bash
+mamba env create -f envs/core.yml && mamba activate repgenr
+mamba env create -f envs/gubbins.yml
+export PATH="$PATH:$(conda info --base)/envs/repgenr-gubbins/bin"
+```
+
+The environments, containers (including Apple Silicon) and the databases some
+tools need are described in [docs/install.md](docs/install.md).
 
 ## Quick start
 
