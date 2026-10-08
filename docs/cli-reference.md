@@ -424,8 +424,13 @@ not exist.
 
 Print the external-tool versions recorded in a workdir's repgenr.yaml.
 
-Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
-surface the resolved tool versions into versions.yml.
+One 'tool: version' line per tool. A tool that stages recorded with
+different versions (an image in one, the host binary in another) is listed
+once per stage as 'tool (stage): version'. A containerized tool's version
+is its image reference. A stage that did not finish is named on stderr.
+
+Lets the Nextflow bridge modules (which run a full stage in a scratch
+workdir) surface the resolved tool versions into versions.yml.
 
 | option | default | description |
 |---|---|---|

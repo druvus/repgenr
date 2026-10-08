@@ -114,3 +114,57 @@ def test_status_shows_the_gtdb_release_or_api_query_date(tmp_path: Path) -> None
     out_api = _runner.invoke(app, ["status", "-wd", str(api)]).output
     assert "metadata [gtdb-table]  t  (GTDB release 232.0)" in out_table
     assert "metadata [gtdb-api]  t  (GTDB API queried 2026-10-08T07:30:12+00:00)" in out_api
+
+
+def test_a_tool_with_different_versions_per_stage_keeps_each(tmp_path: Path) -> None:
+    # dereplicate ran sourmash in its image, phylo ran the host sourmash: the
+    # merged output kept only the phylo value and lost the dereplicate one.
+    cfg = Config()
+    image = "quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0"
+    cfg.record_stage("dereplicate", tool_versions={"sourmash": image}, completed="t")
+    cfg.record_stage(
+        "phylo", tool_versions={"sourmash": "4.9.4", "iqtree": "3.1.2"}, completed="t"
+    )
+    cfg.record_stage("glance", tool_versions={"iqtree": "3.1.2"}, completed="t")
+    cfg.save(tmp_path)
+    result = _runner.invoke(app, ["versions", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert result.stdout.splitlines() == [
+        "iqtree: 3.1.2",
+        f"sourmash (dereplicate): {image}",
+        "sourmash (phylo): 4.9.4",
+    ]
+    out = tmp_path / "frag.yml"
+    _runner.invoke(app, ["versions", "-wd", str(tmp_path), "--versions-out", str(out)])
+    import yaml
+
+    assert yaml.safe_load("p:\n" + out.read_text())["p"] == {
+        "iqtree": "3.1.2",
+        "sourmash (dereplicate)": image,
+        "sourmash (phylo)": "4.9.4",
+    }
+
+
+def test_versions_of_an_unfinished_stage_are_flagged(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("dereplicate", tool="skder", tool_versions={"skder": "1.3.6"})
+    cfg.save(tmp_path)
+    result = _runner.invoke(app, ["versions", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert result.stdout == "skder: 1.3.6\n"
+    assert "dereplicate did not finish" in result.stderr
+
+
+def test_a_fragment_value_that_is_not_plain_yaml_is_quoted(tmp_path: Path) -> None:
+    # An unnumbered version line is recorded verbatim and may hold ": ".
+    from repgenr.core.versions import write_versions_fragment
+
+    out = tmp_path / "frag.yml"
+    write_versions_fragment(out, {"tool": "build: abc #1", "other": "1.2.3"})
+    import yaml
+
+    assert yaml.safe_load("p:\n" + out.read_text())["p"] == {
+        "tool": "build: abc #1",
+        "other": "1.2.3",
+    }
+    assert "    other: 1.2.3\n" in out.read_text()

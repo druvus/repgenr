@@ -36,12 +36,17 @@ def versions(
 ) -> None:
     """Print the external-tool versions recorded in a workdir's repgenr.yaml.
 
-    Lets the Nextflow bridge modules (which run a full stage in a scratch workdir)
-    surface the resolved tool versions into versions.yml.
+    One 'tool: version' line per tool. A tool that stages recorded with
+    different versions (an image in one, the host binary in another) is listed
+    once per stage as 'tool (stage): version'. A containerized tool's version
+    is its image reference. A stage that did not finish is named on stderr.
+
+    Lets the Nextflow bridge modules (which run a full stage in a scratch
+    workdir) surface the resolved tool versions into versions.yml.
     """
     from ..core.config import CONFIG_FILENAME, Config
     from ..core.errors import WorkdirError
-    from ..core.versions import write_versions_fragment
+    from ..core.versions import merge_stage_versions, write_versions_fragment
 
     if not (workdir / CONFIG_FILENAME).exists():
         # A wrong -wd would otherwise print nothing and exit 0.
@@ -55,9 +60,13 @@ def versions(
     except WorkdirError as exc:
         typer.echo(f"ERROR {exc}", err=True)
         raise typer.Exit(code=exc.exit_code) from exc
-    merged: dict[str, str] = {}
-    for record in cfg.stages.values():
-        merged.update(record.tool_versions)
+    for name, record in cfg.stages.items():
+        if record.tool_versions and not record.completed:
+            typer.echo(
+                f"WARNING {name} did not finish; its versions are from its last recorded run.",
+                err=True,
+            )
+    merged = merge_stage_versions({n: r.tool_versions for n, r in cfg.stages.items()})
     metadata_record = cfg.stages.get("metadata")
     if metadata_record is not None:
         merged.update(gtdb_provenance(metadata_record.params))
