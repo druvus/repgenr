@@ -37,7 +37,12 @@ def _quota_v2(root: Path, relative: str) -> float | None:
 
 
 def _quota_v1(root: Path, relative: str) -> float | None:
-    """``cpu.cfs_quota_us / cpu.cfs_period_us`` of the process's cgroup."""
+    """``cpu.cfs_quota_us / cpu.cfs_period_us`` of the process's cgroup.
+
+    Only the process's own cgroup is read (or the mount root inside a
+    container), so a quota set only on a parent cgroup is not seen. This is
+    rare: Docker and Kubernetes set the quota on the container's own cgroup.
+    """
     for controller in ("cpu,cpuacct", "cpu"):
         base = root / controller
         # Inside a container's namespace the recorded path may not exist under

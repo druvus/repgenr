@@ -25,37 +25,40 @@ def glance(monkeypatch, tmp_path):
         args = ["-q"] if quiet else []
         result = _runner.invoke(app, [*args, "glance", "-wd", str(tmp_path), *extra])
         assert result.exit_code == 0, result.output
-        return calls.pop().threads, result.output
+        return calls.pop().threads, result
 
     return invoke
 
 
 def test_the_default_is_lowered_to_the_cpu_limit(glance) -> None:
-    threads, output = glance(cpus=4)
+    threads, result = glance(cpus=4)
     assert threads == 4
-    assert "Using 4 threads, the CPU limit of this process" in output
+    # The note goes to stderr; stdout stays free for a command's own output.
+    assert "Using 4 threads, the CPU limit of this process" in result.stderr
+    assert result.stdout == ""
 
 
 def test_the_default_stays_16_with_enough_cpus(glance) -> None:
-    threads, output = glance(cpus=64)
+    threads, result = glance(cpus=64)
     assert threads == 16
-    assert "Using" not in output and "WARNING -t/--threads" not in output
+    assert "Using" not in result.output and "WARNING -t/--threads" not in result.output
 
 
 def test_quiet_hides_the_note(glance) -> None:
-    threads, output = glance(cpus=4, quiet=True)
-    assert threads == 4 and "Using 4 threads" not in output
+    threads, result = glance(cpus=4, quiet=True)
+    assert threads == 4 and "Using 4 threads" not in result.output
 
 
 def test_an_explicit_count_above_the_limit_is_kept_with_a_warning(glance) -> None:
-    threads, output = glance("-t", "32", cpus=4)
+    threads, result = glance("-t", "32", cpus=4)
     assert threads == 32
-    assert output.count("WARNING -t/--threads 32 exceeds the 4 CPU(s)") == 1
+    assert result.stderr.count("WARNING -t/--threads 32 exceeds the 4 CPU(s)") == 1
+    assert result.stdout == ""
 
 
 def test_an_explicit_count_within_the_limit_is_silent(glance) -> None:
-    threads, output = glance("-t", "4", cpus=4)
-    assert threads == 4 and "WARNING -t/--threads" not in output
+    threads, result = glance("-t", "4", cpus=4)
+    assert threads == 4 and "WARNING -t/--threads" not in result.output
 
 
 def _commands(typer_app):  # noqa: ANN001, ANN202
