@@ -25,6 +25,9 @@ process READS_ASSEMBLE {
     script:
     def args = task.ext.args ?: ''
     def opts = task.ext.repgenr_opts ?: ''
+    // The assembler's memory budget; without a memory directive the CLI
+    // default applies.
+    def memory_arg = task.memory ? "--memory-gb ${Math.max(1L, task.memory.toGiga())}" : ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
@@ -35,7 +38,7 @@ process READS_ASSEMBLE {
         --out ${meta.accession} \\
         ${args} \\
         --threads ${task.cpus} \\
-        --memory-gb ${task.memory.toGiga()} \\
+        ${memory_arg} \\
         --versions-out tool_versions.yml
 
     repgenr_versions_fragment "${task.process}" tool_versions.yml
