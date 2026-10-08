@@ -293,6 +293,7 @@ def test_status_json_with_an_unquoted_timestamp(tmp_path: Path) -> None:
     completed = _by_name(payload)["metadata"]["completed"]
     assert isinstance(completed, str) and completed.startswith("2026-01-01")
 
+
 def test_status_with_an_empty_record_names_the_entry_stages(tmp_path: Path) -> None:
     # An emptied record used to be read as the bacterial chain ("Next:
     # repgenr metadata"), although the outputs may come from any lineage.
@@ -345,13 +346,3 @@ def test_status_notes_a_record_without_a_fingerprint(tmp_path: Path, write_deliv
     assert stages["metadata"]["state"] == "done"
     assert stages["metadata"]["fingerprint"] is False
     assert stages["genome"]["fingerprint"] is True
-
-
-def test_status_does_not_note_a_derep_stock_record(tmp_path: Path) -> None:
-    cfg = Config()
-    cfg.record_stage("ingest", completed="t", fingerprint="f")
-    cfg.record_stage("derep_stock", params={"action": "delete", "name": "r1"}, completed="t")
-    cfg.save(tmp_path)
-    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
-    assert "derep_stock" in result.stdout
-    assert "no resume fingerprint" not in result.stdout

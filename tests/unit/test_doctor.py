@@ -662,7 +662,6 @@ def test_a_record_without_a_fingerprint_is_a_warning(tmp_path: Path) -> None:
     wd = _base_workdir(tmp_path)  # metadata and genome recorded without fingerprints
     cfg = Config.load(wd)
     cfg.stages["genome"].fingerprint = "abc"
-    cfg.record_stage("derep_stock", params={"action": "delete", "name": "r1"}, completed="t")
     cfg.save(wd)
     findings = diagnose(wd)
     warned = {f.area for f in findings if f.level == "warn" and "resume fingerprint" in f.message}

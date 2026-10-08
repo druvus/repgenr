@@ -207,8 +207,9 @@ All notable changes to RepGenR are documented here. The format follows
   without `reads` selects the reads chain. A completed record without a resume
   fingerprint (an older version, or `derep-stock --action unpack`) stays
   `[done]` with a note that its next invocation recomputes it (`"fingerprint":
-  false` in `--json`), and `doctor` warns about it, except for `derep_stock`
-  records.
+  false` in `--json`). `doctor` warns about every completed record without a
+  fingerprint, stale ones included; `status` notes only `[done]` lines, since
+  a `[stale]` line already says the stage re-runs.
 - `doctor` (#242): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
   a failure, including a malformed `repgenr.yaml` or a check that could not
   complete; it exited 1, the status of an unexpected error. A script that

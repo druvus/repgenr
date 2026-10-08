@@ -1215,7 +1215,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   re-runs on its next invocation. A finished stage whose record holds no
   resume fingerprint (written by an older version, or restored by
   `derep-stock --action unpack`) stays `[done]` with a note that its next
-  invocation recomputes it; `doctor` reports it as a warning. When
+  invocation recomputes it. `doctor` warns about every completed record
+  without a fingerprint, stale ones included; `status` adds the note only to
+  `[done]` lines, since a `[stale]` line already says the stage re-runs. When
   `repgenr.yaml` records no stage, `status` names the entry stages (and
   suggests `doctor` when the workdir holds outputs); when it records stages
   but no entry stage, `status` follows the stages all pipelines share

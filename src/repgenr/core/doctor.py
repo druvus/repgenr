@@ -140,8 +140,7 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     for name, record in config.stages.items():
         if not record.interrupted:
             out.append(Finding("ok", name, f"completed {record.completed}"))
-            # derep_stock is exempt: a delete is never fingerprinted.
-            if not record.fingerprint and name != "derep_stock":
+            if not record.fingerprint:
                 out.append(
                     Finding(
                         "warn",

@@ -326,12 +326,11 @@ def _render_status_text(report: dict[str, Any]) -> None:
 
 
 def _fingerprint_note(stage: dict[str, Any]) -> str:
-    """The note after a completed record that its next invocation recomputes.
+    """The note after a done record that its next invocation recomputes.
 
-    derep_stock records are exempt: a delete is never fingerprinted, and the
-    store is not resumed.
+    Only done lines carry it: a stale line already says the stage re-runs.
     """
-    if stage["state"] != "done" or stage["fingerprint"] or stage["name"] == "derep_stock":
+    if stage["state"] != "done" or stage["fingerprint"]:
         return ""
     return f"  ({NO_FINGERPRINT_NOTE})"
 
