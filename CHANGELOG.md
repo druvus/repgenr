@@ -7,12 +7,12 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- `list-tools --check --strict` (#PRNUM): after the full listing, exits 4
+- `list-tools --check --strict` (#237): after the full listing, exits 4
   when any adapter is missing or errored and 5 when any plugin failed to
   load, so a script can verify an environment. `--check` alone still exits 0,
   since a host with only some families installed is normal. `--strict`
   without `--check` is a usage error.
-- Tool versions (#PRNUM): a binary that reports no version number itself
+- Tool versions (#237): a binary that reports no version number itself
   (SibeliaZ has no version flag) is recorded with the version of the conda
   package that installed it, read from `conda-meta` next to the binary's
   `bin` directory; it was recorded as `unknown`. A stage that recorded
@@ -183,7 +183,7 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
-- `list-tools`, `versions` (#PRNUM): a warning logged while they run (a plugin
+- `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
 - `phylo --msa-source snptype` (#228) writes its typing pass under
