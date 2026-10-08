@@ -529,7 +529,7 @@ All notable changes to RepGenR are documented here. The format follows
 - Resume (#239): `genomes/` or `derep/representatives/` holding only a
   non-FASTA file such as `x.fasta.tmp` counts as a missing deliverable, so the
   stage that writes it re-runs instead of being skipped.
-- Containers (PR_NUM): with `--container docker`, a container started from a
+- Containers (#240): with `--container docker`, a container started from a
   parallel worker thread is now stopped when repgenr receives a termination
   signal, also when its tool ignores SIGTERM; previously only the container of
   the main thread was stopped. A second signal starts one detached
