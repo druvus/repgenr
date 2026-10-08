@@ -201,7 +201,7 @@ All notable changes to RepGenR are documented here. The format follows
   a failure, including a malformed `repgenr.yaml` or a check that could not
   complete; it exited 1, the status of an unexpected error. A script that
   tested for 1 after `doctor` must test for 7. Warnings alone still exit 0.
-- CLI (PR_NUM): the default of `-t/--threads` is 16, or the CPU limit of the
+- CLI (#244): the default of `-t/--threads` is 16, or the CPU limit of the
   process when that is lower: the affinity mask capped by a cgroup v1 or v2
   CPU quota (`docker run --cpus`, a Kubernetes CPU limit), previously not
   seen. A lowered default is reported once; an explicit `-t` above the limit
