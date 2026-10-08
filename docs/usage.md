@@ -769,7 +769,11 @@ diff <(part $WD/derep/stock/sourmash/clusters.tsv) \
 ```
 
 `derep-stock --action unpack --name <run>` makes a stored run the current one
-again.
+again. The restored `dereplicate` record holds no resume fingerprint, since
+unpack cannot reproduce the conditions of the original run, so a later
+`dereplicate` or `repgenr run` recomputes the dereplication; run `phylo`
+directly to build on the restored set. `status` and `doctor` note such a
+record.
 
 ### Limiting the selection
 
@@ -1208,7 +1212,16 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   that failed is listed as `[interrupted]` and its outputs may be partial
   until it is re-run. A finished stage is listed as `[stale]` when one of its
   inputs changed or one of its outputs is missing since it finished; it
-  re-runs on its next invocation.
+  re-runs on its next invocation. A finished stage whose record holds no
+  resume fingerprint (written by an older version, or restored by
+  `derep-stock --action unpack`) stays `[done]` with a note that its next
+  invocation recomputes it. `doctor` warns about every completed record
+  without a fingerprint, stale ones included; `status` adds the note only to
+  `[done]` lines, since a `[stale]` line already says the stage re-runs. When
+  `repgenr.yaml` records no stage, `status` names the entry stages (and
+  suggests `doctor` when the workdir holds outputs); when it records stages
+  but no entry stage, `status` follows the stages all pipelines share
+  (dereplicate, phylo, tree2tax) under "Pipeline: unrecorded entry stage".
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. A host
   that does not accept a connection within 15 s counts as unreachable, so a

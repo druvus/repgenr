@@ -197,6 +197,19 @@ All notable changes to RepGenR are documented here. The format follows
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
 - `doctor` (#PRNUM): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
+- `status` (#PRNUM): a `repgenr.yaml` that records no stage is no longer read
+- `status` (#245): a `repgenr.yaml` that records no stage is no longer read
+  as the bacterial chain ("Next: repgenr metadata"); `status` names the entry
+  stages, and suggests `doctor` when the workdir holds outputs. A record with
+  stages but no entry stage (for example only `dereplicate`) is shown as
+  "Pipeline: unrecorded entry stage" with the shared stages dereplicate, phylo
+  and tree2tax, and `pipeline` is null in `--json`. An `assemble` record
+  without `reads` selects the reads chain. A completed record without a resume
+  fingerprint (an older version, or `derep-stock --action unpack`) stays
+  `[done]` with a note that its next invocation recomputes it (`"fingerprint":
+  false` in `--json`). `doctor` warns about every completed record without a
+  fingerprint, stale ones included; `status` notes only `[done]` lines, since
+  a `[stale]` line already says the stage re-runs.
 - `doctor` (#242): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
   a failure, including a malformed `repgenr.yaml` or a check that could not
   complete; it exited 1, the status of an unexpected error. A script that
