@@ -1079,6 +1079,13 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
                     "inputs; skipping (use --force to re-run).",
                     stage_name,
                 )
+                if getattr(params, "sketch", None) is True:
+                    # --sketch is not in the fingerprint, so a skip writes none.
+                    logger.info(
+                        "A skipped stage writes no sketches; 'repgenr sketch -wd %s' "
+                        "writes the missing ones.",
+                        ctx.workdir,
+                    )
                 return
             # The fingerprint excludes outputs, so check them separately: a
             # deliverable deleted by hand must be rebuilt, not skipped.

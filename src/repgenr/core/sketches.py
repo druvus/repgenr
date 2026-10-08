@@ -26,7 +26,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 from collections.abc import Collection, Mapping, Sequence
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -42,7 +44,6 @@ from .contracts import (
     record_name,
 )
 from .errors import MissingBinaryError, RepGenRError, ToolExecutionError, WorkdirError
-from .executors import parallel_map
 from .inputs import file_digest
 from .manifest import SketchRecord
 from .plugins import preflight, tool_available
@@ -66,12 +67,11 @@ OUTGROUP_JSON = "outgroup.json"
 _PARTIAL = ".partial"
 # The threads a writer stage without -t/--threads gives the sketch step.
 _DEFAULT_THREADS = 16
-# Sketches are recorded every this many genomes per thread.
-_BATCH_PER_THREAD = 8
 
 ACTION_PRESENT = "present"
 ACTION_WRITTEN = "written"
 ACTION_REPLACED = "replaced"
+ACTION_FORCED = "forced"
 ACTION_COPIED = "copied"
 
 
@@ -104,6 +104,7 @@ class SketchSummary:
     present: int = 0  # up to date, left as they were
     written: int = 0  # sketched for the first time
     replaced: int = 0  # a stale sketch replaced
+    forced: int = 0  # a current sketch written again under --force
     copied: int = 0  # reused from another working directory
     removed: int = 0  # sketches of genomes no longer in the set
 
@@ -112,15 +113,17 @@ class SketchSummary:
             "present": self.present,
             "written": self.written,
             "replaced": self.replaced,
+            "forced": self.forced,
             "copied": self.copied,
             "removed": self.removed,
         }
 
     def line(self) -> str:
+        forced = f", {self.forced} replaced (--force)" if self.forced else ""
         copied = f", {self.copied} copied" if self.copied else ""
         return (
             f"Sketches: {self.present} present, {self.written} written, "
-            f"{self.replaced} stale replaced{copied}, {self.removed} removed"
+            f"{self.replaced} stale replaced{forced}{copied}, {self.removed} removed"
         )
 
 
@@ -315,7 +318,10 @@ def sketch_genomes(
     same parameters) is left as it is unless ``force``. ``reuse`` maps record
     names to sketches of another workdir; one whose recorded digest and
     parameters match the genome is copied (or linked) instead of sketched.
-    The records are written on this thread after each batch.
+    Each sketch is recorded on this thread as soon as it is in place, so an
+    interrupted run keeps the records of every sketch it finished. After a
+    failure no further genome is started; the running ones finish and are
+    recorded, then the first failure is raised.
     """
     directory = sketches_dir(ctx.workdir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -330,7 +336,8 @@ def sketch_genomes(
         rel = _relative(ctx, out)
         digest = file_digest(target.path)
         fresh = SketchRecord(rel, SKETCH_PARAMS, digest)
-        if not force and _is_current(records.get(_record_key(target)), rel, digest, out):
+        current = _is_current(records.get(_record_key(target)), rel, digest, out)
+        if current and not force:
             return target, ACTION_PRESENT, fresh
         existed = out.is_file()
         source = None if force else reuse.get(target.name)
@@ -343,38 +350,48 @@ def sketch_genomes(
             _copy_one(source.sketch, out)
             return target, ACTION_COPIED, fresh
         _sketch_one(target, out, logger)
+        if current:
+            return target, ACTION_FORCED, fresh
         return target, (ACTION_REPLACED if existed else ACTION_WRITTEN), fresh
 
-    def attempt(target: SketchTarget) -> tuple[SketchTarget, str, SketchRecord] | Exception:
-        # A failure is returned rather than raised, so the sketches the other
-        # workers of the batch finish are still recorded below.
-        try:
-            return work(target)
-        except Exception as exc:
-            return exc
+    def record(target: SketchTarget, action: str, rec: SketchRecord) -> None:
+        setattr(summary, action, getattr(summary, action) + 1)
+        if action == ACTION_PRESENT and records.get(_record_key(target)) == rec:
+            return
+        if target.accession is not None:
+            ctx.manifest.set_sketches([(target.accession, rec)])
+        else:
+            # Records of genomes that left the set are pruned by remove_stale.
+            outgroup_records[target.path.name] = rec
+            _write_outgroup_json(directory, outgroup_records)
 
     workers = max(1, min(threads, len(genomes)))
-    batch = max(workers * _BATCH_PER_THREAD, 1)
-    for start in range(0, len(genomes), batch):
-        results = parallel_map(attempt, genomes[start : start + batch], workers, logger=logger)
-        done = [r for r in results if not isinstance(r, Exception)]
-        manifest_updates: list[tuple[str, SketchRecord | None]] = []
-        for target, action, rec in done:
-            setattr(summary, action, getattr(summary, action) + 1)
-            if action == ACTION_PRESENT and records.get(_record_key(target)) == rec:
+    failures: list[Exception] = []
+    pool = ThreadPoolExecutor(max_workers=workers)
+    try:
+        futures: list[Future[tuple[SketchTarget, str, SketchRecord]]] = [
+            pool.submit(work, t) for t in genomes
+        ]
+        for future in as_completed(futures):
+            try:
+                target, action, rec = future.result()
+            except CancelledError:
+                continue  # not started after an earlier failure
+            except Exception as exc:
+                if not failures:
+                    for other in futures:
+                        other.cancel()  # queued genomes do not start
+                failures.append(exc)
                 continue
-            if target.accession is not None:
-                manifest_updates.append((target.accession, rec))
-            else:
-                outgroup_records[target.path.name] = rec
-        if manifest_updates:
-            ctx.manifest.set_sketches(manifest_updates)
-        if any(t.accession is None for t, _, _ in done):
-            # Records of genomes that left the set are pruned by remove_stale.
-            _write_outgroup_json(directory, outgroup_records)
-        failures = [r for r in results if isinstance(r, Exception)]
-        if failures:
-            raise failures[0]
+            record(target, action, rec)
+    except BaseException:
+        # A termination signal: queued genomes must not start; the running
+        # ones settle (their tools are stopped by the handler).
+        pool.shutdown(wait=True, cancel_futures=True)
+        raise
+    pool.shutdown(wait=True)
+    if failures:
+        raise failures[0]
     return summary
 
 
@@ -394,7 +411,7 @@ def remove_stale(ctx: WorkdirContext, logger: logging.Logger | None = None) -> i
     for entry in directory.iterdir():
         if entry.name.startswith(".") or not entry.name.endswith(SKETCH_SUFFIX):
             continue
-        if entry.name[: -len(SKETCH_SUFFIX)] in expected:
+        if entry.is_dir() or entry.name[: -len(SKETCH_SUFFIX)] in expected:
             continue
         entry.unlink()
         removed += 1
@@ -407,8 +424,10 @@ def remove_stale(ctx: WorkdirContext, logger: logging.Logger | None = None) -> i
     _write_outgroup_json(directory, kept)
     if not any(not e.name.startswith(".") for e in directory.iterdir()):
         for entry in directory.iterdir():  # dotfiles only (exFAT, Finder)
-            entry.unlink(missing_ok=True)
-        directory.rmdir()
+            if not entry.is_dir():
+                entry.unlink(missing_ok=True)
+        if not any(directory.iterdir()):
+            directory.rmdir()
     if removed and logger is not None:
         logger.info("Removed %d sketch(es) of genomes no longer in the set", removed)
     return removed
@@ -528,7 +547,13 @@ def sketch_stage_genomes(
     sketches are not deliverables, so it is logged and the stage finishes;
     with an explicit ``--sketch`` it is raised.
     """
-    removed = remove_stale(ctx, logger)
+    try:
+        removed = remove_stale(ctx, logger)
+    except OSError as exc:
+        if flag:
+            raise
+        _warn_stopped(stage, exc, ctx, logger)
+        removed = 0
     versions = sourmash_for_sketches(flag, stage, logger)
     if not versions:
         state = "off" if flag is False else "unavailable"
@@ -542,17 +567,23 @@ def sketch_stage_genomes(
     except (ToolExecutionError, WorkdirError, OSError) as exc:
         if flag or process.stop_requested.is_set():
             raise
-        logger.warning(
-            "%s: genome sketching stopped (%s); the genome set is complete without "
-            "sketches, and 'repgenr sketch -wd %s' builds the missing ones.",
-            stage,
-            exc,
-            ctx.workdir,
-        )
+        _warn_stopped(stage, exc, ctx, logger)
         return {"state": "failed", "removed": removed}, versions
     summary.removed = removed
     logger.info("%s", summary.line())
     return {"state": "done", **summary.as_dict()}, versions
+
+
+def _warn_stopped(
+    stage: str, exc: BaseException, ctx: WorkdirContext, logger: logging.Logger
+) -> None:
+    logger.warning(
+        "%s: genome sketching stopped (%s); the genome set is complete without "
+        "sketches, and 'repgenr sketch -wd %s' builds the missing ones.",
+        stage,
+        exc,
+        ctx.workdir,
+    )
 
 
 def sources_from_workdir(workdir: Path) -> dict[str, SketchSource]:
@@ -573,7 +604,7 @@ def sources_from_workdir(workdir: Path) -> dict[str, SketchSource]:
         return {}
     try:
         records = manifest.sketch_records()
-    except Exception:  # an unreadable source manifest: sketch instead
+    except (sqlite3.Error, WorkdirError):  # an unreadable source manifest: sketch instead
         records = {}
     finally:
         manifest.close()

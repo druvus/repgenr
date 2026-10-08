@@ -46,4 +46,4 @@ def run(ctx: WorkdirContext, params: SketchParams) -> int:
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()
-    return summary.written + summary.replaced + summary.copied
+    return summary.written + summary.replaced + summary.forced + summary.copied

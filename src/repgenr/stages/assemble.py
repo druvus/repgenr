@@ -1340,7 +1340,10 @@ def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
     (ctx.workdir / ASSEMBLY_STATS_TSV).unlink(missing_ok=True)
     _stage_outgroup(ctx, None, logger)
     ctx.manifest.replace_genomes([])
-    remove_stale(ctx, logger)
+    try:
+        remove_stale(ctx, logger)
+    except OSError as exc:  # sketches are not deliverables; the set is already cleared
+        logger.warning("Could not remove the sketches of the cleared genome set: %s", exc)
 
 
 def _unlink_previous(genomes_dir: Path, accession: str) -> None:

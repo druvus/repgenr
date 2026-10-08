@@ -139,8 +139,9 @@ class FakeSourmash:
 
     The file holds the signature name and the input path. ``fail`` names
     genomes (record names) whose call writes a partial file and then fails,
-    as a tool killed mid-write would; ``delay`` holds each call open so
-    concurrency can be measured (``peak``).
+    as a tool killed mid-write would; ``interrupt`` names genomes whose call
+    raises KeyboardInterrupt. ``barrier`` (a threading.Barrier) makes calls
+    wait for each other, so an overlap is certain and ``peak`` measures it.
     """
 
     def __init__(self) -> None:
@@ -148,14 +149,13 @@ class FakeSourmash:
 
         self.calls: list[str] = []
         self.fail: set[str] = set()
-        self.delay = 0.0
+        self.interrupt: set[str] = set()
+        self.barrier: threading.Barrier | None = None
         self.peak = 0
         self._active = 0
         self._lock = threading.Lock()
 
     def run_tool(self, caps, command, *, logger, **kwargs) -> int:
-        import time
-
         from repgenr.core.errors import ToolExecutionError
 
         argv = [str(c) for c in command]
@@ -167,8 +167,10 @@ class FakeSourmash:
             self._active += 1
             self.peak = max(self.peak, self._active)
         try:
-            if self.delay:
-                time.sleep(self.delay)
+            if self.barrier is not None:
+                self.barrier.wait(timeout=10)
+            if name in self.interrupt:
+                raise KeyboardInterrupt
             if name in self.fail:
                 out.write_text("partial", encoding="utf-8")
                 raise ToolExecutionError(argv, 1, output="killed", tool="sourmash")

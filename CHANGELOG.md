@@ -11,8 +11,8 @@ All notable changes to RepGenR are documented here. The format follows
   `genome`, `vgenome`, `ingest` and `assemble` write
   `sketches/<name>.sig.zip` per genome, outgroup included, with DNA
   signatures at k=21, 31 and 51 (scaled=1000) named after the genome's record
-  name, when sourmash can run. `--sketch` requires sourmash (exit 4 before the
-  stage writes anything) and `--no-sketch` leaves the step out; the flag does
+  name, when sourmash can run. `--sketch` requires sourmash (exit 4 before any
+  genome or sketch is written) and `--no-sketch` leaves the step out; the flag does
   not change the resume fingerprint. Only missing and stale sketches are
   written (stale: the FASTA SHA-256 or the parameters differ from the
   record), `assemble --append` sketches only the genomes it adds,

@@ -289,7 +289,8 @@ def test_sketch_command_writes_missing_and_reports(tmp_path, fake_sourmash) -> N
     fake_sourmash.calls.clear()
     assert _runner.invoke(app, ["--force", "sketch", "-wd", str(wd)]).exit_code == 0
     assert sorted(fake_sourmash.calls) == sorted(_genome_names(wd))
-    assert Config.load(wd).stages["sketch"].params["replaced"] == 3
+    params = Config.load(wd).stages["sketch"].params
+    assert (params["replaced"], params["forced"]) == (0, 3)
 
 
 def test_sketch_command_refusals(tmp_path, monkeypatch) -> None:
@@ -314,3 +315,13 @@ def test_sketch_command_refusals(tmp_path, monkeypatch) -> None:
 def test_status_without_sketches_shows_no_count(tmp_path) -> None:
     wd = _ingested(tmp_path)
     assert "sketches:" not in _runner.invoke(app, ["status", "-wd", str(wd)]).output
+
+
+def test_a_skipped_stage_with_sketch_names_the_sketch_command(tmp_path, fake_sourmash) -> None:
+    src = _genomes(tmp_path / "src")
+    wd = tmp_path / "wd"
+    args = ["ingest", "-wd", str(wd), "--genomes-dir", str(src), "--sketch"]
+    assert _runner.invoke(app, args).exit_code == 0
+    assert _runner.invoke(app, args).exit_code == 0
+    log = _log(wd)
+    assert "already completed" in log and "A skipped stage writes no sketches" in log

@@ -79,7 +79,7 @@ def test_writes_every_missing_sketch_and_records_it(tmp_path, fake_sourmash) -> 
     ctx = _workdir(tmp_path / "wd")
     summary = _sketch_all(ctx)
     assert summary.as_dict() == {
-        "present": 0, "written": 4, "replaced": 0, "copied": 0, "removed": 0,
+        "present": 0, "written": 4, "replaced": 0, "forced": 0, "copied": 0, "removed": 0,
     }  # fmt: skip
     names = {p.name for p in (ctx.workdir / "sketches").iterdir()}
     assert names == {
@@ -134,7 +134,8 @@ def test_force_sketches_every_genome_again(tmp_path, fake_sourmash) -> None:
     ctx = _workdir(tmp_path / "wd", outgroup=False)
     _sketch_all(ctx)
     summary = _sketch_all(ctx, force=True)
-    assert (summary.present, summary.replaced) == (0, 3)
+    assert (summary.present, summary.replaced, summary.forced) == (0, 0, 3)
+    assert "3 replaced (--force)" in summary.line()
 
 
 def test_orphans_are_removed_with_the_genome_set(tmp_path, fake_sourmash) -> None:
@@ -164,7 +165,7 @@ def test_a_failed_sketch_leaves_no_file_and_the_others_are_recorded(tmp_path, fa
     ctx = _workdir(tmp_path / "wd")
     fake_sourmash.fail = {"Fam_Gen_sp_GCA_000001.1"}
     with pytest.raises(ToolExecutionError):
-        _sketch_all(ctx, threads=1)
+        _sketch_all(ctx, threads=4)  # all four run; the other three finish
     directory = ctx.workdir / "sketches"
     assert not (directory / "Fam_Gen_sp_GCA_000001.1.sig.zip").exists()
     assert not [p for p in directory.iterdir() if "partial" in p.name]
@@ -188,11 +189,53 @@ def test_a_partial_file_of_a_killed_run_is_not_a_sketch(tmp_path, fake_sourmash)
 
 
 def test_concurrent_sketches_are_bounded_by_threads(tmp_path, fake_sourmash) -> None:
+    import threading
+
     ctx = _workdir(tmp_path / "wd", n=8, outgroup=False)
-    fake_sourmash.delay = 0.05
+    fake_sourmash.barrier = threading.Barrier(2)  # calls pair up: an overlap is certain
     _sketch_all(ctx, threads=3)
-    assert 1 < fake_sourmash.peak <= 3
+    assert 2 <= fake_sourmash.peak <= 3
     assert len(fake_sourmash.calls) == 8
+
+
+def test_an_interrupt_keeps_the_records_of_finished_sketches(tmp_path, fake_sourmash) -> None:
+    ctx = _workdir(tmp_path / "wd", outgroup=False)
+    fake_sourmash.interrupt = {"Fam_Gen_sp_GCA_000001.1"}
+    with pytest.raises(KeyboardInterrupt):
+        _sketch_all(ctx, threads=1)
+    # The first genome finished before the interrupt and is recorded.
+    assert set(ctx.manifest.sketch_records()) == {"GCA_000000.1"}
+    fake_sourmash.interrupt = set()
+    fake_sourmash.calls.clear()
+    summary = _sketch_all(ctx, threads=1)
+    # The worker may have started the third genome before the interrupt was
+    # seen; its unrecorded sketch counts as stale, never as present.
+    assert summary.present == 1 and summary.written + summary.replaced == 2
+    assert "Fam_Gen_sp_GCA_000000.1" not in fake_sourmash.calls
+
+
+def test_remove_stale_leaves_directories_alone(tmp_path, fake_sourmash) -> None:
+    ctx = _workdir(tmp_path / "wd", n=1, outgroup=False)
+    _sketch_all(ctx)
+    odd = ctx.workdir / "sketches" / "unknown.sig.zip"
+    odd.mkdir()
+    assert remove_stale(ctx, _LOG) == 0
+    assert odd.is_dir()
+
+
+def test_a_pruning_error_is_a_warning_by_default(tmp_path, fake_sourmash, monkeypatch, caplog):
+    ctx = _workdir(tmp_path / "wd", n=1, outgroup=False)
+
+    def unreadable(ctx, logger=None):
+        raise PermissionError("sketches/ is read-only")
+
+    monkeypatch.setattr(sketches, "remove_stale", unreadable)
+    with caplog.at_level(logging.WARNING):
+        summary, _ = sketch_stage_genomes(ctx, None, "genome", _LOG)
+    assert summary["state"] == "done" and summary["removed"] == 0
+    assert "read-only" in caplog.text
+    with pytest.raises(PermissionError):
+        sketch_stage_genomes(ctx, True, "genome", _LOG)
 
 
 def test_an_outgroup_without_a_manifest_row_is_recorded_in_outgroup_json(tmp_path, fake_sourmash):
