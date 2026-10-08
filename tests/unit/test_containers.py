@@ -76,6 +76,15 @@ def test_docker_wrap_command() -> None:
     assert any(c == "HOME=/wd" for c in cmd)
 
 
+def test_docker_run_uses_an_init_process() -> None:
+    """With --init the tool is not process 1 in the container, so the SIGTERM
+    the docker client forwards when repgenr stops a tool ends the container."""
+    cfg = ContainerConfig(backend="docker")
+    cmd = wrap_command("img:1", ["fasttree", "x"], config=cfg, cwd="/wd", logger=_LOG)
+    assert "--init" in cmd
+    assert cmd.index("--init") < cmd.index("img:1")
+
+
 def test_docker_extra_mounts(tmp_path, monkeypatch) -> None:
     # A directory referenced indirectly (not in argv) is mounted when declared.
     # Isolate the temp dir so `genomes` is not nested under the default tempdir
