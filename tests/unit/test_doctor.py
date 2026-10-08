@@ -537,3 +537,10 @@ def test_appledouble_companions_are_not_leftovers(tmp_path: Path) -> None:
     (wd / "tree" / "._tree.nwk.part").write_bytes(b"\0" * 16)
     warned = _messages([f for f in diagnose(wd) if f.area == "leftovers"], "warn")
     assert "1 temp file(s)" in warned and "._tree" not in warned
+
+
+def test_emptied_record_beside_outputs_is_a_warning(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "repgenr.yaml").write_text("", encoding="utf-8")
+    warned = _messages([f for f in diagnose(wd) if f.area == "config"], "warn")
+    assert "records no stage" in warned

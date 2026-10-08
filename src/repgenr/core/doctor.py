@@ -116,6 +116,17 @@ def _genome_set_stages(config: Config) -> tuple[str, str]:
 
 def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     out: list[Finding] = []
+    if not config.stages and any(
+        (workdir / name).exists() for name in ("genomes", SELECTION_TSV, "derep", "tree")
+    ):
+        out.append(
+            Finding(
+                "warn",
+                "config",
+                f"{CONFIG_FILENAME} records no stage, but the workdir holds outputs; the "
+                "record was emptied or replaced, and every stage will re-run.",
+            )
+        )
     for name, record in config.stages.items():
         if not record.interrupted:
             out.append(Finding("ok", name, f"completed {record.completed}"))
