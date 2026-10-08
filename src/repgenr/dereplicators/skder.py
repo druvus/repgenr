@@ -33,6 +33,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import FASTA_SUFFIXES, list_fasta
 from ..core.errors import ToolExecutionError, UserInputError, WorkdirError
+from ..core.logging import capped_names, console_extra
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy, remove_tree
 from .base import (
@@ -44,6 +45,8 @@ from .base import (
 )
 
 _ARGV_WARN_GENOMES = 5000
+# Placement warnings beyond this count are folded into one line.
+_MAX_PLACED_LINES = 5
 # skDER asks for confirmation below this ANI (percent); skani is unreliable there.
 _MIN_ANI_PCT = 80.0
 
@@ -199,15 +202,7 @@ def _parse_skder_output(
                 if member in unassigned and rep in rep_names:
                     if member not in nearest or ani > nearest[member][1]:
                         nearest[member] = (rep, ani)
-        for member, (rep, ani) in sorted(nearest.items()):
-            logger.warning(
-                "skDER did not select %s, and no edge to a representative meets "
-                "the aligned-fraction cutoff; placing it under its closest "
-                "representative %s (ANI %.2f).",
-                member,
-                rep,
-                ani,
-            )
+        _warn_placed(nearest, logger)
         best.update(nearest)
 
     for member, (rep, _ani) in best.items():
@@ -223,6 +218,38 @@ def _parse_skder_output(
         representatives=representatives,
         clusters=clusters,
         genome_status=status,
+    )
+
+
+def _warn_placed(nearest: dict[str, tuple[str, float]], logger: logging.Logger) -> None:
+    """Name the genomes placed under their closest representative.
+
+    One line per genome up to ``_MAX_PLACED_LINES``; beyond that one line, of
+    which the console shows the first names and a count and the run log keeps
+    every placement.
+    """
+    placed = sorted(nearest.items())
+    if len(placed) <= _MAX_PLACED_LINES:
+        for member, (rep, ani) in placed:
+            logger.warning(
+                "skDER did not select %s, and no edge to a representative meets "
+                "the aligned-fraction cutoff; placing it under its closest "
+                "representative %s (ANI %.2f).",
+                member,
+                rep,
+                ani,
+            )
+        return
+    head = (
+        f"skDER did not select {len(placed)} genomes, and no edge to a representative "
+        "meets the aligned-fraction cutoff; placing each under its closest representative"
+    )
+    full = "; ".join(f"{member} under {rep} (ANI {ani:.2f})" for member, (rep, ani) in placed)
+    logger.warning(
+        "%s: %s.",
+        head,
+        full,
+        extra=console_extra(f"{head}: {capped_names([m for m, _ in placed])}."),
     )
 
 

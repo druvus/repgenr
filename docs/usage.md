@@ -1256,6 +1256,11 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   line naming the tool and its exit status; the command line and the output
   tail are in the same log. Re-run with `--verbose` to see them on the console
   (a data-channel step has no log and always prints the tail).
+  A tool command line is shortened on the console, with or without
+  `--verbose`: a run of input paths is shown as its first path and a count,
+  and other paths by their last component. Long lists of genome names show
+  the first five and a count. The full text of such a line, and the tool's own
+  output, are in `repgenr.log`.
   `repgenr status -wd <WD>` shows what completed and what is next; a stage
   that failed is listed as `[interrupted]` and its outputs may be partial
   until it is re-run. A finished stage is listed as `[stale]` when one of its

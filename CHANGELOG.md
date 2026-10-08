@@ -621,6 +621,16 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- Console output (#PR): a tool command line is shortened on the console, so
+  `dereplicate --tool skder`, which passes every genome path on argv, no
+  longer prints a line of several thousand characters (6006 for 50 genomes).
+  A run of input paths is shown as its first path and a count, other paths by
+  their last component, and the line ends with a pointer to the run log, which
+  keeps the full command. This applies to every adapter and to chained
+  container steps. skDER's warnings for genomes placed under their closest
+  representative, and the `derep-unpack` list of missing cluster members,
+  show the first five names and a count on the console beyond five and ten
+  genomes; the run log lists them all. No stage reruns for this.
 - Resume (#239): input directories are digested from their genome FASTA
   files only (the files `list_fasta` returns), so a leftover `x.fasta.tmp`, a
   `.fai` index or a README in `genomes/`, `derep/representatives/` or the
