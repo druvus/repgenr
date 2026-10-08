@@ -121,7 +121,8 @@ def _derep_workdir(tmp_path: Path, reps: int) -> Path:
     for i in range(4):
         (src / f"Fam_Gen_sp{i}_GCA_00000{i}.1.fasta").write_text(">s\nACGT\n", encoding="utf-8")
     wd = tmp_path / "wd"
-    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    ingest = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)])
+    assert ingest.exit_code == 0, ingest.output
     names = sorted(p.name for p in (wd / "genomes").iterdir())
     derep = wd / "derep"
     (derep / "representatives").mkdir(parents=True)
