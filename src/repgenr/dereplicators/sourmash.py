@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import logging
 import os
 import uuid
@@ -330,6 +331,10 @@ class SourmashDereplicator(Dereplicator):
 
         if sigs_zip.exists():
             logger.info("Reusing cached sourmash %s", sigs_zip.name)
+        elif sketch_cache is not None and self._collect_from_cache(
+            genomes, sketch_cache, sigs_zip, out_dir, ksize, scaled, logger
+        ):
+            pass
         else:
             # manysketch reads a CSV of (name, genome_filename, protein_filename).
             # The name becomes the signature name, which is what pairwise reports --
@@ -365,6 +370,8 @@ class SourmashDereplicator(Dereplicator):
             if not tmp_zip.exists():
                 raise WorkdirError(f"sourmash manysketch produced no signatures at {tmp_zip}")
             os.replace(tmp_zip, sigs_zip)
+            if sketch_cache is not None:
+                _write_zip_index(sigs_zip, genomes, ksize, scaled)
 
         pairwise_csv = out_dir / "pairwise.csv"
         run_tool(
@@ -394,6 +401,133 @@ class SourmashDereplicator(Dereplicator):
         labels = [g.stem for g in sorted(genomes, key=lambda g: g.name)]
         neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels), ksize)
         return _sparse_greedy_cluster(labels, neighbors, name_by_label)
+
+    def _collect_from_cache(
+        self,
+        genomes: Sequence[Path],
+        sketch_cache: Path,
+        sigs_zip: Path,
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        logger: logging.Logger,
+    ) -> bool:
+        """Assemble ``sigs_zip`` from sketched zips in the cache, if they cover the set.
+
+        Under chunked ``--target-reps`` the merge level dereplicates the union
+        of the chunk representatives, which changes with the threshold at each
+        search step; its signatures are already in the chunk zips. ``sourmash
+        sig cat`` with a picklist of the wanted names copies them into a new
+        zip, which takes far less time than sketching the genomes again.
+        Returns False (the caller sketches) when the cached zips do not cover
+        every genome or ``sig cat`` fails.
+        """
+        sources = _select_cached_zips(
+            {g.stem for g in genomes}, _read_zip_indexes(sketch_cache, ksize, scaled)
+        )
+        if sources is None:
+            return False
+        picklist = out_dir / "picklist.csv"
+        picklist.write_text(
+            "name\n" + "".join(f"{g.stem}\n" for g in sorted(genomes, key=lambda g: g.stem)),
+            encoding="utf-8",
+        )
+        tmp_zip = sigs_zip.parent / f".{sigs_zip.stem}.{uuid.uuid4().hex}.partial.zip"
+        cmd: list[str | Path] = ["sourmash", "sig", "cat", *sources]
+        cmd += [
+            "--picklist",
+            f"{picklist}:name:name",
+            "--picklist-require-all",
+            "-k",
+            str(ksize),
+            "-o",
+            tmp_zip,
+        ]
+        try:
+            run_tool(
+                self.capabilities,
+                cmd,
+                logger=logger,
+                log_prefix="sourmash",
+                extra_mounts=[str(sketch_cache), str(picklist)],
+            )
+        except ToolExecutionError as exc:
+            logger.warning(
+                "Collecting %d cached sourmash signatures failed (%s); sketching them instead",
+                len(genomes),
+                exc,
+            )
+            tmp_zip.unlink(missing_ok=True)
+            return False
+        if not tmp_zip.exists():
+            logger.warning("sourmash sig cat wrote no %s; sketching instead", tmp_zip.name)
+            return False
+        os.replace(tmp_zip, sigs_zip)
+        logger.info(
+            "Collected %d cached sourmash signatures from %d sketched zip(s) into %s",
+            len(genomes),
+            len(sources),
+            sigs_zip.name,
+        )
+        return True
+
+
+# Index written beside each zip that manysketch produced in a shared cache:
+# which signature names it holds and with which sketch parameters. Zips
+# assembled by sig cat get no index, so they are never offered as a source and
+# the sources of one collection cannot overlap (sig cat would emit a genome
+# twice). A zip without its index (e.g. after an interruption) is not offered.
+_INDEX_SUFFIX = ".names.json"
+
+
+def _write_zip_index(sigs_zip: Path, genomes: Sequence[Path], ksize: int, scaled: int) -> None:
+    index = sigs_zip.with_name(sigs_zip.stem + _INDEX_SUFFIX)
+    tmp = index.with_name(f".{index.name}.{uuid.uuid4().hex}.partial")
+    tmp.write_text(
+        json.dumps({"ksize": ksize, "scaled": scaled, "names": sorted(g.stem for g in genomes)}),
+        encoding="utf-8",
+    )
+    os.replace(tmp, index)
+
+
+def _read_zip_indexes(sketch_cache: Path, ksize: int, scaled: int) -> dict[Path, frozenset[str]]:
+    """Sketched zips in ``sketch_cache`` made with these parameters -> their names."""
+    out: dict[Path, frozenset[str]] = {}
+    for index in sorted(sketch_cache.glob(f"signatures-*{_INDEX_SUFFIX}")):
+        zip_path = index.with_name(index.name[: -len(_INDEX_SUFFIX)] + ".zip")
+        try:
+            data = json.loads(index.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not zip_path.exists() or not isinstance(data, dict):
+            continue
+        if data.get("ksize") != ksize or data.get("scaled") != scaled:
+            continue
+        out[zip_path] = frozenset(str(n) for n in data.get("names", []))
+    return out
+
+
+def _select_cached_zips(
+    wanted: set[str], indexes: Mapping[Path, frozenset[str]]
+) -> list[Path] | None:
+    """Zips that together hold every wanted name, none sharing a wanted name.
+
+    Greedy, largest overlap first. Returns None when the zips cannot cover the
+    set without overlap, in which case the caller sketches the genomes.
+    """
+    remaining = set(wanted)
+    chosen: list[Path] = []
+    for zip_path, names in sorted(
+        indexes.items(), key=lambda kv: (-len(kv[1] & wanted), kv[0].name)
+    ):
+        hit = names & wanted
+        if not hit or not hit <= remaining:
+            continue
+        chosen.append(zip_path)
+        remaining -= hit
+        if not remaining:
+            return chosen
+    return None
 
 
 def _find_signatures(sig_dir: Path, genomes: Sequence[Path]) -> dict[Path, Path]:

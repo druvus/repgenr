@@ -516,6 +516,15 @@ genome's card (one request per selected genome). When the manifest has no
 quality at all the stage warns, and `repgenr.yaml` records
 `keeper_effective: tool` next to the requested `keeper` and the swap count.
 
+The same manifest values also reach the dereplicator, whichever keeper rule is
+chosen (the Nextflow chunk and merge steps read them from `selection.tsv`).
+dRep receives them as `--genomeInfo` when every genome has both values, and
+then runs without CheckM; otherwise the values are not passed and dRep runs
+CheckM, with a warning naming the genomes that lack values. galah keeps the
+first listed genome of a cluster when it has no quality, so unless every genome
+has manifest quality RepGenR lists the genomes by descending file size, which
+makes a complete genome rather than a fragment the representative.
+
 `--reduce species|genus` collapses the ANI representatives to one per taxon
 after dereplication, choosing the keeper by quality when scores are known and
 by cluster size otherwise; `--target-reps N` searches the secondary ANI to

@@ -198,6 +198,27 @@ All notable changes to RepGenR are documented here. The format follows
   of running on the earlier genomes. A set written by another stage, or kept
   because every run failed to download, stays and the error names it; a first
   call writes no empty set. Finished runs under `assemblies/` stay (#230).
+- `dereplicate --tool galah` (#PR): without manifest quality for every genome,
+  galah receives the genomes by descending file size instead of by name. galah
+  keeps the first listed genome of a cluster when it has no quality, so a
+  fragment whose name sorted first became the representative. With quality for
+  every genome the order is unchanged and `--keeper quality` picks the
+  representative. A finished dereplication is not re-made by this change;
+  `--force` applies it.
+- `dereplicate --tool drep` (#PR): when the manifest (or `selection.tsv`, for
+  `dereplicate-chunk` and `dereplicate-merge`) has completeness and
+  contamination for every genome dRep receives, they are passed as
+  `--genomeInfo`, so dRep runs without CheckM and scores genomes with the
+  values `--keeper quality` uses. When some genomes lack them, nothing is
+  passed (dRep needs every genome), dRep runs CheckM, and a warning names the
+  genomes without values. `--virus` still passes `--ignoreGenomeQuality`
+  instead. Adapters read the values from a new `DerepParams.quality` field.
+- `dereplicate --tool sourmash --process-size N --target-reps M` (#PR): the
+  merge-level signature collection, whose genome set changes with the
+  threshold at each search step, is assembled with `sourmash sig cat` from the
+  chunk zips in the shared sketch cache instead of sketching the genomes again.
+  Each sketched zip gets an index file of its signature names; a set the
+  indexed zips do not cover, or a failed `sig cat`, is sketched as before.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.

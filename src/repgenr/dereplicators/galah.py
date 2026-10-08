@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
@@ -58,7 +58,7 @@ class GalahDereplicator(Dereplicator):
 
         # Pass the genome list via a file (--genome-fasta-list), never on argv:
         # 1000s-10000s of paths would exceed ARG_MAX.
-        fofn = write_fofn(genomes, out_dir / "genomes.fofn")
+        fofn = write_fofn(_galah_order(genomes, params.quality), out_dir / "genomes.fofn")
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         cmd: list[str | Path] = [
             "galah",
@@ -113,3 +113,25 @@ class GalahDereplicator(Dereplicator):
             clusters=clusters,
             genome_status=status,
         )
+
+
+def _galah_order(genomes: Sequence[Path], quality: Mapping[str, tuple[float, float]]) -> list[Path]:
+    """The order in which galah is given the genomes.
+
+    Without genome quality, galah prefers genomes listed earlier as cluster
+    representatives, so a name-sorted list can make a fragment that sorts
+    first the representative. Unless every genome has manifest quality (in
+    which case ``--keeper quality`` re-picks each representative), list the
+    genomes by descending file size, then by name. The size of a gzipped file
+    is its compressed size, a rough proxy only.
+    """
+    if genomes and all(Path(g).name in quality for g in genomes):
+        return list(genomes)
+    return sorted(genomes, key=lambda g: (-_file_size(g), Path(g).name))
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0

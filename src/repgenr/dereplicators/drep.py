@@ -14,7 +14,7 @@ from __future__ import annotations
 import csv
 import logging
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
@@ -131,6 +131,11 @@ class DrepDereplicator(Dereplicator):
             "--length",
             str(params.extra.get("length", 0)),
         ]
+        genome_info = (
+            None if virus else _write_genome_info(genomes, staged, params.quality, out_dir, logger)
+        )
+        if genome_info is not None:
+            cmd += ["--genomeInfo", genome_info]
         if virus:
             cmd += [
                 "--cov_thresh",
@@ -148,7 +153,7 @@ class DrepDereplicator(Dereplicator):
             cmd,
             logger=logger,
             log_prefix="drep",
-            extra_mounts=[str(genomes_dir)],
+            extra_mounts=[str(genomes_dir), *([str(genome_info)] if genome_info else [])],
         )
 
         if not drep_wd.exists():
@@ -162,9 +167,10 @@ class DrepDereplicator(Dereplicator):
                 [str(c) for c in cmd],
                 0,
                 "dRep wrote no data_tables/Cdb.csv. dRep stops this way when CheckM "
-                "is not on PATH: it scores genome quality with CheckM unless "
-                "--ignoreGenomeQuality is set, which --virus does. The [drep] lines "
-                "in repgenr.log show the step where it stopped.",
+                "is not on PATH: it scores genome quality with CheckM unless every "
+                "genome has completeness and contamination in the manifest (passed "
+                "as --genomeInfo) or --ignoreGenomeQuality is set, which --virus "
+                "does. The [drep] lines in repgenr.log show the step where it stopped.",
                 tool="dRep",
             )
         result = _parse_drep_output(drep_wd, logger)
@@ -184,6 +190,52 @@ class DrepDereplicator(Dereplicator):
             for name in dropped:
                 result.genome_status[name] = STATUS_FAIL_QC
         return result
+
+
+def _write_genome_info(
+    genomes: Sequence[Path],
+    staged: Sequence[Path],
+    quality: Mapping[str, tuple[float, float]],
+    out_dir: Path,
+    logger: logging.Logger,
+) -> Path | None:
+    """Write dRep's ``--genomeInfo`` table from the manifest quality, if complete.
+
+    With this table dRep uses the given completeness and contamination instead
+    of running CheckM, so it runs without CheckM installed and scores genomes
+    with the same values as ``--keeper quality``. dRep requires a row for every
+    genome, so the table is written only when every genome has both values.
+    Rows name the staged file dRep reads (a gzipped input is staged
+    decompressed, without ``.gz``).
+    """
+    lacking = [g.name for g in genomes if g.name not in quality]
+    if lacking:
+        if len(lacking) < len(genomes):
+            logger.warning(
+                "dRep is not given the manifest quality (--genomeInfo): %d of %d genome(s) "
+                "have no completeness and contamination (e.g. %s), and dRep needs values for "
+                "every genome. dRep scores genome quality with CheckM instead.",
+                len(lacking),
+                len(genomes),
+                ", ".join(lacking[:3]),
+            )
+        else:
+            logger.info(
+                "No genome quality in the manifest; dRep scores genome quality with CheckM."
+            )
+        return None
+    path = out_dir / "genome_info.csv"
+    with open(path, "w", encoding="utf-8", newline="") as fo:
+        writer = csv.writer(fo, lineterminator="\n")
+        writer.writerow(["genome", "completeness", "contamination"])
+        for src, st in zip(genomes, staged, strict=True):
+            completeness, contamination = quality[src.name]
+            writer.writerow([st.name, f"{completeness:g}", f"{contamination:g}"])
+    logger.info(
+        "dRep uses the manifest completeness and contamination of %d genomes (--genomeInfo)",
+        len(genomes),
+    )
+    return path
 
 
 def _restore_input_names(result: DerepResult, source_by_staged: dict[str, Path]) -> DerepResult:

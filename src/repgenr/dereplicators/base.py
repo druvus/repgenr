@@ -31,6 +31,10 @@ class DerepParams:
     """Normalized dereplication parameters shared across tools.
 
     ``extra`` carries tool-specific overrides keyed by adapter name.
+    ``quality`` maps genome filename to (completeness, contamination) from the
+    manifest or selection.tsv, for genomes that carry both values; adapters
+    that can use genome quality read it (dRep's ``--genomeInfo``, galah's
+    input order) and the others ignore it.
     """
 
     primary_ani: float = 0.90
@@ -38,6 +42,7 @@ class DerepParams:
     aligned_fraction: float = 0.50
     threads: int = 16
     extra: dict = field(default_factory=dict)
+    quality: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 
 @dataclass

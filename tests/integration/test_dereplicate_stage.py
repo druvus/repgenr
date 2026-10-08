@@ -426,3 +426,40 @@ def test_skder_ani_floor_refusal_keeps_the_finished_record(
     assert refused.exit_code == 2, refused.output
     record = Config.load(workdir).stages["dereplicate"]
     assert record.completed and record.tool == "fake"
+
+
+class _QualityRecorder(_FakeDereplicator):
+    capabilities = ToolCapabilities(name="qualityrecorder", supports_native_scaling=True)
+    seen: list[dict] = []
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:
+        type(self).seen.append(dict(params.quality))
+        return super().dereplicate(genomes, out_dir, params, logger)
+
+
+@pytest.mark.parametrize("keeper", ["quality", "tool"])
+def test_adapters_receive_the_manifest_quality(
+    workdir: Path, genome_files, fake_tool, keeper: str
+) -> None:
+    """dRep's --genomeInfo and galah's input order read DerepParams.quality."""
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    registry.register("qualityrecorder", _QualityRecorder, replace=True)
+    _QualityRecorder.seen = []
+    ctx = WorkdirContext(workdir, create=True)
+    quality = {genome_files[0].name: (97.0, 1.0), genome_files[1].name: (88.0, 2.0)}
+    for filename, (completeness, contamination) in quality.items():
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(filename),
+                filename=filename,
+                completeness=completeness,
+                contamination=contamination,
+            )
+        )
+    try:
+        run(ctx, DereplicateParams(tool="qualityrecorder", keeper=keeper))
+    finally:
+        registry._classes.pop("qualityrecorder", None)
+    assert _QualityRecorder.seen == [quality]

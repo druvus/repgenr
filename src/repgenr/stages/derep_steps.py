@@ -136,6 +136,9 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
         extra={**caps.default_params, **(params.extra or {})},
+        # As in the stage: selection.tsv quality is an adapter input (dRep
+        # --genomeInfo, galah input order) whichever keeper rule applies.
+        quality=_summary_quality(params.selection_tsv),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
@@ -188,12 +191,18 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
     versions = adapter.preflight()
     _maybe_write_versions(params.versions_out, versions)
+    union_names = {rep.name for rep in union}
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
         extra={**caps.default_params, **(params.extra or {})},
+        quality={
+            name: qual
+            for name, qual in _summary_quality(params.selection_tsv).items()
+            if name in union_names
+        },
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
