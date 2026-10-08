@@ -559,9 +559,7 @@ def test_merge_reduce_species_uses_selection_taxonomy(tmp_path: Path, register_t
     assert sorted(status.values()).count(STATUS_CONTAINED) == 1
 
 
-def test_merge_reduce_keeper_tool_ignores_selection_quality(
-    tmp_path: Path, register_tool
-) -> None:
+def test_merge_reduce_keeper_tool_ignores_selection_quality(tmp_path: Path, register_tool) -> None:
     """--keeper tool: the --reduce keeper is the largest cluster, as in the stage.
 
     The merge step used to rank the representatives by selection.tsv quality
