@@ -173,7 +173,7 @@ dispatch: `query`
 |---|---|---|---|---|---|---|
 | `--check` |  | n/a: query command, no stage parameters | none | n/a: environment query; the Nextflow layer preflights inside each step | tests/live/test_aux_commands.py::test_list_tools_check_reports_every_adapter | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--strict` |  | n/a: query command, no stage parameters | callback | n/a: environment query; the Nextflow layer preflights inside each step | n/a: exit status from the per-adapter states; tests/unit/test_plugin_visibility.py | docs/cli-reference.md, docs/usage.md, docs/install.md, docs/audit/cli-matrix.md |
-| `--images` |  | n/a: query command, no stage parameters | none | n/a: environment query; the Nextflow layer preflights inside each step | n/a: needs a container engine; tests/unit/test_list_tools_labels.py | docs/cli-reference.md, docs/install.md, docs/audit/cli-matrix.md |
+| `--images` |  | n/a: query command, no stage parameters | callback | n/a: environment query; the Nextflow layer preflights inside each step | n/a: needs a container engine; tests/unit/test_list_tools_labels.py | docs/cli-reference.md, docs/install.md, docs/audit/cli-matrix.md |
 
 ## metadata
 
