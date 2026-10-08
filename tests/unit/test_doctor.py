@@ -420,7 +420,7 @@ def test_cli_doctor_exit_codes(tmp_path: Path) -> None:
 
     (wd / "genomes" / "Fam_Gen_sp2_GCF_2.1.fasta").unlink()
     result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
-    assert result.exit_code == 1
+    assert result.exit_code == 7  # failures found; 1 is kept for a crash
     assert "FAIL" in result.stdout
 
 
@@ -441,7 +441,7 @@ def test_malformed_record_is_a_config_failure_not_a_traceback(tmp_path: Path, te
     assert [(f.level, f.area) for f in findings] == [("fail", "config")]
     assert "not a readable RepGenR record" in findings[0].message
     result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
-    assert result.exit_code == 1
+    assert result.exit_code == 7
     assert "[FAIL] config" in result.stdout
     for command in ("status", "versions"):
         result = _runner.invoke(app, [command, "-wd", str(wd)])
@@ -541,7 +541,7 @@ def test_doctor_prints_findings_only(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    assert result.returncode == 1, result.stderr
+    assert result.returncode == 7, result.stderr
     assert result.stderr == ""
     assert "--allow-incomplete" not in result.stdout
 
@@ -560,3 +560,99 @@ def test_emptied_record_beside_outputs_is_a_warning(tmp_path: Path) -> None:
     (wd / "repgenr.yaml").write_text("", encoding="utf-8")
     warned = _messages([f for f in diagnose(wd) if f.area == "config"], "warn")
     assert "records no stage" in warned
+
+
+def _doctor_json(wd: Path, *extra: str) -> tuple[int, dict]:
+    import json
+
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd), "--json", *extra])
+    return result.exit_code, json.loads(result.stdout)
+
+
+def test_doctor_json_on_a_healthy_workdir(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    code, payload = _doctor_json(wd)
+    assert code == 0
+    assert payload["schema"] == "repgenr.doctor/1"
+    assert payload["workdir"] == str(wd)
+    assert payload["quick"] is False
+    assert payload["exit_code"] == 0
+    assert payload["counts"]["fail"] == 0
+    assert set(payload["findings"][0]) == {"level", "area", "message"}
+    for level in ("fail", "warn", "ok"):
+        listed = sum(1 for f in payload["findings"] if f["level"] == level)
+        assert payload["counts"][level] == listed
+
+
+def test_doctor_json_counts_agree_with_the_exit_code(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "genomes" / "Fam_Gen_sp2_GCF_2.1.fasta").unlink()
+    code, payload = _doctor_json(wd)
+    assert code == 7 == payload["exit_code"]
+    assert payload["counts"]["fail"] >= 1
+    assert payload["findings"][0]["level"] == "fail"  # failures first, as in the text
+    assert any(f["area"] == "genomes" and f["level"] == "fail" for f in payload["findings"])
+
+
+def test_doctor_json_on_a_missing_workdir_leaves_stdout_empty(tmp_path: Path) -> None:
+    result = _runner.invoke(app, ["doctor", "-wd", str(tmp_path / "missing"), "--json"])
+    assert result.exit_code == 3
+    assert result.stdout == ""
+
+
+def test_a_check_that_raises_exits_7_not_1(tmp_path: Path, monkeypatch) -> None:
+    import repgenr.core.doctor as doctor_mod
+
+    def _check_tree(workdir: Path, config: Config) -> list:
+        raise RuntimeError("unreadable table")
+
+    monkeypatch.setattr(doctor_mod, "_check_tree", _check_tree)
+    wd = _base_workdir(tmp_path)
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert result.exit_code == 7, result.output
+    assert "[FAIL] tree: Check could not complete: unreadable table" in result.stdout
+
+
+def test_quick_check_failure_keeps_the_genomes_area(tmp_path: Path, monkeypatch) -> None:
+    # The genome check is wrapped in functools.partial under quick; a failure
+    # inside it still names its area.
+    import repgenr.core.doctor as doctor_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("stat failed")
+
+    monkeypatch.setattr(doctor_mod, "looks_like_fasta", boom)
+    findings = diagnose(_base_workdir(tmp_path))
+    assert ("fail", "genomes") in {(f.level, f.area) for f in findings}
+
+
+def test_quick_skips_the_fasta_content_check(tmp_path: Path, monkeypatch) -> None:
+    import repgenr.core.doctor as doctor_mod
+
+    wd = _base_workdir(tmp_path)
+    (wd / "genomes" / "Fam_Gen_sp2_GCF_2.1.fasta").write_text("<html>\n", encoding="utf-8")
+    full = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert full.exit_code == 7
+    assert "not FASTA" in full.stdout
+
+    def never(path: Path) -> bool:
+        raise AssertionError(f"looks_like_fasta called under --quick: {path}")
+
+    monkeypatch.setattr(doctor_mod, "looks_like_fasta", never)
+    quick = _runner.invoke(app, ["doctor", "-wd", str(wd), "--quick"])
+    assert quick.exit_code == 0, quick.output
+    assert "not FASTA" not in quick.stdout
+    assert "2 genome file(s) present (content not read: --quick)" in quick.stdout
+    code, payload = _doctor_json(wd, "--quick")
+    assert code == 0
+    assert payload["quick"] is True
+
+
+def test_quick_still_reports_missing_and_dangling_genomes(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    victim = wd / "genomes" / "Fam_Gen_sp2_GCF_2.1.fasta"
+    victim.unlink()
+    victim.symlink_to(tmp_path / "gone.fasta")
+    findings = diagnose(wd, quick=True)
+    text = _messages(findings, "fail")
+    assert "point at files that no longer exist" in text

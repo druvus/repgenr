@@ -83,20 +83,35 @@ def versions(
 
 
 def _gtdb_note(params: dict) -> str:
-    """The GTDB release, or the date of the API query, after the metadata line."""
+    """The GTDB release, or the date of the API query, for the metadata line."""
     from ..stages.metadata import gtdb_provenance
 
     gtdb = gtdb_provenance(params)
     if "gtdb_release" in gtdb:
-        return f"  (GTDB release {gtdb['gtdb_release']})"
+        return f"GTDB release {gtdb['gtdb_release']}"
     if "gtdb_api_query_date" in gtdb:
-        return f"  (GTDB API queried {gtdb['gtdb_api_query_date']})"
+        return f"GTDB API queried {gtdb['gtdb_api_query_date']}"
     return ""
+
+
+STATUS_SCHEMA = "repgenr.status/1"
+DOCTOR_SCHEMA = "repgenr.doctor/1"
+HELP_JSON = (
+    "Print one versioned JSON object on stdout instead of the text report "
+    "(schema in docs/output.md); exit codes are unchanged."
+)
+
+
+def _echo_json(payload: dict[str, Any]) -> None:
+    import json
+
+    typer.echo(json.dumps(payload, indent=2))
 
 
 @app.command(rich_help_panel=PANEL_PIPELINE)
 def status(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
+    as_json: bool = typer.Option(False, "--json", help=HELP_JSON),
 ) -> None:
     """Show which pipeline stages have completed in a working directory.
 
@@ -104,18 +119,23 @@ def status(
     one of its outputs is missing since it finished (it re-runs on its next
     invocation), and as interrupted when it did not finish. A -wd that does
     not exist exits 3; an existing directory without repgenr.yaml prints
-    which entry stage to run first and exits 0.
+    which entry stage to run first and exits 0. With --json, a malformed
+    record still exits 3 and leaves stdout empty.
     """
     from ..core.config import CONFIG_FILENAME, Config
     from ..core.errors import WorkdirError
 
     require_existing_workdir(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
-        typer.echo(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
-        typer.echo(
+        notes = [
             "Start with 'repgenr metadata' (bacteria), 'vmetadata' (viruses), "
             "'ingest' (local genomes) or 'reads' (sequencing reads), with -wd <wd>."
-        )
+        ]
+        if as_json:
+            _echo_json(_status_envelope(workdir, None, [], None, notes, None))
+            raise typer.Exit()
+        typer.echo(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
+        typer.echo(notes[0])
         raise typer.Exit()
 
     try:
@@ -123,6 +143,43 @@ def status(
     except WorkdirError as exc:
         typer.echo(f"ERROR {exc}", err=True)
         raise typer.Exit(code=exc.exit_code) from exc
+    report = _status_report(workdir, cfg)
+    if as_json:
+        _echo_json(report)
+    else:
+        _render_status_text(report)
+
+
+def _status_envelope(
+    workdir: Path,
+    pipeline: str | None,
+    stages: list[dict[str, Any]],
+    next_stage: str | None,
+    notes: list[str],
+    unchecked: str | None,
+) -> dict[str, Any]:
+    from .. import __version__
+
+    return {
+        "schema": STATUS_SCHEMA,
+        "repgenr": __version__,
+        "workdir": str(workdir),
+        "pipeline": pipeline,
+        "stages": stages,
+        "next": next_stage,
+        "notes": notes,
+        "unchecked": unchecked,
+    }
+
+
+def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
+    """The state of each stage of a loaded workdir record, as plain data.
+
+    Shared by the text and JSON renderers of `status`. Each stage entry has
+    name, in_chain, state (done, stale, interrupted or pending), reason (the
+    stale reason), tool, completed, fingerprint and detail (the GTDB note of
+    metadata).
+    """
     recorded = cfg.stages
     chain: tuple[str, ...]
     if "reads" in recorded and "metadata" not in recorded:
@@ -136,31 +193,76 @@ def status(
 
     from ..core.doctor import stale_stages
 
+    unchecked: str | None
     try:
         stale = stale_stages(workdir, cfg)
         unchecked = None
     except Exception as exc:  # a damaged artifact must not stop the report
         stale, unchecked = {}, str(exc)
 
-    typer.echo(f"RepGenR workdir: {workdir}")
-    typer.echo(f"Pipeline: {lineage}\n")
-
-    next_stage: str | None = None
-    for stage in chain:
+    def entry(stage: str, in_chain: bool) -> dict[str, Any]:
         rec = recorded.get(stage)
-        tool = f" [{rec.tool}]" if rec is not None and rec.tool else ""
-        finished = rec is not None and not rec.interrupted
-        note = (
-            _gtdb_note(rec.params) if rec is not None and finished and stage == "metadata" else ""
-        )
-        if rec is not None and not rec.interrupted and stage not in stale:
-            typer.echo(f"  [done]    {stage}{tool}  {rec.completed}{note}")
+        if rec is None:
+            return {
+                "name": stage,
+                "in_chain": in_chain,
+                "state": "pending",
+                "reason": None,
+                "tool": None,
+                "completed": None,
+                "fingerprint": False,
+                "detail": None,
+            }
+        if rec.interrupted:
+            state = "interrupted"
+        elif stage in stale:
+            state = "stale"
+        else:
+            state = "done"
+        detail = None
+        if stage == "metadata" and not rec.interrupted:
+            detail = _gtdb_note(rec.params) or None
+        return {
+            "name": stage,
+            "in_chain": in_chain,
+            "state": state,
+            "reason": stale.get(stage) if state == "stale" else None,
+            "tool": rec.tool or None,
+            "completed": rec.completed,
+            "fingerprint": bool(rec.fingerprint),
+            "detail": detail,
+        }
+
+    stages = [entry(stage, True) for stage in chain]
+    stages += [entry(stage, False) for stage in recorded if stage not in chain]
+    next_stage = next((s["name"] for s in stages if s["in_chain"] and s["state"] != "done"), None)
+    notes: list[str] = []
+    if next_stage is not None:
+        hint = _next_stage_note(workdir, next_stage, recorded)
+        if hint:
+            notes.append(hint)
+    return _status_envelope(workdir, lineage, stages, next_stage, notes, unchecked)
+
+
+def _render_status_text(report: dict[str, Any]) -> None:
+    """The text form of `status`: one line per stage, then the next step."""
+    workdir = report["workdir"]
+    typer.echo(f"RepGenR workdir: {workdir}")
+    typer.echo(f"Pipeline: {report['pipeline']}\n")
+
+    for s in report["stages"]:
+        if not s["in_chain"]:
             continue
-        if rec is not None and not rec.interrupted:
+        stage = s["name"]
+        tool = f" [{s['tool']}]" if s["tool"] else ""
+        note = f"  ({s['detail']})" if s["detail"] else ""
+        if s["state"] == "done":
+            typer.echo(f"  [done]    {stage}{tool}  {s['completed']}{note}")
+        elif s["state"] == "stale":
             # Completed, but an input changed or an output is missing since:
             # the stage re-runs on its next invocation.
-            typer.echo(f"  [stale]   {stage}{tool}  {rec.completed}{note}  ({stale[stage]})")
-        elif rec is not None:
+            typer.echo(f"  [stale]   {stage}{tool}  {s['completed']}{note}  ({s['reason']})")
+        elif s["state"] == "interrupted":
             # The stage started a (re-)run and failed or was killed; outputs
             # may be partial.
             typer.echo(
@@ -168,34 +270,30 @@ def status(
                 "(did not finish; outputs may be partial; see repgenr.log)"
             )
         else:
-            marker = "next" if next_stage is None else "    "
+            marker = "next" if stage == report["next"] else "    "
             typer.echo(f"  [{marker}] {stage}")
-        if next_stage is None:
-            next_stage = stage
 
-    extras = [s for s in recorded if s not in chain]
+    extras = [s for s in report["stages"] if not s["in_chain"]]
     if extras:
         typer.echo("\n  optional stages run:")
-        for stage in extras:
-            rec = recorded[stage]
-            tool = f" [{rec.tool}]" if rec.tool else ""
-            if rec.interrupted:
+        for s in extras:
+            tool = f" [{s['tool']}]" if s["tool"] else ""
+            if s["state"] == "interrupted":
                 when = "[interrupted] (did not finish; outputs may be partial; see repgenr.log)"
-            elif stage in stale:
-                when = f"{rec.completed}  [stale] ({stale[stage]})"
+            elif s["state"] == "stale":
+                when = f"{s['completed']}  [stale] ({s['reason']})"
             else:
-                when = rec.completed or ""
-            typer.echo(f"    {stage}{tool}  {when}")
+                when = s["completed"] or ""
+            typer.echo(f"    {s['name']}{tool}  {when}")
 
-    if unchecked is not None:
-        typer.echo(f"\nStale stages were not checked ({unchecked}); run repgenr doctor.")
-    if next_stage is None:
+    if report["unchecked"] is not None:
+        typer.echo(f"\nStale stages were not checked ({report['unchecked']}); run repgenr doctor.")
+    if report["next"] is None:
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
     else:
-        typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
-        hint = _next_stage_note(workdir, next_stage, recorded)
-        if hint:
-            typer.echo(hint)
+        typer.echo(f"\nNext: repgenr {report['next']} -wd {workdir} ...")
+        for line in report["notes"]:
+            typer.echo(line)
 
 
 def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str | None:
@@ -221,6 +319,14 @@ def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str
 @app.command(rich_help_panel=PANEL_ENV)
 def doctor(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
+    quick: bool = typer.Option(
+        False,
+        "--quick",
+        help="Skip reading the first bytes of each genome file (the FASTA content check), "
+        "the slowest check on large genome sets. Links, missing and untracked genomes are "
+        "still checked.",
+    ),
+    as_json: bool = typer.Option(False, "--json", help=HELP_JSON),
 ) -> None:
     """Verify a workdir's outputs against its records (read-only health check).
 
@@ -230,23 +336,43 @@ def doctor(
     truncated tree and tree2tax tables, missing deliverables, stages whose
     inputs changed since completion, and leftover temp files.
     Exits 0 when only warnings are found (a stale stage re-runs on its next
-    invocation), 1 when any failure is found, and 3 when the workdir does
-    not exist.
+    invocation), 7 when any failure is found (including a malformed
+    repgenr.yaml or a check that could not complete), 3 when the workdir
+    does not exist, and 1 only on an unexpected error.
     """
     from ..core.doctor import diagnose
+    from ..core.errors import DOCTOR_FAILURES_EXIT
 
     require_existing_workdir(workdir)
 
-    findings = diagnose(workdir)
-    label = {"ok": "OK  ", "warn": "WARN", "fail": "FAIL"}
+    findings = diagnose(workdir, quick=quick)
     order = {"fail": 0, "warn": 1, "ok": 2}
-    for f in sorted(findings, key=lambda f: (order[f.level], f.area)):
-        typer.echo(f"[{label[f.level]}] {f.area}: {f.message}")
-    failures = sum(1 for f in findings if f.level == "fail")
-    warnings = sum(1 for f in findings if f.level == "warn")
-    typer.echo(f"\n{failures} failure(s), {warnings} warning(s).")
-    if failures:
-        raise typer.Exit(code=1)
+    findings = sorted(findings, key=lambda f: (order[f.level], f.area))
+    counts = {level: sum(1 for f in findings if f.level == level) for level in order}
+    exit_code = DOCTOR_FAILURES_EXIT if counts["fail"] else 0
+    if as_json:
+        from dataclasses import asdict
+
+        from .. import __version__
+
+        _echo_json(
+            {
+                "schema": DOCTOR_SCHEMA,
+                "repgenr": __version__,
+                "workdir": str(workdir),
+                "quick": quick,
+                "findings": [asdict(f) for f in findings],
+                "counts": counts,
+                "exit_code": exit_code,
+            }
+        )
+    else:
+        label = {"ok": "OK  ", "warn": "WARN", "fail": "FAIL"}
+        for f in findings:
+            typer.echo(f"[{label[f.level]}] {f.area}: {f.message}")
+        typer.echo(f"\n{counts['fail']} failure(s), {counts['warn']} warning(s).")
+    if exit_code:
+        raise typer.Exit(code=exit_code)
 
 
 def _glance_tool_help() -> str:

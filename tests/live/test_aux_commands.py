@@ -90,7 +90,24 @@ def test_doctor_passes_then_fails_on_a_corrupt_genome(run_repgenr, derep_wd: Pat
     victim = next(iter(sorted((derep_wd / "genomes").glob("*.fasta"))))
     victim.write_text("this is not a fasta file\n", encoding="utf-8")
     bad = run_repgenr("doctor", "-wd", derep_wd, check=False)
-    assert bad.returncode == 1 and "genomes" in bad.stdout
+    assert bad.returncode == 7 and "genomes" in bad.stdout
+
+
+def test_doctor_and_status_json_and_quick(run_repgenr, derep_wd: Path) -> None:
+    import json
+
+    status = json.loads(run_repgenr("status", "-wd", derep_wd, "--json").stdout)
+    assert status["schema"] == "repgenr.status/1" and status["pipeline"] == "local"
+    assert {s["name"]: s["state"] for s in status["stages"]}["dereplicate"] == "done"
+    assert status["next"] == "phylo"
+    doctor = json.loads(run_repgenr("doctor", "-wd", derep_wd, "--json").stdout)
+    assert doctor["schema"] == "repgenr.doctor/1" and doctor["exit_code"] == 0
+    victim = next(iter(sorted((derep_wd / "genomes").glob("*.fasta"))))
+    victim.write_text("this is not a fasta file\n", encoding="utf-8")
+    quick = run_repgenr("doctor", "-wd", derep_wd, "--quick")
+    assert "content not read: --quick" in quick.stdout
+    bad = run_repgenr("doctor", "-wd", derep_wd, "--json", check=False)
+    assert bad.returncode == 7 == json.loads(bad.stdout)["exit_code"]
 
 
 def test_second_run_skips_and_force_reruns(run_repgenr, derep_wd: Path) -> None:

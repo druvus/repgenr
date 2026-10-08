@@ -14,8 +14,10 @@ companion files, which hold no data of their own.
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -60,8 +62,13 @@ class Finding:
     message: str
 
 
-def diagnose(workdir: Path) -> list[Finding]:
-    """Run every health check; never raises for a broken workdir."""
+def diagnose(workdir: Path, *, quick: bool = False) -> list[Finding]:
+    """Run every health check; never raises for a broken workdir.
+
+    ``quick`` skips reading the first bytes of each genome file (the FASTA
+    content check), the slowest check on large genome sets; links, the
+    selection shortfall and untracked files are still checked.
+    """
     workdir = Path(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
         return [Finding("warn", "config", f"No RepGenR run found at {workdir}.")]
@@ -71,9 +78,9 @@ def diagnose(workdir: Path) -> list[Finding]:
         config = Config.load(workdir)
     except WorkdirError as exc:
         return [Finding("fail", "config", str(exc))]
-    checks = (
+    checks: tuple[Callable[[Path, Config], list[Finding]], ...] = (
         _check_stage_records,
-        _check_genomes,
+        functools.partial(_check_genomes, quick=quick),
         _check_manifest_drift,
         _check_outgroup,
         _check_representatives,
@@ -91,7 +98,7 @@ def diagnose(workdir: Path) -> list[Finding]:
             findings.append(
                 Finding(
                     "fail",
-                    check.__name__.removeprefix("_check_"),
+                    getattr(check, "func", check).__name__.removeprefix("_check_"),
                     f"Check could not complete: {exc}",
                 )
             )
@@ -142,7 +149,7 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     return out
 
 
-def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
+def _check_genomes(workdir: Path, config: Config, *, quick: bool = False) -> list[Finding]:
     genomes_dir = workdir / "genomes"
     writer = _genome_set_stages(config)[1]
     out: list[Finding] = []
@@ -169,7 +176,9 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 "copies with ingest --copy.",
             )
         )
-    bad = [p.name for p in entries if p not in dangling and not looks_like_fasta(p)]
+    bad = (
+        [] if quick else [p.name for p in entries if p not in dangling and not looks_like_fasta(p)]
+    )
     if bad:
         out.append(
             Finding(
@@ -191,9 +200,13 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
             )
         )
     if not shortfall and not bad and not dangling and genomes_dir.exists():
-        out.append(
-            Finding("ok", "genomes", f"{len(list_fasta(genomes_dir))} genome file(s) look sound")
+        count = len(list_fasta(genomes_dir))
+        message = (
+            f"{count} genome file(s) present (content not read: --quick)"
+            if quick
+            else f"{count} genome file(s) look sound"
         )
+        out.append(Finding("ok", "genomes", message))
     return out
 
 

@@ -206,3 +206,78 @@ def test_stale_metadata_line_keeps_the_gtdb_note(tmp_path: Path) -> None:
     cfg.save(tmp_path)  # selection.tsv and the manifest are absent: stale
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
     assert "[stale]   metadata [gtdb-table]  t  (GTDB release 232.0)  (missing:" in result.stdout
+
+
+def _status_json(wd: Path) -> dict:
+    import json
+
+    result = _runner.invoke(app, ["status", "-wd", str(wd), "--json"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)
+
+
+def _by_name(payload: dict) -> dict[str, dict]:
+    return {s["name"]: s for s in payload["stages"]}
+
+
+def test_status_json_without_a_record(tmp_path: Path) -> None:
+    payload = _status_json(tmp_path)
+    assert payload["schema"] == "repgenr.status/1"
+    assert payload["pipeline"] is None
+    assert payload["stages"] == []
+    assert payload["next"] is None
+
+
+def test_status_json_done_and_pending(tmp_path: Path, write_deliverables) -> None:
+    cfg = Config()
+    cfg.record_stage("metadata", completed="2026-01-01T00:00:00")
+    cfg.record_stage("genome", tool="datasets", completed="2026-01-01T00:01:00")
+    cfg.save(tmp_path)
+    write_deliverables(tmp_path)
+    payload = _status_json(tmp_path)
+    assert payload["pipeline"] == "bacterial"
+    assert payload["workdir"] == str(tmp_path)
+    stages = _by_name(payload)
+    assert stages["genome"]["state"] == "done"
+    assert stages["genome"]["tool"] == "datasets"
+    assert stages["genome"]["completed"] == "2026-01-01T00:01:00"
+    assert stages["genome"]["in_chain"] is True
+    assert stages["genome"]["fingerprint"] is False
+    assert stages["dereplicate"]["state"] == "pending"
+    assert stages["dereplicate"]["completed"] is None
+    assert payload["next"] == "dereplicate"
+    assert payload["unchecked"] is None
+
+
+def test_status_json_stale_with_reason(tmp_path: Path) -> None:
+    wd = _derep_workdir(tmp_path, reps=3)
+    (wd / "derep" / "genome_status.tsv").unlink()
+    stage = _by_name(_status_json(wd))["dereplicate"]
+    assert stage["state"] == "stale"
+    assert "missing: derep/genome_status.tsv" in stage["reason"]
+
+
+def test_status_json_interrupted_and_optional(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("ingest", completed="2026-01-01T00:00:00")
+    cfg.record_stage("glance", tool="drep", params={"plot_min": 0.0})
+    cfg.save(tmp_path)
+    payload = _status_json(tmp_path)
+    assert payload["pipeline"] == "local"
+    glance = _by_name(payload)["glance"]
+    assert glance["state"] == "interrupted"
+    assert glance["in_chain"] is False
+
+
+def test_status_json_carries_the_phylo_note(tmp_path: Path) -> None:
+    wd = _derep_workdir(tmp_path, reps=2)
+    payload = _status_json(wd)
+    assert payload["next"] == "phylo"
+    assert any("a tree needs at least 3" in note for note in payload["notes"])
+
+
+def test_status_json_on_a_malformed_record_leaves_stdout_empty(tmp_path: Path) -> None:
+    (tmp_path / "repgenr.yaml").write_text("stages: [\n  bad", encoding="utf-8")
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path), "--json"])
+    assert result.exit_code == 3
+    assert result.stdout == ""

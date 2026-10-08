@@ -112,11 +112,13 @@ A completed stage is listed as stale when one of its inputs changed or
 one of its outputs is missing since it finished (it re-runs on its next
 invocation), and as interrupted when it did not finish. A -wd that does
 not exist exits 3; an existing directory without repgenr.yaml prints
-which entry stage to run first and exits 0.
+which entry stage to run first and exits 0. With --json, a malformed
+record still exits 3 and leaves stdout empty.
 
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
+| `--json` | off | Print one versioned JSON object on stdout instead of the text report (schema in docs/output.md); exit codes are unchanged. |
 
 ## Entry points: select and fetch genomes
 
@@ -418,12 +420,15 @@ dangling links, manifest drift, representative/cluster mismatches,
 truncated tree and tree2tax tables, missing deliverables, stages whose
 inputs changed since completion, and leftover temp files.
 Exits 0 when only warnings are found (a stale stage re-runs on its next
-invocation), 1 when any failure is found, and 3 when the workdir does
-not exist.
+invocation), 7 when any failure is found (including a malformed
+repgenr.yaml or a check that could not complete), 3 when the workdir
+does not exist, and 1 only on an unexpected error.
 
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory. |
+| `--quick` | off | Skip reading the first bytes of each genome file (the FASTA content check), the slowest check on large genome sets. Links, missing and untracked genomes are still checked. |
+| `--json` | off | Print one versioned JSON object on stdout instead of the text report (schema in docs/output.md); exit codes are unchanged. |
 
 ### versions
 
