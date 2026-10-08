@@ -15,6 +15,7 @@ import pytest
 
 from repgenr.aligners.base import AlignParams
 from repgenr.aligners.base import registry as align_registry
+from repgenr.core.contracts import record_name
 from repgenr.snptypers.base import SnpParams
 from repgenr.snptypers.base import registry as snp_registry
 
@@ -63,8 +64,8 @@ def _xmfa_for(ref: str, query: str) -> str:
         "#FormatVersion Mauve1\n"
         f"#Sequence1File\t{ref}\n#Sequence1Format\tFastA\n"
         f"#Sequence2File\t{query}\n#Sequence2Format\tFastA\n"
-        f"> 1:1-12 + {ref}\n{_SEQ[Path(ref).stem]}\n"
-        f"> 2:1-12 + {query}\n{_SEQ[Path(query).stem]}\n"
+        f"> 1:1-12 + {ref}\n{_SEQ[record_name(ref)]}\n"
+        f"> 2:1-12 + {query}\n{_SEQ[record_name(query)]}\n"
         "=\n"
     )
 
@@ -82,7 +83,7 @@ def _make_fake_run_tool(recorded: list[list[str]]):
         elif tool == "minimap2":
             # One full-length alignment against the reference (g1), so the
             # simple typer masks nothing; every genome here is 12 bases.
-            query = Path(cmd[-1]).stem
+            query = record_name(cmd[-1])
             _write(
                 Path(_flag_value(cmd, "-o") if "-o" in cmd else stdout_path),
                 f"@SQ\tSN:g1\tLN:12\n{query}\t0\tg1\t1\t60\t12M\t*\t0\t0\t*\t*\n",
@@ -318,6 +319,29 @@ def test_aligner_contract(tool, genomes, recorded, tmp_path) -> None:
         assert token in flat, f"{token!r} missing from recorded argv for {tool}"
 
 
+@pytest.mark.parametrize("tool", sorted(_ALIGN_PARAM_TOKENS))
+def test_aligner_names_gzipped_genomes_without_their_suffix(tool, recorded, tmp_path) -> None:
+    """A genome x.fasta.gz is the record 'x' in the MSA, as in the typers and the tree.
+
+    Path.stem gave 'x.fasta'. Only the file name matters for the record name,
+    so the content is plain text here; aligners that cannot read gzip receive
+    decompressed copies from the stage.
+    """
+    if tool not in align_registry.names():
+        pytest.skip(f"{tool} not registered")
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for stem in _STEMS:
+        path = gdir / f"{stem}.fasta.gz"
+        path.write_text(f">{stem}\n{_SEQ[stem]}\n", encoding="utf-8")
+        genomes.append(path)
+    result = align_registry.create(tool).align(
+        genomes, genomes[0], tmp_path / "align_out", AlignParams(threads=2), _LOG
+    )
+    assert _read_headers(result.msa_fasta) == set(_STEMS)
+
+
 def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
     builtin_snp = {"simple", "snippy", "parsnp", "ska2"}
     builtin_aln = {"progressivemauve", "cactus", "sibeliaz"}
@@ -325,7 +349,8 @@ def test_every_registered_snptyper_and_aligner_has_contract_coverage() -> None:
     assert builtin_aln & set(align_registry.names()) <= set(_ALIGN_PARAM_TOKENS)
 
 
-def test_parsnp_names_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("suffix", [".fasta", ".fasta.gz"])
+def test_parsnp_names_records_by_genome_stem(suffix, tmp_path, monkeypatch) -> None:
     """harvesttools names records by file name, the reference with '.ref'; the
     typer renames them to genome stems, so tree leaves match the input genomes
     and tree2tax finds a versioned outgroup such as 'x_GCF_9.1'."""
@@ -339,11 +364,13 @@ def test_parsnp_names_records_by_genome_stem(tmp_path, monkeypatch) -> None:
     stems = ["Fam_Gen_sp_GCF_1.1", "Fam_Gen_sp_GCF_2.1", "Fam_Gen_sp_GCF_9.1"]
     genomes = []
     for stem in stems:
-        path = gdir / f"{stem}.fasta"
+        path = gdir / f"{stem}{suffix}"
         path.write_text(f">{stem}\nACGT\n", encoding="utf-8")
         genomes.append(path)
     # As observed with parsnp 2 and harvesttools 1.3 on the 50-genome set.
-    harvest = f">{stems[0]}.fasta.ref\nACGT\n>{stems[1]}.fasta\nACGA\n>{stems[2]}.fasta\nACTT\n"
+    harvest = (
+        f">{stems[0]}{suffix}.ref\nACGT\n>{stems[1]}{suffix}\nACGA\n>{stems[2]}{suffix}\nACTT\n"
+    )
 
     def fake_run_tool(caps, command, *, logger, stdout_path=None, cwd=None, **kwargs):
         cmd = [str(part) for part in command]
@@ -378,7 +405,8 @@ def test_parsnp_hardlinks_its_query_genomes(genomes, recorded, tmp_path) -> None
         assert (staged / genome.name).stat().st_ino == genome.stat().st_ino
 
 
-def test_cactus_names_msa_records_by_genome_stem(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("suffix", [".fasta", ".fasta.gz"])
+def test_cactus_names_msa_records_by_genome_stem(suffix, tmp_path, monkeypatch) -> None:
     """cactus sample names replace '.' with '_'; the MSA records are renamed back
     to genome stems so a versioned outgroup (x_GCF_9.1) stays findable by
     IQ-TREE's -o and by tree2tax."""
@@ -394,7 +422,7 @@ def test_cactus_names_msa_records_by_genome_stem(tmp_path, monkeypatch) -> None:
     seqs["Fam_Gen_sp_GCF_9.1"] = "TAAACCCA"
     genomes = []
     for stem, seq in seqs.items():
-        path = gdir / f"{stem}.fasta"
+        path = gdir / f"{stem}{suffix}"
         path.write_text(f">contig1\n{seq}\n", encoding="utf-8")
         genomes.append(path)
     maf_rows = "\n".join(

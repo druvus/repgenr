@@ -10,6 +10,7 @@ import pytest
 from repgenr.aligners.base import Aligner, AlignResult
 from repgenr.aligners.base import registry as aligner_registry
 from repgenr.core.context import WorkdirContext
+from repgenr.core.contracts import record_name
 from repgenr.core.plugins import ToolCapabilities
 from repgenr.snptypers.base import SnpResult, SnpTyper
 from repgenr.snptypers.base import registry as snp_registry
@@ -28,7 +29,7 @@ class _GenomesTreeBuilder(TreeBuilder):
     def build(self, msa_or_genomes, out_dir, params, logger) -> Path:
         out_dir.mkdir(parents=True, exist_ok=True)
         tree = out_dir / "tree.nwk"
-        leaves = [Path(g).stem for g in msa_or_genomes]
+        leaves = [record_name(g) for g in msa_or_genomes]
         tree.write_text("(" + ",".join(leaves) + ");\n")
         return tree
 
@@ -67,7 +68,7 @@ class _FakeAligner(Aligner):
         type(self).seen_extra = dict(params.extra)
         out_dir.mkdir(parents=True, exist_ok=True)
         msa = out_dir / "msa.fasta"
-        msa.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
+        msa.write_text("".join(f">{record_name(g)}\nACGT\n" for g in genomes))
         return AlignResult(msa_fasta=msa)
 
 
@@ -83,7 +84,7 @@ class _FakeSnpTyper(SnpTyper):
         type(self).seen_extra = dict(params.extra)
         out_dir.mkdir(parents=True, exist_ok=True)
         core = out_dir / "core.fasta"
-        core.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
+        core.write_text("".join(f">{record_name(g)}\nACGT\n" for g in genomes))
         return SnpResult(core_snp_fasta=core)
 
 
@@ -823,6 +824,43 @@ def test_msa_stamped_by_an_earlier_version_is_not_reused(
     assert len(calls) == 2, "a stamp from an earlier version is not trusted"
 
 
+def test_aligner_msa_named_by_path_stem_is_rebuilt(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """An aligner MSA whose records carry 'x.fasta' for a gzipped genome x.fasta.gz
+    (the Path.stem names before the record-name rule) is rebuilt once, without
+    a stamp version change that would realign every workdir."""
+    import gzip
+
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, 4):
+        with gzip.open(reps / f"Fam_gen_sp_GCA_00000{i}.fasta.gz", "wt") as fh:
+            fh.write(f">s{i}\nACGTACGT\n")
+    ctx = WorkdirContext(workdir)
+    calls = _align_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="aligner", aligner="fakealigner")
+
+    def stem_named(self, genomes, reference, out_dir, params, logger) -> AlignResult:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        msa = out_dir / "msa.fasta"
+        msa.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
+        return AlignResult(msa_fasta=msa)
+
+    with monkeypatch.context() as m:
+        m.setattr(_FakeAligner, "align", stem_named)
+        run(ctx, PhyloParams(no_outgroup=True, **base))
+    msa = workdir / "align" / "msa.fasta"
+    assert ">Fam_gen_sp_GCA_000001.fasta\n" in msa.read_text()
+    assert (workdir / "align" / "msa_source.json").is_file()
+
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1, "records that are not the genome record names: rebuilt"
+    assert ">Fam_gen_sp_GCA_000001\n" in msa.read_text()
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1, "the rebuilt alignment is reused"
+
+
 # -- the stage harness: which failures leave an [interrupted] record ---------
 
 
@@ -956,4 +994,5 @@ def test_gzipped_genomes_and_outgroup_are_named_without_their_suffix(
     assert ".fasta" not in text
     assert "Fam_gen_sp_GCA_000001" in text and "Fam_gen_og_GCA_000009" in text
     assert seen["outgroup"] == "Fam_gen_og_GCA_000009"
-    assert "Fam_gen_og_GCA_000009" in seen["mask_exclude"]
+    # One name form: every typer names records by record_name.
+    assert seen["mask_exclude"] == ("Fam_gen_og_GCA_000009",)

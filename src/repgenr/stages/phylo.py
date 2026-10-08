@@ -42,7 +42,7 @@ from ..core.contracts import (
     atomic_path,
     list_fasta,
     parse_genome_filename,
-    strip_fasta_suffix,
+    record_name,
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.inputs import file_digest, paths_stat_digest
@@ -225,6 +225,16 @@ def _msa_with_reuse(
     artifact = _msa_artifact(dirs, params)
     if reuse:
         stamp = _read_msa_stamp(artifact, key)
+        if stamp is not None and not _msa_records_named(artifact, genomes, outgroup_file):
+            # An aligner MSA from before every adapter used record_name names a
+            # gzipped genome x.fasta.gz 'x.fasta'. Rebuilding only such an MSA
+            # spares the workdirs a stamp version change would realign.
+            logger.info(
+                "The alignment at %s names records other than the genomes' record "
+                "names; it is rebuilt.",
+                artifact,
+            )
+            stamp = None
         if stamp is not None:
             logger.info(
                 "Reusing the alignment at %s: same source, inputs and settings "
@@ -236,6 +246,23 @@ def _msa_with_reuse(
     if msa.resolve() == artifact.resolve():
         _write_msa_stamp(artifact, key, versions)
     return msa, versions
+
+
+def _msa_records_named(artifact: Path, genomes: Sequence[Path], outgroup_file: Path | None) -> bool:
+    """True when every record of ``artifact`` is the record name of an input.
+
+    Reads only the header lines. A subset, not equality: a typer may leave out
+    a genome it could not type, and the tree leaf check reports that.
+    """
+    inputs = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
+    names = {record_name(g) for g in inputs}
+    with open(artifact, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.startswith(">"):
+                fields = line[1:].split()
+                if not fields or fields[0] not in names:
+                    return False
+    return True
 
 
 def build_msa(
@@ -374,7 +401,7 @@ def build_tree(
             shutil.copy2(tree, tmp)
     logger.info("Phylogenetic tree written to %s", final)
     expected = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
-    leaf_names = [strip_fasta_suffix(g.name) for g in expected]
+    leaf_names = [record_name(g) for g in expected]
     check_tree_leaves(final, leaf_names, treebuilder)
     restore_leaf_names(final, leaf_names, logger)
     return PhyloOutcome(
@@ -776,11 +803,11 @@ def resolve_outgroup_files(
     for f in candidates:
         if accession_from_filename(f.name) == accession:
             logger.info("Using %s as outgroup", f.name)
-            return f, strip_fasta_suffix(f.name)
+            return f, record_name(f)
     for f in candidates:
         if accession in f.name:
             logger.info("Using %s as outgroup (substring match)", f.name)
-            return f, strip_fasta_suffix(f.name)
+            return f, record_name(f)
     logger.warning("Outgroup accession %s not found in %s", accession, outgroup_dir)
     return None, None
 
@@ -834,13 +861,8 @@ def _build_msa(
             extra=_adapter_extra(params.extra),
             # A species-level outgroup breaks the recombination scan; the
             # masker runs on the ingroup and applies its regions to all.
-            # Both name forms: a typer may name a gzipped genome's record
-            # with or without its FASTA suffix.
-            mask_exclude=(
-                (strip_fasta_suffix(outgroup_file.name), outgroup_file.stem)
-                if outgroup_file is not None
-                else ()
-            ),
+            # Every typer names records by record_name.
+            mask_exclude=(record_name(outgroup_file),) if outgroup_file is not None else (),
         )
         snp_reference: Path | None = (
             _resolve_reference(params.reference, genomes, outgroup_file, logger)

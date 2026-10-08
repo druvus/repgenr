@@ -379,3 +379,16 @@ def test_drep_marks_genomes_its_filter_dropped_as_fail_qc(genomes, tmp_path, mon
     )
     assert result.genome_status["short.fasta"] == "fail_qc"
     assert all("short.fasta" not in m for m in result.clusters.values())
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["/p/x.fasta.gz", "/p/x.fasta", "x.fna.gz", "x"],
+)
+def test_sourmash_tree_labels_use_the_record_name(label: str) -> None:
+    """sourmash labels signatures by the input path; the leaf is the genome's
+    record name, so a gzipped genome is 'x' as in every alignment."""
+    from repgenr.treebuilders.sourmash import _label_to_genome
+
+    genomes = [Path("/p/x.fasta.gz"), Path("/p/y.fasta")]
+    assert _label_to_genome(label, genomes) == "x"

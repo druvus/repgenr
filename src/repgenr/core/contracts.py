@@ -152,6 +152,17 @@ def strip_fasta_suffix(name: str) -> str:
     return name
 
 
+def record_name(path: str | Path) -> str:
+    """The name of a genome in alignments, trees and tables.
+
+    The file name without its FASTA suffix, gzip included: ``x.fasta.gz`` and
+    ``x.fasta`` are both ``x`` (``Path.stem`` would give ``x.fasta`` for the
+    first). Every aligner, SNP typer and tree builder adapter names records and
+    leaves with this, so one genome carries one name across the stages.
+    """
+    return strip_fasta_suffix(Path(path).name)
+
+
 def sanitise_taxon_tokens(family: str, genus: str, species: str) -> tuple[str, str, str]:
     """Turn taxonomy names into the single tokens a canonical filename holds.
 

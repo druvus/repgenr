@@ -9,6 +9,7 @@ from repgenr.core.contracts import (
     parse_genome_filename,
     read_clusters,
     read_genome_status,
+    record_name,
     strip_fasta_suffix,
     write_clusters,
     write_genome_status,
@@ -36,6 +37,17 @@ def test_strip_fasta_suffix() -> None:
     assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta.gz") == "Fam_Gen_sp_GCA_1"
     assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta") == "Fam_Gen_sp_GCA_1"
     assert strip_fasta_suffix("noext") == "noext"
+
+
+def test_record_name_drops_every_fasta_suffix() -> None:
+    """One name for a genome in alignments, trees and tables, whatever its suffix."""
+    for suffix in (".fasta.gz", ".fna.gz", ".fa.gz", ".fasta", ".fa", ".fna", ".fas"):
+        assert record_name(Path(f"/data/Fam_Gen_sp_GCF_1.1{suffix}")) == "Fam_Gen_sp_GCF_1.1"
+    # A versioned accession keeps its version; Path.stem would leave '.fasta'
+    # on a gzipped name.
+    assert record_name("GCF_000008985.1") == "GCF_000008985.1"
+    assert record_name(Path("x.fasta.gz")) == "x"
+    assert record_name("dir/noext") == "noext"
 
 
 def test_gzipped_fna_and_fa_are_genome_files(tmp_path: Path) -> None:

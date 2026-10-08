@@ -906,9 +906,11 @@ in the log. `--tool-arg preset=` accepts `asm5`, `asm10`, `asm20`, `map-ont`,
 and refuses any other value (exit 2). `asm5` suits near-identical genomes, and
 `none` aligns more divergent sequence at the cost of the accuracy above.
 
-Records in the SNP typers' alignments, and tree leaves, are named by the
-genome file name without its FASTA suffix and `.gz` (`x.fasta.gz` gives `x`),
-as `clusters.tsv` and tree2tax name genomes.
+Records in every alignment (the SNP typers' and the aligners'
+`align/msa.fasta`), the leaves of every tree including the sourmash tree, and
+the outgroup name given to the masker are the genome file name without its
+FASTA suffix and `.gz` (`x.fasta.gz` gives `x`), as `clusters.tsv` and
+tree2tax name genomes.
 
 `parsnp` names its records by file name and marks the reference with `.ref`;
 the typer renames them to the genome names, as the other typers write them.

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.contracts import atomic_replace
+from ..core.contracts import atomic_replace, record_name
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
@@ -129,8 +129,8 @@ def _read_csv(path: Path) -> tuple[list[str], list[list[float]]]:
 
 
 def _label_to_genome(label: str, genomes: Sequence[Path]) -> str:
-    base = Path(label).name
-    stems = {g.stem: g.stem for g in genomes}
-    if Path(label).stem in stems:
-        return Path(label).stem
-    return base
+    """The record name of the genome sourmash labelled ``label`` (its input path)."""
+    name = record_name(label)
+    if name in {record_name(g) for g in genomes}:
+        return name
+    return Path(label).name
