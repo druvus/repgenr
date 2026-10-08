@@ -1055,6 +1055,17 @@ commands:
         nextflow: 'n/a: environment query; the Nextflow layer preflights inside each step'
         live: 'n/a: exit status from the per-adapter states; tests/unit/test_plugin_visibility.py'
         observable: exit 4 when an adapter is missing or errored, 5 when a plugin is broken
+      --images:
+        aliases: []
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/install.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: environment query; the Nextflow layer preflights inside each step'
+        live: 'n/a: needs a container engine; tests/unit/test_list_tools_labels.py'
+        observable: "'[image <ref>, present]' or '[image <ref>, not pulled]' per image-run tool"
   metadata:
     dispatch: stage
     base_args:

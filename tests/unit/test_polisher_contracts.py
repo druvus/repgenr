@@ -237,4 +237,5 @@ def test_racon_records_the_minimap2_image_under_a_container_backend(monkeypatch)
     assert versions == {
         "racon": RaconPolisher.capabilities.container,
         "minimap2": _MINIMAP2.container,
+        "docker": "x",
     }

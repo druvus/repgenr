@@ -240,6 +240,40 @@ def runs_on_host(caps: ToolCapabilities) -> bool:
     return resolve_image(caps, config) is None
 
 
+_IMAGE_INSPECT_TIMEOUT = 30
+
+
+def image_present(image: str, config: ContainerConfig | None = None) -> bool | None:
+    """Is ``image`` available locally, so a run would not pull it first?
+
+    Docker (or podman) is asked with ``image inspect``, which neither pulls
+    nor contacts a registry. For Singularity the image is present when it is
+    a local ``.sif`` file or its cached ``<cache_dir>/<name>.sif`` exists.
+    None means the answer is not known: no cache directory for Singularity,
+    or the engine could not be asked.
+    """
+    config = config or _CONFIG
+    if config.backend == SINGULARITY:
+        if image.endswith(".sif"):
+            return Path(image).is_file()
+        if config.cache_dir is None:
+            return None
+        return (config.cache_dir / f"{_sanitize(image)}.sif").is_file()
+    if config.backend != DOCKER:
+        return None
+    try:
+        proc = subprocess.run(
+            [config.engine_binary(), "image", "inspect", image],
+            capture_output=True,
+            text=True,
+            timeout=_IMAGE_INSPECT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.returncode == 0
+
+
 def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
     cache_key = (conda_spec, config.platform)
     if cache_key in _WAVE_CACHE:
