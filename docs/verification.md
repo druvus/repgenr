@@ -507,6 +507,16 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | The auto-select warning about a broken plugin was printed twice per run (precheck and run) | (this PR) |
 | global options | `--container bogus` ended in a traceback with exit 1; it now exits 2. `--platform`, `--wave`, `--container-engine` and `--container-cache` were silently ignored without `--container` (and the cache by Docker); each is named in a warning. The help called `--container-cache` the Wave cache, which is not stored there | (this PR) |
 | assemble | Under a container backend racon's minimap2 image was not recorded | (this PR) |
+| list-tools, versions | `cactus-pangenome --version` in a broken environment printed a Python traceback, and the interpreter path in it (`python3.12`) was recorded as cactus 3.12.0, which passed the 2.5 floor; a crashed query and numbers inside longer tokens are no longer read as versions | #235 |
+| dereplicate, list-tools | Under `--container` without `--wave`, a conda spec counted as an image, so `--tool auto` above 2000 genomes chose skder, which then ran on the host and exited 4 when absent; availability now mirrors where the tool runs | #235 |
+| list-tools, all stages | With the Docker daemon down, `list-tools --check` reported every image-backed tool as ok and a stage failed with exit 6 ("sourmash failed (exit 1)"); preflight now runs `docker info` and exits 4 naming the unreachable daemon | #235 |
+| all stages | A pinned image Docker could not pull failed as "sourmash failed (exit 125)"; the message now names the engine, the image and the daemon's error | #235 |
+| dereplicate | install.md said to provide dRep's CheckM data through `CHECKM_DATA_PATH`, but the variable never reached the container and its directory was not bound; it is now forwarded and bound | #235 |
+| versions | A tool recorded by two stages with different versions kept only the last one (dereplicate's sourmash image was hidden by phylo's host sourmash); each differing version is now listed as `tool (stage)` and an unfinished stage is named on stderr | #235 |
+| list-tools | `--check` printed "broken (see list-tools)" for a plugin that failed to import, and an adapter whose preflight raised an unexpected error ended the listing with exit 1; the import error is shown and the adapter is reported on its own line | #235 |
+| dereplicate | The auto-select warning about a broken plugin was printed twice per run (precheck and run) | #235 |
+| global options | `--container bogus` ended in a traceback with exit 1; it now exits 2. `--platform`, `--wave`, `--container-engine` and `--container-cache` were silently ignored without `--container` (and the cache by Docker); each is named in a warning. The help called `--container-cache` the Wave cache, which is not stored there | #235 |
+| assemble | Under a container backend racon's minimap2 image was not recorded | #235 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
