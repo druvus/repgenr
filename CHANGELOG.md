@@ -277,7 +277,7 @@ All notable changes to RepGenR are documented here. The format follows
   samtools 0.1.19 and Gubbins' IQ-TREE 2 cannot shadow core's tools; install.md,
   README.md and choosing-tools.md describe this. Two gaps remain under this
   rule: snippy calls core's samtools and bcftools, and Gubbins calls core's
-  IQ-TREE 3 instead of its own 2.4 (the Gubbins log then reports version 3);
+  IQ-TREE 3 instead of its own 2.4 (the Gubbins log then records no IQ-TREE version, "for" in its place);
   `--bin-dir` (#247) closes both. The progressiveMauve adapter's Wave spec
   now names `bioconda::mauvealigner` (with `boost-cpp=1.74.0`), the package
   that provides the binary of its pinned image, instead of `bioconda::mauve`,
