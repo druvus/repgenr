@@ -107,8 +107,9 @@ def _classify(lineage_names: list[str], organism: str) -> tuple[str, str, str | 
 
 def species_from_lineage(lineage_names: list[str], genera: list[str]) -> str | None:
     """The ICTV binomial in a lineage: the shallowest name made of one of
-    ``genera`` and a single lower-case epithet ('Mammarenavirus brazilense',
-    'Mammarenavirus dhati-welelense'); ``None`` when there is none.
+    ``genera`` and a single lower-case epithet, which may hold digits and
+    hyphens ('Mammarenavirus brazilense', 'Mammarenavirus dhati-welelense',
+    'Lentivirus humimdef1'); ``None`` when there is none.
 
     NCBI keeps strain-level and earlier names below the binomial, some of
     which also start with the genus: 'Hepatovirus ahepa' > 'Hepatovirus A',
@@ -118,7 +119,7 @@ def species_from_lineage(lineage_names: list[str], genera: list[str]) -> str | N
     species, so names below it do not split one species into several.
     """
     for name in lineage_names:
-        if any(re.fullmatch(re.escape(g) + r" [a-z][a-z-]*", name) for g in genera):
+        if any(re.fullmatch(re.escape(g) + r" [a-z][a-z0-9-]*", name) for g in genera):
             return name
     return None
 

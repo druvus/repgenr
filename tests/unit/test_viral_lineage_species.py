@@ -42,6 +42,8 @@ def test_species_is_the_binomial_in_the_lineage() -> None:
     assert species_from_lineage(lineage, ["Mammarenavirus"]) == "Mammarenavirus brazilense"
     hyphen = [*_ARENA, "Mammarenavirus dhati-welelense", "Dhati Welel virus"]
     assert species_from_lineage(hyphen, ["Mammarenavirus"]) == "Mammarenavirus dhati-welelense"
+    digit = ["Viruses", "Retroviridae", "Lentivirus", "Lentivirus humimdef1", "HIV-1"]
+    assert species_from_lineage(digit, ["Lentivirus"]) == "Lentivirus humimdef1"
 
 
 @pytest.mark.parametrize(

@@ -61,7 +61,30 @@ def fake_datasets(monkeypatch):
             zf.writestr("ncbi_dataset/data/genomic.fna", fna)
         return 0
 
+    def fake_taxonomy(caps, cmd, *, logger, stdout_path, **kw):
+        # The NCBI Taxonomy lookup after the download (ncbi_virus.run_tool).
+        cmd = [str(c) for c in cmd]
+        calls.append(cmd)
+        taxids = Path(cmd[cmd.index("--inputfile") + 1]).read_text(encoding="utf-8").split()
+        rows = [
+            {
+                "query": [taxid],
+                "taxonomy": {
+                    "tax_id": int(taxid),
+                    "classification": {
+                        "family": {"id": 10508, "name": "Adenoviridae"},
+                        "genus": {"id": 10509, "name": "Mastadenovirus"},
+                        "species": {"id": 3, "name": "Mastadenovirus adami"},
+                    },
+                },
+            }
+            for taxid in taxids
+        ]
+        Path(stdout_path).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return 0
+
     monkeypatch.setattr(ncbi_virus, "run_tool_with_retries", fake)
+    monkeypatch.setattr(ncbi_virus, "run_tool", fake_taxonomy)
     monkeypatch.setattr(vmetadata, "preflight", lambda caps: {"datasets": "16.0"}, raising=False)
     return calls
 
@@ -83,6 +106,11 @@ def test_ncbi_virus_end_to_end(tmp_path, fake_datasets, monkeypatch) -> None:
     # filters forwarded to the datasets CLI
     flat = [tok for cmd in fake_datasets for tok in cmd]
     assert "adenoviridae" in flat
+    # The species comes from the (faked) NCBI Taxonomy lookup, one call.
+    assert {r["species"] for r in records} == {"Mastadenovirus-adami"}
+    assert {r["species_source"] for r in records} == {"taxonomy"}
+    assert sum(1 for cmd in fake_datasets if "taxonomy" in cmd) == 1
+    assert ctx.config.stages["vmetadata"].params["species_source"] == {"taxonomy": 2}
 
 
 def test_ncbi_virus_filters_forwarded(tmp_path, fake_datasets, monkeypatch) -> None:
