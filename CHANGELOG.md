@@ -7,6 +7,16 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `list-tools --check` under a container backend (#248): each line names
+  where the tool runs, `[image <ref>]` or `[host]`, so a host version is not
+  read as the image's. `--images` adds whether each image of a tool that passed
+  the check, secondary images included, is present locally (`docker image
+  inspect`, or the Singularity `.sif` cache; nothing is pulled), or `presence
+  unknown` when the engine does not say the image is absent.
+- Tool versions (#248): a stage that runs a tool in an image records the
+  engine and its version beside the image reference (`docker: 29.5.3`), in
+  `repgenr.yaml`, `repgenr versions` and the Nextflow `versions.yml`. The
+  resume fingerprint does not include versions, so no stage reruns for this.
 - `list-tools --check --strict` (#237): after the full listing, exits 4
   when any adapter is missing or errored and 5 when any plugin failed to
   load, so a script can verify an environment. `--check` alone still exits 0,

@@ -475,13 +475,50 @@ def test_engine_readiness_is_checked_once_per_configuration(monkeypatch) -> None
     caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
     try:
         containers.configure_container("docker")
-        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
-        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1", "docker": "29.5.3"}
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1", "docker": "29.5.3"}
         containers.configure_container("singularity")
         preflight(caps)  # no daemon to ask
     finally:
         containers.configure_container("none")
     assert calls == [["docker", "info"]]
+
+
+def test_preflight_records_the_engine_and_its_version(monkeypatch) -> None:
+    # An image-run tool recorded only its image reference, so the engine that
+    # ran it was not in repgenr.yaml or versions.yml.
+    from repgenr.core.plugins import ToolCapabilities, preflight
+
+    _engine_env(monkeypatch, 0)
+    image_caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    try:
+        containers.configure_container("docker", engine="/opt/bin/podman")
+        assert preflight(image_caps) == {"tool": "quay.io/x/tool:1", "podman": "29.5.3"}
+        containers.configure_container("singularity")
+        assert preflight(image_caps) == {"tool": "quay.io/x/tool:1", "singularity": "29.5.3"}
+    finally:
+        containers.configure_container("none")
+
+
+def test_versions_lists_the_engine_once_for_two_image_stages(tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+    from repgenr.core.config import Config
+
+    cfg = Config()
+    cfg.record_stage(
+        "dereplicate",
+        tool_versions={"skder": "quay.io/x/skder:1", "docker": "29.5.3"},
+        completed="t",
+    )
+    cfg.record_stage(
+        "phylo", tool_versions={"iqtree": "quay.io/x/iqtree:2", "docker": "29.5.3"}, completed="t"
+    )
+    cfg.save(tmp_path)
+    result = CliRunner().invoke(app, ["versions", "-wd", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines().count("docker: 29.5.3") == 1
 
 
 def test_an_image_docker_cannot_start_is_named_as_an_engine_failure(monkeypatch) -> None:

@@ -569,6 +569,13 @@ def list_tools(
         help="With --check, exit 4 when an adapter is missing or errored and 5 when "
         "a plugin is broken, after the full listing.",
     ),
+    images: bool = typer.Option(
+        False,
+        "--images",
+        help="With --check under a container backend, also report whether each "
+        "tool's image is present locally (docker image inspect or the Singularity "
+        ".sif cache; nothing is pulled).",
+    ),
 ) -> None:
     """List the available pluggable tools in each family.
 
@@ -577,7 +584,11 @@ def list_tools(
     The last line names the dereplicators that glance can run.
     With --check, every adapter's required binaries are looked up (version
     floors included) and reported per tool, so an environment can be
-    verified before a run without a working directory. --check alone
+    verified before a run without a working directory. Under a container
+    backend each line names where the tool runs: '[image <ref>]' or
+    '[host]'; --images adds, for each tool that passed, whether its images
+    (secondary ones such as racon's minimap2 included) are present
+    locally. --check alone
     always exits 0, since a host that has only some families installed is
     normal; --check --strict exits 4 when any adapter is missing or errored,
     or 5 when any plugin failed to load, so a script can verify an
@@ -588,6 +599,15 @@ def list_tools(
 
     if strict and not check:
         raise typer.BadParameter("--strict needs --check.", param_hint="--strict")
+    if images and not check:
+        raise typer.BadParameter("--images needs --check.", param_hint="--images")
+    from ..core.containers import get_config
+
+    if images and not get_config().active:
+        raise typer.BadParameter(
+            "--images needs a container backend (--container docker or singularity).",
+            param_hint="--images",
+        )
     # A plugin that fails to load warns through the repgenr logger; give the
     # line the standard timestamp and level.
     configure_logging(None, level=min(_RUN_STATE["log_level"], logging.WARNING))
@@ -616,7 +636,7 @@ def list_tools(
         if not check:
             continue
         for name in reg.names():
-            state, text = _preflight_summary(reg, name)
+            state, text = _preflight_summary(reg, name, images=images)
             statuses.add(state)
             typer.echo(f"  {name}: {text}")
     from ..dereplicators.base import compare_supporters
@@ -638,11 +658,14 @@ def _one_line(exc: Exception) -> str:
     return "; ".join(part.strip() for part in text.splitlines() if part.strip())
 
 
-def _preflight_summary(reg, name: str) -> tuple[str, str]:
+def _preflight_summary(reg, name: str, *, images: bool = False) -> tuple[str, str]:
     """Status and one line per adapter for `list-tools --check`.
 
     The status is one of ok, missing, error and broken; the line is ok with
-    versions, or why not.
+    versions, or why not. Under a container backend the line names where the
+    tool runs, '[image <ref>]' or '[host]'. With ``images``, an ok line also
+    says whether each image the adapter recorded is present locally, its
+    secondary images (racon's minimap2) included.
     """
     from ..core.errors import MissingBinaryError, RepGenRError
 
@@ -651,10 +674,56 @@ def _preflight_summary(reg, name: str) -> tuple[str, str]:
     try:
         versions = reg.create(name).preflight()
     except MissingBinaryError as exc:
-        return "missing", f"missing ({_one_line(exc)})"
+        return "missing", f"missing{_where(reg, name)[0]} ({_one_line(exc)})"
     except RepGenRError as exc:
-        return "error", f"error ({_one_line(exc)})"
+        return "error", f"error{_where(reg, name)[0]} ({_one_line(exc)})"
     except Exception as exc:  # a third-party adapter must not end the listing
-        return "error", f"error ({type(exc).__name__}: {_one_line(exc)})"
-    shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
-    return "ok", f"ok ({shown})"
+        reason = f"{type(exc).__name__}: {_one_line(exc)}"
+        return "error", f"error{_where(reg, name)[0]} ({reason})"
+    label, image = _where(reg, name)
+    shown = dict(versions)
+    if image is not None and shown.get(name) == image:
+        # The label names the image; the versions keep the engine.
+        del shown[name]
+        if images:
+            parts = [f"image {image}, {_presence(image)}"]
+            for tool, ref in sorted(shown.items()):
+                if _looks_like_image(ref):
+                    parts.append(f"{tool} image {ref}, {_presence(ref)}")
+                    del shown[tool]
+            label = f" [{'; '.join(parts)}]"
+    text = ", ".join(f"{k} {v}" for k, v in sorted(shown.items())) or "no binaries declared"
+    return "ok", f"ok{label} ({text})"
+
+
+def _looks_like_image(value: str) -> bool:
+    """A recorded version that is an image reference (a registry path or a .sif)."""
+    return "/" in value or value.endswith(".sif")
+
+
+def _presence(image: str) -> str:
+    from ..core.containers import get_config, image_present
+
+    present = image_present(image, get_config())
+    return {True: "present", False: "not pulled", None: "presence unknown"}[present]
+
+
+def _where(reg, name: str) -> tuple[str, str | None]:
+    """Where a tool runs under a container backend: the label and the image.
+
+    The label is ' [image <ref>]' or ' [host]'; without a backend it is empty.
+    """
+    from ..core.containers import get_config, resolve_image
+    from ..core.plugins import _capabilities_of
+
+    config = get_config()
+    caps = _capabilities_of(reg, name)
+    if not config.active or caps is None:
+        return "", None
+    try:
+        image = resolve_image(caps, config)
+    except Exception:  # a failed Wave build is already in the line's reason
+        return "", None
+    if image is None:
+        return " [host]", None
+    return f" [image {image}]", image

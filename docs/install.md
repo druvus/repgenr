@@ -170,8 +170,19 @@ BioContainers are `linux/amd64`. On Apple Silicon pass
 - Before a tool runs in an image, RepGenR checks that the engine binary is
   on `PATH` and, for Docker, that `docker info` reaches the daemon. A stopped
   Docker Desktop therefore exits 4 before the stage starts, and
-  `repgenr --container docker list-tools --check` reports it per tool. The
-  image itself is pulled on first use.
+  `repgenr --container docker list-tools --check` reports it per tool. Under
+  a container backend each line of `list-tools --check` names where the tool
+  runs: `[image <ref>]` for a tool with a pinned (or `--wave`) image and
+  `[host]` for one that runs from `PATH`, so a host version is not mistaken
+  for the image's. The image itself is pulled on first use; `--images` adds,
+  for each tool that passed the check, whether its images are present locally
+  (`present` or `not pulled`, from `docker image inspect` or the Singularity
+  `.sif` cache; nothing is pulled). An adapter's secondary images, such as
+  racon's minimap2 image, are listed too. `presence unknown` means the engine
+  did not say the image is absent, for example because the daemon is down.
+- A stage that ran a tool in an image records the image reference as that
+  tool's version and the engine with its version (`docker: 29.5.3`) beside it,
+  in `repgenr.yaml` and in `repgenr versions`.
 - Docker runs as the host UID and GID so outputs are owned by you. The workdir
   and `TMPDIR` are bind-mounted at identical paths.
 - Symlinked inputs (a `genomes/` directory staged by `repgenr ingest`) are
