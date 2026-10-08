@@ -23,6 +23,7 @@ and `run --viral-source` correspond to `metadata --source` and `vmetadata
 | `--container-cache` |  | Directory for Singularity .sif images and their cache (large; can be external). |
 | `--platform` |  | Container platform, e.g. linux/amd64 for emulated BioContainers on arm64. |
 | `--wave`, `--no-wave` | off | Resolve images for multi-tool adapters via the Seqera Wave CLI. |
+| `--bin-dir` |  | Put DIR first on PATH for one tool only, e.g. gubbins=ENV/bin for a satellite conda environment. Repeatable; also REPGENR_BIN_DIRS='tool=dir,tool=dir'. |
 | `--force`, `-f`, `--no-force` | off | Re-run a stage even if it already completed with the same parameters. |
 | `--verbose`, `-v` | off | Verbose (DEBUG) logging. |
 | `--quiet`, `-q` | off | Only warnings and errors. |

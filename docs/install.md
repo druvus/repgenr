@@ -116,6 +116,18 @@ Two further points:
 - progressiveMauve is not packaged for macOS. Use its image (below) or a Linux
   host.
 
+Instead of appending, each satellite can be given to its tool alone with
+`--bin-dir TOOL=DIR` (or `REPGENR_BIN_DIRS`). The directory then comes first
+on `PATH` for that tool and its subprocesses only, which also closes the gap
+above: snippy runs with the samtools and bcftools of its own environment.
+
+```bash
+export REPGENR_BIN_DIRS="gubbins=$P/repgenr-gubbins/bin,mashtree=$P/repgenr-mashtree/bin,snippy=$P/repgenr-snippy/bin"
+repgenr list-tools --check
+```
+
+See [usage.md](usage.md#per-tool-directories---bin-dir) for the details.
+
 A single command can also be run inside a named environment without
 activating it:
 
@@ -124,7 +136,7 @@ conda run -n repgenr --no-capture-output repgenr phylo -wd $WD --treebuilder iqt
 ```
 
 The live test suite uses the same idea: its config has a `[bin_dirs]` table
-that appends tools from other environments to `PATH` (see `tests/live/README.md`).
+whose entries become `REPGENR_BIN_DIRS` (see `tests/live/README.md`).
 
 ### 3. Containers
 

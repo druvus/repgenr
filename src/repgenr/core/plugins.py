@@ -214,7 +214,10 @@ def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
             found = check_binaries((BinarySpec(engine, version_args=("--version",)),))
             check_engine_ready(config)
             return {capabilities.name: image, Path(engine).name: found[engine]}
-    return check_binaries(capabilities.required_binaries)
+    from .bindirs import note_used, tool_path
+
+    note_used(capabilities.name)
+    return check_binaries(capabilities.required_binaries, path=tool_path(capabilities.name))
 
 
 AUTO = "auto"
@@ -249,12 +252,14 @@ def _tool_available(cap: ToolCapabilities) -> bool:
     available (resolution itself happens at preflight). Any other tool runs on
     the host, so it is available only when its required binaries are on PATH.
     """
+    from .bindirs import tool_path
     from .containers import get_config
 
     config = get_config()
     if config.active and (cap.container is not None or (config.wave_enabled and bool(cap.conda))):
         return True
-    return all(shutil.which(spec.name) is not None for spec in cap.required_binaries)
+    path = tool_path(cap.name)
+    return all(shutil.which(spec.name, path=path) is not None for spec in cap.required_binaries)
 
 
 def tool_available(caps: ToolCapabilities) -> bool:

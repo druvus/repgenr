@@ -38,16 +38,27 @@ def _load_live_config(config: pytest.Config) -> dict:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Append configured bin dirs to PATH before any ``requires_binary`` check.
+    """Hand configured bin dirs to repgenr before any ``requires_binary`` check.
 
-    Appended, not prepended: a satellite environment must not shadow the
-    core environment's tools (mashtree's environment ships samtools 0.1.19).
+    A key that names a repgenr tool (``gubbins``, ``mashtree``) goes to
+    ``REPGENR_BIN_DIRS``, so that directory comes first on PATH for that tool
+    only. Other keys (``nextflow``) are appended to PATH. Neither shadows the
+    core environment pytest runs in.
     """
     live = _load_live_config(config)
     config.stash[_LIVE_KEY] = live
-    bin_dirs = [str(Path(p).expanduser()) for p in live.get("bin_dirs", {}).values()]
-    if bin_dirs:
-        os.environ["PATH"] = os.pathsep.join([os.environ.get("PATH", ""), *bin_dirs])
+    entries = {k: str(Path(p).expanduser()) for k, p in live.get("bin_dirs", {}).items()}
+    if not entries:
+        return
+    from repgenr.core.bindirs import ENV_VAR, known_capabilities
+
+    known = known_capabilities()
+    tools = {k: v for k, v in entries.items() if k in known}
+    others = [v for k, v in entries.items() if k not in known]
+    if tools:
+        os.environ[ENV_VAR] = ",".join(f"{k}={v}" for k, v in tools.items())
+    # requires_binary checks the global PATH, so tool dirs are appended too.
+    os.environ["PATH"] = os.pathsep.join([os.environ.get("PATH", ""), *others, *tools.values()])
 
 
 _LIVE_KEY = pytest.StashKey[dict]()

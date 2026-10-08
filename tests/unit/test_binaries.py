@@ -10,9 +10,9 @@ from repgenr.core.errors import MissingBinaryError
 
 
 def _fake_env(monkeypatch, present: set[str], versions: dict[str, str]) -> None:
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: n if n in present else None)
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n if n in present else None)
     monkeypatch.setattr(
-        binaries, "_query_version", lambda name, args, timeout=None: versions.get(name)
+        binaries, "_query_version", lambda name, args, timeout=None, path=None: versions.get(name)
     )
 
 
@@ -65,7 +65,7 @@ def test_rejected_version_flag_is_recorded_as_unknown(monkeypatch) -> None:
     # "illegal option -- v" and exits 1. That error line is not a version and
     # must not reach repgenr.yaml or `list-tools --check`.
     _fake_run(monkeypatch, 1, "/env/bin/sibeliaz: illegal option -- v\n")
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: n)
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n)
     assert check_binaries((BinarySpec("sibeliaz", version_args=("-v",)),)) == {
         "sibeliaz": "unknown"
     }
@@ -77,8 +77,8 @@ def test_unnumbered_version_line_is_kept_on_success(monkeypatch) -> None:
 
 
 def test_strict_version_reports_a_missing_version_without_text(monkeypatch) -> None:
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: n)
-    monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None: None)
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n)
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None, path=None: None)
     with pytest.raises(MissingBinaryError, match="could not read a version") as exc:
         check_binaries((BinarySpec("samtools", min_version="1.10", strict_version=True),))
     assert "None" not in str(exc.value)

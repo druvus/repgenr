@@ -773,6 +773,15 @@ def main(
         envvar="REPGENR_WAVE",
         help="Resolve images for multi-tool adapters via the Seqera Wave CLI.",
     ),
+    bin_dir: list[str] | None = typer.Option(
+        None,
+        "--bin-dir",
+        metavar="TOOL=DIR",
+        help=(
+            "Put DIR first on PATH for one tool only, e.g. gubbins=ENV/bin for a satellite "
+            "conda environment. Repeatable; also REPGENR_BIN_DIRS='tool=dir,tool=dir'."
+        ),
+    ),
     force: bool = typer.Option(
         False,
         "--force/--no-force",
@@ -812,6 +821,30 @@ def main(
     _warn_ineffective_container_options(
         container, container_engine, container_cache, platform, wave
     )
+    _configure_bin_dirs(bin_dir or [], container, wave)
+
+
+def _configure_bin_dirs(entries: list[str], backend: str, wave: bool) -> None:
+    """Set the per-tool directories from REPGENR_BIN_DIRS and --bin-dir (which wins)."""
+    from ..core import bindirs
+
+    raw = os.environ.get(bindirs.ENV_VAR, "")
+    if not entries and not raw.strip():
+        bindirs.configure_bin_dirs({})
+        return
+    try:
+        mapping = bindirs.parse_entries(raw.split(","))
+        mapping.update(bindirs.parse_entries(entries))
+        bindirs.configure_bin_dirs(bindirs.validate(mapping))
+    except UserInputError as exc:
+        raise typer.BadParameter(str(exc), param_hint="'--bin-dir'") from exc
+    if backend != "none":
+        for name in bindirs.ineffective_under_backend(wave_enabled=wave):
+            typer.echo(
+                f"WARNING --bin-dir {name} has no effect: under --container {backend} "
+                f"'{name}' runs in its image.",
+                err=True,
+            )
 
 
 def resolve_threads(ctx: typer.Context, param: typer.CallbackParam, value: int) -> int:
@@ -1086,6 +1119,9 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         else None
     )
     module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
+    from ..core import bindirs
+
+    bindirs.reset_used()
     try:
         module.run(ctx, params)
     except (UserInputError, WorkdirError, MissingBinaryError):
@@ -1122,6 +1158,7 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     if record is not None:
         record.fingerprint = fingerprint
         record.inputs = digests
+        record.bin_dirs = bindirs.used()
         ctx.save_config()
 
 

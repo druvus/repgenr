@@ -676,6 +676,13 @@ def run_tool(
                 hint,
                 config.backend,
             )
+        from .bindirs import note_used, tool_path
+
+        path = tool_path(caps.name, base=(env or {}).get("PATH"))
+        if path is not None:
+            # --bin-dir: this tool's directory comes first for it and its helpers.
+            env = {**(env or {}), "PATH": path}
+            note_used(caps.name)
         return process.run(
             command,
             logger=logger,

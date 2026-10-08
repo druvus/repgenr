@@ -307,7 +307,9 @@ use, but limit-based `auto` selection applies only to dereplicators and tree bui
 A tool you choose must be installed. The conda files under `envs/` split the
 tools over a core environment and six satellites, because they do not solve
 as one environment (see [install.md](install.md#1-core-and-satellite-environments)).
-Append a satellite's `bin` directory after core on `PATH`, never before it.
+Append a satellite's `bin` directory after core on `PATH`, never before it,
+or give it to its tool alone with `--bin-dir TOOL=DIR` (see
+[usage.md](usage.md#per-tool-directories---bin-dir)).
 
 | Environment | Tools |
 |---|---|

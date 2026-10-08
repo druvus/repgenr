@@ -1199,10 +1199,37 @@ repgenr --container singularity --container-cache /Volumes/LaCie/repgenr_sif \
 | `--container-cache <dir>` | `REPGENR_CONTAINER_CACHE` | Singularity `.sif` images and cache (can be external) |
 | `--platform <plat>` | `REPGENR_CONTAINER_PLATFORM` | e.g. `linux/amd64` to emulate BioContainers on Apple Silicon |
 | `--wave / --no-wave` | `REPGENR_WAVE` | resolve multi-tool/arm64 images via the Seqera Wave CLI |
+| `--bin-dir TOOL=DIR` (repeatable) | `REPGENR_BIN_DIRS` (`tool=dir,tool=dir`) | put DIR first on `PATH` for one tool on the host (a satellite conda environment); see below |
 
 Image sources, the storage location, Apple Silicon and Rosetta setup, and the
 notes on bind mounts and known image problems are in
 [install.md](install.md#3-containers).
+
+### Per-tool directories (`--bin-dir`)
+
+`--bin-dir TOOL=DIR` puts DIR first on `PATH` for one tool only: for its
+preflight lookup and version query, and for every host subprocess it runs, so
+a wrapper such as `run_gubbins.py` calls the helpers of its own environment.
+Other tools keep the inherited `PATH`. TOOL is an adapter name as printed by
+`repgenr list-tools` (for example `gubbins`, `mashtree`, `snippy`, `parsnp`,
+`progressivemauve`), or `checkm2`, `datasets` or `minimap2` (racon's mapper).
+The option is repeatable, and `REPGENR_BIN_DIRS="gubbins=/p/bin,mashtree=/q/bin"`
+sets the same; an option given on the command line replaces the variable's
+entry for that tool. An unknown tool or a directory that does not exist exits
+2.
+
+```bash
+P=$(conda info --base)/envs
+repgenr --bin-dir gubbins=$P/repgenr-gubbins/bin --bin-dir mashtree=$P/repgenr-mashtree/bin \
+        phylo -wd $WD --msa-source snptype --snptyper simple --mask gubbins
+```
+
+The directory each tool used is recorded under `bin_dirs` in the stage's
+record in `repgenr.yaml`. It is not part of the resume fingerprint, so
+setting or changing it does not rerun a finished stage; the tool's version is
+recorded as before. Under `--container`, a tool that runs in an image is not
+affected, and a warning names it. In Nextflow, pass the option through
+`params.repgenr_opts`, for example `--repgenr_opts '--bin-dir gubbins=/p/bin'`.
 
 ### Container profiles in Nextflow
 

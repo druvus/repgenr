@@ -86,7 +86,7 @@ def _run_bsd_wrapper(monkeypatch, tmp_path: Path, work: Path) -> None:
     upstream.write_text(_UPSTREAM_WRAPPER)
     monkeypatch.setattr(sz.sys, "platform", "darwin")
     monkeypatch.setattr(sz, "get_config", lambda: types.SimpleNamespace(active=False))
-    monkeypatch.setattr(sz.shutil, "which", lambda name: str(upstream))
+    monkeypatch.setattr("shutil.which", lambda name, path=None: str(upstream))
     argv = sz._sibeliaz_invocation(tmp_path, _LOG)
     assert argv[0] == "bash"
     subprocess.run([*argv, str(work)], check=True)

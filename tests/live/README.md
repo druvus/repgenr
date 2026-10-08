@@ -40,7 +40,8 @@ from BV-BRC. First run about ten minutes, later runs about five.
 `tests/live/test_species_set.py` needs ska (`ska`), parsnp (`parsnp`,
 `harvesttools`), gubbins (`run_gubbins.py`), minimap2, samtools, bcftools,
 IQ-TREE, FastTree and RAxML-NG. Tools that live in other conda environments
-are appended to PATH through the `[bin_dirs]` table of the live config; a test
+are given through the `[bin_dirs]` table of the live config (a key naming a
+repgenr tool becomes its `--bin-dir`; other keys are appended to PATH); a test
 whose tool is still missing is skipped, not failed.
 
 ## Containers

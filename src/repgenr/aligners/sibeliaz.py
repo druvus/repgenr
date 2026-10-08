@@ -8,13 +8,13 @@ reference coordinates by :mod:`repgenr.converters.maf_to_fasta`.
 from __future__ import annotations
 
 import logging
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
+from ..core.bindirs import host_which
 from ..core.containers import get_config, run_tool
 from ..core.contracts import MSA_FASTA, record_name
 from ..core.errors import WorkdirError
@@ -159,7 +159,7 @@ def _sibeliaz_invocation(out_dir: Path, logger: logging.Logger) -> list[str]:
     if sys.platform != "darwin" or get_config().active:
         return ["sibeliaz"]
 
-    real = shutil.which("sibeliaz")
+    real = host_which("sibeliaz", "sibeliaz")
     if real is None:
         return ["sibeliaz"]
     script = Path(real).read_text(encoding="utf-8")

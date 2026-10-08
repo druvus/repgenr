@@ -38,6 +38,18 @@ All notable changes to RepGenR are documented here. The format follows
   (about 30 s per 1000 genomes on an exFAT disk); links, missing and untracked
   genomes are still checked, and the genome line says the content was not
   read.
+- Global `--bin-dir TOOL=DIR` (#PR), repeatable, and `REPGENR_BIN_DIRS`
+  (`tool=dir,tool=dir`): DIR comes first on `PATH` for that tool only, at
+  preflight (lookup and version query) and in every host subprocess it runs,
+  so a satellite environment's tool uses its own helpers and never shadows
+  core's. Gubbins' tree-builder choice, the FastTree binary name and the
+  SibeliaZ wrapper lookup use the same per-tool path. An unknown tool or a
+  missing directory exits 2; under `--container` a tool that runs in an image
+  is named in a warning. The directory each tool used is recorded under
+  `bin_dirs` in the stage record and is not part of the resume fingerprint, so
+  existing workdirs do not rerun. The live suite passes its `[bin_dirs]`
+  entries through `REPGENR_BIN_DIRS`; a key that is not a tool name (such as
+  `nextflow`) is appended to `PATH`.
 - Install (#238): `envs/` holds seven conda environment files that solve: a
   core environment (`envs/core.yml`, Python 3.12, RepGenR and every tool that
   shares its solve) and six satellites for tools that do not (Gubbins,
