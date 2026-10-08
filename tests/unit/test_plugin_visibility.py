@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import pytest
 
 from repgenr.core import plugins
-from repgenr.core.errors import PluginError
+from repgenr.core.errors import MissingBinaryError, PluginError
 from repgenr.core.plugins import Registry, ToolCapabilities
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 class _GoodAdapter:
@@ -402,3 +405,160 @@ def test_list_tools_names_the_glance_backends() -> None:
     assert result.exit_code == 0
     line = next(ln for ln in result.output.splitlines() if ln.startswith("glance"))
     assert "drep" in line and "sourmash" in line and "skder" not in line
+
+
+def _isolated_families(monkeypatch, registry) -> None:
+    """Every family lists only ``registry``'s adapters, so the status is known."""
+    import importlib
+
+    for family in (
+        "aligners",
+        "snptypers",
+        "maskers",
+        "treebuilders",
+        "assemblers",
+        "classifiers",
+        "polishers",
+    ):
+        module = importlib.import_module(f"repgenr.{family}.base")
+        empty = Registry(f"repgenr.test_empty_{family}")
+        empty._loaded = True
+        monkeypatch.setattr(module, "registry", empty)
+    import repgenr.dereplicators.base as derep_base
+
+    monkeypatch.setattr(derep_base, "registry", registry)
+
+
+class _OkAdapter:
+    capabilities = ToolCapabilities(name="oktool")
+
+    def preflight(self):
+        return {"oktool": "1.0"}
+
+
+class _MissingAdapter:
+    capabilities = ToolCapabilities(name="missingtool")
+
+    def preflight(self):
+        raise MissingBinaryError("missingtool: not found on PATH")
+
+
+def _bare(*adapters) -> Registry:
+    reg = Registry("repgenr.test_strict")
+    reg._loaded = True
+    for adapter in adapters:
+        reg.register(adapter.capabilities.name, adapter)
+    return reg
+
+
+@pytest.mark.parametrize(
+    ("args", "adapters", "code"),
+    [
+        (["--check", "--strict"], (_OkAdapter,), 0),
+        (["--check", "--strict"], (_OkAdapter, _MissingAdapter), 4),
+        (["--check"], (_OkAdapter, _MissingAdapter), 0),
+    ],
+)
+def test_list_tools_strict_exit_code(monkeypatch, args, adapters, code) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _isolated_families(monkeypatch, _bare(*adapters))
+    result = CliRunner().invoke(app, ["list-tools", *args])
+    assert result.exit_code == code, result.output
+    # The full listing is printed before the exit.
+    assert "polishers:" in result.output
+    assert "glance" in result.output
+
+
+def test_list_tools_strict_exits_5_on_a_broken_plugin(registry, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _isolated_families(monkeypatch, registry)
+    result = CliRunner().invoke(app, ["list-tools", "--check", "--strict"])
+    assert result.exit_code == 5, result.output
+    assert "badtool: broken" in result.output
+    assert "polishers:" in result.output
+    plain = CliRunner().invoke(app, ["list-tools", "--check"])
+    assert plain.exit_code == 0
+
+
+def test_list_tools_strict_exits_4_on_an_errored_adapter(monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    class _Errored:
+        capabilities = ToolCapabilities(name="erroredtool")
+
+        def preflight(self):
+            raise RuntimeError("unexpected")
+
+    _isolated_families(monkeypatch, _bare(_OkAdapter, _Errored))
+    result = CliRunner().invoke(app, ["list-tools", "--check", "--strict"])
+    assert result.exit_code == 4, result.output
+    assert "erroredtool: error (RuntimeError: unexpected)" in result.output
+
+
+def test_list_tools_strict_requires_check() -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    result = CliRunner().invoke(app, ["list-tools", "--strict"])
+    assert result.exit_code == 2
+    # Not an unknown-option error: the command names what --strict needs.
+    assert "--strict needs --check" in _ANSI.sub("", result.output)
+
+
+def test_list_tools_strict_prefers_5_when_broken_and_missing(registry, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    registry.register("missingtool", _MissingAdapter)
+    _isolated_families(monkeypatch, registry)
+    result = CliRunner().invoke(app, ["list-tools", "--check", "--strict"])
+    assert result.exit_code == 5, result.output
+    assert "badtool: broken" in result.output
+    assert "missingtool: missing" in result.output
+
+
+def test_list_tools_verbose_shows_debug_lines(registry, monkeypatch) -> None:
+    import logging
+
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _isolated_families(monkeypatch, registry)
+    real_names = registry.names
+
+    def names():
+        logging.getLogger("repgenr").debug("listing %s", registry.group)
+        return real_names()
+
+    monkeypatch.setattr(registry, "names", names)
+    verbose = CliRunner().invoke(app, ["--verbose", "list-tools"])
+    assert verbose.exit_code == 0
+    assert "DEBUG listing repgenr.test_tools" in verbose.stderr
+    plain = CliRunner().invoke(app, ["list-tools"])
+    assert "DEBUG" not in plain.stderr
+
+
+def test_list_tools_broken_plugin_warning_is_formatted(registry, monkeypatch) -> None:
+    import re
+
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _isolated_families(monkeypatch, registry)
+    result = CliRunner().invoke(app, ["list-tools"])
+    assert result.exit_code == 0
+    assert re.search(
+        r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d WARNING .*badtool", result.stderr, re.MULTILINE
+    ), result.stderr

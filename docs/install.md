@@ -256,7 +256,9 @@ repgenr list-tools --check
 `list-tools` prints each family with its adapters and, where one is declared,
 the genome limit. Its last line names the dereplicators that `glance` can run
 (`drep`, `sourmash`). `--check` runs each adapter's preflight and prints `ok` with
-the versions found, or `missing` or `error` with the reason. It reports and
-exits with status 0. A stage run with a missing or outdated tool exits with
+the versions found, or `missing` or `error` with the reason, or `broken` for a
+plugin that failed to load. It reports and exits with status 0. Add `--strict`
+to verify an environment from a script: after the full listing it exits 4 when
+any adapter is missing or errored, and 5 when any plugin is broken. A stage run with a missing or outdated tool exits with
 status 4, except under `assemble --assembler auto`, which excuses runs whose assembler is missing (reason `assembler_not_installed`, with a warning) and exits 4 only when no run can be assembled. A missing `auto` polisher is skipped (see [usage.md](usage.md#starting-from-sequencing-reads)). The full exit-code table is in
 [usage.md](usage.md#troubleshooting).

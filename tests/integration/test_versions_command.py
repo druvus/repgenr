@@ -166,3 +166,25 @@ def test_a_fragment_value_that_is_not_plain_yaml_is_quoted(tmp_path: Path) -> No
         "other": "1.2.3",
     }
     assert "    other: 1.2.3\n" in out.read_text()
+
+
+def test_versions_formats_logged_warnings(tmp_path: Path, monkeypatch) -> None:
+    # A warning logged while the command runs (a plugin that fails to load,
+    # say) carries the timestamp and level, not Python's bare fallback line.
+    import logging
+    import re
+
+    import repgenr.core.versions as versions_mod
+
+    wd = _workdir_with_versions(tmp_path)
+    real_merge = versions_mod.merge_stage_versions
+
+    def merge(per_stage):
+        logging.getLogger("repgenr").warning("plugin 'x' failed to load")
+        return real_merge(per_stage)
+
+    monkeypatch.setattr(versions_mod, "merge_stage_versions", merge)
+    result = _runner.invoke(app, ["versions", "-wd", str(wd)])
+    assert result.exit_code == 0
+    assert re.search(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d WARNING plugin 'x'", result.stderr, re.M)
+    assert "plugin 'x'" not in result.stdout
