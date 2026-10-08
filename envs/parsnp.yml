@@ -3,6 +3,7 @@ name: repgenr-parsnp
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - parsnp>=2.0
   - harvesttools>=1.3

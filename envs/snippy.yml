@@ -3,5 +3,6 @@ name: repgenr-snippy
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - snippy>=4.6

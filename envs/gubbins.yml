@@ -3,5 +3,6 @@ name: repgenr-gubbins
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - gubbins>=3.0

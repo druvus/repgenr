@@ -3,6 +3,7 @@ name: repgenr
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - python=3.12
   - pip

@@ -29,8 +29,9 @@ FAMILIES = (
     "snptypers",
     "treebuilders",
 )
-# Tools with a floor but no conda package: cactus is distributed as a container.
-CONTAINER_ONLY = {"cactus-pangenome"}
+# Binaries with no conda package: cactus is distributed as a container.
+CONTAINER_ONLY = {"cactus-pangenome", "hal2maf"}
+WORKFLOW = ENVS.parent / ".github" / "workflows" / "envs.yml"
 # Packages allowed in more than one file. Empty: a package in two files means
 # two environments may put different builds of one tool on PATH.
 SHARED_ALLOWED: set[str] = set()
@@ -54,8 +55,13 @@ def _specs(name: str) -> dict[str, tuple[str | None, str | None]]:
     return out
 
 
+def _env_files() -> list[Path]:
+    # macOS writes ._* AppleDouble files beside the real ones on some volumes.
+    return sorted(p for p in ENVS.glob("*.yml") if not p.name.startswith("._"))
+
+
 def _all_specs() -> dict[str, dict[str, tuple[str | None, str | None]]]:
-    return {path.stem: _specs(path.stem) for path in sorted(ENVS.glob("*.yml"))}
+    return {path.stem: _specs(path.stem) for path in _env_files()}
 
 
 def _capabilities() -> list[ToolCapabilities]:
@@ -72,13 +78,14 @@ def _capabilities() -> list[ToolCapabilities]:
     return caps
 
 
-def _package_for(binary: str, caps: ToolCapabilities) -> str:
+def _package_for(binary: str, caps: ToolCapabilities, available: set[str] | None = None) -> str:
     """The conda package that ships ``binary``, from the adapter's conda spec.
 
     A package whose name contains the binary name or is contained in it
-    (gubbins / run_gubbins.py, snippy / snippy-core, ska2 / ska). A binary
-    that matches none of the adapter's packages is its own package (skani
-    under skder).
+    (gubbins / run_gubbins.py, snippy / snippy-core, ska2 / ska). Otherwise
+    the binary's own name when that is a package in ``available`` (skani
+    under skder), else the adapter's first package (progressiveMauve from
+    mauvealigner).
     """
     lowered = binary.lower()
     packages = [spec.split("::")[-1].split("=")[0].lower() for spec in caps.conda]
@@ -88,11 +95,13 @@ def _package_for(binary: str, caps: ToolCapabilities) -> str:
     for package in packages:
         if package in lowered or lowered in package:
             return package
+    if available is not None and lowered not in available and packages:
+        return packages[0]
     return lowered
 
 
 def test_the_expected_files_exist() -> None:
-    assert {path.stem for path in ENVS.glob("*.yml")} == EXPECTED_FILES
+    assert {path.stem for path in _env_files()} == EXPECTED_FILES
     assert not (ENVS.parent / "environment.yml").exists()
 
 
@@ -101,7 +110,9 @@ def test_each_file_names_its_environment_and_channels(name: str) -> None:
     data = _load(name)
     expected = "repgenr" if name == "core" else f"repgenr-{name}"
     assert data["name"] == expected
-    assert data["channels"] == ["conda-forge", "bioconda"]
+    # nodefaults: a configured 'defaults' channel (Miniconda, Anaconda) with
+    # flexible priority made the core solve run for more than 17 minutes.
+    assert data["channels"] == ["conda-forge", "bioconda", "nodefaults"]
     first_line = (ENVS / f"{name}.yml").read_text().splitlines()[0]
     assert first_line.startswith("#") and "Platforms:" in first_line
 
@@ -146,3 +157,34 @@ def test_package_mapping_follows_the_conda_spec() -> None:
         "skani"
     )
     assert _package_for("ska", ToolCapabilities(name="ska2", conda=("bioconda::ska2",))) == "ska2"
+    mauve = ToolCapabilities(name="m", conda=("bioconda::mauvealigner", "boost-cpp=1.74"))
+    assert _package_for("progressiveMauve", mauve, {"mauvealigner"}) == "mauvealigner"
+
+
+def test_every_required_binary_comes_from_an_env_file() -> None:
+    available = {pkg for specs in _all_specs().values() for pkg in specs}
+    checked = 0
+    for caps in _capabilities():
+        for spec in caps.required_binaries:
+            if spec.name in CONTAINER_ONLY:
+                continue
+            package = _package_for(spec.name, caps, available)
+            assert package in available, f"{caps.name}: {spec.name} ({package}) is in no envs/*.yml"
+            checked += 1
+    assert checked >= 25
+
+
+def test_the_adapter_conda_specs_are_in_the_env_files() -> None:
+    # --wave builds an image from caps.conda; the env files install the same packages.
+    available = {pkg for specs in _all_specs().values() for pkg in specs}
+    for caps in _capabilities():
+        for spec in caps.conda:
+            package = spec.split("::")[-1].split("=")[0].lower()
+            assert package in available, f"{caps.name}: {spec} is in no envs/*.yml"
+
+
+def test_the_ci_matrix_solves_every_file() -> None:
+    matrix = yaml.safe_load(WORKFLOW.read_text())["jobs"]["solve"]["strategy"]["matrix"]
+    assert set(matrix["env"]) == EXPECTED_FILES
+    assert matrix["subdir"] == ["linux-64"]
+    assert {"env": "core", "subdir": "osx-arm64"} in matrix["include"]

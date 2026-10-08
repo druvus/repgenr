@@ -52,7 +52,7 @@ dry-runs each solve on every change to `envs/` and once a week
 | `envs/snippy.yml` | `repgenr-snippy` | snippy 4.6 | linux-64, osx-64 |
 | `envs/parsnp.yml` | `repgenr-parsnp` | parsnp, harvesttools | linux-64, osx-64 |
 | `envs/checkm2.yml` | `repgenr-checkm2` | CheckM2 (TensorFlow, kept apart from medaka's PyTorch) | linux-64 |
-| `envs/mauve.yml` | `repgenr-mauve` | progressiveMauve with boost-cpp 1.74.0 | linux-64 |
+| `envs/mauve.yml` | `repgenr-mauve` | progressiveMauve (`mauvealigner`) with boost-cpp 1.74.0 | linux-64 |
 
 Create the core environment and only the satellites you need. The core file
 installs the package in editable mode from the checkout:
@@ -97,9 +97,16 @@ Appended satellites supply only what core lacks (`run_gubbins.py`, `iqtree2`,
 `mashtree`, `snippy`, `parsnp`, `checkm2`, `progressiveMauve`). Core's samtools
 and bcftools then come first, ahead of the samtools 0.1.19 in the mashtree
 environment, which the `simple` SNP typer would reject. A satellite
-placed before core shadows core's tools in this way. One known gap remains:
-snippy then calls core's samtools and bcftools instead of the versions in its
-own environment. This combination has not been tested.
+placed before core shadows core's tools in this way. Two known gaps remain,
+because a satellite tool calls its helpers by name and core's come first:
+
+- snippy calls core's samtools and bcftools instead of the versions in its own
+  environment. This combination has not been tested.
+- Gubbins calls `iqtree` by name, so it runs core's IQ-TREE 3 instead of the
+  IQ-TREE 2.4 of its own environment. On a small test set the result was the
+  same, but the Gubbins log then reports the IQ-TREE 3 version.
+
+The per-tool `--bin-dir` option (#247) closes both gaps.
 
 Two further points:
 
@@ -216,9 +223,10 @@ BioContainers are `linux/amd64`. On Apple Silicon pass
   `CHECKM_DATA_PATH` on the host: RepGenR passes it into the container and
   binds that directory at the same path. Otherwise run dRep with
   `--ignoreGenomeQuality`.
-- The bioconda `mauve` (progressiveMauve) build is broken upstream (boost ABI,
-  `undefined symbol`). Use the pinned image, or run that tool natively on
-  Linux.
+- progressiveMauve from bioconda (`mauvealigner`) is linked against boost
+  1.74 and fails with an `undefined symbol` error against a newer boost.
+  `envs/mauve.yml` and the adapter's Wave spec therefore pin `boost-cpp=1.74.0`;
+  the pinned image already holds a compatible boost.
 
 ## Per-tool table
 
@@ -237,7 +245,7 @@ the `envs/` files, and the environment that holds each tool is listed in
 | Dereplicator | skder | `skder`, `skani` | yes | none (Wave) | none |
 | Dereplicator | galah | `galah` | yes | `galah:0.4.2` | none |
 | Dereplicator | sourmash | `sourmash` | yes | `sourmash:4.9.4` | `sourmash_plugin_branchwater` for the sparse back-end (extra `sparse`) |
-| Aligner | progressivemauve | `progressivemauve` | no (unpackaged on macOS) | `mauve:2.4.0.snapshot_2015_02_13` | none |
+| Aligner | progressivemauve | `mauvealigner`, `boost-cpp=1.74.0` | no (unpackaged on macOS) | `mauve:2.4.0.snapshot_2015_02_13` | none |
 | Aligner | sibeliaz | `sibeliaz` | yes | none (Wave) | none |
 | Aligner | cactus | not on conda | no | `cactus:v2.9.3` | none |
 | SNP typer | simple | `minimap2`, `samtools`, `bcftools` | yes | none (Wave) | samtools and bcftools 1.10 or later |

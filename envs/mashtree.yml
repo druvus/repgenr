@@ -3,5 +3,6 @@ name: repgenr-mashtree
 channels:
   - conda-forge
   - bioconda
+  - nodefaults
 dependencies:
   - mashtree>=1.2

@@ -14,4 +14,5 @@ gubbins = "~/miniforge3/envs/repgenr-gubbins/bin"
 mashtree = "~/miniforge3/envs/repgenr-mashtree/bin"
 snippy = "~/miniforge3/envs/repgenr-snippy/bin"
 parsnp = "~/miniforge3/envs/repgenr-parsnp/bin"
+# simple = "~/miniforge3/envs/repgenr_snptools/bin"  # only if the pytest env has a pre-1.10 samtools
 nextflow = "~/miniforge3/envs/repgenr_nf/bin"
