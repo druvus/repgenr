@@ -23,6 +23,24 @@ _FORMAT = "%(asctime)s %(levelname)s %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
 # LogRecord attribute that holds the console form of a message.
 _CONSOLE_ATTR = "repgenr_console"
+_DEFAULT_LOG = "repgenr.log"
+# Terminal width a shortened console line is fitted to, header and suffix included.
+CONSOLE_COLUMNS = 120
+
+
+def console_suffix(log_name: str = _DEFAULT_LOG) -> str:
+    """The pointer appended to a shortened console line."""
+    return f" (full text in {log_name})"
+
+
+def console_room(levelname: str = "INFO", log_name: str = _DEFAULT_LOG) -> int:
+    """Characters left for a short console form so the line fits ``CONSOLE_COLUMNS``.
+
+    The line is the timestamp, the level name, the short form and
+    :func:`console_suffix`.
+    """
+    header = len("2026-01-01 00:00:00") + 1 + len(levelname) + 1  # matches _DATEFMT
+    return CONSOLE_COLUMNS - header - len(console_suffix(log_name))
 
 
 def console_extra(short: str) -> dict[str, Any]:
@@ -48,7 +66,7 @@ class _ConsoleFormatter(logging.Formatter):
 
     def __init__(self, log_name: str) -> None:
         super().__init__(_FORMAT, datefmt=_DATEFMT)
-        self._log_name = log_name
+        self._suffix = console_suffix(log_name)
 
     def format(self, record: logging.LogRecord) -> str:
         short = getattr(record, _CONSOLE_ATTR, None)
@@ -56,7 +74,7 @@ class _ConsoleFormatter(logging.Formatter):
             return super().format(record)
         # A copy: the file handler formats the same record with the full text.
         shown = logging.makeLogRecord(record.__dict__)
-        shown.msg = f"{short} (full text in {self._log_name})"
+        shown.msg = f"{short}{self._suffix}"
         shown.args = None
         return super().format(shown)
 
@@ -65,7 +83,7 @@ def configure_logging(
     workdir: str | os.PathLike[str] | None = None,
     *,
     level: int = logging.INFO,
-    log_filename: str = "repgenr.log",
+    log_filename: str = _DEFAULT_LOG,
 ) -> logging.Logger:
     """Configure and return the ``repgenr`` logger.
 

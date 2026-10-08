@@ -16,6 +16,9 @@ import pytest
 from repgenr.core import process
 from repgenr.core.logging import capped_names, configure_logging, console_extra
 
+# A shortened command line, with timestamp, level and the run-log pointer,
+# fits a 120-column terminal; other capped lines stay under about 200.
+_COMMAND_LINE_COLUMNS = 120
 _CONSOLE_LIMIT = 200
 
 
@@ -61,8 +64,8 @@ def test_command_line_is_short_on_console_and_full_in_log(tmp_path, capsys) -> N
     command_lines = [ln for ln in err.splitlines() if "[faketool] $ " in ln]
     assert len(command_lines) == 1
     line = command_lines[0]
-    assert len(line) < _CONSOLE_LIMIT, line
-    assert "500" in line  # the inputs are counted
+    assert len(line) <= _COMMAND_LINE_COLUMNS, line
+    assert "499 paths" in line  # the inputs after the -g value are counted
     assert "repgenr.log" in line  # and the reader is told where the full line is
     assert "-c 4" in line  # options after the inputs are kept
     assert "fake tool output line" not in err  # tool output stays off the console
@@ -80,7 +83,7 @@ def test_verbose_console_also_gets_the_short_command(tmp_path, capsys) -> None:
     for handler in logger.handlers:
         handler.flush()
     err = capsys.readouterr().err
-    assert all(len(ln) < _CONSOLE_LIMIT for ln in err.splitlines()), err
+    assert all(len(ln) <= _COMMAND_LINE_COLUMNS for ln in err.splitlines()), err
     assert " ".join(cmd) in log_file.read_text()
 
 
@@ -102,10 +105,46 @@ def test_without_a_run_log_the_console_keeps_the_full_text(capsys) -> None:
 def test_shorten_command_counts_a_run_of_paths() -> None:
     paths = [f"/data/set/genome_{i}.fasta" for i in range(50)]
     short = process.shorten_command(["skder", "-g", *paths, "-o", "/tmp/out", "-d", "greedy"])
-    assert short.startswith("skder -g ")
-    assert "50 paths" in short
-    assert short.endswith("-o /tmp/out -d greedy")
+    # The path after -g is that option's value; the other 49 are counted.
+    assert short.startswith("skder -g .../genome_0.fasta (49 paths)")
+    assert short.endswith("-o .../out -d greedy")
     assert len(short) <= process.CONSOLE_COMMAND_CHARS
+
+
+def test_option_value_path_is_not_folded_into_the_input_run() -> None:
+    inputs = [f"/data/set/sample_{i:03d}.fasta" for i in range(10)]
+    short = process.shorten_command(["snippy", "--reference", "/data/refs/ref.fasta", *inputs])
+    assert "--reference .../ref.fasta" in short
+    assert "(10 paths)" in short
+    assert len(short) <= process.CONSOLE_COMMAND_CHARS
+
+
+def test_skder_style_command_keeps_its_options_within_the_budget() -> None:
+    # Long genome names: paths are reduced to "..." before any option is cut.
+    genomes = [
+        f"/Volumes/data/run/wd/genomes/Benchfam_Benchgen_g{i:06d}_GCF{i:07d}.1.fasta"
+        for i in range(50)
+    ]
+    cmd = ["skder", "-g", *genomes, "-o", "/var/folders/x/T/repgenr_skder_ab/skder_out"]
+    cmd += ["-i", "99", "-f", "50", "-c", "11", "-d", "greedy"]
+    short = process.shorten_command(cmd, limit=58)
+    assert len(short) <= 58
+    assert "(49 paths)" in short
+    assert short.endswith("-i 99 -f 50 -c 11 -d greedy")
+
+
+def test_log_command_line_fits_120_columns_with_a_long_prefix(tmp_path, capsys) -> None:
+    logger, _ = _run_logger(tmp_path)
+    cmd = [
+        "tool",
+        "--ref",
+        "/x/" + "r" * 80 + ".fa",
+        *[f"/in/{'s' * 60}_{i}.fa" for i in range(20)],
+    ]
+    process.log_command(logger, cmd, "[a_rather_long_adapter_name] ")
+    line = capsys.readouterr().err.rstrip("\n")
+    assert len(line) <= _COMMAND_LINE_COLUMNS, line
+    assert line.endswith("(full text in repgenr.log)")
 
 
 def test_shorten_command_caps_a_single_long_argument() -> None:

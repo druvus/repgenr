@@ -621,6 +621,10 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- Console output (#PR): a shortened tool command line now fits 120 columns
+  with its timestamp, level and run-log pointer; it was up to about 225. A
+  path directly after an option (`--reference /r/ref.fasta`) is kept as that
+  option's value and is no longer counted with the input paths that follow.
 - Console output (#251): a tool command line is shortened on the console, so
   `dereplicate --tool skder`, which passes every genome path on argv, no
   longer prints a line of several thousand characters (6006 for 50 genomes).

@@ -14,6 +14,7 @@ from __future__ import annotations
 import gzip
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -28,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 from .contracts import atomic_path, record_name
 from .errors import ToolExecutionError, UserInputError, WorkdirError
-from .logging import console_extra
+from .logging import console_extra, console_room
 
 if TYPE_CHECKING:
     from .plugins import ToolCapabilities
@@ -275,10 +276,12 @@ def _default_timeout() -> float | None:
     return None
 
 
-# Console budget for a tool command line; the run log keeps the full line.
-CONSOLE_COMMAND_CHARS = 160
+# Console budget for a tool command line with no prefix; the run log keeps the
+# full line. log_command subtracts the prefix so the whole line fits.
+CONSOLE_COMMAND_CHARS = console_room("INFO") - len("$ ")
 # A run of at least this many consecutive path arguments is counted, not listed.
 _MIN_PATH_RUN = 3
+_OPTION = re.compile(r"-{1,2}[A-Za-z]")
 
 
 def _path_like(arg: str) -> bool:
@@ -290,49 +293,92 @@ def _abbreviate(arg: str) -> str:
     return f".../{name}" if name and name != arg else arg
 
 
+def _segments(parts: list[str]) -> list[tuple[str, str | list[str]]]:
+    """Split argv into ("word", text), ("path", text) and ("run", paths).
+
+    A path directly after an option (``--reference /r/ref.fasta``) is that
+    option's value and stays a single path; a run is three or more
+    consecutive paths after it.
+    """
+    segments: list[tuple[str, str | list[str]]] = []
+    i = 0
+    while i < len(parts):
+        arg = parts[i]
+        if not _path_like(arg):
+            segments.append(("word", arg))
+            i += 1
+            continue
+        if i > 0 and _OPTION.match(parts[i - 1]):
+            segments.append(("path", arg))
+            i += 1
+            continue
+        j = i
+        while j < len(parts) and _path_like(parts[j]):
+            j += 1
+        if j - i >= _MIN_PATH_RUN:
+            segments.append(("run", parts[i:j]))
+        else:
+            segments.extend(("path", p) for p in parts[i:j])
+        i = j
+    return segments
+
+
+def _render(segments: list[tuple[str, str | list[str]]], level: int) -> str:
+    """One console form of ``segments``; a higher level is shorter.
+
+    1: a run is its first path and a count; 2: paths are cut to their last
+    component; 3: a run is only its count; 4: a single path is "...".
+    """
+    out: list[str] = []
+    for kind, value in segments:
+        if kind == "word":
+            out.append(str(value))
+        elif kind == "path":
+            path = str(value)
+            out.append("..." if level >= 4 else _abbreviate(path) if level >= 2 else path)
+        else:
+            paths = list(value)
+            first = _abbreviate(paths[0]) if level >= 2 else paths[0]
+            count = f"({len(paths)} paths)"
+            out.append(count if level >= 3 else f"{first} ... {count}")
+    return " ".join(out)
+
+
 def shorten_command(
     command: Sequence[str | os.PathLike[str]], limit: int = CONSOLE_COMMAND_CHARS
 ) -> str:
     """A console form of ``command`` at most ``limit`` characters long.
 
-    A command that fits is returned as it is. Otherwise a run of path
-    arguments (genome files on argv) is shown as its first path and a count,
-    then paths are cut to their last component, and a line that is still too
-    long is cut at ``limit`` with "...".
+    A command that fits is returned as it is. Otherwise it is shortened in
+    steps until it fits: a run of input paths becomes its first path and a
+    count, paths are cut to their last component, a run becomes only its
+    count, and other paths become "...". Options and their non-path values
+    are kept; a line still too long is cut at ``limit`` with "...".
     """
     parts = [str(p) for p in command]
     full = " ".join(parts)
     if len(full) <= limit:
         return full
-    tokens: list[tuple[str, bool]] = []  # (text, is a path)
-    i = 0
-    while i < len(parts):
-        j = i
-        while j < len(parts) and _path_like(parts[j]):
-            j += 1
-        if j - i >= _MIN_PATH_RUN:
-            tokens.append((f"{_abbreviate(parts[i])} ... ({j - i} paths)", False))
-            i = j
-        elif j > i:
-            tokens.extend((p, True) for p in parts[i:j])
-            i = j
-        else:
-            tokens.append((parts[i], False))
-            i += 1
-    short = " ".join(text for text, _ in tokens)
-    if len(short) > limit:
-        short = " ".join(_abbreviate(text) if is_path else text for text, is_path in tokens)
-    if len(short) > limit:
-        short = short[: limit - 4].rstrip() + " ..."
-    return short
+    segments = _segments(parts)
+    short = full
+    for level in range(1, 5):
+        short = _render(segments, level)
+        if len(short) <= limit:
+            return short
+    return short[: max(limit - 4, 0)].rstrip() + " ..."
 
 
 def log_command(
     logger: logging.Logger, command: Sequence[str | os.PathLike[str]], prefix: str = ""
 ) -> None:
-    """Log a tool command line at INFO: in full in the run log, shortened on the console."""
+    """Log a tool command line at INFO: in full in the run log, shortened on the console.
+
+    The console form is sized so that the whole line, timestamp, level and
+    run-log pointer included, fits ``core.logging.CONSOLE_COLUMNS``.
+    """
     full = " ".join(str(p) for p in command)
-    short = shorten_command(command)
+    room = console_room("INFO") - len(prefix) - len("$ ")
+    short = shorten_command(command, limit=room)
     extra = console_extra(f"{prefix}$ {short}") if short != full else None
     logger.info("%s$ %s", prefix, full, extra=extra)
 

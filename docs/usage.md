@@ -1257,8 +1257,11 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   tail are in the same log. Re-run with `--verbose` to see them on the console
   (a data-channel step has no log and always prints the tail).
   A tool command line is shortened on the console, with or without
-  `--verbose`: a run of input paths is shown as its first path and a count,
-  and other paths by their last component. Long lists of genome names show
+  `--verbose`, so that the whole line fits 120 columns: a run of input paths
+  is shown as its first path and a count, then other paths by their last
+  component, then the run as its count alone and other paths as `...`. A path
+  that directly follows an option (`--reference ref.fasta`) is that option's
+  value and is not counted with the inputs. Long lists of genome names show
   the first five and a count. The full text of such a line, and the tool's own
   output, are in `repgenr.log`.
   `repgenr status -wd <WD>` shows what completed and what is next; a stage
