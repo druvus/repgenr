@@ -318,7 +318,10 @@ def wrap_command(
     workdir = str(Path(os.path.abspath(cwd if cwd is not None else os.getcwd())))
 
     if config.backend == DOCKER:
-        cmd = [config.engine_binary(), "run", "--rm", "--entrypoint", ""]
+        # --init: an init process becomes process 1 and passes signals on, so
+        # the SIGTERM the client forwards when repgenr stops a tool ends it
+        # (a tool running as process 1 ignores a signal it has no handler for).
+        cmd = [config.engine_binary(), "run", "--rm", "--init", "--entrypoint", ""]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
         # Run as an arbitrary host UID with no passwd entry, so HOME defaults to
         # "/" and is not writable. Point it at the mounted, writable workdir so

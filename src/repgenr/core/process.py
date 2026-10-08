@@ -111,10 +111,15 @@ def install_termination_handler() -> None:
     :class:`KeyboardInterrupt` (SIGINT), so the stage record stays marked as
     interrupted and a temporary output is removed. A second signal kills the
     remaining tool groups at once and takes the default action. Only the main
-    thread can install handlers.
+    thread can install handlers. A signal that repgenr inherited as ignored
+    (``nohup`` ignores SIGHUP; a shell ignores SIGINT for a background job of
+    a script) stays ignored.
 
     Ctrl-Z (SIGTSTP) suspends the running tool groups together with repgenr,
-    and they resume when repgenr is continued.
+    and they resume when repgenr is continued. This applies only when repgenr
+    runs as the foreground job of a terminal; elsewhere SIGTSTP keeps its
+    default action, which the kernel discards for a process without a
+    terminal.
     """
     if threading.current_thread() is not threading.main_thread():
         return
@@ -144,6 +149,10 @@ def install_termination_handler() -> None:
 
     def _on_suspend(_signum: int, _frame: object) -> None:
         # Ctrl-Z: suspend the tool groups with repgenr, resume them with it.
+        # Only as the foreground job of a terminal, where a shell will send
+        # SIGCONT; otherwise the signal is ignored, as the kernel would do.
+        if not _foreground_of_terminal():
+            return
         # repgenr stops itself with SIGSTOP: a re-sent SIGTSTP is discarded in
         # an orphaned process group, which would leave the tools stopped while
         # repgenr waits for them.
@@ -153,9 +162,36 @@ def install_termination_handler() -> None:
         stop_running_tools(signal.SIGCONT)
 
     for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
-        signal.signal(signum, _on_signal)
-    if hasattr(signal, "SIGTSTP"):
+        if signal.getsignal(signum) != signal.SIG_IGN:
+            signal.signal(signum, _on_signal)
+    if (
+        hasattr(signal, "SIGTSTP")
+        and signal.getsignal(signal.SIGTSTP) == signal.SIG_DFL
+        and _terminal_fd() is not None
+    ):
         signal.signal(signal.SIGTSTP, _on_suspend)
+
+
+def _terminal_fd() -> int | None:
+    """stdin or stderr when it is a terminal, else None."""
+    for fd in (0, 2):
+        try:
+            if os.isatty(fd):
+                return fd
+        except OSError:
+            continue
+    return None
+
+
+def _foreground_of_terminal() -> bool:
+    """True when repgenr's process group is the foreground job of its terminal."""
+    fd = _terminal_fd()
+    if fd is None:
+        return False
+    try:
+        return os.getpgrp() == os.tcgetpgrp(fd)
+    except OSError:  # no controlling terminal
+        return False
 
 
 def _default_timeout() -> float | None:
@@ -292,6 +328,11 @@ def run(
                 tail.append(line)
                 logger.debug("%s%s", prefix, line)
         returncode = proc.wait()
+        if stop_requested.is_set() or returncode != 0 or timed_out:
+            # The tool ended abnormally (or repgenr is stopping): a helper that
+            # outlived it, or ignored SIGTERM, would be left behind once the
+            # tool is reaped and leaves the registry.
+            _signal_group(proc, signal.SIGKILL)
     except BaseException:
         # A failure in this function (a logging handler, a KeyboardInterrupt,
         # the SystemExit of the termination handler) must not orphan the tool

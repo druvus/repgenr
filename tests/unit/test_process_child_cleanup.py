@@ -317,23 +317,183 @@ def _wait_state(pid: int, stopped: bool) -> None:
         time.sleep(0.05)
 
 
+class _PtyDriver:
+    """The driver on a pseudo-terminal, as the foreground job of a terminal."""
+
+    def __init__(self, driver: str) -> None:
+        import os
+        import pty
+
+        self.pid, self.fd = pty.fork()
+        if self.pid == 0:  # pragma: no cover - the child execs at once
+            os.environ["PYTHONPATH"] = os.pathsep.join(sys.path)
+            os.execv(sys.executable, [sys.executable, "-c", driver])
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        import os
+
+        if self.returncode is None:
+            pid, status = os.waitpid(self.pid, os.WNOHANG)
+            if pid:
+                self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+    def communicate(self) -> tuple[None, str]:
+        return None, ""
+
+    def finish(self, timeout: float = 10) -> int:
+        import os
+        import signal
+
+        deadline = time.monotonic() + timeout
+        while self.poll() is None:
+            if time.monotonic() > deadline:
+                os.kill(self.pid, signal.SIGKILL)
+                os.waitpid(self.pid, 0)
+                raise AssertionError("the driver did not end")
+            time.sleep(0.05)
+        os.close(self.fd)
+        assert self.returncode is not None
+        return self.returncode
+
+
 def test_ctrl_z_suspends_and_resumes_the_tool_group(tmp_path: Path) -> None:
     """Ctrl-Z (SIGTSTP) no longer reaches a tool in its own session; repgenr
     suspends the tool group with itself and resumes it on SIGCONT."""
+    import os
     import signal
 
-    proc = _start_driver(_driver(_helper_tool(tmp_path)))
+    proc = _PtyDriver(_driver(_helper_tool(tmp_path)))
+    _wait_started(tmp_path, proc)
+    pids = _pids(tmp_path)
+    try:
+        os.kill(proc.pid, signal.SIGTSTP)
+        _wait_state(proc.pid, stopped=True)
+        for pid in pids:
+            _wait_state(pid, stopped=True)
+        os.kill(proc.pid, signal.SIGCONT)
+        _wait_state(proc.pid, stopped=False)
+        for pid in pids:
+            _wait_state(pid, stopped=False)
+    finally:
+        os.kill(proc.pid, signal.SIGCONT)
+        os.kill(proc.pid, signal.SIGTERM)
+        proc.finish()
+    _assert_gone_within(pids, 2)
+
+
+def test_ctrl_c_typed_on_the_terminal_stops_the_tool_group(tmp_path: Path) -> None:
+    """A Ctrl-C typed on the terminal reaches repgenr only (the tool has its
+    own session); repgenr ends by SIGINT and the tool and helper are gone."""
+    import os
+    import signal
+
+    proc = _PtyDriver(_driver(_helper_tool(tmp_path)))
+    _wait_started(tmp_path, proc)
+    pids = _pids(tmp_path)
+    sent = time.monotonic()
+    os.write(proc.fd, b"\x03")
+    returncode = proc.finish()
+    elapsed = time.monotonic() - sent
+    _assert_gone_within(pids, 2)
+    assert returncode == -signal.SIGINT
+    assert elapsed < 2
+
+
+def _detached_helper_tool(tmp_path: Path) -> list[str]:
+    """A tool that exits on SIGTERM while its helper ignores SIGTERM and does
+    not hold the output pipe, so run() sees the tool end at once."""
+    child = tmp_path / "child.pid"
+    grandchild = tmp_path / "grandchild.pid"
+    script = (
+        "(trap '' TERM; exec sleep 60) >/dev/null 2>&1 & "
+        f"echo $! > {grandchild}.tmp; mv {grandchild}.tmp {grandchild}; "
+        f"echo $$ > {child}; wait"
+    )
+    return ["/bin/sh", "-c", script]
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_helper_ignoring_sigterm_is_killed_after_its_tool_exits(
+    tmp_path: Path, parallel: bool
+) -> None:
+    """run() reaps a tool that exited on SIGTERM; the helper that ignored it is
+    killed with the group, also when the tool ran on a pool thread (review of
+    #231: such a helper survived)."""
+    import signal
+
+    dirs = [tmp_path / "a", tmp_path / "b"] if parallel else [tmp_path]
+    for d in dirs:
+        d.mkdir(exist_ok=True)
+    proc = _start_driver(_driver(*(_detached_helper_tool(d) for d in dirs), grace=0.5))
+    for d in dirs:
+        _wait_started(d, proc)
+    pids = [pid for d in dirs for pid in _pids(d)]
+    proc.send_signal(signal.SIGTERM)
+    _finish(proc)
+    assert proc.returncode == 128 + signal.SIGTERM
+    _assert_gone_within(pids, 2)
+
+
+@pytest.mark.parametrize("signame", ["SIGHUP", "SIGINT", "SIGTERM"])
+def test_an_inherited_ignored_signal_stays_ignored(tmp_path: Path, signame: str) -> None:
+    """``nohup repgenr ... &`` ignores SIGHUP and a background job of a script
+    ignores SIGINT; the handler must not replace an inherited SIG_IGN."""
+    import os
+    import signal
+    import subprocess
+
+    sig = getattr(signal, signame)
+    driver = (
+        "import logging, signal\n"
+        "from repgenr.core import process\n"
+        "process.install_termination_handler()\n"
+        f"assert signal.getsignal({int(sig)}) == signal.SIG_IGN\n"
+        "print('ready', flush=True)\n"
+        "process.run(['/bin/sh', '-c', 'sleep 1'], logger=logging.getLogger('t'))\n"
+    )
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    proc = subprocess.Popen(
+        [sys.executable, "-c", driver],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        text=True,
+        preexec_fn=lambda: signal.signal(sig, signal.SIG_IGN),
+    )
+    assert proc.stdout is not None
+    assert proc.stdout.readline().strip() == "ready", _finish(proc)
+    proc.send_signal(sig)
+    stderr = _finish(proc)
+    assert proc.returncode == 0, stderr
+
+
+def test_sigtstp_without_a_terminal_does_not_stop_repgenr(tmp_path: Path) -> None:
+    """Without a controlling terminal (setsid, nohup after the shell exits, a
+    workflow manager) the kernel discards SIGTSTP; repgenr must not stop
+    itself, since nobody would send SIGCONT (review of #231)."""
+    import os
+    import signal
+    import subprocess
+
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _driver(_helper_tool(tmp_path))],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        env=env,
+        text=True,
+        start_new_session=True,
+    )
     _wait_started(tmp_path, proc)
     pids = _pids(tmp_path)
     try:
         proc.send_signal(signal.SIGTSTP)
-        _wait_state(proc.pid, stopped=True)
-        for pid in pids:
-            _wait_state(pid, stopped=True)
-        proc.send_signal(signal.SIGCONT)
-        _wait_state(proc.pid, stopped=False)
-        for pid in pids:
-            _wait_state(pid, stopped=False)
+        time.sleep(1)
+        assert not _state(proc.pid).startswith("T"), _state(proc.pid)
+        assert not any(_state(p).startswith("T") for p in pids)
     finally:
         proc.send_signal(signal.SIGCONT)
         proc.terminate()

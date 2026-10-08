@@ -174,12 +174,15 @@ All notable changes to RepGenR are documented here. The format follows
   the tool itself was signalled. Because a tool no longer shares repgenr's
   terminal, repgenr forwards Ctrl-C (raising `KeyboardInterrupt` as before)
   and Ctrl-Z (the tools are suspended and resumed with repgenr). A second
-  signal kills the remaining tools at once. With the Docker backend the group
-  holds the `docker run` client. Docker forwards SIGTERM to the container,
-  where the tool runs as process 1 and ignores the signal unless it handles
-  it; such a container keeps running after the client is killed
-  (`docker ps`). Singularity and Apptainer run the tool as an
-  ordinary process in the group.
+  signal kills the remaining tools at once. A signal inherited as ignored
+  stays ignored (`nohup` keeps working), and Ctrl-Z is handled only when
+  repgenr is the foreground job of a terminal. Singularity and Apptainer run
+  the tool as an ordinary process in the group. With the Docker backend the
+  group holds the `docker run` client, which forwards SIGTERM to the
+  container; `docker run` now passes `--init`, so the tool is no longer
+  process 1 in the container, where it would ignore that signal and keep the
+  container running after the client is killed. The changed container
+  command line does not make a stage rerun.
 - `run` (#223): `--with-snptype --msa-source snptype` runs the `snptype` stage after
   `phylo` instead of before it, so the tables left in `snp/` are the ones the
   `snptype` record describes. As a consequence, a later `phylo` run that
