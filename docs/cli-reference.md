@@ -397,11 +397,16 @@ genomes)'; auto-selection and the scale warnings use the same limit.
 The last line names the dereplicators that glance can run.
 With --check, every adapter's required binaries are looked up (version
 floors included) and reported per tool, so an environment can be
-verified before a run without a working directory.
+verified before a run without a working directory. --check alone
+always exits 0, since a host that has only some families installed is
+normal; --check --strict exits 4 when any adapter is missing or errored,
+or 5 when any plugin failed to load, so a script can verify an
+environment.
 
 | option | default | description |
 |---|---|---|
 | `--check` | off | Run each adapter's preflight and report whether its binaries are present. |
+| `--strict` | off | With --check, exit 4 when an adapter is missing or errored and 5 when a plugin is broken, after the full listing. |
 
 ### doctor
 

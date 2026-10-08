@@ -46,8 +46,12 @@ def versions(
     """
     from ..core.config import CONFIG_FILENAME, Config
     from ..core.errors import WorkdirError
+    from ..core.logging import configure_logging
     from ..core.versions import merge_stage_versions, write_versions_fragment
 
+    # A warning raised while loading records or plugins carries the standard
+    # timestamp and level instead of Python's bare last-resort line.
+    configure_logging(None, level=logging.WARNING)
     if not (workdir / CONFIG_FILENAME).exists():
         # A wrong -wd would otherwise print nothing and exit 0.
         err = WorkdirError(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
@@ -390,6 +394,12 @@ def list_tools(
         "--check",
         help="Run each adapter's preflight and report whether its binaries are present.",
     ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="With --check, exit 4 when an adapter is missing or errored and 5 when "
+        "a plugin is broken, after the full listing.",
+    ),
 ) -> None:
     """List the available pluggable tools in each family.
 
@@ -398,8 +408,20 @@ def list_tools(
     The last line names the dereplicators that glance can run.
     With --check, every adapter's required binaries are looked up (version
     floors included) and reported per tool, so an environment can be
-    verified before a run without a working directory.
+    verified before a run without a working directory. --check alone
+    always exits 0, since a host that has only some families installed is
+    normal; --check --strict exits 4 when any adapter is missing or errored,
+    or 5 when any plugin failed to load, so a script can verify an
+    environment.
     """
+    from ..core.errors import MissingBinaryError, PluginError
+    from ..core.logging import configure_logging
+
+    if strict and not check:
+        raise typer.BadParameter("--strict needs --check.", param_hint="--strict")
+    # A plugin that fails to load warns through the repgenr logger; give the
+    # line the standard timestamp and level.
+    configure_logging(None, level=logging.WARNING)
     from ..aligners.base import registry as aligners
     from ..assemblers.base import registry as assemblers
     from ..classifiers.base import registry as classifiers
@@ -409,6 +431,7 @@ def list_tools(
     from ..snptypers.base import registry as snptypers
     from ..treebuilders.base import registry as treebuilders
 
+    statuses: set[str] = set()
     for label, reg in (
         ("dereplicators", dereplicators),
         ("aligners", aligners),
@@ -424,13 +447,20 @@ def list_tools(
         if not check:
             continue
         for name in reg.names():
-            typer.echo(f"  {name}: {_preflight_summary(reg, name)}")
+            state, text = _preflight_summary(reg, name)
+            statuses.add(state)
+            typer.echo(f"  {name}: {text}")
     from ..dereplicators.base import compare_supporters
 
     # glance is not a family of its own: it runs any dereplicator with compare().
     typer.echo(
         f"glance (dereplicators with compare): {', '.join(compare_supporters()) or '(none)'}"
     )
+    if strict:
+        if "broken" in statuses:
+            raise typer.Exit(code=PluginError.exit_code)
+        if statuses & {"missing", "error"}:
+            raise typer.Exit(code=MissingBinaryError.exit_code)
 
 
 def _one_line(exc: Exception) -> str:
@@ -439,19 +469,23 @@ def _one_line(exc: Exception) -> str:
     return "; ".join(part.strip() for part in text.splitlines() if part.strip())
 
 
-def _preflight_summary(reg, name: str) -> str:
-    """One line per adapter for `list-tools --check`: ok with versions, or why not."""
+def _preflight_summary(reg, name: str) -> tuple[str, str]:
+    """Status and one line per adapter for `list-tools --check`.
+
+    The status is one of ok, missing, error and broken; the line is ok with
+    versions, or why not.
+    """
     from ..core.errors import MissingBinaryError, RepGenRError
 
     if reg.is_broken(name):
-        return f"broken (failed to load: {_one_line(reg.load_error(name))})"
+        return "broken", f"broken (failed to load: {_one_line(reg.load_error(name))})"
     try:
         versions = reg.create(name).preflight()
     except MissingBinaryError as exc:
-        return f"missing ({_one_line(exc)})"
+        return "missing", f"missing ({_one_line(exc)})"
     except RepGenRError as exc:
-        return f"error ({_one_line(exc)})"
+        return "error", f"error ({_one_line(exc)})"
     except Exception as exc:  # a third-party adapter must not end the listing
-        return f"error ({type(exc).__name__}: {_one_line(exc)})"
+        return "error", f"error ({type(exc).__name__}: {_one_line(exc)})"
     shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
-    return f"ok ({shown})"
+    return "ok", f"ok ({shown})"

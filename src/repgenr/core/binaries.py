@@ -9,10 +9,12 @@ enough. Resolved versions are returned so the stage can record them in
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .errors import MissingBinaryError
 
@@ -77,6 +79,46 @@ def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
     return blob.strip().splitlines()[0] if blob.strip() else None
 
 
+def _owns_binary(data: object, name: str) -> bool:
+    """True when a conda-meta record lists ``bin/<name>`` among its files."""
+    return isinstance(data, dict) and f"bin/{name}" in (data.get("files") or ())
+
+
+def _metadata_version(name: str, path: str | None = None) -> str | None:
+    """The version of the conda package that installed ``name``, if any.
+
+    Used when the binary does not report a version itself (SibeliaZ has no
+    version flag). The package records sit in ``<prefix>/conda-meta`` next to
+    the ``bin`` directory that holds the binary; the path is not resolved,
+    since conda links files into the prefix. The record named after the binary
+    is tried first, then any record whose file list contains ``bin/<name>``.
+    """
+    found = path or shutil.which(name)
+    if found is None:
+        return None
+    meta = Path(found).parent.parent / "conda-meta"
+    try:
+        if not meta.is_dir():
+            return None
+        named = sorted(meta.glob(f"{name}-*.json"))
+        others = [p for p in sorted(meta.glob("*.json")) if p not in set(named)]
+        for record in (*named, *others):
+            try:
+                text = record.read_text(encoding="utf-8")
+                if f'"bin/{name}"' not in text:
+                    continue
+                data = json.loads(text)
+            except (OSError, ValueError):
+                continue
+            if _owns_binary(data, name):
+                version = data.get("version")
+                if isinstance(version, str) and version.strip():
+                    return version.strip()
+    except OSError:
+        return None
+    return None
+
+
 def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
     """Confirm all ``specs`` are present (and new enough). Return name -> version.
 
@@ -86,11 +128,16 @@ def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
     problems: list[str] = []
 
     for spec in specs:
-        if shutil.which(spec.name) is None:
+        found = shutil.which(spec.name)
+        if found is None:
             problems.append(f"{spec.name}: not found on PATH")
             continue
 
         reported = _query_version(spec.name, spec.version_args)
+        if _parse_version(reported or "") is None:
+            # No version number from the tool itself: the conda package
+            # record, when there is one, still names the installed version.
+            reported = _metadata_version(spec.name, found) or reported
         versions[spec.name] = reported or "unknown"
 
         if spec.min_version is not None:

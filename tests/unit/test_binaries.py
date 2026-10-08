@@ -110,3 +110,82 @@ def test_versions_inside_paths_and_identifiers_are_not_matched() -> None:
     assert binaries._parse_version("RAxML-NG v. 2.0.2 released") == (2, 0, 2)
     assert binaries._parse_version("2.9.6-b1802") == (2, 9, 6)
     assert binaries._parse_version("Version of skDER being used is: 1.3.6") == (1, 3, 6)
+
+
+def _conda_prefix(tmp_path, records: dict[str, str]):
+    """A fake conda prefix with ``bin/sibeliaz`` and the given conda-meta files."""
+    (tmp_path / "bin").mkdir()
+    exe = tmp_path / "bin" / "sibeliaz"
+    exe.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    exe.chmod(0o755)
+    (tmp_path / "conda-meta").mkdir()
+    for fname, text in records.items():
+        (tmp_path / "conda-meta" / fname).write_text(text, encoding="utf-8")
+    return exe
+
+
+def test_version_is_read_from_conda_meta_when_the_tool_reports_none(monkeypatch, tmp_path) -> None:
+    # sibeliaz has no version flag; its conda package record names 1.2.7.
+    import json
+
+    exe = _conda_prefix(
+        tmp_path,
+        {
+            "sibeliaz-1.2.7-h28ef24b_0.json": json.dumps(
+                {"name": "sibeliaz", "version": "1.2.7", "files": ["bin/sibeliaz"]}
+            )
+        },
+    )
+    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args: None)
+    spec = BinarySpec("sibeliaz", version_args=("-v",), min_version="1.2")
+    assert check_binaries((spec,)) == {"sibeliaz": "1.2.7"}
+
+
+def test_conda_meta_record_is_found_by_its_file_list(monkeypatch, tmp_path) -> None:
+    import json
+
+    exe = _conda_prefix(
+        tmp_path,
+        {
+            "other-1.0-0.json": json.dumps({"version": "1.0", "files": ["bin/other"]}),
+            "sibeliaz-suite-2.0-0.json": json.dumps(
+                {"version": "2.0", "files": ["bin/sibeliaz", "bin/sibeliaz-lcb"]}
+            ),
+        },
+    )
+    assert binaries._metadata_version("sibeliaz", str(exe)) == "2.0"
+
+
+def test_tool_reported_version_is_preferred_over_conda_meta(monkeypatch, tmp_path) -> None:
+    import json
+
+    exe = _conda_prefix(
+        tmp_path,
+        {"sibeliaz-1.2.7-0.json": json.dumps({"version": "1.2.7", "files": ["bin/sibeliaz"]})},
+    )
+    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args: "1.3.0")
+    assert check_binaries((BinarySpec("sibeliaz"),)) == {"sibeliaz": "1.3.0"}
+
+
+@pytest.mark.parametrize(
+    "records",
+    [
+        {},  # no record for the binary
+        {"sibeliaz-1.2.7-0.json": '{"version": "1.2.7", "files": ["bin/sibeliaz"'},  # corrupt
+        {"sibeliaz-1.2.7-0.json": '{"files": ["bin/sibeliaz"]}'},  # no version field
+    ],
+)
+def test_missing_or_corrupt_conda_meta_gives_unknown(monkeypatch, tmp_path, records) -> None:
+    exe = _conda_prefix(tmp_path, records)
+    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args: None)
+    assert check_binaries((BinarySpec("sibeliaz"),)) == {"sibeliaz": "unknown"}
+
+
+def test_no_conda_meta_directory_gives_no_metadata_version(tmp_path) -> None:
+    (tmp_path / "bin").mkdir()
+    exe = tmp_path / "bin" / "tool"
+    exe.write_text("", encoding="utf-8")
+    assert binaries._metadata_version("tool", str(exe)) is None
