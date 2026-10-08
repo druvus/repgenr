@@ -1023,7 +1023,9 @@ commands:
       --strict:
         aliases: []
         param: 'n/a: query command, no stage parameters'
-        validated: none
+        validated: callback
+        # A boolean flag: the invalid use is --strict without --check.
+        invalid: without --check
         docs:
         - docs/cli-reference.md
         - docs/usage.md

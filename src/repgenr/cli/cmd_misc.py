@@ -10,6 +10,7 @@ import typer
 
 from ..core.errors import UserInputError
 from .base import (
+    _RUN_STATE,
     DEFAULT_THREADS,
     HELP_THREADS,
     HELP_WORKDIR,
@@ -51,7 +52,7 @@ def versions(
 
     # A warning raised while loading records or plugins carries the standard
     # timestamp and level instead of Python's bare last-resort line.
-    configure_logging(None, level=logging.WARNING)
+    configure_logging(None, level=min(_RUN_STATE["log_level"], logging.WARNING))
     if not (workdir / CONFIG_FILENAME).exists():
         # A wrong -wd would otherwise print nothing and exit 0.
         err = WorkdirError(f"No RepGenR run found at {workdir} (no {CONFIG_FILENAME}).")
@@ -421,7 +422,7 @@ def list_tools(
         raise typer.BadParameter("--strict needs --check.", param_hint="--strict")
     # A plugin that fails to load warns through the repgenr logger; give the
     # line the standard timestamp and level.
-    configure_logging(None, level=logging.WARNING)
+    configure_logging(None, level=min(_RUN_STATE["log_level"], logging.WARNING))
     from ..aligners.base import registry as aligners
     from ..assemblers.base import registry as assemblers
     from ..classifiers.base import registry as classifiers

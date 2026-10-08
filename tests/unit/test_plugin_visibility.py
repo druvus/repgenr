@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import pytest
 
 from repgenr.core import plugins
 from repgenr.core.errors import MissingBinaryError, PluginError
 from repgenr.core.plugins import Registry, ToolCapabilities
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 class _GoodAdapter:
@@ -507,6 +510,43 @@ def test_list_tools_strict_requires_check() -> None:
 
     result = CliRunner().invoke(app, ["list-tools", "--strict"])
     assert result.exit_code == 2
+    # Not an unknown-option error: the command names what --strict needs.
+    assert "--strict needs --check" in _ANSI.sub("", result.output)
+
+
+def test_list_tools_strict_prefers_5_when_broken_and_missing(registry, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    registry.register("missingtool", _MissingAdapter)
+    _isolated_families(monkeypatch, registry)
+    result = CliRunner().invoke(app, ["list-tools", "--check", "--strict"])
+    assert result.exit_code == 5, result.output
+    assert "badtool: broken" in result.output
+    assert "missingtool: missing" in result.output
+
+
+def test_list_tools_verbose_shows_debug_lines(registry, monkeypatch) -> None:
+    import logging
+
+    from typer.testing import CliRunner
+
+    from repgenr.cli.main import app
+
+    _isolated_families(monkeypatch, registry)
+    real_names = registry.names
+
+    def names():
+        logging.getLogger("repgenr").debug("listing %s", registry.group)
+        return real_names()
+
+    monkeypatch.setattr(registry, "names", names)
+    verbose = CliRunner().invoke(app, ["--verbose", "list-tools"])
+    assert verbose.exit_code == 0
+    assert "DEBUG listing repgenr.test_tools" in verbose.stderr
+    plain = CliRunner().invoke(app, ["list-tools"])
+    assert "DEBUG" not in plain.stderr
 
 
 def test_list_tools_broken_plugin_warning_is_formatted(registry, monkeypatch) -> None:
