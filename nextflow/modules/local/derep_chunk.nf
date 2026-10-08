@@ -3,7 +3,9 @@
 // Data-channel module: genome FASTAs are staged in as channel inputs (not read
 // from a shared workdir), and the chunk result directory is emitted as a typed
 // output other processes consume. Wraps `repgenr dereplicate-chunk`. Tool
-// flags arrive as task.ext.args from conf/modules.config.
+// flags arrive as task.ext.args from conf/modules.config. A staged sketches/
+// directory (SKETCH, when params.sketch is set) is passed as --sketches-dir;
+// a sourmash dereplicator then reads it instead of sketching.
 
 process DEREP_CHUNK {
     label 'process_high'
@@ -12,6 +14,7 @@ process DEREP_CHUNK {
     input:
     tuple val(meta), path(genomes, stageAs: 'inputs/*')
     path selection, stageAs: 'selection.tsv'
+    path sketches, stageAs: 'sketches'
 
     output:
     tuple val(meta), path("${meta.id}"), emit: chunk
@@ -37,12 +40,14 @@ process DEREP_CHUNK {
     # any promotion the keeper makes is always resolvable.
     sel=""
     [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
+    sk=""
+    [ -d sketches ] && sk="--sketches-dir sketches"
 
     repgenr ${opts} dereplicate-chunk \\
         --genomes-fofn genomes.fofn \\
         --out ${meta.id} \\
         ${args} \\
-        \$sel \\
+        \$sel \$sk \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
 
@@ -53,6 +58,7 @@ process DEREP_CHUNK {
     def args = task.ext.args ?: ''
     """
     echo "ext.args: ${args}"
+    if [ -d sketches ]; then echo "sketches: staged"; else echo "sketches: none"; fi
     mkdir -p ${meta.id}/representatives
     printf 'representative\\tmember\\n' > ${meta.id}/clusters.tsv
     printf 'genome\\tstatus\\n' > ${meta.id}/genome_status.tsv

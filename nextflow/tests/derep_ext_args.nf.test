@@ -27,6 +27,7 @@ nextflow_process {
                     ]
                 )
                 input[1] = []
+                input[2] = []
                 """
             }
         }
@@ -40,6 +41,33 @@ nextflow_process {
             assert line.contains('--aligned-fraction 0.4')
             assert line.contains('--keeper tool')
             assert line.contains('--virus')
+            // No sketches directory staged: the step gets no --sketches-dir.
+            assert process.stdout.contains('sketches: none')
+        }
+    }
+
+    test("a staged sketches directory reaches the chunk as sketches/") {
+        when {
+            params {
+                derep_tool = "sourmash"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.chunk_0', mode: 'bacterial', run: [id: 'test', mode: 'bacterial']],
+                    [
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                        file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta")
+                    ]
+                )
+                input[1] = []
+                input[2] = file("${projectDir}/nextflow/tests/data/sketches")
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.stdout.contains('sketches: staged')
         }
     }
 }

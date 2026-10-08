@@ -159,6 +159,14 @@ class FakeSourmash:
         from repgenr.core.errors import ToolExecutionError
 
         argv = [str(c) for c in command]
+        if argv[:3] == ["sourmash", "sig", "rename"]:
+            # A rename keeps the file's input line and changes the name.
+            source, name, out = Path(argv[3]), argv[4], Path(argv[argv.index("-o") + 1])
+            with self._lock:
+                self.calls.append(f"rename:{name}")
+            first = source.read_text(encoding="utf-8").splitlines()[1]
+            out.write_text(f"{name}\n{first}\n", encoding="utf-8")
+            return 0
         assert argv[:5] == ["sourmash", "sketch", "dna", "-p", "k=21,k=31,k=51,scaled=1000"]
         name = argv[argv.index("--name") + 1]
         out = Path(argv[argv.index("-o") + 1])

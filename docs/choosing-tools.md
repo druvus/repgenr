@@ -131,9 +131,13 @@ Guidance:
   mode. `--tool auto`, the default, uses dRep when it can run and sourmash
   otherwise. sourmash needs no container on most systems and plots the ANI
   estimate that `dereplicate --tool sourmash` thresholds; it holds the full
-  N x N matrix and refuses sets above 5000 genomes. On `pureclone_20` and
-  `clonal_50_clustered` a sourmash glance took about 22 to 24 s, most of it
-  sketching.
+  N x N matrix and refuses sets above 5000 genomes. It reads the genome
+  sketches of the working directory, so it no longer sketches when they
+  exist. On one workstation (8 threads, genomes on a USB disk) a sourmash
+  glance of `clonal_50_clustered` took about 4 s with the sketches against
+  7 s sketching, and of `balanced_1000_clustered` about 20 s against 104 s;
+  `dereplicate --tool sourmash` on the 1000 genomes took about 6 s against
+  65 s.
 
 ## 5. Phylogeny routes
 

@@ -250,6 +250,75 @@ def test_assemble_sketches_and_a_total_failure_clears_them(
     assert not (wd / "sketches").exists()
 
 
+def test_assemble_gathers_with_the_assembly_sketch_and_copies_it_once(
+    tmp_path, fake_assembler, fake_sourmash, monkeypatch
+) -> None:
+    """The classifier's query sketch becomes the genome sketch; an excused run gets none."""
+    from assemble_fakes import FakeClassifier, fake_checkm2
+
+    from repgenr.classifiers.base import registry as cls_registry
+    from repgenr.core.inputs import file_digest
+    from repgenr.core.plugins import ToolCapabilities
+    from repgenr.stages import assemble as stage
+    from repgenr.stages.assemble import AssembleParams
+    from repgenr.stages.assemble import run as assemble_run
+
+    class SketchClassifier(FakeClassifier):
+        capabilities = ToolCapabilities(name="fakesketchcls")
+
+        def sketch_request(self, extra):  # noqa: ANN001, ANN202
+            return (31, 1000)
+
+    cls_registry._load()
+    cls_registry.register("fakesketchcls", SketchClassifier, replace=True)
+    SketchClassifier.lineages = {}
+    monkeypatch.setattr(stage, "preflight_checkm2", lambda: {"checkm2": "1.1.0"})
+    quality = {"SRR1.fasta": (99.0, 0.5), "SRR2.fasta": (40.0, 15.0)}
+    monkeypatch.setattr(stage, "run_checkm2", fake_checkm2(quality))
+    try:
+        wd = tmp_path / "wd"
+        ctx = WorkdirContext(wd, create=True)
+        write_reads(wd / READS_TSV, [read_row(tmp_path, "SRR1"), read_row(tmp_path, "SRR2")])
+        dbs = {}
+        for name in ("gtdb.sig.zip", "lineages.csv", "checkm2.dmnd"):
+            (tmp_path / name).write_text("db\n", encoding="utf-8")
+            dbs[name] = str(tmp_path / name)
+        params = AssembleParams(
+            assembler="fakeasm",
+            threads=2,
+            classifier="fakesketchcls",
+            gtdb_sketch=dbs["gtdb.sig.zip"],
+            gtdb_lineages=dbs["lineages.csv"],
+            checkm2_db=dbs["checkm2.dmnd"],
+        )
+        assemble_run(ctx, params)
+
+        # Each assembly is sketched once, beside its contigs, named by run.
+        given = SketchClassifier.last_params.sketches
+        assert {p.name: v for p, v in given.items()} == {
+            f"{run}.fasta": wd / "assemblies" / run / "contigs.sig.zip" for run in ("SRR1", "SRR2")
+        }
+        genome = "Francisellaceae_Francisella_tularensis_SRR1"
+        assert sorted(fake_sourmash.calls) == ["SRR1", "SRR2", f"rename:{genome}"]
+        # SRR2 failed QC: it has no genome and no sketch in sketches/.
+        assert _sketch_names(wd) == {genome}
+        assert ctx.config.stages["assemble"].params["sketches"]["copied"] == 1
+        record = ctx.manifest.sketch_records()["SRR1"]
+        assert record.digest == file_digest(wd / "genomes" / f"{genome}.fasta")
+        assert (wd / "sketches" / f"{genome}.sig.zip").read_text().splitlines()[0] == genome
+
+        # A repeat sketches nothing: the assembly sketches and sketches/ are current.
+        fake_sourmash.calls.clear()
+        assemble_run(ctx, params)
+        assert fake_sourmash.calls == []
+
+        # --no-sketch: the classifier sketches for itself, as before.
+        assemble_run(ctx, AssembleParams(**{**params.__dict__, "sketch": False}))
+        assert SketchClassifier.last_params.sketches is None
+    finally:
+        cls_registry._classes.pop("fakesketchcls", None)
+
+
 # --- the sketch command and status ------------------------------------------------
 
 

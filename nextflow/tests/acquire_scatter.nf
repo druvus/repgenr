@@ -12,7 +12,11 @@ include { run_meta            } from '../subworkflows/local/run_meta'
 workflow {
     def ch_meta = channel.value(run_meta(params))
     ACQUIRE(ch_meta)
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
+    DEREPLICATE_SCATTER(
+        ACQUIRE.out.genomes,
+        ACQUIRE.out.selection,
+        ACQUIRE.out.genomes.map { meta, _files -> tuple(meta, []) }
+    )
 
     DEREPLICATE_SCATTER.out.reps
         .map { _meta, dir -> dir }

@@ -17,6 +17,7 @@ nextflow_process {
                     file("${projectDir}/nextflow/tests/data/outgroup_accession.txt"),
                     file("${projectDir}/nextflow/tests/data/msa.fasta")
                 )
+                input[1] = []
                 """
             }
         }

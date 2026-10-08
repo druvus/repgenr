@@ -1,15 +1,23 @@
 """sourmash gather against a GTDB sketch database, resolved to a lineage with
-``sourmash tax genome`` and the matching lineages CSV."""
+``sourmash tax genome`` and the matching lineages CSV.
+
+A genome given in ``ClassifyParams.sketches`` is not sketched here: gather
+reads its ``.sig.zip`` and selects the signature at the requested k-mer size
+with ``-k``. Each query signature is named by the genome's record name.
+"""
 
 from __future__ import annotations
 
 import csv
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 
 from ..core.containers import run_chain, run_tool
+from ..core.contracts import record_name
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
+from ..core.plugins import parse_extra_int
 from ..core.sourmash import sourmash_capabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
@@ -32,6 +40,13 @@ class SourmashClassifier(Classifier):
         accepted_extras=frozenset({"ksize", "scaled", "threshold_bp"}),
     )
     needs_lineages = True
+
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int]:
+        defaults = self.capabilities.default_params
+        return (
+            parse_extra_int(extra, "ksize", defaults["ksize"]),
+            parse_extra_int(extra, "scaled", defaults["scaled"]),
+        )
 
     def classify(
         self,
@@ -61,27 +76,42 @@ class SourmashClassifier(Classifier):
         # and takes tens of seconds against a GTDB-sized sketch, so the chains
         # run side by side within the thread budget; the lineages are then
         # resolved for every gather in one tax call.
+        given = {
+            g: Path(params.sketches[g]) for g in genomes if params.sketches and g in params.sketches
+        }
+        if given:
+            mounts += sorted({str(p.resolve().parent) for p in given.values()})
+            logger.info(
+                "sourmash: %d of %d queries read from the genome sketches", len(given), len(genomes)
+            )
+
         def gather(genome: Path) -> Path:
-            work = out_dir / genome.stem
+            name = record_name(genome)
+            work = out_dir / name
             work.mkdir(parents=True, exist_ok=True)
-            sig = work / "query.sig"
             gather_csv = work / "gather.csv"
-            steps: list[tuple[str, list[str | Path]]] = [
-                (
-                    "sourmash",
-                    [
+            steps: list[tuple[str, list[str | Path]]] = []
+            sig = given.get(genome)
+            if sig is None:
+                sig = work / "query.sig"
+                steps.append(
+                    (
                         "sourmash",
-                        "sketch",
-                        "dna",
-                        "-p",
-                        f"k={ksize},scaled={scaled}",
-                        "--name",
-                        genome.stem,
-                        "-o",
-                        sig,
-                        genome,
-                    ],
-                ),
+                        [
+                            "sourmash",
+                            "sketch",
+                            "dna",
+                            "-p",
+                            f"k={ksize},scaled={scaled}",
+                            "--name",
+                            name,
+                            "-o",
+                            sig,
+                            genome,
+                        ],
+                    )
+                )
+            steps.append(
                 (
                     "sourmash",
                     [
@@ -96,8 +126,8 @@ class SourmashClassifier(Classifier):
                         "-o",
                         gather_csv,
                     ],
-                ),
-            ]
+                )
+            )
             run_chain(self.capabilities, steps, logger=logger, extra_mounts=mounts)
             return gather_csv
 
@@ -135,7 +165,7 @@ class SourmashClassifier(Classifier):
         by_query = _parse_classifications(Path(str(base) + ".classifications.csv"))
         results: dict[str, Classification] = {}
         for genome in genomes:
-            hit = by_query.get(genome.stem)
+            hit = by_query.get(record_name(genome))
             if hit is not None:
                 taxonomy, rank, score = hit
                 results[genome.name] = Classification(taxonomy, rank, score, version)

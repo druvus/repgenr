@@ -18,6 +18,7 @@ nextflow_workflow {
                     .collect()
                     .map { files -> tuple([id: 'test', mode: 'bacterial'], files) }
                 input[1] = channel.value(tuple([id: 'test', mode: 'bacterial'], []))
+                input[2] = channel.value(tuple([id: 'test', mode: 'bacterial'], []))
                 """
             }
         }

@@ -4,7 +4,8 @@
 // files: the merged representatives directory provides the genome set, the
 // outgroup files are staged into an outgroup/ directory, and tree/tree.nwk is
 // emitted as a channel output. Tool flags arrive as task.ext.args from
-// conf/modules.config; publishing is configured there too.
+// conf/modules.config; publishing is configured there too. A staged sketches/
+// directory is passed as --sketches-dir; the sourmash tree builder reads it.
 
 process PHYLO {
     tag "${meta.id}"
@@ -12,6 +13,7 @@ process PHYLO {
 
     input:
     tuple val(meta), path(reps_dir), path(outgroup, stageAs: 'outgroup/*'), path(outgroup_accession)
+    path sketches, stageAs: 'sketches'
 
     output:
     tuple val(meta), path("tree/tree.nwk")            , emit: tree
@@ -33,11 +35,14 @@ process PHYLO {
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
 
+    sk=""
+    [ -d sketches ] && sk="--sketches-dir sketches"
+
     repgenr ${opts} phylo-build \\
         --genomes-dir ${reps_dir}/representatives \\
         --outgroup-dir outgroup \\
         --outgroup-accession ${outgroup_accession} \\
-        -o . -t ${task.cpus} ${args} \\
+        -o . -t ${task.cpus} ${args} \$sk \\
         --versions-out tool_versions.yml
 
     repgenr_versions_fragment "${task.process}" tool_versions.yml
@@ -49,6 +54,7 @@ process PHYLO {
     """
     echo "ext.args: ${args}"
     echo "ext.repgenr_opts: ${opts}"
+    if [ -d sketches ]; then echo "sketches: staged"; else echo "sketches: none"; fi
     mkdir -p tree
     names=\$(ls ${reps_dir}/representatives | sed 's/\\.[^.]*\$//' | paste -sd, -)
     echo "(\${names});" > tree/tree.nwk

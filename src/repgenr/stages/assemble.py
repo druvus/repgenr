@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import shutil
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +45,7 @@ from ..core.contracts import (
     genome_filename,
     read_reads,
     read_selection,
+    record_name,
     sanitise_taxon_tokens,
     write_assembly_stats,
     write_excused_runs,
@@ -57,9 +59,16 @@ from ..core.errors import (
     WorkdirError,
 )
 from ..core.executors import parallel_map
-from ..core.manifest import MANIFEST_FILENAME, record_from_selection
+from ..core.manifest import MANIFEST_FILENAME, SketchRecord, record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
-from ..core.sketches import remove_stale, require_sourmash_if_requested, sketch_stage_genomes
+from ..core.sketches import (
+    SketchSource,
+    adapter_sketches,
+    remove_stale,
+    require_sourmash_if_requested,
+    sketch_beside,
+    sketch_stage_genomes,
+)
 from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
 from .assemble_qc import (
@@ -77,6 +86,10 @@ GTDB_SKETCH_ENV = "REPGENR_GTDB_SKETCH"
 GTDB_LINEAGES_ENV = "REPGENR_GTDB_LINEAGES"
 _DONE_MARKER = "assembly.ok"
 _CONTIGS_NAME = "contigs.fasta"
+# The sketch of an assembly, beside its contigs, with the parameters of the
+# workdir sketches and named by run accession. The classifier gathers with it;
+# the sketch step copies it into sketches/ once the genome is named.
+_ASSEMBLY_SKETCH = "contigs.sig.zip"
 # Rough peak disk per run: the FASTQ files, their uncompressed form and the
 # assembler's scratch.
 _DISK_FACTOR = 4
@@ -222,6 +235,9 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         {o.row.run_accession: assemblies / o.row.run_accession / _CONTIGS_NAME for o in assembled},
         scratch / "named",
     )
+    query_sketches, sketch_records = _assembly_sketches(
+        named, classifier_name, params, assemblies, logger
+    )
     quality, classified = assess(
         named,
         checkm2_db=checkm2_db,
@@ -235,6 +251,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         logger=logger,
         memory_gb=params.memory_gb,
         cache_dirs={run: assemblies / run for run in named},
+        sketches=query_sketches,
     )
     if quality is not None:
         apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
@@ -295,6 +312,16 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         logger,
         threads=params.threads,
         only=[ctx.genomes_dir / _name(o) for o in assembled] if params.append else None,
+        # The classifier's sketch of each accepted assembly, renamed to the genome.
+        reuse={
+            record_name(_name(o)): SketchSource(
+                assemblies / o.row.run_accession / _ASSEMBLY_SKETCH,
+                sketch_records[o.row.run_accession],
+                name=o.row.run_accession,
+            )
+            for o in assembled
+            if o.row.run_accession in sketch_records
+        },
     )
     versions.update(sketch_versions)
 
@@ -901,6 +928,48 @@ def named_links(contigs: dict[str, Path], link_dir: Path) -> dict[str, Path]:
     return links
 
 
+def _assembly_sketches(
+    named: dict[str, Path],
+    classifier: str | None,
+    params: AssembleParams,
+    assemblies: Path,
+    logger: logging.Logger,
+) -> tuple[dict[Path, Path] | None, dict[str, SketchRecord]]:
+    """Sketch each assembly once, beside its contigs, for the classifier and sketches/.
+
+    Applies when the classifier reads genome sketches at parameters they hold
+    and genome sketches are not turned off (``--no-sketch``). Returns the
+    classifier's query sketches (named link -> file) and the record of each
+    sketch by run accession, for the copy into ``sketches/`` at the end of
+    the stage. A sketch whose assembly is unchanged is reused from an earlier
+    run. An assembly whose sketch fails is left to the classifier.
+    """
+    records: dict[str, SketchRecord] = {}
+    if classifier is None or not named or params.sketch is False:
+        return None, records
+    adapter = classifier_registry.create(classifier)
+
+    def provide(links: Sequence[Path]) -> dict[Path, Path]:
+        def one(link: Path) -> tuple[Path, Path | None]:
+            run = record_name(link)
+            sig = assemblies / run / _ASSEMBLY_SKETCH
+            try:
+                records[run] = sketch_beside(link, run, sig, logger)
+            except (ToolExecutionError, WorkdirError, OSError) as exc:
+                logger.warning("%s: assembly sketch not written (%s)", run, exc)
+                return link, None
+            return link, sig
+
+        workers = max(1, min(params.threads, len(links)))
+        done = parallel_map(one, list(links), workers, logger=logger)
+        return {link: sig for link, sig in done if sig is not None}
+
+    sketches = adapter_sketches(
+        adapter, params.extra, list(named.values()), provide, logger, "assemble"
+    )
+    return sketches, records
+
+
 def classifier_for(classifier: str, gtdb_sketch: str | None) -> str | None:
     """The classifier to run: explicit, or sourmash when a sketch is configured."""
     if classifier == "none":
@@ -1005,6 +1074,7 @@ def assess(
     logger: logging.Logger,
     memory_gb: float | None = None,
     cache_dirs: dict[str, Path] | None = None,
+    sketches: Mapping[Path, Path] | None = None,
 ) -> tuple[dict[str, tuple[float, float]] | None, dict[str, Classification] | None]:
     """Score (CheckM2) and classify the assemblies in ``named`` (run -> FASTA).
 
@@ -1012,7 +1082,8 @@ def assess(
     Both are keyed by run accession. With ``cache_dirs`` (run -> directory),
     CheckM2 scores are stored per run and reused while the contigs, the
     database and the CheckM2 version are unchanged. ``memory_gb`` bounds the
-    classifier's concurrent work.
+    classifier's concurrent work. ``sketches`` (named FASTA -> sourmash
+    signature file) are the classifier's query sketches, when it reads them.
     """
     quality: dict[str, tuple[float, float]] | None = None
     classified: dict[str, Classification] | None = None
@@ -1077,6 +1148,7 @@ def assess(
                 threads=threads,
                 memory_gb=memory_gb,
                 extra=dict(extra),
+                sketches=sketches,
             ),
             logger,
         )

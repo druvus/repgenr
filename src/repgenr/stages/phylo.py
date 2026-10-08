@@ -51,6 +51,12 @@ from ..core.inputs import file_digest, paths_stat_digest
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import ToolCapabilities, auto_select, scale_warning, warn_ignored_params
 from ..core.process import remove_tree, stage_plain_inputs
+from ..core.sketches import (
+    SketchProvider,
+    adapter_sketches,
+    directory_provider,
+    workdir_provider,
+)
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
@@ -359,13 +365,15 @@ def build_tree(
     *,
     reuse_msa: bool = True,
     msa: Path | None = None,
+    sketch_provider: SketchProvider | None = None,
 ) -> PhyloOutcome:
     """Build a phylogeny from explicit inputs into ``dirs`` (stateless; no config).
 
     Selects (or auto-picks) the tree builder, derives the MSA from an aligner or
     a SNP typer when needed, roots by the outgroup and writes ``tree/tree.nwk``.
     The reference (for aligner/SNP sources) is resolved by basename against the
-    genome set, so the core needs no working directory.
+    genome set, so the core needs no working directory. ``sketch_provider``
+    supplies genome sketches to a builder that compares them.
     """
     if not genomes:
         raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
@@ -422,7 +430,12 @@ def build_tree(
         # for the aligners, so a new builder that does not is given copies.
         inputs_dir = dirs.scratch_dir / _STAGED_INPUTS
         remove_tree(inputs_dir)  # copies a killed run left behind
+        sketches = adapter_sketches(
+            builder, tree_params.extra, inputs, sketch_provider, logger, "phylo"
+        )
         staged = stage_plain_inputs(inputs, builder.capabilities, inputs_dir, logger)
+        if sketches is not None:
+            tree_params.sketches = {staged[p]: sk for p, sk in sketches.items()}
         try:
             tree = builder.build([staged[p] for p in inputs], dirs.tree_dir, tree_params, logger)
         finally:
@@ -671,6 +684,9 @@ class PhyloBuildParams:
     # builder changes; nothing else changes between the two halves.
     msa_only: bool = False
     msa: Path | None = None
+    # A sketches/ directory (Nextflow SKETCH) for a builder that compares
+    # sourmash sketches; matched to the genomes by record name.
+    sketches_dir: Path | None = None
 
 
 MIN_TREE_GENOMES = 3
@@ -698,6 +714,8 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
     genomes = list_fasta(params.genomes_dir)
     if not genomes:
         raise WorkdirError(f"No genome FASTA files found in {params.genomes_dir}.")
+    if params.sketches_dir is not None and not params.sketches_dir.is_dir():
+        raise WorkdirError(f"phylo-build: --sketches-dir {params.sketches_dir} is not a directory.")
     _require_tree_size(genomes, f"in {params.genomes_dir}")
 
     outgroup_file: Path | None = None
@@ -727,7 +745,18 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
         return published
 
     outcome = build_tree(
-        genomes, outgroup_file, outgroup_leaf, dirs, params.phylo, logger, msa=params.msa
+        genomes,
+        outgroup_file,
+        outgroup_leaf,
+        dirs,
+        params.phylo,
+        logger,
+        msa=params.msa,
+        sketch_provider=(
+            None
+            if params.sketches_dir is None
+            else directory_provider(params.sketches_dir, logger, "phylo-build")
+        ),
     )
     _write_versions(params.versions_out, outcome.versions)
     return outcome.tree
@@ -785,6 +814,7 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         logger,
         # --force means recompute this stage, cached alignment included.
         reuse_msa=not ctx.force,
+        sketch_provider=workdir_provider(ctx, logger, params.threads, "phylo"),
     )
 
     is_msa = treebuilder_registry.create(outcome.treebuilder).input_kind == InputKind.MSA_FASTA

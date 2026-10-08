@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-29 commands, 317 flags (317 with a live test or an n/a reason, 0 pending).
+29 commands, 320 flags (320 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -96,6 +96,7 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_chunk`
 | `--tool-arg` |  | ChunkParams.extra | callback | n/a: not exposed; add it to ext.args in modules.config | n/a: shared adapter path, exercised through dereplicate (test_dereplicators.py) | docs/developing.md, docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--selection-tsv` |  | ChunkParams.selection_tsv | none | module: fixed by the process script | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keeper` |  | ChunkParams.keeper | choice | params.derep_keeper | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | docs/usage.md, docs/choosing-tools.md, docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
+| `--sketches-dir` |  | ChunkParams.sketches_dir | stage | module: --sketches-dir sketches when params.sketch stages sketches/ | n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | ChunkParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_chunk_results_carry_the_contract_and_versions | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## dereplicate-merge
@@ -118,6 +119,7 @@ dispatch: `step:repgenr.stages.derep_steps.dereplicate_merge`
 | `--keeper` |  | MergeParams.keeper | choice | params.derep_keeper | tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv | docs/usage.md, docs/choosing-tools.md, docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
 | `--reduce` |  | MergeParams.reduce | choice | params.derep_reduce | tests/live/test_steps.py::test_merge_reduce_and_target_reps | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--target-reps` |  | MergeParams.target_reps | range | params.derep_target_reps | tests/live/test_steps.py::test_merge_reduce_and_target_reps | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketches-dir` |  | MergeParams.sketches_dir | stage | module: --sketches-dir sketches when params.sketch stages sketches/ | n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | MergeParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_merge_by_chunk_fofn | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## doctor
@@ -250,6 +252,7 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--reference` |  | PhyloBuildParams.phylo.reference | none | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
 | `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/developing.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--threads` | -t | PhyloBuildParams.phylo.threads | range | task.cpus | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketches-dir` |  | PhyloBuildParams.sketches_dir | stage | module: --sketches-dir sketches when params.sketch stages sketches/ | n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | PhyloBuildParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--msa-only` |  | PhyloBuildParams.msa_only | stage | module: PHYLO_MSA | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--msa` |  | PhyloBuildParams.msa | stage | module: PHYLO_TREE | tests/live/test_steps.py::test_phylo_build_split_into_msa_and_tree | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |

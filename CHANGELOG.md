@@ -7,6 +7,33 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Genome sketches, step 2: the sourmash tools read `sketches/` instead of
+  sketching each genome again. `dereplicate --tool sourmash` (branchwater
+  `pairwise` over a path list of the `.sig.zip` files, or `sourmash compare`),
+  `glance --tool sourmash`, `phylo --treebuilder sourmash` (outgroup included)
+  and the sourmash classifier of `assemble` select their k-mer size with
+  `-k`; k=21, 31 or 51 at scaled=1000 come from the sketches, and other
+  `ksize` or `scaled` values fall back to the tool's own sketch with a log
+  line naming the reason. A consumer first writes the missing and stale
+  sketches of the genomes it compares and logs `sketches: n reused, m
+  written`. Whether a sketch is current still rests on the FASTA SHA-256,
+  now kept in `sketches/.digests.json` with the file's size and modification
+  time, so an unchanged genome is not read again (`repgenr --force sketch`
+  hashes every genome). On 1000 genomes `dereplicate --tool sourmash` took
+  about 6 s instead of 65 s and `glance` about 20 s instead of 104 s.
+  `assemble` sketches each accepted assembly once
+  (`assemblies/<run>/contigs.sig.zip`, reused while the contigs are
+  unchanged); the classifier gathers with it and the sketch step copies it to
+  `sketches/` under the genome's record name (`sourmash sig rename`).
+  Adapters declare the parameters they compare at with `sketch_request()`
+  and receive the files in `DerepParams.sketches`, the `sketches` argument of
+  `compare`, `TreeParams.sketches` or `ClassifyParams.sketches`. The stateless
+  steps `dereplicate-chunk`, `dereplicate-merge` and `phylo-build` take
+  `--sketches-dir`. Nextflow: `--sketch` (default false) runs `SKETCH` on the
+  bacterial path, publishes `sketches/` and stages it into the dereplication
+  and tree tasks; `SKETCH` now reads its genome list with a `read` loop
+  (file names with spaces stay whole, user arguments are not nested in
+  quotes) and fails when any sourmash call fails.
 - Genome sketches as a working-directory contract (step 1 of 2):
   `genome`, `vgenome`, `ingest` and `assemble` write
   `sketches/<name>.sig.zip` per genome, outgroup included, with DNA
@@ -23,8 +50,7 @@ All notable changes to RepGenR are documented here. The format follows
   `sketch_file`, `sketch_params` and `sketch_digest`; a version 3 manifest is
   migrated when a stage opens it, and its digest for the resume fingerprint is
   unchanged. A Nextflow `SKETCH` module (stub-tested, not yet wired into the
-  workflows) sketches a genome directory. The dereplicator, tree builder and
-  classifier do not read the sketches yet (step 2).
+  workflows) sketches a genome directory.
 - `ingest --from-workdir WD` (repeatable, alone or with `--genomes-dir`;
   also on `run`) takes the genome set of an earlier working directory: its
   `selection.tsv` rows, with taxonomy, CheckM quality and
@@ -273,6 +299,13 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The dense sourmash path of `dereplicate` and `glance` orders the
+  `sourmash compare` matrix by genome file name before the greedy pick, and
+  the sourmash tree builder joins in name order. `sourmash compare` does not
+  keep its input order (seen with 4.9.4), so a tie between equally connected
+  genomes could pick a different representative from run to run; the pick is
+  now the same each run and matches the branchwater path, which already
+  took the genomes in name order.
 - The sourmash dereplicator, tree builder and classifier take their container
   image, conda spec and binary check from one shared specification
   (`core/sourmash.py`), which the genome sketch step also uses; the pinned

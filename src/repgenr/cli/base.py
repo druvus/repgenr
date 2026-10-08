@@ -125,6 +125,11 @@ HELP_INCLUDE_DEREPLICATED = "List redundant genomes under their representative i
 HELP_COLLAPSE_SUPPORT = "Merge nodes whose support is below this fraction into their parent."
 HELP_COLLAPSE_LENGTH = "Merge nodes whose branch is shorter than this length into their parent."
 HELP_VERSIONS_OUT = "Write resolved tool versions (YAML fragment) here."
+HELP_SKETCHES_DIR = (
+    "A sketches/ directory of <record name>.sig.zip files (k=21, 31, 51; scaled=1000) "
+    "made from these genomes. A sourmash tool reads them instead of sketching; "
+    "other tools ignore it."
+)
 
 # Canonical stage order per lineage. Used to show progress (`status`) and by
 # `run --dry-run` to print the chain.

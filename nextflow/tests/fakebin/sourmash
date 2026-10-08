@@ -1,0 +1,29 @@
+#!/bin/sh
+# Test stand-in for sourmash, used by sketch_fake.nf.test. `--version` prints a
+# version; `sketch dna ... --name NAME -o OUT INPUT` writes OUT holding the
+# name, the input path and every argument on its own line. An input whose
+# name contains FAIL makes the call fail.
+if [ "$1" = "--version" ]; then
+    echo "sourmash 4.9.4"
+    exit 0
+fi
+all=""
+for a in "$@"; do
+    all="$all
+arg:$a"
+done
+name=""
+out=""
+last=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --name) name="$2"; shift 2 ;;
+        -o) out="$2"; shift 2 ;;
+        *) last="$1"; shift ;;
+    esac
+done
+case "$last" in
+    *FAIL*) echo "fake sourmash: failing on $last" >&2; exit 1 ;;
+esac
+[ -f "$last" ] || { echo "fake sourmash: no input $last" >&2; exit 1; }
+printf 'name:%s\ninput:%s%s\n' "$name" "$last" "$all" > "$out"

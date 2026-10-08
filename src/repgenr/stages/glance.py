@@ -20,6 +20,7 @@ from ..core.contracts import list_fasta
 from ..core.errors import MissingBinaryError, UserInputError, WorkdirError
 from ..core.plugins import AUTO
 from ..core.process import remove_tree
+from ..core.sketches import adapter_sketches, workdir_provider
 
 # File names predate the sourmash backend and stay fixed; the plots' axes name
 # the measure the chosen tool reports.
@@ -119,7 +120,20 @@ def run(ctx: WorkdirContext, params: GlanceParams) -> Path:
     if glance_wd.exists():
         remove_tree(glance_wd)
 
-    result = adapter.compare(genomes, glance_wd, params.threads, logger)
+    # An adapter that compares sourmash sketches reads those of the workdir
+    # (written first when missing or stale) at its default parameters.
+    sketches = adapter_sketches(
+        adapter,
+        adapter.capabilities.default_params,
+        genomes,
+        workdir_provider(ctx, logger, params.threads, "glance"),
+        logger,
+        "glance",
+    )
+    if sketches is None:
+        result = adapter.compare(genomes, glance_wd, params.threads, logger)
+    else:
+        result = adapter.compare(genomes, glance_wd, params.threads, logger, sketches=sketches)
 
     # The comparison succeeded: drop the previous outputs before writing new
     # ones, so a plot that is not drawn this time (no similarity in range)

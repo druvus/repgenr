@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -46,6 +46,9 @@ class TreeParams:
     outgroup: str | None = None
     bootstrap: int = 0
     extra: dict = field(default_factory=dict)
+    # Genome path -> sourmash signature file of the workdir sketches, given
+    # only to a builder whose sketch_request() asks for parameters they hold.
+    sketches: Mapping[Path, Path] | None = None
 
 
 class TreeBuilder(ABC):
@@ -54,6 +57,14 @@ class TreeBuilder(ABC):
 
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)
+
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int] | None:
+        """The (ksize, scaled) of the sourmash sketches this builder compares at.
+
+        None (the default) means the builder reads no genome sketches; one
+        that returns a pair receives ``TreeParams.sketches``.
+        """
+        return None
 
     def distance_matrix(
         self,

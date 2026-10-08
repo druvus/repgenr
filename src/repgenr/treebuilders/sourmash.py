@@ -1,11 +1,16 @@
-"""sourmash tree builder (alignment-free; k-mer distance + neighbor-joining)."""
+"""sourmash tree builder (alignment-free; k-mer distance + neighbor-joining).
+
+With ``TreeParams.sketches`` the genomes that have a workdir sketch are not
+sketched again: ``sourmash compare -k`` selects the signature at the
+requested k-mer size from each ``.sig.zip``.
+"""
 
 from __future__ import annotations
 
 import csv
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from ..core.containers import run_tool
@@ -33,6 +38,13 @@ class SourmashBuilder(TreeBuilder):
     )
     input_kind = InputKind.GENOMES
 
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int]:
+        defaults = self.capabilities.default_params
+        return (
+            parse_extra_int(extra, "ksize", defaults["ksize"]),
+            parse_extra_int(extra, "scaled", defaults["scaled"]),
+        )
+
     def build(
         self,
         msa_or_genomes: Path | Sequence[Path],
@@ -53,6 +65,60 @@ class SourmashBuilder(TreeBuilder):
         ksize = parse_extra_int(params.extra, "ksize", self.capabilities.default_params["ksize"])
         scaled = parse_extra_int(params.extra, "scaled", self.capabilities.default_params["scaled"])
 
+        given = {
+            g: Path(params.sketches[g]) for g in genomes if params.sketches and g in params.sketches
+        }
+        rest = [g for g in genomes if g not in given]
+        sigs = [given[g] for g in genomes if g in given]
+        if rest:
+            sigs += self._sketch(rest, out_dir, ksize, scaled, logger)
+
+        matrix_csv = out_dir / "compare.csv"
+        compare_fofn = write_fofn(sigs, out_dir / "signatures.fofn")
+        run_tool(
+            self.capabilities,
+            [
+                "sourmash",
+                "compare",
+                "-k",
+                str(ksize),
+                "--csv",
+                matrix_csv,
+                "--from-file",
+                compare_fofn,
+                "--processes",
+                str(params.threads),
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            # The given sketches live outside out_dir; their paths are inside the fofn.
+            extra_mounts=sorted({os.path.dirname(os.path.abspath(p)) for p in given.values()}),
+        )
+
+        labels, similarity = _read_csv(matrix_csv)
+        named = [_label_to_genome(label, genomes) for label in labels]
+        # sourmash compare does not keep its input order; join in name order so
+        # the same genomes give the same tree whatever order the matrix came in.
+        order = sorted(range(len(labels)), key=lambda i: (named[i], i))
+        clean_labels = [named[i] for i in order]
+        # distance = 1 - similarity
+        dist = [[1.0 - similarity[i][j] for j in order] for i in order]
+        newick = neighbor_joining(clean_labels, dist)
+
+        tree = out_dir / "tree.nwk"
+        with atomic_replace(tree) as fo:
+            fo.write(newick + "\n")
+        return tree
+
+    def _sketch(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        logger: logging.Logger,
+    ) -> list[Path]:
+        """Sketch ``genomes`` into ``out_dir/signatures``; one signature file each."""
         sig_dir = out_dir / "signatures"
         sig_dir.mkdir(exist_ok=True)
         fofn = write_fofn(genomes, out_dir / "genomes.fofn")
@@ -84,37 +150,7 @@ class SourmashBuilder(TreeBuilder):
         ]
         if not sigs:
             raise WorkdirError("sourmash produced no signatures")
-
-        matrix_csv = out_dir / "compare.csv"
-        compare_fofn = write_fofn(sigs, out_dir / "signatures.fofn")
-        run_tool(
-            self.capabilities,
-            [
-                "sourmash",
-                "compare",
-                "-k",
-                str(ksize),
-                "--csv",
-                matrix_csv,
-                "--from-file",
-                compare_fofn,
-                "--processes",
-                str(params.threads),
-            ],
-            logger=logger,
-            log_prefix="sourmash",
-        )
-
-        labels, similarity = _read_csv(matrix_csv)
-        # distance = 1 - similarity
-        dist = [[1.0 - similarity[i][j] for j in range(len(labels))] for i in range(len(labels))]
-        clean_labels = [_label_to_genome(label, genomes) for label in labels]
-        newick = neighbor_joining(clean_labels, dist)
-
-        tree = out_dir / "tree.nwk"
-        with atomic_replace(tree) as fo:
-            fo.write(newick + "\n")
-        return tree
+        return sigs
 
 
 def _read_csv(path: Path) -> tuple[list[str], list[list[float]]]:
