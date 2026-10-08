@@ -32,7 +32,7 @@
                         "msa.fasta:md5,c00d06fefbe5112077928e8044d832fc"
                     ]
                 ],
-                "snp": [
+                "tree_msa": [
                     
                 ],
                 "versions": [
@@ -40,7 +40,7 @@
                 ]
             }
         ],
-        "timestamp": "2026-09-14T08:02:35.815013",
+        "timestamp": "2026-10-08T07:15:58.882537",
         "meta": {
             "nf-test": "0.9.5",
             "nextflow": "26.04.6"

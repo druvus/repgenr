@@ -9,7 +9,8 @@ obligation), so the names and layout are chosen fresh:
     derep/genome_status.tsv     genome<TAB>status(representative|contained|fail_qc)
     derep/cluster_summary.tsv   one row per representative: size, species, quality
     align/msa.fasta             multiple sequence alignment (aligner output)
-    snp/core_snp.fasta          variant-site alignment (snp typer output)
+    snp/core_snp.fasta          variant-site alignment (snptype stage output)
+    tree/msa/core_snp.fasta     variant-site alignment phylo typed for its tree
     tree/tree.nwk               Newick tree
     tree2tax.tsv                child<TAB>parent (FlexTaxD)
     genomes_map.tsv             accession<TAB>leaf
@@ -39,6 +40,9 @@ SELECTION_TSV = "selection.tsv"
 MSA_FASTA = "msa.fasta"
 CORE_SNP_FASTA = "core_snp.fasta"
 TREE_NWK = "tree.nwk"
+# Under tree/: the alignment phylo's own SNP typing pass (--msa-source snptype)
+# writes, with its reuse stamp. snp/ belongs to the snptype stage.
+PHYLO_MSA_DIR = "msa"
 TREE2TAX_TSV = "tree2tax.tsv"
 GENOMES_MAP_TSV = "genomes_map.tsv"
 # Segment-grouped viral isolates (vgenome --group-segments): the synthetic

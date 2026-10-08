@@ -169,6 +169,8 @@ def test_iqtree_from_snptype_with_bootstrap_and_outgroup(run_repgenr, wd: Path) 
     leaves = newick_leaves(tree)
     assert len(leaves) == 11 and _outgroup_leaf(wd) in leaves
     assert re.search(r"\)\d+(\.\d+)?:", tree), "ultrafast bootstrap writes support labels"
+    assert _records(wd / "tree" / "msa" / CORE_SNP_FASTA) == 11, "typed under tree/msa/"
+    assert not (wd / "snp").exists(), "snp/ belongs to the snptype stage"
     assert Config.load(wd).stages["phylo"].params["bootstrap"] == 1000
 
     run_repgenr(

@@ -188,10 +188,11 @@ app = typer.Typer(
 
 
 def _phylo_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
-    # snp/core_snp.fasta is deliberately NOT declared for msa_source=snptype:
-    # phylo regenerates it from the same genome set, so declaring it would make
-    # the stage's fingerprint depend on its own output and force a spurious
-    # rerun on every second invocation.
+    # Neither snp/ (the snptype stage's tables) nor tree/msa/ (phylo's own
+    # typing pass, --msa-source snptype) is an input: phylo types the genome
+    # set itself, and the MSA stamp under tree/msa/ decides whether the typed
+    # alignment is reused. Declaring its own output would force a rerun on
+    # every second invocation.
     return [
         ctx.genomes_dir if getattr(params, "all_genomes", False) else ctx.representatives_dir,
         ctx.outgroup_dir,

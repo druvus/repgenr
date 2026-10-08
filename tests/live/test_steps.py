@@ -318,6 +318,8 @@ def test_phylo_build_aligner_and_snp_source_variants(
     )
     tree = (snp / "tree" / TREE_NWK).read_text(encoding="utf-8")
     assert len(newick_leaves(tree)) == 4
+    assert (snp / "tree" / "msa" / "core_snp.fasta").is_file(), "typed under tree/msa/"
+    assert not (snp / "snp").exists()
     assert re.search(r"\)\d+(\.\d+)?:", tree), "bootstrap support labels present"
 
 
@@ -347,6 +349,7 @@ def test_phylo_build_split_into_msa_and_tree(run_repgenr, synthetic_set, tmp_pat
     msa = align / "msa.fasta"
     assert msa.is_file(), "the alignment is published for the tree step"
     assert not (align / "tree" / TREE_NWK).exists(), "no tree is built"
+    assert (align / "tree" / "msa" / "msa_source.json").is_file()
 
     for builder in ("fasttree", "iqtree"):
         out = tmp_path / builder
@@ -367,7 +370,7 @@ def test_phylo_build_split_into_msa_and_tree(run_repgenr, synthetic_set, tmp_pat
         )
         tree = (out / "tree" / TREE_NWK).read_text(encoding="utf-8")
         assert len(newick_leaves(tree)) == 4
-        assert not (out / "snp").exists(), "the SNP typer does not run again"
+        assert not (out / "tree" / "msa").exists(), "the SNP typer does not run again"
 
 
 def test_merge_reduce_and_target_reps(run_repgenr, synthetic_set, tmp_path: Path) -> None:

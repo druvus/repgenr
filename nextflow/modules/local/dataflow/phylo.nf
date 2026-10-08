@@ -16,10 +16,10 @@ process PHYLO {
     output:
     tuple val(meta), path("tree/tree.nwk")            , emit: tree
     // The alignment the tree was built from and the tree builder's own files
-    // (logs, bootstrap trees), published beside the tree. Which of align/ and
-    // snp/ exists depends on --msa-source; an alignment-free builder writes neither.
+    // (logs, bootstrap trees), published beside the tree. An aligner writes
+    // align/; the SNP typing pass (--msa-source snptype) writes tree/msa/,
+    // which tree/* includes. An alignment-free builder writes neither.
     tuple val(meta), path("align/*"), optional: true , emit: align
-    tuple val(meta), path("snp/*")  , optional: true , emit: snp
     path "tree/*"                                     , emit: tree_files
     path "versions.yml"                               , emit: versions
 

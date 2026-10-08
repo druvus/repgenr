@@ -10,6 +10,10 @@ Three orthogonal choices:
 The outgroup genome is added to the input set here and passed to builders that
 can root (iqtree, raxmlng); the others emit an unrooted tree. Rooting on the
 outgroup is done once, for every builder, in the tree2tax stage.
+
+The SNP typing pass (--msa-source snptype) writes under tree/msa/, not snp/:
+snp/ belongs to the snptype stage, so the two never replace each other's
+tables and each stage's record describes what is on disk.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from ..core.contracts import (
     CLUSTERS_TSV,
     CORE_SNP_FASTA,
     MSA_FASTA,
+    PHYLO_MSA_DIR,
     TREE_NWK,
     accession_from_filename,
     atomic_path,
@@ -113,7 +118,8 @@ class PhyloDirs:
 
     tree_dir: Path
     align_dir: Path
-    snp_dir: Path
+    # Where the SNP typing pass writes its alignment and stamp (tree/msa/).
+    msa_dir: Path
     scratch_dir: Path
 
 
@@ -132,14 +138,19 @@ MSA_STAMP = "msa_source.json"
 # 2: the snippy typer names its reference record by genome (was "Reference").
 # 3: parsnp and cactus records carry genome stems (were file names with
 # '.ref', and '.' replaced by '_'); an older alignment would keep them.
+# The SNP typing pass moved from snp/ to tree/msa/ without a version change: a
+# stamp left in snp/ is never read, so such a workdir is typed once more.
 _MSA_STAMP_VERSION = 3
+# Scratch subdirectory of the SNP typing pass; the snptype stage uses
+# scratch/snptype, and each stage clears its own at the start.
+_TYPING_SCRATCH = "phylo_snptype"
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
     """Path the MSA source writes, by source."""
     if params.msa_source == "aligner":
         return dirs.align_dir / MSA_FASTA
-    return dirs.snp_dir / CORE_SNP_FASTA
+    return dirs.msa_dir / CORE_SNP_FASTA
 
 
 def _msa_key(genomes: Sequence[Path], outgroup_file: Path | None, params: PhyloParams) -> str:
@@ -552,12 +563,14 @@ def _clear_previous_builder_files(tree_dir: Path) -> None:
 
     ``tree/`` holds the current tree builder's own files; a matrix or a set of
     bootstrap trees left by another builder would describe a different run.
-    ``tree.nwk`` stays until the new tree replaces it atomically. An entry may
+    ``tree.nwk`` stays until the new tree replaces it atomically, and
+    ``msa/`` stays: it is the reuse cache of the SNP typing pass, which may
+    date from an earlier run with another MSA source. An entry may
     vanish after listing (macOS drops a file's ``._`` AppleDouble sibling on
     non-HFS volumes when the file is removed), so missing entries are skipped.
     """
     for entry in list(tree_dir.iterdir()):
-        if entry.name == TREE_NWK:
+        if entry.name in (TREE_NWK, PHYLO_MSA_DIR):
             continue
         if entry.is_dir() and not entry.is_symlink():
             remove_tree(entry)
@@ -624,7 +637,7 @@ def phylo_build(params: PhyloBuildParams, logger: logging.Logger) -> Path:
     dirs = PhyloDirs(
         tree_dir=params.out_dir / "tree",
         align_dir=params.out_dir / "align",
-        snp_dir=params.out_dir / "snp",
+        msa_dir=params.out_dir / "tree" / PHYLO_MSA_DIR,
         scratch_dir=params.out_dir / "scratch",
     )
     if params.msa_only:
@@ -682,25 +695,19 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     dirs = PhyloDirs(
         tree_dir=ctx.tree_dir,
         align_dir=ctx.align_dir,
-        snp_dir=ctx.snp_dir,
+        msa_dir=ctx.phylo_msa_dir,
         scratch_dir=ctx.scratch_dir,
     )
-    snp_before = _file_identity(ctx.snp_dir / CORE_SNP_FASTA)
-    try:
-        outcome = build_tree(
-            genomes,
-            outgroup_file,
-            outgroup_leaf,
-            dirs,
-            params,
-            logger,
-            # --force means recompute this stage, cached alignment included.
-            reuse_msa=not ctx.force,
-        )
-    finally:
-        # Also on failure: the typing pass may have replaced snp/ before the
-        # tree builder failed.
-        _release_replaced_snptype_record(ctx, snp_before, logger)
+    outcome = build_tree(
+        genomes,
+        outgroup_file,
+        outgroup_leaf,
+        dirs,
+        params,
+        logger,
+        # --force means recompute this stage, cached alignment included.
+        reuse_msa=not ctx.force,
+    )
 
     is_msa = treebuilder_registry.create(outcome.treebuilder).input_kind == InputKind.MSA_FASTA
     ctx.config.record_stage(
@@ -728,39 +735,6 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
     )
     ctx.save_config()
     return outcome.tree
-
-
-def _file_identity(path: Path) -> tuple[int, int, int] | None:
-    """Inode, size and mtime of ``path``; None when absent. Outputs are
-    replaced by rename, so a rewrite changes the inode."""
-    try:
-        st = path.stat()
-    except OSError:
-        return None
-    return (st.st_ino, st.st_size, st.st_mtime_ns)
-
-
-def _release_replaced_snptype_record(
-    ctx: WorkdirContext, before: tuple[int, int, int] | None, logger: logging.Logger
-) -> None:
-    """Drop the snptype record when phylo's own typing pass replaced its tables.
-
-    With --msa-source snptype, phylo types the genome set (outgroup included)
-    into snp/, the directory the snptype stage writes. The snptype record then
-    describes tables that are no longer there, and a repeat snptype would skip.
-    Removing the record makes status say so and lets snptype rebuild them.
-    """
-    record = ctx.config.stages.get("snptype")
-    if record is None or _file_identity(ctx.snp_dir / CORE_SNP_FASTA) == before:
-        return
-    del ctx.config.stages["snptype"]
-    ctx.save_config()
-    logger.warning(
-        "phylo's SNP typing pass (--msa-source snptype) replaced the tables the "
-        "snptype stage wrote in snp/ (snptype %s); its record is removed. Run "
-        "'repgenr snptype' again to rebuild them.",
-        record.tool or "",
-    )
 
 
 def _genome_set(ctx: WorkdirContext, all_genomes: bool) -> list[Path]:
@@ -842,7 +816,8 @@ def _build_msa(
         return result.msa_fasta, versions
 
     if params.msa_source == "snptype":
-        # Reuse the SNP typer's core-SNP alignment as the MSA source.
+        # Reuse the SNP typer's core-SNP alignment as the MSA source. It is
+        # written under tree/msa/; snp/ is the snptype stage's directory.
         from .snptype import SnptypeParams, snptype_core
 
         snp_params = SnptypeParams(
@@ -867,8 +842,8 @@ def _build_msa(
         snp_result, versions = snptype_core(
             inputs,
             snp_reference,
-            dirs.snp_dir,
-            dirs.scratch_dir / "snptype",
+            dirs.msa_dir,
+            dirs.scratch_dir / _TYPING_SCRATCH,
             snp_params,
             logger,
             # build_tree already warned once for the typer and the tree builder

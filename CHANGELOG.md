@@ -128,6 +128,19 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `phylo --msa-source snptype` (#228) writes its typing pass under
+  `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
+  under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the
+  `snptype` stage alone. Before, the typing pass replaced the `snptype` stage's
+  tables in `snp/` while its record stayed, so a repeat `snptype` skipped and
+  `doctor` reported nothing. The interim measures of #223 (phylo removing the
+  `snptype` record, and `run --with-snptype --msa-source snptype` placing
+  `snptype` after `phylo`) are withdrawn: `run` again types before `phylo`.
+  A workdir whose alignment stamp is under `snp/` is typed once more, into
+  `tree/msa/`; `doctor` warns about the old stamp. The Nextflow `PHYLO_MSA`
+  process emits `tree_msa` (was `snp`), `PHYLO` publishes the typing pass
+  with `tree/`, and the published alignment moves from `phylo/snp/` to
+  `phylo/tree/msa/`.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.
@@ -153,11 +166,6 @@ All notable changes to RepGenR are documented here. The format follows
   marked as interrupted. Before, the interpreter ended at once and left the
   tool running (seen with FastTree). A pool of parallel tasks
   (`parallel_map`) now cancels its queued items when one task fails.
-- `run` (#223): `--with-snptype --msa-source snptype` runs the `snptype` stage after
-  `phylo` instead of before it, so the tables left in `snp/` are the ones the
-  `snptype` record describes. As a consequence, a later `phylo` run that
-  changes only the tree builder types the genomes again, since `snp/` no
-  longer holds phylo's own alignment.
 - `phylo` (#223): the MSA stamp version is 3: an alignment cached before the ParSNP and
   cactus record names changed is rebuilt once.
 - `phylo` (#223) warns when an alignment-free tree builder (mashtree, sourmash) is
@@ -345,10 +353,6 @@ All notable changes to RepGenR are documented here. The format follows
   (ParSNP). phylo also writes the input names back into `tree.nwk` when a
   tool renamed leaves that its leaf check accepts, changing only those labels.
   ParSNP query genomes are hardlinked into scratch instead of copied.
-- `phylo --msa-source snptype` (#223) removes the `snptype` record, with a warning,
-  when its typing pass replaces the tables the `snptype` stage wrote in
-  `snp/`; before, the record stayed, a repeat `snptype` skipped and `doctor`
-  reported nothing.
 - `tree2tax` (#223) warns when the last phylo run did not finish, since `tree.nwk` is
   then the tree of an earlier run. An outgroup accession that no file in the
   outgroup directory matches is reported as such, not as a missing leaf.
