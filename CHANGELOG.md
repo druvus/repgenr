@@ -211,7 +211,7 @@ All notable changes to RepGenR are documented here. The format follows
   of running on the earlier genomes. A set written by another stage, or kept
   because every run failed to download, stays and the error names it; a first
   call writes no empty set. Finished runs under `assemblies/` stay (#230).
-- `dereplicate --tool galah` (#PR): without manifest quality for every genome,
+- `dereplicate --tool galah` (#239): without manifest quality for every genome,
 - `dereplicate --tool galah` (#233): without manifest quality for every genome,
   galah receives the genomes by descending file size instead of by name. galah
   keeps the first listed genome of a cluster when it has no quality, so a
@@ -511,7 +511,7 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
-- Resume (#PR): input directories are digested from their genome FASTA
+- Resume (#239): input directories are digested from their genome FASTA
   files only (the files `list_fasta` returns), so a leftover `x.fasta.tmp`, a
   `.fai` index or a README in `genomes/`, `derep/representatives/` or the
   `ingest` source no longer re-runs dereplicate, snptype, phylo, glance,
@@ -520,10 +520,10 @@ All notable changes to RepGenR are documented here. The format follows
   file present re-runs that stage once (an `ingest` source with `truth.json`,
   for example). `derep-stock --action unpack` digests the stored run's
   tables and representatives file by file and repeats once after the upgrade.
-- `phylo`, `tree2tax` and `doctor` (#PR): the outgroup is resolved among the
+- `phylo`, `tree2tax` and `doctor` (#239): the outgroup is resolved among the
   genome FASTA files under `outgroup/` only; a partial `GCF_x.fasta.tmp` could
   win the substring match before.
-- Resume (#PR): `genomes/` or `derep/representatives/` holding only a
+- Resume (#239): `genomes/` or `derep/representatives/` holding only a
   non-FASTA file such as `x.fasta.tmp` counts as a missing deliverable, so the
   stage that writes it re-runs instead of being skipped.
 - Version probing (#235): a version query that crashed with a Python
