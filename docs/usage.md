@@ -783,13 +783,28 @@ backend each genome's chain of tools runs in a single container, so a genome
 costs one engine start rather than eight.
 
 The `simple` typer builds each genome's consensus by applying its SNP calls to
-the reference, so sequence a genome lacks keeps the reference base rather than
-an N. Such a genome appears closer to the reference, and further from its
-nearest relatives, than its sequence supports. On the 50-genome test set a copy
-of one genome with 500 kb removed differed from that genome at 20539 sites,
-all but one of them within the removed region. Where genomes differ in gene content,
-prefer `snippy`, `parsnp` or `ska2`, or compare the tree with an
-alignment-free one.
+the reference, and then sets every reference position that none of the genome's
+primary or supplementary alignments covers to N (the spans come from the
+minimap2 CIGAR strings). Sequence a genome lacks is therefore missing data, not
+the reference base. A column of `snp/core_snp.fasta` is kept only when at least
+two of A, C, G and T occur in it; N, other ambiguity codes and gaps do not make
+a column variable, and they are written as N. `snp/snp_distance_matrix.tsv`
+counts, for each pair, the differing sites among those where both genomes have
+a base, so two genomes are not separated by a region one of them lacks. On the
+50-genome test set a copy of one genome with 500 kb removed now differs from
+that genome at 0 sites; before masking it differed at 20539, all but one of
+them within the removed region. The distances between genomes of different gene
+content are computed over different numbers of sites, so they are not directly
+comparable as proportions.
+
+The `simple` typer maps assemblies with the minimap2 preset `asm20`, which
+suits assembly-to-reference alignment up to several percent divergence. Three
+genomes of the 50-genome test set have equal length (2 Mb), so their true
+substitution counts are position-wise differences. With `asm20` the typer's
+distances were within one site of those counts; with minimap2's default
+settings, used before, they differed by 8 to 111 sites. `--tool-arg
+preset=asm5` suits near-identical genomes, and `--tool-arg preset=none`
+restores minimap2's default settings.
 
 `parsnp` names its records by file name and marks the reference with `.ref`;
 the typer renames them to the genome names, as the other typers write them.

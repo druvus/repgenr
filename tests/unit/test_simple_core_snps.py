@@ -65,7 +65,9 @@ def test_per_genome_chain_is_threaded_and_clears_its_scratch(tmp_path: Path, mon
         out = kw.get("stdout_path")
         if out is None and "-o" in cmd:
             out = cmd[cmd.index("-o") + 1]
-        if tool == "bcftools consensus":
+        if tool == "minimap2":
+            Path(out).write_text(_sam(("g1", 0, "ref", 1, "4M")), encoding="utf-8")
+        elif tool == "bcftools consensus":
             Path(out).write_text(">ref\nACGT\n", encoding="utf-8")
         elif tool == "bcftools index":
             Path(cmd[-1] + ".csi").write_text("", encoding="utf-8")
@@ -115,14 +117,43 @@ def test_columns_are_found_across_block_boundaries(tmp_path: Path, monkeypatch) 
     assert (tmp_path / "dist.tsv").read_text().splitlines()[1].split("\t")[1:] == ["0", "2"]
 
 
-def test_ambiguous_and_gap_characters_count_as_differences(tmp_path: Path) -> None:
-    """An N or a gap against a base is a difference, as it was before."""
+def test_n_against_one_base_is_not_a_variable_column(tmp_path: Path) -> None:
+    """A column with N (or a gap) in some genomes and one base in the rest is not variable."""
     from repgenr.snptypers.simple import _write_core_snps
 
-    consensuses = {"ref": "ACGT", "s1": "ANGT", "s2": "A-GT"}
+    consensuses = {"ref": "ACGT", "s1": "ANGT", "s2": "A-GN"}
+    assert _write_core_snps(consensuses, tmp_path / "c.fasta", tmp_path / "d.tsv") == 0
+    lines = (tmp_path / "d.tsv").read_text().splitlines()
+    assert [line.split("\t")[1:] for line in lines[1:]] == [["0"] * 3] * 3
+
+
+def test_a_real_snp_still_counts_beside_missing_data(tmp_path: Path) -> None:
+    """Two bases in a column make it variable; N and lower case are handled."""
+    from repgenr.snptypers.simple import _write_core_snps
+
+    consensuses = {"ref": "ACGT", "s1": "ATGN", "s2": "aNgt"}
     n = _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
     assert n == 1
-    assert _read_fasta(tmp_path / "core.fasta") == {"ref": "C", "s1": "N", "s2": "-"}
+    assert _read_fasta(tmp_path / "core.fasta") == {"ref": "C", "s1": "T", "s2": "N"}
+
+
+def test_distances_count_only_sites_where_both_genomes_have_a_base(tmp_path: Path) -> None:
+    from repgenr.snptypers.simple import _write_core_snps
+
+    consensuses = {
+        "ref": "AAAA",
+        "s1": "TTTA",
+        "s2": "NTTT",  # no base where s1 differs from ref at column 0
+    }
+    n = _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv")
+    assert n == 4
+    rows = {
+        line.split("\t")[0]: line.split("\t")[1:]
+        for line in (tmp_path / "dist.tsv").read_text().splitlines()[1:]
+    }
+    assert rows["ref"] == ["0", "3", "3"]
+    assert rows["s1"] == ["3", "0", "1"]  # column 0 is not shared with s2
+    assert rows["s2"] == ["3", "1", "0"]
 
 
 def test_ragged_consensuses_are_truncated_to_the_shortest(tmp_path: Path) -> None:
@@ -162,3 +193,123 @@ def test_no_variable_sites_message_names_the_cause(tmp_path: Path, monkeypatch) 
     assert "refgenome" in msg
     assert "closer reference" in msg
     assert "alignment-free" in msg
+
+
+def _sam(*records: tuple[str, int, str, int, str]) -> str:
+    """SAM text from (query, flag, reference, 1-based position, CIGAR) tuples."""
+    lines = ["@HD\tVN:1.6"]
+    for qname, flag, rname, pos, cigar in records:
+        lines.append(f"{qname}\t{flag}\t{rname}\t{pos}\t60\t{cigar}\t*\t0\t0\t*\t*")
+    return "\n".join(lines) + "\n"
+
+
+def test_covered_positions_follow_primary_and_supplementary_cigar_spans(tmp_path: Path) -> None:
+    from repgenr.snptypers.simple import _covered_positions
+
+    sam = tmp_path / "g.sam"
+    sam.write_text(
+        _sam(
+            ("q", 0, "c1", 2, "2S3M1I2D1M5H"),  # reference span 2..7 (M, D count; S, I, H do not)
+            ("q", 2048, "c2", 1, "2="),  # supplementary on the second contig: 1..2
+            ("q", 256, "c2", 3, "3M"),  # secondary: ignored
+            ("q", 4, "*", 0, "*"),  # unmapped: ignored
+            ("q", 16, "c2", 5, "1X"),  # reverse strand primary: 5
+        ),
+        encoding="utf-8",
+    )
+    covered = _covered_positions(sam, [("c1", 8), ("c2", 6)])
+    assert "".join("1" if c else "0" for c in covered) == "01111110" + "110010"
+
+
+def _fake_genome_chain(monkeypatch, sam_text: str, consensus: str, calls: list) -> None:
+    from repgenr.snptypers import simple as mod
+
+    def fake_run_chain(caps, steps, *, logger, **kwargs):
+        for _prefix, command in steps:
+            cmd = [str(c) for c in command]
+            calls.append(cmd)
+            out = cmd[cmd.index("-o") + 1] if "-o" in cmd else None
+            if cmd[0] == "minimap2":
+                Path(out).write_text(sam_text, encoding="utf-8")
+            elif cmd[:2] == ["bcftools", "consensus"]:
+                Path(out).write_text(f">c1\n{consensus}\n", encoding="utf-8")
+            elif out is not None:
+                Path(out).write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "run_chain", fake_run_chain)
+
+
+def test_a_genome_missing_a_region_has_n_there_and_no_snps_against_its_copy(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A copy with a region removed differs from the full genome at no site.
+
+    Without masking the copy would keep the reference base over the removed
+    region, and every SNP the full genome has there would separate the two.
+    """
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref = tmp_path / "reference.fasta"
+    ref.write_text(">c1\nAAAAAAAAAA\n", encoding="utf-8")
+    contigs = [("c1", 10)]
+    full_consensus = "ATAAAAATAA"  # SNPs at columns 1 and 7
+    log = logging.getLogger("t")
+    work = tmp_path / "work"
+    work.mkdir()
+
+    _fake_genome_chain(monkeypatch, _sam(("full", 0, "c1", 1, "10M")), full_consensus, [])
+    full = mod._call_one(tmp_path / "full.fasta", ref, work, 1, SnpParams(), log, contigs=contigs)
+    # The copy lacks reference positions 6..10, so its alignment ends at 5 and
+    # the consensus keeps the reference base there.
+    _fake_genome_chain(monkeypatch, _sam(("cut", 0, "c1", 1, "5M")), "ATAAAAAAAA", [])
+    cut = mod._call_one(tmp_path / "cut.fasta", ref, work, 1, SnpParams(), log, contigs=contigs)
+    assert full == full_consensus
+    assert cut == "ATAAANNNNN"
+
+    n = mod._write_core_snps(
+        {"reference": "AAAAAAAAAA", "full": full, "cut": cut},
+        tmp_path / "core.fasta",
+        tmp_path / "dist.tsv",
+    )
+    assert n == 2, "column 7 stays variable (reference against full); N adds no column"
+    rows = {
+        line.split("\t")[0]: line.split("\t")[1:]
+        for line in (tmp_path / "dist.tsv").read_text().splitlines()[1:]
+    }
+    assert rows["full"] == ["2", "0", "0"]
+    assert rows["cut"] == ["1", "0", "0"]
+
+
+def test_assemblies_are_mapped_with_the_asm20_preset_unless_overridden(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref = tmp_path / "reference.fasta"
+    ref.write_text(">c1\nACGT\n", encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    log = logging.getLogger("t")
+
+    def minimap2_args(params: SnpParams) -> list[str]:
+        calls: list[list[str]] = []
+        _fake_genome_chain(monkeypatch, _sam(("g", 0, "c1", 1, "4M")), "ACGT", calls)
+        mod._call_one(tmp_path / "g.fasta", ref, work, 1, params, log, contigs=[("c1", 4)])
+        return next(c for c in calls if c[0] == "minimap2")
+
+    default = minimap2_args(SnpParams())
+    assert default[default.index("-x") + 1] == "asm20"
+    custom = minimap2_args(SnpParams(extra={"preset": "asm5"}))
+    assert custom[custom.index("-x") + 1] == "asm5"
+    assert "-x" not in minimap2_args(SnpParams(extra={"preset": "none"}))
+    assert "preset" in mod.SimpleSnpTyper.capabilities.accepted_extras
+
+
+def test_reference_contigs_are_read_in_file_order(tmp_path: Path) -> None:
+    from repgenr.snptypers.simple import _reference_contigs
+
+    ref = tmp_path / "reference.fasta"
+    ref.write_text(">c2 desc\nAC\nGT\n>c1\nA\n", encoding="utf-8")
+    assert _reference_contigs(ref) == [("c2", 4), ("c1", 1)]

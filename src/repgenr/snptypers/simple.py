@@ -1,10 +1,14 @@
 """Built-in 'simple' SNP typer (minimap2 + samtools + bcftools).
 
 A lightweight reference-based core-SNP pipeline that needs no dedicated typing
-tool. For each genome: align to the reference (minimap2), call SNP-only variants
-(bcftools), and build a SNP-only consensus that preserves reference length. The
-per-genome consensuses (plus the reference) are stacked into a whole-genome
-alignment, then reduced to variable columns to form the core-SNP alignment.
+tool. For each genome: align to the reference (minimap2, assembly preset asm20
+by default), call SNP-only variants (bcftools), and build a SNP-only consensus
+that preserves reference length. Reference positions that no primary or
+supplementary alignment of the genome covers are set to N in its consensus, so
+sequence a genome lacks is recorded as missing rather than as the reference
+base. The per-genome consensuses (plus the reference) are stacked into a
+whole-genome alignment, then reduced to the columns where at least two of A, C,
+G and T occur to form the core-SNP alignment.
 
 Genomes are independent, so they run concurrently: the thread budget becomes
 ``workers x threads-per-worker``, each worker driving its own chain of tools.
@@ -17,6 +21,7 @@ with the genome count.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -45,6 +50,12 @@ _CAPABILITIES = ToolCapabilities(
         ),
     ),
     recommended_max_genomes=2000,
+    # minimap2 preset for assembly-to-reference mapping. asm20 tolerates the
+    # divergence seen within a bacterial species (up to several percent);
+    # ``--tool-arg preset=asm5`` suits near-identical genomes, and
+    # ``preset=none`` restores minimap2's default (no -x).
+    default_params={"preset": "asm20"},
+    accepted_extras=frozenset({"preset"}),
     # multi-tool: resolved to one image via Wave (or pin an explicit container)
     conda=("bioconda::minimap2", "bioconda::samtools", "bioconda::bcftools"),
 )
@@ -72,6 +83,7 @@ class SimpleSnpTyper(SnpTyper):
         run_tool(_CAPABILITIES, ["samtools", "faidx", ref], logger=logger, log_prefix="samtools")
 
         consensuses: dict[str, str] = {reference.stem: _concat_fasta(ref)}
+        contigs = _reference_contigs(ref)
         per_genome_dir = out_dir / "per_genome"
         per_genome_dir.mkdir(exist_ok=True)
 
@@ -85,7 +97,9 @@ class SimpleSnpTyper(SnpTyper):
                 per_worker,
             )
         called = parallel_map(
-            lambda genome: _call_one(genome, ref, per_genome_dir, per_worker, params, logger),
+            lambda genome: _call_one(
+                genome, ref, per_genome_dir, per_worker, params, logger, contigs=contigs
+            ),
             others,
             workers,
             logger=logger,
@@ -107,9 +121,10 @@ class SimpleSnpTyper(SnpTyper):
             raise WorkdirError(
                 f"No variable sites found among {len(consensuses)} genomes against the "
                 f"reference {reference.stem}, so no SNP tree can be built. The genomes "
-                "either are identical at every called position or did not align to the "
-                "reference. Try a closer reference (--reference), more divergent "
-                "genomes, or an alignment-free tree (phylo --treebuilder mashtree)."
+                "either are identical at every position they share or did not align to "
+                "the reference (unaligned positions are N and do not count). Try a "
+                "closer reference (--reference), more divergent genomes, or an "
+                "alignment-free tree (phylo --treebuilder mashtree)."
             )
 
         return SnpResult(
@@ -134,8 +149,22 @@ def _split_threads(threads: int, genomes: int) -> tuple[int, int]:
     return workers, max(1, threads // workers)
 
 
-def _call_one(genome: Path, ref: Path, work: Path, threads: int, params: SnpParams, logger) -> str:
+def _call_one(
+    genome: Path,
+    ref: Path,
+    work: Path,
+    threads: int,
+    params: SnpParams,
+    logger,
+    *,
+    contigs: list[tuple[str, int]] | None = None,
+) -> str:
+    """Consensus of ``genome`` in reference coordinates, N where it does not align."""
     stem = genome.stem
+    if contigs is None:
+        contigs = _reference_contigs(ref)
+    preset = str(params.extra.get("preset", _CAPABILITIES.default_params["preset"])).strip()
+    preset_args = [] if preset.lower() in ("", "none") else ["-x", preset]
     sam = work / f"{stem}.sam"
     bam = work / f"{stem}.bam"
     # Compressed BCF, not plain VCF: the pileup of a bacterial genome is a
@@ -154,7 +183,10 @@ def _call_one(genome: Path, ref: Path, work: Path, threads: int, params: SnpPara
     run_chain(
         _CAPABILITIES,
         [
-            ("minimap2", ["minimap2", "-a", "-t", nt, "-o", sam, ref, genome.resolve()]),
+            (
+                "minimap2",
+                ["minimap2", "-a", *preset_args, "-t", nt, "-o", sam, ref, genome.resolve()],
+            ),
             ("samtools", ["samtools", "sort", "-@", nt, "-o", bam, sam]),
             ("samtools", ["samtools", "index", "-@", nt, bam]),
             (
@@ -187,12 +219,85 @@ def _call_one(genome: Path, ref: Path, work: Path, threads: int, params: SnpPara
         logger=logger,
         extra_mounts=[genome.resolve().parent, work, ref.parent],
     )
-    consensus = _concat_fasta(cons)
+    covered = _covered_positions(sam, contigs)
+    consensus = _mask_uncovered(_concat_fasta(cons), covered, stem)
     # The consensus is in memory now; nothing downstream reads this genome's
     # intermediates. Keep them on failure, where they are the evidence.
     for leftover in (sam, bam, Path(f"{bam}.bai"), pileup, calls, snps, Path(f"{snps}.csi"), cons):
         leftover.unlink(missing_ok=True)
     return consensus
+
+
+def _reference_contigs(ref: Path) -> list[tuple[str, int]]:
+    """(name, length) of each reference record, in file order.
+
+    This is the order in which ``bcftools consensus`` writes the records and
+    hence the order of the concatenated consensus.
+    """
+    contigs: list[tuple[str, int]] = []
+    name: str | None = None
+    length = 0
+    with open(ref, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith(">"):
+                if name is not None:
+                    contigs.append((name, length))
+                name = line[1:].split(maxsplit=1)[0] if line[1:].strip() else ""
+                length = 0
+            else:
+                length += len(line.strip())
+    if name is not None:
+        contigs.append((name, length))
+    return contigs
+
+
+# CIGAR operations that consume the reference: M, D, N, = and X.
+_CIGAR_OP = re.compile(r"(\d+)([MIDNSHP=X])")
+_REF_CONSUMING = frozenset("MDN=X")
+# SAM flags of records that do not describe where the genome aligns:
+# unmapped (0x4) and secondary (0x100).
+_SKIP_FLAGS = 0x4 | 0x100
+
+
+def _covered_positions(sam: Path, contigs: list[tuple[str, int]]) -> npt.NDArray[np.bool_]:
+    """Reference positions spanned by the genome's alignments, over the concatenated contigs.
+
+    Primary and supplementary records count; secondary and unmapped records do
+    not. A record covers its reference span from POS to the end given by the
+    CIGAR, deletions included, since the consensus there is defined by the
+    alignment.
+    """
+    offsets: dict[str, int] = {}
+    total = 0
+    for name, length in contigs:
+        offsets[name] = total
+        total += length
+    covered = np.zeros(total, dtype=np.bool_)
+    with open(sam, encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("@"):
+                continue
+            fields = line.split("\t", 6)
+            if len(fields) < 6 or int(fields[1]) & _SKIP_FLAGS:
+                continue
+            offset = offsets.get(fields[2])
+            if offset is None or fields[5] == "*":
+                continue
+            span = sum(int(n) for n, op in _CIGAR_OP.findall(fields[5]) if op in _REF_CONSUMING)
+            start = offset + int(fields[3]) - 1
+            covered[start : start + span] = True
+    return covered
+
+
+def _mask_uncovered(consensus: str, covered: npt.NDArray[np.bool_], name: str) -> str:
+    if len(consensus) != len(covered):
+        raise WorkdirError(
+            f"The consensus of {name} has {len(consensus)} positions but the reference has "
+            f"{len(covered)}; the simple typer expects a SNP-only consensus of reference length."
+        )
+    seq = np.frombuffer(consensus.encode("ascii", "replace"), dtype=np.uint8).copy()
+    seq[~covered] = ord("N")
+    return seq.tobytes().decode("ascii")
 
 
 def _concat_fasta(path: Path) -> str:
@@ -209,12 +314,26 @@ def _concat_fasta(path: Path) -> str:
 _COLUMN_BLOCK = 1 << 20
 
 
-def _core_columns(seqs: list[str], length: int) -> npt.NDArray[np.uint8]:
-    """Stack the variable columns of ``seqs`` as a (genomes x sites) byte array.
+# Byte to base code: A, C, G, T (either case) to 0..3, everything else
+# (N, IUPAC codes, gaps) to 4, which marks a position without a base.
+_NO_BASE = 4
+_BASE_CODE = np.full(256, _NO_BASE, dtype=np.uint8)
+for _i, _b in enumerate("ACGT"):
+    _BASE_CODE[ord(_b)] = _i
+    _BASE_CODE[ord(_b.lower())] = _i
+# The same codes with "no base" at 0, so a column maximum ignores missing data.
+_BASE_CODE_LOW = np.where(_BASE_CODE == _NO_BASE, 0, _BASE_CODE).astype(np.uint8)
+_CODE_BASE = np.frombuffer(b"ACGTN", dtype=np.uint8)
 
-    A column is variable when any genome differs from the first, which is what
-    comparing every pair in the column amounts to. Characters are compared as
-    bytes, so an N or a gap counts as a difference exactly as before.
+
+def _core_columns(seqs: list[str], length: int) -> npt.NDArray[np.uint8]:
+    """Base codes (0..3 for A, C, G, T; 4 for no base) of the variable columns of ``seqs``.
+
+    A column is variable when at least two of A, C, G and T occur in it. N,
+    other ambiguity codes and gaps are missing data: a column holding them and
+    one base is not variable. Columns where every genome holds the same byte
+    are dropped first with one comparison, so the base-level test runs only on
+    the few columns that differ at all.
     """
     kept: list[npt.NDArray[np.uint8]] = []
     for start in range(0, length, _COLUMN_BLOCK):
@@ -222,9 +341,16 @@ def _core_columns(seqs: list[str], length: int) -> npt.NDArray[np.uint8]:
         block = np.frombuffer(
             b"".join(s[start:end].encode("ascii", "replace") for s in seqs), dtype=np.uint8
         ).reshape(len(seqs), end - start)
-        varying = (block != block[0]).any(axis=0)
-        if varying.any():
-            kept.append(block[:, varying])
+        differing = block[:, (block != block[0]).any(axis=0)]
+        if differing.shape[1] == 0:
+            continue
+        # Smallest base code with missing data high, largest with it low: the
+        # two differ only when the column holds two different bases.
+        lowest = _BASE_CODE[differing].min(axis=0)
+        highest = _BASE_CODE_LOW[differing].max(axis=0)
+        variable = highest > lowest
+        if variable.any():
+            kept.append(_BASE_CODE[differing[:, variable]])
     if not kept:
         return np.empty((len(seqs), 0), dtype=np.uint8)
     return np.concatenate(kept, axis=1)
@@ -239,17 +365,19 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
     n_sites = int(core.shape[1])
     with open(core_fasta, "w", encoding="utf-8") as fo:
         for name, row in zip(names, core, strict=True):
-            snp_seq = row.tobytes().decode("ascii")
+            snp_seq = _CODE_BASE[row].tobytes().decode("ascii")
             fo.write(f">{name}\n")
             for pos in range(0, n_sites, 80):
                 fo.write(snp_seq[pos : pos + 80] + "\n")
 
-    # Pairwise SNP distances over those columns. Each row is compared against
-    # the whole matrix at once; the work is still quadratic in genomes, but
-    # each pair costs a vector comparison instead of a Python loop.
+    # Pairwise SNP distances over those columns, counting only sites where both
+    # genomes have a base. Each row is compared against the whole matrix at
+    # once; the work is still quadratic in genomes, but each pair costs a
+    # vector comparison instead of a Python loop.
+    has_base = core != _NO_BASE
     with open(snp_matrix, "w", encoding="utf-8") as fo:
         fo.write("\t" + "\t".join(names) + "\n")
-        for name, row in zip(names, core, strict=True):
-            dists = (core != row).sum(axis=1)
+        for name, row, row_base in zip(names, core, has_base, strict=True):
+            dists = ((core != row) & has_base & row_base).sum(axis=1)
             fo.write(name + "\t" + "\t".join(str(int(d)) for d in dists) + "\n")
     return n_sites

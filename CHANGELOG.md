@@ -250,6 +250,19 @@ All notable changes to RepGenR are documented here. The format follows
   genome replaced under the same name in a persistent `--tool-arg
   sketch_cache=DIR` is sketched again. The sketch CSV and picklist are
   csv-quoted, so a genome name containing a comma is one field.
+- `snptype --tool simple` and `phylo --msa-source snptype --snptyper simple`
+  (#PR): reference positions that none of a genome's primary or supplementary
+  minimap2 alignments covers are N in that genome's consensus, instead of the
+  reference base. A core-SNP column is variable only when at least two of A,
+  C, G and T occur in it, non-ACGT characters are written as N, and the SNP
+  distance matrix counts each pair over the sites where both genomes have a
+  base. Assemblies are mapped with the minimap2 preset `asm20` (overridable
+  with `--tool-arg preset=<preset>`, or `preset=none` for minimap2's default
+  settings). SNP counts, `core_snp.fasta`, `full_alignment.fasta` and the
+  distances change: on the 50-genome test set a copy of a genome with 500 kb
+  removed differed from it at 20539 sites and now at 0. An existing workdir is
+  not retyped by the upgrade alone; `snptype` and `phylo` rerun only with
+  `--force` or when their inputs or settings change.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.
