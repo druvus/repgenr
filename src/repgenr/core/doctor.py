@@ -7,7 +7,9 @@ deliverables, unresolvable outgroups, leftover temp files, and stages whose
 recorded input digests no longer match reality or whose declared deliverables
 are missing (they will re-run).
 
-Strictly read-only: no file, log, or manifest is created in the workdir.
+Read-only: no output, log or record is written in the workdir. Opening the
+WAL-mode manifest lets SQLite create or update its ``-shm``/``-wal``
+companion files, which hold no data of their own.
 """
 
 from __future__ import annotations
@@ -42,7 +44,12 @@ from .integrity import (
 )
 from .manifest import MANIFEST_FILENAME, Manifest
 
+# The integrity guards log their refusal text as a warning when told to
+# continue; doctor reports the same condition as a finding, so their log
+# lines are dropped instead of reaching the console unformatted.
 _LOG = logging.getLogger(__name__)
+_LOG.addHandler(logging.NullHandler())
+_LOG.propagate = False
 _MAX_LISTED = 3  # examples shown per finding
 
 
@@ -99,6 +106,14 @@ def _examples(names: list[str]) -> str:
     return shown + more
 
 
+def _genome_set_stages(config: Config) -> tuple[str, str]:
+    """(stage that wrote selection.tsv, stage that placed genomes/) for advice."""
+    for name in ("ingest", "vgenome", "assemble"):
+        if name in config.stages:
+            return name, name
+    return "metadata", "genome"
+
+
 def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     out: list[Finding] = []
     for name, record in config.stages.items():
@@ -118,6 +133,7 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
 
 def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
     genomes_dir = workdir / "genomes"
+    writer = _genome_set_stages(config)[1]
     out: list[Finding] = []
     shortfall = check_genome_completeness(genomes_dir, workdir, logger=_LOG, allow_incomplete=True)
     if shortfall:
@@ -126,7 +142,7 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "genomes",
                 f"{len(shortfall)} selected genome(s) missing from {genomes_dir} "
-                f"(e.g. {_examples(shortfall)}); re-run the genome stage.",
+                f"(e.g. {_examples(shortfall)}); re-run {writer}.",
             )
         )
     entries = list_fasta(genomes_dir)
@@ -149,7 +165,18 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "genomes",
                 f"{len(bad)} file(s) under {genomes_dir} are not FASTA "
-                f"(e.g. {_examples(bad)}); delete them and re-run the genome stage.",
+                f"(e.g. {_examples(bad)}); delete them and re-run {writer}.",
+            )
+        )
+    untracked = _untracked_genomes(workdir, entries)
+    if untracked:
+        out.append(
+            Finding(
+                "warn",
+                "genomes",
+                f"{len(untracked)} file(s) under {genomes_dir} are not in {SELECTION_TSV} "
+                f"(e.g. {_examples(untracked)}); dereplicate would include them. Remove "
+                f"them, or re-run {_genome_set_stages(config)[0]} to select them.",
             )
         )
     if not shortfall and not bad and not dangling and genomes_dir.exists():
@@ -157,6 +184,15 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
             Finding("ok", "genomes", f"{len(list_fasta(genomes_dir))} genome file(s) look sound")
         )
     return out
+
+
+def _untracked_genomes(workdir: Path, entries: list[Path]) -> list[str]:
+    """Genome files under genomes/ that selection.tsv does not list."""
+    selection = workdir / SELECTION_TSV
+    if not selection.exists():
+        return []
+    selected = {row.filename for row in read_selection(selection)}
+    return sorted(p.name for p in entries if p.name not in selected)
 
 
 def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
@@ -172,6 +208,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
         manifest.close()
     extra = sorted(recorded - selected)
     missing = sorted(selected - recorded)
+    writer = _genome_set_stages(config)[0]
     out: list[Finding] = []
     if extra:
         out.append(
@@ -179,7 +216,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "manifest",
                 f"manifest holds {len(extra)} genome(s) not in selection.tsv "
-                f"(e.g. {_examples(extra)}); re-run the metadata stage to reconcile.",
+                f"(e.g. {_examples(extra)}); re-run {writer} to reconcile.",
             )
         )
     if missing:
@@ -188,7 +225,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "manifest",
                 f"manifest is missing {len(missing)} selected genome(s) "
-                f"(e.g. {_examples(missing)}); re-run the metadata stage.",
+                f"(e.g. {_examples(missing)}); re-run {writer}.",
             )
         )
     if not extra and not missing:
@@ -318,8 +355,20 @@ def _check_phylo_stamp_in_snp(workdir: Path, config: Config) -> list[Finding]:
 def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
     t2t = workdir / TREE2TAX_TSV
     gmap = workdir / GENOMES_MAP_TSV
+    if t2t.exists() and gmap.exists():
+        problem = _tree2tax_tables_problem(t2t, gmap)
+        if problem:
+            return [
+                Finding(
+                    "fail",
+                    "tree2tax",
+                    f"{problem}; the files were truncated or edited -- re-run "
+                    "repgenr --force tree2tax.",
+                )
+            ]
+        return [Finding("ok", "tree2tax", "deliverable pair present and consistent")]
     if t2t.exists() == gmap.exists():
-        return [Finding("ok", "tree2tax", "deliverable pair present")] if t2t.exists() else []
+        return []
     missing = GENOMES_MAP_TSV if t2t.exists() else TREE2TAX_TSV
     return [
         Finding(
@@ -329,6 +378,35 @@ def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
             "exists; the tree2tax stage likely crashed mid-write -- re-run it.",
         )
     ]
+
+
+def _tree2tax_tables_problem(t2t: Path, gmap: Path) -> str | None:
+    """Why tree2tax.tsv and genomes_map.tsv do not describe the same leaves.
+
+    tree2tax.tsv holds a ``child``/``parent`` header and one edge per row;
+    its leaves are the children that are never a parent. genomes_map.tsv
+    maps every leaf to itself (and members to their leaf), so the two leaf
+    sets must be equal.
+    """
+    lines = t2t.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t") != ["child", "parent"]:
+        return f"{TREE2TAX_TSV} lacks its child/parent header"
+    edges = [line.split("\t") for line in lines[1:] if line]
+    if not edges or any(len(edge) != 2 for edge in edges):
+        return f"{TREE2TAX_TSV} holds no edges, or a row without two columns"
+    parents = {parent for _, parent in edges}
+    leaves = {child for child, _ in edges if child not in parents}
+    rows = [line.split("\t") for line in gmap.read_text(encoding="utf-8").splitlines() if line]
+    if not rows or any(len(row) != 2 for row in rows):
+        return f"{GENOMES_MAP_TSV} is empty, or holds a row without two columns"
+    mapped = {leaf for _, leaf in rows}
+    if leaves != mapped:
+        diff = sorted(leaves ^ mapped)
+        return (
+            f"{TREE2TAX_TSV} and {GENOMES_MAP_TSV} name different leaves "
+            f"({len(diff)} in one only, e.g. {_examples(diff)})"
+        )
+    return None
 
 
 def _layout(workdir: Path) -> SimpleNamespace:
@@ -412,7 +490,9 @@ def _check_leftovers(workdir: Path, config: Config) -> list[Finding]:
         str(p.relative_to(workdir))
         for pattern in ("*.tmp", "*.part")
         for p in workdir.rglob(pattern)
-        if "scratch" not in p.parts
+        # exFAT keeps a ._ AppleDouble companion beside each file; it is not
+        # a second leftover.
+        if "scratch" not in p.parts and not p.name.startswith("._")
     )
     if not leftovers:
         return []

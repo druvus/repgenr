@@ -448,3 +448,92 @@ def test_interrupted_stage_without_params_is_a_failure(tmp_path: Path) -> None:
     status = _runner.invoke(app, ["status", "-wd", str(wd)])
     assert "[interrupted] dereplicate" in status.stdout
     assert "cluster_summary  [interrupted]" in status.stdout
+
+
+def _tree2tax_pair(wd: Path, edges: str, mapping: str) -> None:
+    (wd / "tree2tax.tsv").write_text("child\tparent\n" + edges, encoding="utf-8")
+    (wd / "genomes_map.tsv").write_text(mapping, encoding="utf-8")
+
+
+_EDGES = "a\tn1\nb\tn1\nn1\troot\nc\troot\n"
+_MAP = "A1\ta\nB1\tb\nB2\tb\nC1\tc\n"
+
+
+def test_consistent_tree2tax_tables_pass(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    _tree2tax_pair(wd, _EDGES, _MAP)
+    assert "fail" not in _levels(diagnose(wd), "tree2tax")
+
+
+@pytest.mark.parametrize(
+    ("edges", "mapping", "expected"),
+    [
+        ("", _MAP, "holds no edges"),  # tree2tax.tsv emptied to its header
+        (_EDGES, "", "is empty"),  # genomes_map.tsv emptied
+        (_EDGES, "A1\ta\nB1\tb\n", "name different leaves"),  # map truncated
+        ("a\tn1\nb\tn1\n", _MAP, "name different leaves"),  # tree2tax truncated
+    ],
+)
+def test_truncated_tree2tax_tables_are_a_failure(
+    tmp_path: Path, edges: str, mapping: str, expected: str
+) -> None:
+    wd = _base_workdir(tmp_path)
+    _tree2tax_pair(wd, edges, mapping)
+    failures = _messages([f for f in diagnose(wd) if f.area == "tree2tax"], "fail")
+    assert expected in failures
+
+
+def test_headerless_tree2tax_is_a_failure(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "tree2tax.tsv").write_text("", encoding="utf-8")
+    (wd / "genomes_map.tsv").write_text(_MAP, encoding="utf-8")
+    assert "lacks its child/parent header" in _messages(diagnose(wd), "fail")
+
+
+def test_untracked_genome_is_a_warning(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "genomes" / "Fam_Gen_sp3_GCF_3.1.fasta").write_text(">x\nACGT\n", encoding="utf-8")
+    findings = diagnose(wd)
+    warned = _messages([f for f in findings if f.area == "genomes"], "warn")
+    assert "1 file(s)" in warned and "Fam_Gen_sp3_GCF_3.1.fasta" in warned
+    assert "re-run metadata" in warned
+
+
+def test_advice_names_the_stage_that_wrote_the_genome_set(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    cfg = Config()
+    cfg.record_stage("ingest", completed="2026-01-01T00:00:00")
+    cfg.save(wd)
+    (wd / "genomes" / "Fam_Gen_sp1_GCF_1.1.fasta").unlink()
+    failures = _messages(diagnose(wd), "fail")
+    assert "re-run ingest" in failures
+    assert "genome stage" not in failures
+
+
+def test_doctor_prints_findings_only(tmp_path: Path) -> None:
+    # The completeness guard's refusal text used to reach the console as an
+    # unformatted warning above the [FAIL] line that reports the same thing.
+    # A subprocess: pytest attaches its own handlers to every logger.
+    import subprocess
+    import sys
+
+    wd = _base_workdir(tmp_path)
+    (wd / "genomes" / "Fam_Gen_sp1_GCF_1.1.fasta").unlink()
+    result = subprocess.run(
+        [sys.executable, "-c", "from repgenr.cli.main import app; app()", "doctor", "-wd", str(wd)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stderr
+    assert result.stderr == ""
+    assert "--allow-incomplete" not in result.stdout
+
+
+def test_appledouble_companions_are_not_leftovers(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "tree").mkdir()
+    (wd / "tree" / "tree.nwk.part").write_text("(a", encoding="utf-8")
+    (wd / "tree" / "._tree.nwk.part").write_bytes(b"\0" * 16)
+    warned = _messages([f for f in diagnose(wd) if f.area == "leftovers"], "warn")
+    assert "1 temp file(s)" in warned and "._tree" not in warned
