@@ -21,6 +21,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import strip_fasta_suffix
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, parse_extra_int
 from .base import SnpParams, SnpResult, SnpTyper
@@ -62,7 +63,8 @@ class Ska2Typer(SnpTyper):
         # the container backend can bind the same directories it sees here.
         listing = out_dir / "genomes.tsv"
         listing.write_text(
-            "".join(f"{g.stem}\t{os.path.abspath(g)}\n" for g in genomes), encoding="utf-8"
+            "".join(f"{strip_fasta_suffix(g.name)}\t{os.path.abspath(g)}\n" for g in genomes),
+            encoding="utf-8",
         )
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
 

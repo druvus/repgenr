@@ -80,7 +80,13 @@ def _make_fake_run_tool(recorded: list[list[str]]):
             if cmd[1] == "sort":
                 _write(Path(_flag_value(cmd, "-o")), "")
         elif tool == "minimap2":
-            _write(Path(_flag_value(cmd, "-o") if "-o" in cmd else stdout_path), "@SQ\n")
+            # One full-length alignment against the reference (g1), so the
+            # simple typer masks nothing; every genome here is 12 bases.
+            query = Path(cmd[-1]).stem
+            _write(
+                Path(_flag_value(cmd, "-o") if "-o" in cmd else stdout_path),
+                f"@SQ\tSN:g1\tLN:12\n{query}\t0\tg1\t1\t60\t12M\t*\t0\t0\t*\t*\n",
+            )
         elif tool == "bcftools":
             if cmd[1] == "consensus":
                 out = Path(_flag_value(cmd, "-o"))

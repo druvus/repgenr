@@ -268,11 +268,11 @@ def _resolve_outgroup_leaf_from(
     candidates = sorted(p for p in outgroup_dir.iterdir() if not p.name.startswith("."))
     for f in candidates:
         if accession_from_filename(f.name) == accession:
-            return f.stem
+            return strip_fasta_suffix(f.name)
     for f in candidates:
         if accession in f.name:
             logger.info("Outgroup resolved by substring match: %s", f.name)
-            return f.stem
+            return strip_fasta_suffix(f.name)
     logger.warning(
         "No file in %s matches outgroup accession %s; tree is left unrooted",
         outgroup_dir,

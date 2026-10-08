@@ -898,3 +898,62 @@ def test_leaf_check_failure_leaves_an_interrupted_record(
     )
     assert record is not None and not record.get("completed")
     assert (workdir / "tree" / "tree.nwk").exists()
+
+
+def test_gzipped_genomes_and_outgroup_are_named_without_their_suffix(
+    workdir: Path, fake_phylo_tools, fake_snptyper, monkeypatch
+) -> None:
+    """Leaves, the outgroup leaf and the masker's exclusion use the name without .fasta.gz.
+
+    The typer names records as the simple typer does (strip_fasta_suffix), and
+    tree2tax and clusters.tsv use the same form.
+    """
+    import gzip
+
+    from repgenr.core.contracts import strip_fasta_suffix
+    from repgenr.stages import snptype as snptype_stage
+
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, 4):
+        with gzip.open(reps / f"Fam_gen_sp_GCA_00000{i}.fasta.gz", "wt") as fh:
+            fh.write(f">s{i}\nACGTACGT\n")
+    outgroup = workdir / "outgroup"
+    outgroup.mkdir()
+    with gzip.open(outgroup / "Fam_gen_og_GCA_000009.fasta.gz", "wt") as fh:
+        fh.write(">og\nACGTACGT\n")
+    (workdir / "outgroup_accession.txt").write_text("GCA_000009\n")
+
+    def named_call(self, genomes, reference, out_dir, params, logger) -> SnpResult:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        core = out_dir / "core.fasta"
+        core.write_text("".join(f">{strip_fasta_suffix(Path(g).name)}\nACGT\n" for g in genomes))
+        return SnpResult(core_snp_fasta=core)
+
+    monkeypatch.setattr(_FakeSnpTyper, "call", named_call)
+    seen: dict = {}
+    original_core = snptype_stage.snptype_core
+
+    def recording_core(genomes, reference, snp_dir, scratch, params, logger, **kw):
+        seen["mask_exclude"] = params.mask_exclude
+        return original_core(genomes, reference, snp_dir, scratch, params, logger, **kw)
+
+    monkeypatch.setattr(snptype_stage, "snptype_core", recording_core)
+    original_build = _MsaTreeBuilder.build
+
+    def recording_build(self, msa, out_dir, params, logger):
+        seen["outgroup"] = params.outgroup
+        return original_build(self, msa, out_dir, params, logger)
+
+    monkeypatch.setattr(_MsaTreeBuilder, "build", recording_build)
+
+    ctx = WorkdirContext(workdir, create=True)
+    tree = run(
+        ctx,
+        PhyloParams(treebuilder="faketree_msa", msa_source="snptype", snptyper="fakesnptyper"),
+    )
+    text = tree.read_text()
+    assert ".fasta" not in text
+    assert "Fam_gen_sp_GCA_000001" in text and "Fam_gen_og_GCA_000009" in text
+    assert seen["outgroup"] == "Fam_gen_og_GCA_000009"
+    assert "Fam_gen_og_GCA_000009" in seen["mask_exclude"]

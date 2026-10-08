@@ -250,6 +250,32 @@ All notable changes to RepGenR are documented here. The format follows
   genome replaced under the same name in a persistent `--tool-arg
   sketch_cache=DIR` is sketched again. The sketch CSV and picklist are
   csv-quoted, so a genome name containing a comma is one field.
+- `snptype --tool simple` and `phylo --msa-source snptype --snptyper simple`
+  (#232): reference positions that none of a genome's primary or supplementary
+  minimap2 alignments covers are N in that genome's consensus, instead of the
+  reference base. A core-SNP column is variable only when at least two of A,
+  C, G and T occur in it, non-ACGT characters are written as N, and the SNP
+  distance matrix counts each pair over the sites where both genomes have a
+  base. Assemblies are mapped with the minimap2 preset `asm20` (overridable
+  with `--tool-arg preset=<preset>`, or `preset=none` for minimap2's default
+  settings; other values exit 2). Positions within a deletion in the genome
+  are N as well. A pair of genomes with no shared site has the distance `NA`.
+  The log gives each genome's covered fraction of the reference and a summary,
+  warns below 50%, and a genome with no base at any core site is refused
+  (exit 3) instead of reaching the tree builder as N only. SNP counts,
+  `core_snp.fasta`, `full_alignment.fasta` and the distances change: on the 50-genome test set a copy of a genome with 500 kb
+  removed differed from it at 20539 sites and now at 0. An existing workdir is
+  not retyped by the upgrade alone; `snptype` and `phylo` rerun only with
+  `--force` or when their inputs or settings change.
+- `--mask gubbins` (#232) passes `--filter-percentage 100` to Gubbins unless
+  `gubbins_args` sets it. Gubbins 3.4.3 leaves taxa with more than 25% gaps or
+  N out of its analysis by default and still writes them to its outputs, so
+  such a taxon was never scanned for recombination. With a user-set value, a
+  taxon above it is refused (exit 3) before Gubbins runs.
+- Genome record names in the SNP typers' alignments, tree leaves, the phylo
+  outgroup leaf and the tree2tax outgroup lookup drop the whole FASTA suffix
+  (#232): a genome `x.fasta.gz` is `x`, as in `clusters.tsv`, instead of
+  `x.fasta`. Names of uncompressed genomes are unchanged.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.
@@ -476,6 +502,10 @@ All notable changes to RepGenR are documented here. The format follows
   reaches the console; exFAT `._` files are not counted as leftovers.
 - `phylo` (#234): the refusal for fewer than three representatives named a
   lower ANI threshold, which leaves fewer; it now names `--secondary-ani`.
+- `snptype --tool simple` and `phylo --msa-source snptype --snptyper simple`
+  (#232) exited 1 with a UnicodeDecodeError when the reference was a gzipped
+  genome (`.fasta.gz`). The reference copy is decompressed; query genomes are
+  passed to minimap2, which reads gzip itself.
 - `metadata` (#224): under `--limit` the automatic outgroup could be a target
   genome the cap left out; it now lies outside the target taxon. The API path
   keeps GTDB suffixes (`Bacillus_A`) and lowers a capitalised epithet. A

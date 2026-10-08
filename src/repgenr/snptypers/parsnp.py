@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.contracts import rename_fasta_records
+from ..core.contracts import rename_fasta_records, strip_fasta_suffix
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import link_or_copy
@@ -100,12 +100,13 @@ def _record_names(genomes: Sequence[Path], reference: Path) -> dict[str, str]:
     """harvesttools record name -> genome stem.
 
     harvesttools names a record by its file name, and the reference by its
-    file name plus '.ref'. Every other typer names records by genome stem,
+    file name plus '.ref'. Every other typer names records by genome stem
+    (the file name without its FASTA suffix and .gz),
     which the tree leaves, the outgroup lookup in tree2tax and the masker's
     outgroup exclusion all expect. The reference is passed resolved, so its
     target's name is mapped as well.
     """
-    names = {genome.name: genome.stem for genome in genomes}
+    names = {genome.name: strip_fasta_suffix(genome.name) for genome in genomes}
     for name in {reference.name, reference.resolve().name}:
-        names[f"{name}.ref"] = reference.stem
+        names[f"{name}.ref"] = strip_fasta_suffix(reference.name)
     return names
