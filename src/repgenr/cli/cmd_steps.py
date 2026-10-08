@@ -465,6 +465,12 @@ def genome_qc_cmd(
         ..., "-o", "--out", help="Output dir for quality.tsv and classification.tsv."
     ),
     threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    memory_gb: int = typer.Option(
+        16,
+        "--memory-gb",
+        min=1,
+        help="Memory budget in GB; caps concurrent classifier gathers at about 0.6 GB each.",
+    ),
     checkm2_db: Path | None = typer.Option(
         None,
         "--checkm2-db",
@@ -499,6 +505,7 @@ def genome_qc_cmd(
                 assemblies_dir=assemblies,
                 out_dir=out_dir,
                 threads=threads,
+                memory_gb=memory_gb,
                 checkm2_db=None if checkm2_db is None else str(checkm2_db),
                 classifier=classifier,
                 gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),

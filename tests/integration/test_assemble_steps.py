@@ -200,6 +200,35 @@ def test_genome_qc_scores_and_classifies_every_assembly(tmp_path, fakes, monkeyp
     assert "checkm2: 1.1.0" in versions and "fakecls: 1.0" in versions
 
 
+def test_genome_qc_passes_its_memory_budget_and_stores_no_scores(
+    tmp_path, fakes, monkeypatch
+) -> None:
+    """The classifier receives --memory-gb; the input directories, staged by
+    Nextflow, receive no stored CheckM2 scores."""
+    from repgenr.stages import assemble as stage
+    from repgenr.stages.assemble_qc import CHECKM2_CACHE
+
+    reads = _reads_tsv(tmp_path, [read_row(tmp_path, "SRR1")])
+    assemblies = _assembled(tmp_path, ["SRR1"], reads)
+    monkeypatch.setattr(stage, "preflight_checkm2", lambda: {"checkm2": "1.1.0"})
+    monkeypatch.setattr(stage, "run_checkm2", fake_checkm2({"SRR1.fasta": (98.5, 0.4)}))
+    sketch = tmp_path / "gtdb.sig.zip"
+    sketch.write_bytes(b"x")
+    genome_qc(
+        GenomeQcParams(
+            assemblies_dir=assemblies,
+            out_dir=tmp_path / "qc",
+            memory_gb=2,
+            checkm2_db=str(sketch),
+            classifier="fakecls",
+            gtdb_sketch=str(sketch),
+        ),
+        _LOG,
+    )
+    assert FakeClassifier.last_params is not None and FakeClassifier.last_params.memory_gb == 2
+    assert not (assemblies / "SRR1" / CHECKM2_CACHE).exists()
+
+
 def test_genome_qc_needs_a_database(tmp_path, fakes, monkeypatch) -> None:
     monkeypatch.delenv("CHECKM2DB", raising=False)
     monkeypatch.delenv("REPGENR_GTDB_SKETCH", raising=False)

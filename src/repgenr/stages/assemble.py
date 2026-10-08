@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -58,7 +59,15 @@ from ..core.manifest import record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
 from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
-from .assemble_qc import checkm2_db_from_env, preflight_checkm2, run_checkm2
+from .assemble_qc import (
+    CHECKM2_CACHE,
+    checkm2_db_from_env,
+    load_cached_quality,
+    preflight_checkm2,
+    quality_cache_key,
+    run_checkm2,
+    store_cached_quality,
+)
 from .ingest import OUTGROUP_ACCESSION_TXT
 
 GTDB_SKETCH_ENV = "REPGENR_GTDB_SKETCH"
@@ -216,6 +225,8 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         scratch=scratch,
         versions=versions,
         logger=logger,
+        memory_gb=params.memory_gb,
+        cache_dirs={run: assemblies / run for run in named},
     )
     if quality is not None:
         apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
@@ -239,8 +250,20 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     else:
         excused_path.unlink(missing_ok=True)
     if not assembled:
+        if params.append:
+            detail = "the existing selection is unchanged"
+        else:
+            had_set = (ctx.workdir / SELECTION_TSV).exists() or ctx.genomes_dir.is_dir()
+            _clear_genome_set(ctx, logger)
+            detail = (
+                "the previous genome set was cleared, so dereplicate refuses to run until "
+                "assemble succeeds"
+                if had_set
+                else "no genome set was written"
+            )
         raise WorkdirError(
-            f"None of the {len(rows)} runs produced an accepted assembly; see {EXCUSED_RUNS_TSV}."
+            f"None of the {len(rows)} runs produced an accepted assembly ({detail}); see "
+            f"{EXCUSED_RUNS_TSV}."
         )
 
     new_rows = [_selection_row(o) for o in assembled]
@@ -285,6 +308,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "n_assembled": len(assembled),
             "n_excused": len(excused),
             "n_disagree": n_disagree,
+            "n_genus_renamed": sum(1 for o in assembled if o.taxonomy_flag == GENUS_RENAMED),
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
         },
         tool_versions=versions,
@@ -310,6 +334,31 @@ def _why(exc: RepGenRError) -> str:
     if isinstance(exc, ToolExecutionError) and exc.output:
         return f"{exc}: {exc.output}"
     return str(exc)
+
+
+def planned_layout(row: ReadRow) -> str:
+    """The layout a run is assembled as.
+
+    ENA labels some short-read runs PAIRED while serving a single FASTQ file
+    (mate-1 reads only, or interleaved pairs the assemblers here do not split).
+    Such a run is planned as single-end, so an adapter that needs a read pair
+    (shovill) excuses it before anything is downloaded. Long-read runs keep
+    their label; their assemblers and polishers take any layout.
+    """
+    if (
+        row.layout == "PAIRED"
+        and len(row.fastq_urls) == 1
+        and row.platform not in _LONG_READ_PLATFORMS
+    ):
+        return "SINGLE"
+    return row.layout
+
+
+def read_set(row: ReadRow, files: tuple[Path, ...] = ()) -> ReadSet:
+    """The run as an adapter sees it, with the planned layout."""
+    return ReadSet(
+        row.run_accession, row.platform, row.instrument_model, planned_layout(row), files, row.bases
+    )
 
 
 def _default_jobs(pending: list[_Outcome]) -> int:
@@ -352,15 +401,24 @@ def _plan(
         elif not row.fastq_urls:
             outcome.excused = ExcusedRun(row.run_accession, "fetch", "no_fastq_mirror")
         else:
-            reads = ReadSet(
-                row.run_accession, row.platform, row.instrument_model, row.layout, (), row.bases
-            )
+            reads = read_set(row)
+            if reads.layout != row.layout and logger is not None:
+                logger.info(
+                    "%s: listed as %s with one FASTQ file; planned as single-end",
+                    row.run_accession,
+                    row.layout,
+                )
+            reason = "unsupported_platform"
             if params.assembler == "auto":
                 outcome.assembler = select_assembler(registry, reads)
-            elif registry.create(params.assembler).accepts(reads):
-                outcome.assembler = params.assembler
+            else:
+                adapter = registry.create(params.assembler)
+                if adapter.accepts(reads):
+                    outcome.assembler = params.assembler
+                elif reads.platform in adapter.read_types:
+                    reason = "unsupported_layout"
             if outcome.assembler is None:
-                outcome.excused = ExcusedRun(row.run_accession, "assemble", "unsupported_platform")
+                outcome.excused = ExcusedRun(row.run_accession, "assemble", reason)
             elif params.polisher == "auto":
                 outcome.polisher = select_polisher(polisher_registry, reads)
             elif params.polisher != "none":
@@ -404,7 +462,7 @@ def _accepted_extras(name: str | None, reg) -> frozenset[str]:  # noqa: ANN001
 
 def _polisher_request(name: str, row: ReadRow) -> str:
     """A polisher request as it applies to one run: 'none' when nothing would polish it."""
-    reads = ReadSet(row.run_accession, row.platform, row.instrument_model, row.layout, (), 0)
+    reads = read_set(row)
     if name == "none" or not accepting_polishers(polisher_registry, reads):
         return "none"
     if name != "auto" and name in polisher_registry.names():
@@ -554,9 +612,7 @@ def _excuse_missing_assemblers(plan: list[_Outcome], logger: logging.Logger) -> 
         if o.excused is None or o.excused.reason != "unsupported_platform":
             continue
         row = o.row
-        reads = ReadSet(
-            row.run_accession, row.platform, row.instrument_model, row.layout, (), row.bases
-        )
+        reads = read_set(row)
         names = accepting_assemblers(registry, reads)
         if names:
             o.excused = ExcusedRun(row.run_accession, "assemble", ASSEMBLER_NOT_INSTALLED)
@@ -594,9 +650,7 @@ def _warn_missing_polishers(plan: list[_Outcome], logger: logging.Logger) -> Non
         if o.excused is not None or o.stats is not None or o.polisher is not None:
             continue
         row = o.row
-        reads = ReadSet(
-            row.run_accession, row.platform, row.instrument_model, row.layout, (), row.bases
-        )
+        reads = read_set(row)
         names = accepting_polishers(polisher_registry, reads)
         if names:
             needed.setdefault(row.platform, names)
@@ -621,9 +675,7 @@ def _require_something_to_assemble(plan: list[_Outcome]) -> None:
         return
     by_platform: dict[str, list[str]] = {}
     for o in missing:
-        reads = ReadSet(
-            o.row.run_accession, o.row.platform, o.row.instrument_model, o.row.layout, (), 0
-        )
+        reads = read_set(o.row)
         by_platform.setdefault(o.row.platform, accepting_assemblers(registry, reads))
     detail = "; ".join(
         f"{platform} runs need one of {', '.join(names)}"
@@ -674,9 +726,7 @@ def _fetch_and_assemble(
 
     assert outcome.assembler is not None
     adapter = registry.create(outcome.assembler)
-    reads = ReadSet(
-        row.run_accession, row.platform, row.instrument_model, row.layout, files, row.bases
-    )
+    reads = read_set(row, files)
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
         result = adapter.assemble(
@@ -924,30 +974,60 @@ def assess(
     scratch: Path,
     versions: dict[str, str],
     logger: logging.Logger,
+    memory_gb: float | None = None,
+    cache_dirs: dict[str, Path] | None = None,
 ) -> tuple[dict[str, tuple[float, float]] | None, dict[str, Classification] | None]:
     """Score (CheckM2) and classify the assemblies in ``named`` (run -> FASTA).
 
     Either result is None when the corresponding database is not configured.
-    Both are keyed by run accession.
+    Both are keyed by run accession. With ``cache_dirs`` (run -> directory),
+    CheckM2 scores are stored per run and reused while the contigs, the
+    database and the CheckM2 version are unchanged. ``memory_gb`` bounds the
+    classifier's concurrent work.
     """
     quality: dict[str, tuple[float, float]] | None = None
     classified: dict[str, Classification] | None = None
     if checkm2_db and named:
-        versions.update(preflight_checkm2())
-        by_name = run_checkm2(
-            list(named.values()),
-            scratch / "checkm2",
-            db=Path(checkm2_db),
-            threads=threads,
-            logger=logger,
-        )
-        quality = {run: by_name[link.name] for run, link in named.items() if link.name in by_name}
+        checkm2_version = preflight_checkm2()
+        versions.update(checkm2_version)
+        keys: dict[str, dict[str, object]] = {}
+        quality = {}
         for run, link in named.items():
+            if cache_dirs is None or run not in cache_dirs:
+                continue
+            keys[run] = quality_cache_key(link, checkm2_db, checkm2_version.get("checkm2", ""))
+            stored = load_cached_quality(cache_dirs[run] / CHECKM2_CACHE, keys[run])
+            if stored is not None:
+                quality[run] = stored
+        to_score = {run: link for run, link in named.items() if run not in quality}
+        if quality:
+            logger.info(
+                "CheckM2: reusing the stored scores of %d of %d assemblies (same contigs, "
+                "database and CheckM2 version)",
+                len(quality),
+                len(named),
+            )
+        by_name = (
+            run_checkm2(
+                list(to_score.values()),
+                scratch / "checkm2",
+                db=Path(checkm2_db),
+                threads=threads,
+                logger=logger,
+            )
+            if to_score
+            else {}
+        )
+        for run, link in to_score.items():
             if link.name not in by_name:
                 logger.warning(
                     "%s: CheckM2 reported no quality; the assembly is kept without quality values",
                     run,
                 )
+                continue
+            quality[run] = by_name[link.name]
+            if run in keys and cache_dirs is not None:
+                store_cached_quality(cache_dirs[run] / CHECKM2_CACHE, keys[run], quality[run])
     elif not checkm2_db:
         logger.info(
             "No CheckM2 database configured (--checkm2-db or %s); assemblies are not "
@@ -966,6 +1046,7 @@ def assess(
                 db=sketch,
                 lineages=None if lineages is None else Path(lineages),
                 threads=threads,
+                memory_gb=memory_gb,
                 extra=dict(extra),
             ),
             logger,
@@ -1000,6 +1081,10 @@ def apply_quality(
             logger.warning("%s: excused, %s", o.row.run_accession, o.excused.reason)
 
 
+GENUS_RENAMED = "genus_renamed"
+CLASSIFIER_DISAGREES = "classifier_disagrees"
+
+
 def apply_classification(
     outcomes: list[_Outcome],
     classified: dict[str, Classification],
@@ -1008,7 +1093,13 @@ def apply_classification(
 ) -> int:
     """Name by GTDB tokens where the classifier agrees at genus; flag the rest.
 
-    Returns the number of disagreements.
+    A genome whose GTDB genus differs while the species epithet agrees (an
+    NCBI name GTDB has moved to another genus, such as Mycoplasmopsis
+    arginini, GTDB Metamycoplasma arginini) is flagged ``genus_renamed``;
+    any other difference is flagged ``classifier_disagrees``. Both keep the
+    submitted name, and neither excuses the genome.
+
+    Returns the number of disagreements (genus renames not counted).
     """
     n_disagree = 0
     for o in outcomes:
@@ -1018,22 +1109,47 @@ def apply_classification(
         versions["gtdb_sketch"] = o.gtdb.db_version or versions.get("gtdb_sketch", "")
         gtdb_tokens = _gtdb_tokens(o.gtdb.taxonomy)
         assert o.label is not None
+        gtdb_genus = next((c for c in o.gtdb.taxonomy.split(";") if c.startswith("g__")), "g__?")
         if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
             o.label = gtdb_tokens
             o.label_source = "classifier"
+        elif _same_epithet(o.label[2], gtdb_tokens[2]):
+            o.taxonomy_flag = GENUS_RENAMED
+            logger.info(
+                "%s: submitted as %s %s; GTDB places the species in %s (%s). Keeping the "
+                "submitted name and flagging %s",
+                o.row.run_accession,
+                o.label[1],
+                o.label[2],
+                gtdb_genus,
+                o.gtdb.taxonomy.split(";")[-1],
+                GENUS_RENAMED,
+            )
         else:
-            o.taxonomy_flag = "classifier_disagrees"
+            o.taxonomy_flag = CLASSIFIER_DISAGREES
             n_disagree += 1
             logger.warning(
                 "%s: submitted as genus %s (%s) but classified as %s, %s; keeping the "
-                "submitted name and flagging classifier_disagrees",
+                "submitted name and flagging %s",
                 o.row.run_accession,
                 o.label[1],
                 o.row.organism,
-                next((c for c in o.gtdb.taxonomy.split(";") if c.startswith("g__")), "g__?"),
+                gtdb_genus,
                 o.gtdb.taxonomy.split(";")[-1],
+                CLASSIFIER_DISAGREES,
             )
     return n_disagree
+
+
+# A GTDB placeholder suffix on a species epithet (coli_A, sanitised to coli-A).
+_GTDB_SUFFIX = re.compile(r"-[A-Z]+$")
+
+
+def _same_epithet(submitted: str, gtdb: str) -> bool:
+    """Whether two species tokens name the same epithet, ignoring a GTDB suffix."""
+    if not submitted or submitted == "unknown" or not gtdb:
+        return False
+    return _GTDB_SUFFIX.sub("", submitted) == _GTDB_SUFFIX.sub("", gtdb)
 
 
 def _gtdb_tokens(lineage: str) -> tuple[str, str, str]:
@@ -1111,6 +1227,28 @@ def _append_rows(
             kept.append(outgroup_row)
     logger.info("Appending %d assemblies to a selection of %d genomes", len(new_rows), len(kept))
     return [*kept, *new_rows]
+
+
+def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
+    """Leave an empty genome set after a stage in which every run was excused.
+
+    A successful call replaces ``genomes/``, ``selection.tsv``, the manifest
+    and the outgroup; when nothing was accepted the previous set would
+    otherwise stay in place and later stages would run on it unaware. The
+    selection keeps its header, ``genomes/`` is emptied, and the per-run
+    assemblies and their markers stay for a later call.
+    """
+    with staged_dir(ctx.genomes_dir):
+        pass
+    write_selection(ctx.workdir / SELECTION_TSV, [])
+    (ctx.workdir / ASSEMBLY_STATS_TSV).unlink(missing_ok=True)
+    _stage_outgroup(ctx, None, logger)
+    ctx.manifest.replace_genomes([])
+    logger.warning(
+        "Every run was excused: %s is now empty and %s lists no genomes.",
+        ctx.genomes_dir.name,
+        SELECTION_TSV,
+    )
 
 
 def _unlink_previous(genomes_dir: Path, accession: str) -> None:

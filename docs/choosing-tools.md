@@ -201,7 +201,17 @@ Notes:
   library came from MDA amplification, which the default now drops.
 - `--classifier auto` (the default) verifies each assembly's organism with
   sourmash gather against a GTDB sketch when one is given; without a sketch the
-  check is skipped and the log says so.
+  check is skipped and the log says so. Each gather against the GTDB rs226
+  representatives sketch holds about 0.6 GB, so the number run at once is
+  bounded by `--memory-gb` as well as `--threads`. A genus that GTDB has
+  renamed while the species epithet agrees is flagged `genus_renamed` rather
+  than `classifier_disagrees`.
+- `shovill` needs a read pair. A run that ENA labels PAIRED but lists with one
+  FASTQ file is planned as single-end, so `--assembler shovill` excuses it
+  before downloading; `auto` assembles it with `skesa`.
+- Changing only the CheckM2 gate (`--min-completeness`,
+  `--max-contamination`) reuses the scores stored per run; CheckM2 runs again
+  only for contigs, a database or a CheckM2 version it has not scored.
 - `--one-per-sample` (the default) keeps one run per sample. A long-read run is
   preferred when it has at least 100 Mb and a tenth of the largest short-read
   run.

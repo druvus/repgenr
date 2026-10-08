@@ -173,3 +173,92 @@ def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkey
     assert peak > 1, "gathers did not overlap"
     assert len(tax_calls) == 1 and tax_calls[0].count("--gather-csv") == 1
     assert sum(1 for t in tax_calls[0] if t.endswith("gather.csv")) == 4
+
+
+def test_gather_workers_are_bounded_by_the_memory_budget() -> None:
+    from repgenr.classifiers.sourmash import gather_workers
+
+    assert gather_workers(10, 16, None) == 10
+    assert gather_workers(10, 4, 100) == 4
+    assert gather_workers(10, 16, 1.2) == 2  # 1.2 / 0.6, not rounded down to 1
+    assert gather_workers(10, 16, 16) == 10
+    assert gather_workers(40, 64, 16) == 26
+    assert gather_workers(10, 16, 0.3) == 1
+
+
+def test_sourmash_classifier_caps_concurrent_gathers_by_memory(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    import threading
+    import time
+
+    import repgenr.classifiers.sourmash as sm
+
+    active, peak, lock = 0, 0, threading.Lock()
+
+    def fake_run_chain(caps, steps, *, logger, **kwargs):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        for _prefix, argv in steps:
+            cmd = [str(c) for c in argv]
+            if cmd[:2] == ["sourmash", "gather"]:
+                Path(cmd[cmd.index("-o") + 1]).write_text(_GATHER_HEADER, encoding="utf-8")
+        with lock:
+            active -= 1
+        return 0
+
+    def fake_run_tool(caps, argv, *, logger, **kwargs):
+        cmd = [str(c) for c in argv]
+        base = Path(cmd[cmd.index("--output-base") + 1])
+        Path(str(base) + ".classifications.csv").write_text(
+            _CLASSIFICATION.splitlines()[0] + "\n", encoding="utf-8"
+        )
+        return 0
+
+    monkeypatch.setattr(sm, "run_chain", fake_run_chain)
+    monkeypatch.setattr(sm, "run_tool", fake_run_tool)
+    genomes = []
+    for i in range(4):
+        g = tmp_path / f"SRR{i}.fasta"
+        g.write_text(">a\nACGT\n", encoding="utf-8")
+        genomes.append(g)
+    db, lineages = tmp_path / "gtdb.sig.zip", tmp_path / "lineages.csv"
+    db.write_bytes(b"zip"), lineages.write_text("ident\n", encoding="utf-8")
+    with caplog.at_level(logging.INFO, logger="test"):
+        registry.create("sourmash").classify(
+            genomes,
+            tmp_path / "cls",
+            ClassifyParams(db=db, lineages=lineages, threads=4, memory_gb=1),
+            _LOG,
+        )
+    assert peak == 1
+    assert any(
+        "4 gathers, 1 at a time" in r.getMessage() and "1 GB" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_stored_checkm2_scores_are_keyed(tmp_path: Path) -> None:
+    from repgenr.stages.assemble_qc import (
+        load_cached_quality,
+        quality_cache_key,
+        store_cached_quality,
+    )
+
+    contigs = tmp_path / "contigs.fasta"
+    contigs.write_text(">c\nACGT\n", encoding="utf-8")
+    db = tmp_path / "db.dmnd"
+    db.write_bytes(b"db")
+    key = quality_cache_key(contigs, db, "1.1.0")
+    store = tmp_path / "checkm2.json"
+    assert load_cached_quality(store, key) is None  # absent
+    store_cached_quality(store, key, (97.5, 1.25))
+    assert load_cached_quality(store, key) == (97.5, 1.25)
+    assert load_cached_quality(store, quality_cache_key(contigs, db, "1.2.0")) is None
+    contigs.write_text(">c\nACGTT\n", encoding="utf-8")
+    assert load_cached_quality(store, quality_cache_key(contigs, db, "1.1.0")) is None
+    store.write_text("{not json", encoding="utf-8")
+    assert load_cached_quality(store, key) is None

@@ -110,7 +110,11 @@ def assemble(
         "long-read run is pending).",
     ),
     memory_gb: int = typer.Option(
-        16, "--memory-gb", min=1, help="Memory hint per assembly, in GB, for tools that cap RAM."
+        16,
+        "--memory-gb",
+        min=1,
+        help="Memory hint per assembly, in GB, for tools that cap RAM; also the budget that "
+        "caps concurrent classifier gathers (about 0.6 GB each).",
     ),
     min_contig_length: int = typer.Option(
         500, "--min-contig-length", min=0, help="Drop contigs shorter than this many bases."

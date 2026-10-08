@@ -3427,6 +3427,17 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'module: task.cpus'
         live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
+      --memory-gb:
+        param: GenomeQcParams.memory_gb
+        value: '4'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: task.memory'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py'
       --checkm2-db:
         param: GenomeQcParams.checkm2_db
         value: '{alt_dir}'

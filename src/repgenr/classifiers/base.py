@@ -23,6 +23,9 @@ class ClassifyParams:
     db: Path
     lineages: Path | None = None
     threads: int = 16
+    # A memory budget in GB for the classifier's concurrent work; None leaves
+    # concurrency to the thread count alone.
+    memory_gb: float | None = None
     extra: dict = field(default_factory=dict)
 
 

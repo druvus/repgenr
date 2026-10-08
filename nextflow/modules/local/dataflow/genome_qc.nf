@@ -33,6 +33,7 @@ process GENOME_QC {
         --out qc \\
         ${args} \\
         --threads ${task.cpus} \\
+        --memory-gb ${task.memory.toGiga()} \\
         --versions-out tool_versions.yml
 
     repgenr_versions_fragment "${task.process}" tool_versions.yml
