@@ -170,8 +170,42 @@ def test_a_renamed_genus_with_the_same_epithet_is_flagged_genus_renamed(
     record = ctx.config.stages["assemble"]
     assert record.params["n_disagree"] == 1 and record.params["n_genus_renamed"] == 1
     renamed = [r for r in caplog.records if "genus_renamed" in r.getMessage()]
-    assert renamed and renamed[0].levelno == logging.INFO
+    assert renamed and renamed[0].levelno == logging.WARNING
     assert "g__Metamycoplasma" in renamed[0].getMessage()
+
+
+@pytest.mark.parametrize(
+    ("organism", "ncbi", "lineage"),
+    [
+        (
+            "Klebsiella pneumoniae",
+            ("Enterobacteriaceae", "Klebsiella", "pneumoniae"),
+            "d__Bacteria;f__Streptococcaceae;g__Streptococcus;s__Streptococcus pneumoniae",
+        ),
+        (
+            "Escherichia coli",
+            ("Enterobacteriaceae", "Escherichia", "coli"),
+            "d__Bacteria;f__Campylobacteraceae;g__Campylobacter_D;s__Campylobacter_D coli",
+        ),
+    ],
+)
+def test_a_shared_epithet_in_another_family_is_a_disagreement(
+    workdir, tmp_path, fakes, organism, ncbi, lineage
+) -> None:
+    FakeClassifier.lineages = {"SRR1.fasta": lineage}
+    family, genus, species = ncbi
+    row = read_row(tmp_path, "SRR1", organism=organism, family=family, genus=genus, species=species)
+    ctx = _prepare(workdir, [row])
+    run(
+        ctx,
+        AssembleParams(
+            assembler="fakeasm", classifier="fakecls", gtdb_sketch=_db(tmp_path / "db.sig.zip")
+        ),
+    )
+    [stats] = read_assembly_stats(workdir / ASSEMBLY_STATS_TSV)
+    assert stats.taxonomy_flag == "classifier_disagrees"
+    record = ctx.config.stages["assemble"]
+    assert record.params["n_disagree"] == 1 and record.params["n_genus_renamed"] == 0
 
 
 @pytest.mark.parametrize(
@@ -344,12 +378,100 @@ def test_a_total_failure_through_the_cli_marks_the_stage_and_dereplicate_exits_3
     assert derep.exit_code == 3, derep.output
 
 
-def test_a_first_call_in_which_every_run_fails_says_no_set_was_written(
+def test_a_first_call_in_which_every_run_fails_writes_no_genome_set(
     workdir, tmp_path, fakes
 ) -> None:
     FakeAssembler.fail_runs = frozenset({"SRR1"})
     ctx = _prepare(workdir, [read_row(tmp_path, "SRR1")])
     with pytest.raises(WorkdirError, match="no genome set was written"):
         run(ctx, AssembleParams(assembler="fakeasm"))
-    assert read_selection(workdir / SELECTION_TSV) == []
-    assert not any(ctx.genomes_dir.iterdir())
+    assert not (workdir / SELECTION_TSV).exists()
+    assert not ctx.genomes_dir.exists()
+    assert not (workdir / "manifest.sqlite").exists()
+    assert not ctx.outgroup_dir.exists()
+    assert (workdir / EXCUSED_RUNS_TSV).exists()
+
+
+def _genome_stage_workdir(workdir: Path) -> WorkdirContext:
+    """A workdir as metadata + genome leave it: one GTDB genome and an outgroup."""
+    from repgenr.core.contracts import SelectionRow, write_selection
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.genomes_dir.mkdir(parents=True)
+    ctx.outgroup_dir.mkdir(parents=True)
+    rows = [
+        SelectionRow("GCF_1", "Fam", "Gen", "sp", False, "Fam_Gen_sp_GCF_1.fasta"),
+        SelectionRow("GCF_9", "Fam", "Out", "og", True, "Fam_Out_og_GCF_9.fasta"),
+    ]
+    (ctx.genomes_dir / rows[0].filename).write_text(">g\nACGT\n", encoding="utf-8")
+    (ctx.outgroup_dir / rows[1].filename).write_text(">o\nACGT\n", encoding="utf-8")
+    (workdir / "outgroup_accession.txt").write_text("GCF_9\n", encoding="utf-8")
+    write_selection(workdir / SELECTION_TSV, rows)
+    ctx.manifest.replace_genomes(
+        [
+            GenomeRecord(
+                r.accession, r.filename, "gtdb", r.family, r.genus, r.species, r.is_outgroup
+            )
+            for r in rows
+        ]
+    )
+    return ctx
+
+
+def test_a_total_failure_keeps_a_genome_set_another_stage_wrote(
+    workdir, tmp_path, fakes, monkeypatch
+) -> None:
+    _checkm2(monkeypatch, {"SRR1.fasta": (60.0, 1.0)})
+    ctx = _genome_stage_workdir(workdir)
+    write_reads(workdir / READS_TSV, [read_row(tmp_path, "SRR1")])
+    with pytest.raises(WorkdirError, match=r"\(sources: gtdb\) was kept") as info:
+        run(
+            ctx,
+            AssembleParams(
+                assembler="fakeasm",
+                checkm2_db=_db(tmp_path / "checkm2.dmnd"),
+                min_completeness=90.0,
+            ),
+        )
+    assert info.value.exit_code == 3
+    assert [r.accession for r in read_selection(workdir / SELECTION_TSV)] == ["GCF_1", "GCF_9"]
+    assert (ctx.genomes_dir / "Fam_Gen_sp_GCF_1.fasta").exists()
+    assert (ctx.outgroup_dir / "Fam_Out_og_GCF_9.fasta").exists()
+    assert (workdir / "outgroup_accession.txt").read_text().strip() == "GCF_9"
+    assert len(ctx.manifest.all_genomes(include_outgroup=True)) == 2
+
+
+def test_a_total_failure_of_downloads_keeps_the_assembled_set(workdir, tmp_path, fakes) -> None:
+    ctx = _prepare(workdir, [read_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    # Every run of the next call fails its download (a bad checksum here, an
+    # unreachable ENA in practice); nothing was judged, so the set stays.
+    write_reads(workdir / READS_TSV, [read_row(tmp_path, "SRR2", fastq_md5=("0" * 32, "0" * 32))])
+    with pytest.raises(WorkdirError, match="no run could be fetched or assembled"):
+        run(ctx, AssembleParams(assembler="fakeasm"))
+    assert [r.accession for r in read_selection(workdir / SELECTION_TSV)] == ["SRR1"]
+    assert len(list(ctx.genomes_dir.iterdir())) == 1
+    excused = read_excused_runs(workdir / EXCUSED_RUNS_TSV)
+    assert [e.reason.split(":")[0] for e in excused] == ["download_failed"]
+
+
+def test_the_clearing_warning_comes_before_the_removal(
+    workdir, tmp_path, fakes, monkeypatch, caplog
+) -> None:
+    _checkm2(monkeypatch, {"SRR1.fasta": (60.0, 1.0)})
+    db = _db(tmp_path / "checkm2.dmnd")
+    ctx = _prepare(workdir, [read_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=db))
+    seen: list[bool] = []
+    original = stage._clear_genome_set
+
+    def spy(ctx_, logger):
+        seen.append(any("emptying" in r.getMessage() for r in caplog.records))
+        original(ctx_, logger)
+
+    monkeypatch.setattr(stage, "_clear_genome_set", spy)
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING), pytest.raises(WorkdirError):
+        run(ctx, AssembleParams(assembler="fakeasm", checkm2_db=db, min_completeness=90.0))
+    assert seen == [True]

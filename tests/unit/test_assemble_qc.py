@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from repgenr.classifiers.base import ClassifyParams, registry
@@ -259,6 +260,10 @@ def test_stored_checkm2_scores_are_keyed(tmp_path: Path) -> None:
     assert load_cached_quality(store, key) == (97.5, 1.25)
     assert load_cached_quality(store, quality_cache_key(contigs, db, "1.2.0")) is None
     contigs.write_text(">c\nACGTT\n", encoding="utf-8")
+    assert load_cached_quality(store, quality_cache_key(contigs, db, "1.1.0")) is None
+    contigs.write_text(">c\nACGT\n", encoding="utf-8")
+    assert load_cached_quality(store, quality_cache_key(contigs, db, "1.1.0")) == (97.5, 1.25)
+    os.utime(db, (1_000_000_000, 1_000_000_000))  # a database replaced in place
     assert load_cached_quality(store, quality_cache_key(contigs, db, "1.1.0")) is None
     store.write_text("{not json", encoding="utf-8")
     assert load_cached_quality(store, key) is None

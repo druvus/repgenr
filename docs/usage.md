@@ -306,7 +306,8 @@ resolved path and size and the CheckM2 version (the image under
 `--container`), so a later call that changes only `--min-completeness` or
 `--max-contamination` applies the stored scores without running CheckM2
 again (about 5 minutes for two genomes under emulation); a run whose contigs,
-database or CheckM2 version differ is scored again. With a GTDB sourmash sketch (`--gtdb-sketch` and
+database (path, size or modification time) or CheckM2 version differ is
+scored again. `--force` reruns the stage but does not bypass the stored scores; to score a run again, delete `assemblies/<run>/checkm2.json`. With a GTDB sourmash sketch (`--gtdb-sketch` and
 `--gtdb-lineages`, or `REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`; the
 `gtdb-rs226-reps.k31-sc10k.sig.zip` sketch and its `lineages.csv` from
 `https://farm.cse.ucdavis.edu/~ctbrown/sourmash-db/gtdb-rs226/` serve), each
@@ -315,10 +316,13 @@ a sketch is configured; `none` never). When the GTDB genus agrees with the
 submitted organism, the GTDB family, genus and species name the genome file,
 so a reads-derived genome groups with GTDB-downloaded ones; otherwise the
 submitted name stays and `assembly_stats.tsv` flags the genome. The flag is
-`genus_renamed`, logged as information, when only the genus differs and the
-species epithet agrees (NCBI Mycoplasmopsis arginini is GTDB Metamycoplasma
-arginini), and `classifier_disagrees`, with a warning, for any other
-difference. Neither flag excuses the genome. Both lineages are kept in that table, and the sketch
+`genus_renamed` when the genus differs but the family and the species
+epithet agree, so GTDB has moved the species to another genus of the same
+family (NCBI Mycoplasmopsis arginini is GTDB Metamycoplasma arginini), and
+`classifier_disagrees` for any other difference, including a shared epithet
+in another family (Klebsiella pneumoniae against Streptococcus pneumoniae).
+Both are warned about, neither excuses the genome, and only
+`classifier_disagrees` counts as a disagreement in the stage record. Both lineages are kept in that table, and the sketch
 release is recorded in provenance next to the metadata release. The database
 paths and the checkm2 and sourmash binaries are checked before any run is
 fetched, so a wrong path exits 2 and a missing tool exits 4 at once rather
@@ -1106,6 +1110,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 2 | Invalid or missing user input (also Typer's own usage errors). |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, NCBI Datasets, BV-BRC, ENA) failed, e.g. because the network is unreachable. `genome` and `vmetadata` on NCBI Virus check that the NCBI Datasets host answers before running the `datasets` CLI; a network failure inside `datasets` is reported as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. `assemble` then leaves an empty genome set rather than the previous one (except under `--append`), so `dereplicate` also exits 3 instead of running on stale genomes; see [output.md](output.md#when-every-sequencing-run-is-excused). |
+  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. When an earlier `assemble` call wrote the genome set and at least one run was judged (rejected by the assembler, polisher or quality gate), `assemble` empties that set, so `dereplicate` also exits 3 instead of running on stale genomes; a set written by another stage, or one kept because every run failed to download, stays in place. See [output.md](output.md#when-every-sequencing-run-is-excused). |
   | 4 | A required external tool is absent or below its version floor. |
   | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed (one console line; the command and output tail are in `repgenr.log`). Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |

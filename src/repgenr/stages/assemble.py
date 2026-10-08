@@ -42,6 +42,7 @@ from ..core.contracts import (
     atomic_replace,
     genome_filename,
     read_reads,
+    read_selection,
     sanitise_taxon_tokens,
     write_assembly_stats,
     write_excused_runs,
@@ -55,7 +56,7 @@ from ..core.errors import (
     WorkdirError,
 )
 from ..core.executors import parallel_map
-from ..core.manifest import record_from_selection
+from ..core.manifest import MANIFEST_FILENAME, record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
 from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
@@ -250,17 +251,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     else:
         excused_path.unlink(missing_ok=True)
     if not assembled:
-        if params.append:
-            detail = "the existing selection is unchanged"
-        else:
-            had_set = (ctx.workdir / SELECTION_TSV).exists() or ctx.genomes_dir.is_dir()
-            _clear_genome_set(ctx, logger)
-            detail = (
-                "the previous genome set was cleared, so dereplicate refuses to run until "
-                "assemble succeeds"
-                if had_set
-                else "no genome set was written"
-            )
+        detail = _total_failure(ctx, params, excused, logger)
         raise WorkdirError(
             f"None of the {len(rows)} runs produced an accepted assembly ({detail}); see "
             f"{EXCUSED_RUNS_TSV}."
@@ -1093,11 +1084,14 @@ def apply_classification(
 ) -> int:
     """Name by GTDB tokens where the classifier agrees at genus; flag the rest.
 
-    A genome whose GTDB genus differs while the species epithet agrees (an
-    NCBI name GTDB has moved to another genus, such as Mycoplasmopsis
-    arginini, GTDB Metamycoplasma arginini) is flagged ``genus_renamed``;
-    any other difference is flagged ``classifier_disagrees``. Both keep the
-    submitted name, and neither excuses the genome.
+    A genome whose GTDB genus differs while the family and the species
+    epithet agree (an NCBI name GTDB has moved to another genus of the same
+    family, such as Mycoplasmopsis arginini, GTDB Metamycoplasma arginini) is
+    flagged ``genus_renamed``; any other difference is flagged
+    ``classifier_disagrees``. Both are warned about and keep the submitted
+    name, and neither excuses the genome. The family is required because an
+    epithet alone is shared across unrelated genera (Klebsiella pneumoniae,
+    Streptococcus pneumoniae).
 
     Returns the number of disagreements (genus renames not counted).
     """
@@ -1113,11 +1107,11 @@ def apply_classification(
         if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
             o.label = gtdb_tokens
             o.label_source = "classifier"
-        elif _same_epithet(o.label[2], gtdb_tokens[2]):
+        elif _same_taxon(o.label[0], gtdb_tokens[0]) and _same_epithet(o.label[2], gtdb_tokens[2]):
             o.taxonomy_flag = GENUS_RENAMED
-            logger.info(
-                "%s: submitted as %s %s; GTDB places the species in %s (%s). Keeping the "
-                "submitted name and flagging %s",
+            logger.warning(
+                "%s: submitted as %s %s; GTDB places the species in %s of the same family "
+                "(%s). Keeping the submitted name and flagging %s",
                 o.row.run_accession,
                 o.label[1],
                 o.label[2],
@@ -1143,6 +1137,13 @@ def apply_classification(
 
 # A GTDB placeholder suffix on a species epithet (coli_A, sanitised to coli-A).
 _GTDB_SUFFIX = re.compile(r"-[A-Z]+$")
+
+
+def _same_taxon(submitted: str, gtdb: str) -> bool:
+    """Whether two family (or genus) tokens agree, ignoring a GTDB suffix."""
+    if not submitted or submitted == "unknown" or not gtdb:
+        return False
+    return _GTDB_SUFFIX.sub("", submitted) == _GTDB_SUFFIX.sub("", gtdb)
 
 
 def _same_epithet(submitted: str, gtdb: str) -> bool:
@@ -1229,14 +1230,71 @@ def _append_rows(
     return [*kept, *new_rows]
 
 
-def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
-    """Leave an empty genome set after a stage in which every run was excused.
+# Excuses that say nothing about the run's data: it was never fetched, or no
+# assembler could be run on this host. A stage in which only these occurred
+# has not judged any run, so it does not discard an existing genome set.
+_UNJUDGED_REASONS = ("download_failed", "no_fastq_mirror", ASSEMBLER_NOT_INSTALLED)
 
-    A successful call replaces ``genomes/``, ``selection.tsv``, the manifest
-    and the outgroup; when nothing was accepted the previous set would
-    otherwise stay in place and later stages would run on it unaware. The
-    selection keeps its header, ``genomes/`` is emptied, and the per-run
-    assemblies and their markers stay for a later call.
+
+def _total_failure(
+    ctx: WorkdirContext,
+    params: AssembleParams,
+    excused: list[ExcusedRun],
+    logger: logging.Logger,
+) -> str:
+    """Decide what happens to the existing genome set when no run was accepted.
+
+    The set is emptied only when ``assemble`` wrote it (every manifest row,
+    outgroup included, has source ``sra``) and at least one run was judged
+    (assembled, polished or quality-checked and rejected, or refused by the
+    assembler). A set written by ``genome``, ``ingest`` or ``vgenome``, a set
+    under ``--append``, or a stage in which every run failed to download is
+    left as it is. Returns the clause the error message gives.
+    """
+    if params.append:
+        return "the existing selection is unchanged"
+    selection = ctx.workdir / SELECTION_TSV
+    manifest_path = ctx.workdir / MANIFEST_FILENAME
+    records = ctx.manifest.all_genomes(include_outgroup=True) if manifest_path.exists() else []
+    selected = read_selection(selection) if selection.exists() else []
+    files = (
+        [p for p in ctx.genomes_dir.iterdir() if not p.name.startswith(".")]
+        if ctx.genomes_dir.is_dir()
+        else []
+    )
+    if not records and not selected and not files and not ctx.outgroup_dir.exists():
+        return "no genome set was written"
+    foreign = sorted({r.source or "unknown" for r in records if r.source != "sra"})
+    if foreign or not records:
+        origin = f"sources: {', '.join(foreign)}" if foreign else "not recorded in the manifest"
+        return (
+            f"the existing genome set of {len(selected) or len(records)} genome(s) "
+            f"({origin}) was kept, since assemble did not write it"
+        )
+    if all(e.reason.startswith(_UNJUDGED_REASONS) for e in excused):
+        return (
+            f"the genome set of {len(records)} genome(s) from an earlier assemble call was "
+            "kept, since no run could be fetched or assembled in this one; rerun with "
+            "--force once the cause is resolved"
+        )
+    logger.warning(
+        "Every run was excused: emptying %s, %s and the manifest (written by an earlier "
+        "assemble call) so that later stages do not run on them.",
+        ctx.genomes_dir.name,
+        SELECTION_TSV,
+    )
+    _clear_genome_set(ctx, logger)
+    return (
+        "the previous genome set was cleared, so dereplicate refuses to run until assemble succeeds"
+    )
+
+
+def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
+    """Empty the genome set an earlier ``assemble`` call wrote.
+
+    The selection keeps its header, ``genomes/`` is emptied, the outgroup
+    (staged by that call) is removed, and the per-run assemblies and their
+    markers stay for a later call.
     """
     with staged_dir(ctx.genomes_dir):
         pass
@@ -1244,11 +1302,6 @@ def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
     (ctx.workdir / ASSEMBLY_STATS_TSV).unlink(missing_ok=True)
     _stage_outgroup(ctx, None, logger)
     ctx.manifest.replace_genomes([])
-    logger.warning(
-        "Every run was excused: %s is now empty and %s lists no genomes.",
-        ctx.genomes_dir.name,
-        SELECTION_TSV,
-    )
 
 
 def _unlink_previous(genomes_dir: Path, accession: str) -> None:

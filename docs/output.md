@@ -26,9 +26,9 @@ top level, and the execution reports under `pipeline_info/`.
 | `missing_accessions.txt` | genome | Accessions the download did not return, or whose FASTA failed the package checksum; the completeness guard of later stages reads it. |
 | `<version>_metadata_r<major>.tsv.gz` (or `.tar.gz`), `<version>_metadata_r<major>.release` | metadata | The downloaded GTDB table (`--source tsv` without `--metadata-path`) and the exact release it was fetched for, which `--nodownload` checks before reusing the table. |
 | `reads.tsv` | reads | The selected sequencing runs: run, sample and study accessions, organism and taxid, the resolved family/genus/species tokens, platform, instrument, layout, bases, the FASTQ locations, checksums and sizes ENA reports (empty when ENA holds no FASTQ mirror), and ENA's library selection (RANDOM, MDA, PCR, ...). |
-| `assemblies/<run>/` | assemble | Each assembled run's filtered contigs and its `assembly.ok` marker (assembler and polisher, their versions, metrics, and the settings the run was built with); a re-run reuses a run whose settings agree and assembles it again otherwise. With a CheckM2 database, `checkm2.json` stores the run's completeness and contamination with what they were computed from (the SHA-256 of the contigs, the database's resolved path and size, the CheckM2 version or image); a later call with other `--min-completeness` or `--max-contamination` values applies the stored scores, and CheckM2 runs again only for a run where one of these differs. |
-| `assembly_stats.tsv` | assemble | Per-assembly metrics: assembler, contigs, total length, N50, largest contig, estimated coverage, the NCBI taxonomy used for the name, quality and classification columns once those steps run, and the polisher that corrected a long-read assembly. `label_source` is `classifier` when the GTDB tokens name the genome (the genera agree) and `metadata` otherwise. `taxonomy_flag` is empty when the genera agree, `genus_renamed` when the genera differ but the species epithet is the same (an NCBI name that GTDB places in another genus, such as Mycoplasmopsis arginini, GTDB Metamycoplasma arginini; a GTDB suffix such as `_A` is ignored in the comparison), and `classifier_disagrees` for any other difference. Both flags keep the submitted name, and neither excuses the genome; only `classifier_disagrees` counts towards `n_disagree` in the stage record, which records the renames as `n_genus_renamed`. |
-| `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. Reasons include `no_fastq_mirror`, `download_failed`, `unsupported_platform` (no assembler takes the platform), `unsupported_layout` (the requested assembler takes the platform but not the layout, for example shovill and a run with one FASTQ file), `assembler_not_installed`, `assembly_failed`, `polish_failed` and `qc_failed`. When every run is excused, `assemble` exits 3 and leaves an empty genome set (below). |
+| `assemblies/<run>/` | assemble | Each assembled run's filtered contigs and its `assembly.ok` marker (assembler and polisher, their versions, metrics, and the settings the run was built with); a re-run reuses a run whose settings agree and assembles it again otherwise. With a CheckM2 database, `checkm2.json` stores the run's completeness and contamination with what they were computed from (the SHA-256 of the contigs, the database's resolved path, size and modification time, the CheckM2 version or image); a later call with other `--min-completeness` or `--max-contamination` values applies the stored scores, and CheckM2 runs again only for a run where one of these differs. `--force` reruns the stage but does not bypass the stored scores; to score a run again, delete `assemblies/<run>/checkm2.json`. |
+| `assembly_stats.tsv` | assemble | Per-assembly metrics: assembler, contigs, total length, N50, largest contig, estimated coverage, the NCBI taxonomy used for the name, quality and classification columns once those steps run, and the polisher that corrected a long-read assembly. `label_source` is `classifier` when the GTDB tokens name the genome (the genera agree) and `metadata` otherwise. `taxonomy_flag` is empty when the genera agree, `genus_renamed` when the genera differ but the family and the species epithet agree (an NCBI name that GTDB places in another genus of the same family, such as Mycoplasmopsis arginini, GTDB Metamycoplasma arginini; a GTDB suffix such as `_A` is ignored in the comparison), and `classifier_disagrees` for any other difference, including a shared epithet in another family (Klebsiella pneumoniae against Streptococcus pneumoniae). Both flags are warned about, keep the submitted name, and neither excuses the genome; only `classifier_disagrees` counts towards `n_disagree` in the stage record, which records the renames as `n_genus_renamed`. |
+| `excused_runs.tsv` | assemble | Runs that produced no genome, with the step that gave up (`fetch`, `assemble`, ...) and the reason; the completeness guard excuses them like `missing_accessions.txt`. Reasons include `no_fastq_mirror`, `download_failed`, `unsupported_platform` (no assembler takes the platform), `unsupported_layout` (the requested assembler takes the platform but not the layout, for example shovill and a run with one FASTQ file), `assembler_not_installed`, `assembly_failed`, `polish_failed` and `qc_failed`. When every run is excused, `assemble` exits 3 and, in the cases described below, leaves an empty genome set. |
 | `virus_download_wd/` | vmetadata | Downloaded viral sequences and the metadata tables `vgenome` selects from, and `download.source` naming the source and target of `download.fa`. `virus_metadata_base.tsv` (and `virus_metadata_ncbi.tsv` on the BV-BRC path) at the workdir root are copies of those tables. |
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
 | `derep/representatives/` | dereplicate | The representative genomes, one genome file per cluster; the distinct values of the first column of `clusters.tsv`. |
@@ -54,18 +54,35 @@ top level, and the execution reports under `pipeline_info/`.
 
 ## When every sequencing run is excused
 
-When `assemble` accepts no run (each was excused, for example because the
-CheckM2 gate rejected every assembly), it exits 3, `status` shows the stage
-as interrupted, and the genome set of the previous call is not left in place:
-`genomes/` is emptied, `selection.tsv` keeps only its header, the manifest
-lists no genomes, `assembly_stats.tsv` is removed, and an outgroup staged
-with `--outgroup` is removed with `outgroup_accession.txt`. `dereplicate`
-then refuses with exit 3 (no genome files) rather than run on the earlier
-set; the outputs of an earlier `dereplicate` and `phylo` stay until those
-stages run again. `excused_runs.tsv` gives the reasons, and the finished runs under
-`assemblies/` stay, so a later call with other settings (a looser quality
-gate, say) reuses them. With `--append` nothing is removed: the existing
-selection stays as it was, and the error says so.
+When `assemble` accepts no run, it exits 3, `status` shows the stage as
+interrupted, and `excused_runs.tsv` gives the reasons. What happens to the
+genome set already in the working directory depends on who wrote it and on
+whether any run was judged:
+
+- **Written by an earlier `assemble` call, and at least one run judged.** A
+  run counts as judged when it was assembled, polished or quality-checked and
+  rejected, or refused by the assembler (`assembly_failed`, `polish_failed`,
+  `qc_failed`, `unsupported_platform`, `unsupported_layout`). The set is
+  emptied: a warning is logged first, then `genomes/` is emptied,
+  `selection.tsv` keeps only its header, the manifest lists no genomes,
+  `assembly_stats.tsv` is removed, and the outgroup that call staged is
+  removed with `outgroup_accession.txt`. `dereplicate` then refuses with
+  exit 3 (no genome files) rather than run on the earlier set; the outputs of
+  an earlier `dereplicate` and `phylo` stay until those stages run again.
+- **Written by an earlier `assemble` call, but no run judged.** When every
+  excuse is `download_failed`, `no_fastq_mirror` or `assembler_not_installed`
+  (ENA unreachable, say), the set is kept and the error says so; rerun with
+  `--force` once the cause is resolved.
+- **Written by another stage** (`genome`, `ingest`, `vgenome`; any manifest
+  row whose source is not `sra`) or not recorded in the manifest. The set and
+  its outgroup are kept, and the error names their sources.
+- **Under `--append`.** Nothing is removed; the existing selection stays as
+  it was.
+- **No set present** (a first call). Nothing is written: no `genomes/`, no
+  `selection.tsv`, no manifest.
+
+The finished runs under `assemblies/` always stay, so a later call with other
+settings (a looser quality gate, say) reuses them.
 
 ## Cluster summary
 

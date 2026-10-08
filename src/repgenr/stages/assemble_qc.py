@@ -115,18 +115,22 @@ def _sha256(path: Path) -> str:
 def quality_cache_key(contigs: Path, db: str | Path, version: str) -> dict[str, object]:
     """What a stored score depends on: the contigs, the database and the CheckM2 version.
 
-    The database is identified by its resolved path and size, so a database
-    replaced in place by another release also invalidates the stored scores.
+    The database is identified by its resolved path, size and modification
+    time (whole seconds), so a database replaced in place by another release
+    also invalidates the stored scores; copying the same file anew does too,
+    which costs one CheckM2 pass and no wrong result.
     """
     db_path = Path(db).expanduser().resolve()
     try:
-        db_size = db_path.stat().st_size
+        stat = db_path.stat()
+        db_size, db_mtime = stat.st_size, int(stat.st_mtime)
     except OSError:
-        db_size = -1
+        db_size, db_mtime = -1, -1
     return {
         "contigs_sha256": _sha256(contigs),
         "db": str(db_path),
         "db_size": db_size,
+        "db_mtime": db_mtime,
         "checkm2": version,
     }
 
