@@ -154,7 +154,6 @@ All notable changes to RepGenR are documented here. The format follows
   process emits `tree_msa` (was `snp`), `PHYLO` publishes the typing pass
   with `tree/`, and the published alignment moves from `phylo/snp/` to
   `phylo/tree/msa/`.
-- `genome`, `vmetadata` (#PR): before the first `datasets` call, one request
 - `genome`, `vmetadata` (#229): before the first `datasets` call, one request
   with the 15 s connect timeout checks that `api.ncbi.nlm.nih.gov` answers,
   using the proxy settings from the environment; `genome` also checks the
