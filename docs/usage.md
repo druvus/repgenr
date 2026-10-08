@@ -1152,7 +1152,7 @@ repgenr --container singularity --container-cache /Volumes/LaCie/repgenr_sif \
 |--------|---------|---------|
 | `--container {none,docker,singularity}` | `REPGENR_CONTAINER` | execution backend |
 | `--container-engine <bin>` | `REPGENR_CONTAINER_ENGINE` | engine override (apptainer, podman) |
-| `--container-cache <dir>` | `REPGENR_CONTAINER_CACHE` | Singularity `.sif` / Wave cache (can be external) |
+| `--container-cache <dir>` | `REPGENR_CONTAINER_CACHE` | Singularity `.sif` images and cache (can be external) |
 | `--platform <plat>` | `REPGENR_CONTAINER_PLATFORM` | e.g. `linux/amd64` to emulate BioContainers on Apple Silicon |
 | `--wave / --no-wave` | `REPGENR_WAVE` | resolve multi-tool/arm64 images via the Seqera Wave CLI |
 
@@ -1170,8 +1170,8 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
 ## Troubleshooting
 
 - **`MissingBinaryError` / a tool is not found.** The Python package does not
-  install the bioinformatics tools (see [install.md](install.md)). Use the conda environment
-  (`mamba env create -f environment.yml`) or put the tool on `PATH`. Run
+  install the bioinformatics tools (see [install.md](install.md)). Put the tool
+  on `PATH` from a conda environment. Run
   `repgenr list-tools` to see the adapters and each tool's declared genome
   limit (`list-tools --check` also runs every adapter's preflight and reports
   which binaries are missing or too old) and `--container docker` (or
@@ -1239,7 +1239,14 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   running; each tool's process group ID is its own PID, so
   `pkill -g <tool pid>` stops a tool with its helpers. With
   `--container docker`, the container runs with `--init`, so the SIGTERM
-  the `docker run` client forwards ends the tool in the container.
+  the `docker run` client forwards ends the tool in the container. Each
+  container is named `repgenr-<repgenr pid>-<hex>`, and when repgenr is
+  stopped it also runs `docker stop --time 0` on the container of the tool
+  it was running, so a tool that ignores SIGTERM does not keep running.
+  This covers the tool the main thread runs; a container started from a
+  parallel worker thread is not stopped when its tool ignores SIGTERM.
+  SIGKILL to repgenr leaves its containers running; list and stop them with
+  `docker ps --filter name=repgenr-<repgenr pid>-` and `docker stop <name>`.
 - **Exit codes.** A script can tell the failure classes apart without
   reading the log:
 
@@ -1251,6 +1258,6 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, NCBI Datasets, BV-BRC, ENA) failed, e.g. because the network is unreachable. `genome` and `vmetadata` on NCBI Virus check that the NCBI Datasets host answers before running the `datasets` CLI; a network failure inside `datasets` is reported as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. `assemble` then leaves an empty genome set rather than the previous one (except under `--append`), so `dereplicate` also exits 3 instead of running on stale genomes; see [output.md](output.md#when-every-sequencing-run-is-excused). |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. When an earlier `assemble` call wrote the genome set and at least one run was judged (rejected by the assembler, polisher or quality gate), `assemble` empties that set, so `dereplicate` also exits 3 instead of running on stale genomes; a set written by another stage, or one kept because every run failed to download, stays in place. See [output.md](output.md#when-every-sequencing-run-is-excused). |
-  | 4 | A required external tool is absent or below its version floor. |
+  | 4 | A required external tool is absent or below its version floor, or the Docker daemon cannot be reached under `--container docker`. |
   | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed (one console line; the command and output tail are in `repgenr.log`). Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |

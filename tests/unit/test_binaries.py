@@ -85,3 +85,28 @@ def test_strict_version_reports_a_missing_version_without_text(monkeypatch) -> N
     with pytest.raises(MissingBinaryError, match="could not read a version") as exc:
         check_binaries((BinarySpec("samtools", min_version="1.10", strict_version=True),))
     assert "None" not in str(exc.value)
+
+
+def test_a_crashed_version_query_is_not_read_from_its_traceback(monkeypatch) -> None:
+    # cactus-pangenome in a broken environment answers --version with a Python
+    # traceback (exit 1). The interpreter path in it ("python3.12") was read as
+    # version 3.12.0, which passed the 2.5 floor and reached repgenr.yaml.
+    traceback = (
+        "Traceback (most recent call last):\n"
+        '  File "/env/lib/python3.12/site-packages/cactus/refmap/cactus_graphmap.py", '
+        "line 7, in <module>\n"
+        "ImportError: cannot import name 'x'\n"
+    )
+    _fake_run(monkeypatch, 1, traceback)
+    assert binaries._query_version("cactus-pangenome", ("--version",)) is None
+
+
+def test_versions_inside_paths_and_identifiers_are_not_matched() -> None:
+    assert binaries._parse_version("/env/lib/python3.12/site-packages/x.py") is None
+    assert binaries._parse_version("GLIBC_2.17 not found") is None
+    # The forms real tools print still parse.
+    assert binaries._parse_version("hal2maf v2.2: Convert hal database") == (2, 2, 0)
+    assert binaries._parse_version("dRep v3.4.5 :::") == (3, 4, 5)
+    assert binaries._parse_version("RAxML-NG v. 2.0.2 released") == (2, 0, 2)
+    assert binaries._parse_version("2.9.6-b1802") == (2, 9, 6)
+    assert binaries._parse_version("Version of skDER being used is: 1.3.6") == (1, 3, 6)

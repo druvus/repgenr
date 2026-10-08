@@ -111,6 +111,9 @@ class Registry[T]:
         self.group = group
         self._classes: dict[str, type[T]] = {}
         self._loaded = False
+        # Broken plugins auto-selection has already warned about: a stage
+        # selects twice (precheck, then run) and should warn once.
+        self._skip_warned: set[str] = set()
 
     def _load(self) -> None:
         if self._loaded:
@@ -119,8 +122,8 @@ class Registry[T]:
             try:
                 self._classes[ep.name] = ep.load()
             except Exception as exc:  # a broken third-party plugin must not kill the run
-                # Deferred: surfaced only if the broken name is actually requested,
-                # but log at debug so a broken in-tree adapter is diagnosable.
+                # Warned here and raised only if the broken name is requested, so
+                # one broken plugin does not disable the rest of the family.
                 logging.getLogger("repgenr").warning(
                     "Plugin %r (group %s) failed to load and is unavailable: %s",
                     ep.name,
@@ -158,6 +161,12 @@ class Registry[T]:
         self._load()
         return isinstance(self._classes.get(name), _BrokenPlugin)
 
+    def load_error(self, name: str) -> Exception | None:
+        """The import error of a broken plugin, or None."""
+        self._load()
+        cls = self._classes.get(name)
+        return cls.error if isinstance(cls, _BrokenPlugin) else None
+
     def get(self, name: str) -> type[T]:
         self._load()
         if name not in self._classes:
@@ -184,16 +193,18 @@ def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
     """Check the adapter's required binaries; return resolved versions.
 
     When a container backend is active and an image resolves for this tool, the
-    tool lives in the image (not on the host): check the engine binary instead
-    and record the image reference in place of host tool versions.
+    tool lives in the image (not on the host): check the engine binary, and
+    that the Docker daemon answers, instead, and record the image reference in
+    place of host tool versions.
     """
-    from .containers import get_config, resolve_image  # deferred: avoids import cycle
+    from .containers import check_engine_ready, get_config, resolve_image  # avoids a cycle
 
     config = get_config()
     if config.active:
         image = resolve_image(capabilities, config)
         if image:
             check_binaries((BinarySpec(config.engine_binary(), version_args=("--version",)),))
+            check_engine_ready(config)
             return {capabilities.name: image}
     return check_binaries(capabilities.required_binaries)
 
@@ -224,25 +235,27 @@ def _capabilities_of(registry: Registry, name: str) -> ToolCapabilities | None:
 def _tool_available(cap: ToolCapabilities) -> bool:
     """Is this adapter runnable in the CURRENT execution environment?
 
-    Under an active container backend the tool lives in an image, not on the
-    host, so a declared ``container`` or ``conda`` spec counts as available
-    (resolution itself happens at preflight); natively, the required binaries
-    must be on PATH.
+    This mirrors :func:`repgenr.core.containers.run_tool`. Under an active
+    container backend a tool runs in an image when it pins one, or when
+    ``--wave`` is on and it declares a conda spec; such a tool counts as
+    available (resolution itself happens at preflight). Any other tool runs on
+    the host, so it is available only when its required binaries are on PATH.
     """
     from .containers import get_config
 
-    if get_config().active:
-        return cap.container is not None or bool(cap.conda)
+    config = get_config()
+    if config.active and (cap.container is not None or (config.wave_enabled and bool(cap.conda))):
+        return True
     return all(shutil.which(spec.name) is not None for spec in cap.required_binaries)
 
 
-# Tie-break order for auto-selection, matching the documented per-family
-# defaults; unlisted tools rank after these, alphabetically.
 def tool_available(caps: ToolCapabilities) -> bool:
     """Whether an adapter can run here: on the host, or in an image under a backend."""
     return _tool_available(caps)
 
 
+# Tie-break order for auto-selection, matching the documented per-family
+# defaults; unlisted tools rank after these, alphabetically.
 _PREFERRED_ORDER = (
     "skder",
     "iqtree",
@@ -278,11 +291,13 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
     for name in registry.names():
         cap = _capabilities_of(registry, name)
         if cap is None:
-            logging.getLogger("repgenr").warning(
-                "auto-select skipping '%s' (%s): the plugin failed to load.",
-                name,
-                registry.group,
-            )
+            if name not in registry._skip_warned:
+                registry._skip_warned.add(name)
+                logging.getLogger("repgenr").warning(
+                    "auto-select skipping '%s' (%s): the plugin failed to load.",
+                    name,
+                    registry.group,
+                )
             continue
         limit = cap.recommended_max_genomes
         limit_value = inf if limit is None else float(limit)

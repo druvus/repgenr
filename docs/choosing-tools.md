@@ -245,8 +245,10 @@ have nothing to read there. Parameters and profiles are in
 Each adapter declares `recommended_max_genomes`, an integer or none. `--tool
 auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
 
-1. Prefer tools that can run here. Under a container backend, a declared image
-   or conda spec counts as available. Natively, the binaries must be on `PATH`.
+1. Prefer tools that can run here. Under a container backend, a pinned image
+   counts as available, and so does a conda spec with `--wave`. A tool with
+   neither runs on the host, so its binaries must be on `PATH`, as they must
+   be natively.
 2. Prefer tools whose limit fits the number of genomes. Among those, the
    tightest limit wins, so the more careful but limited tool is chosen for
    small inputs. Tools without a limit come last among the fitting ones.
@@ -257,7 +259,11 @@ auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
 
 The default for `--tool` on `dereplicate` is `skder`, not `auto`. With `auto`
 and all tools available, `drep` (limit 2000) would be preferred for up to 2000
-genomes, and it needs manifest quality for every genome or CheckM.
+genomes, and it needs manifest quality for every genome or CheckM. Under
+`--container docker` or `singularity` dRep always counts as available, because
+its image is pinned, so `auto` chooses it for up to 2000 genomes. Without
+manifest quality, set `CHECKM_DATA_PATH` on the host (see
+[install.md](install.md#notes)) or name another tool.
 
 Passing a tool by name past its limit logs a warning and runs anyway. Adapter
 authors set the limit in `ToolCapabilities` (see

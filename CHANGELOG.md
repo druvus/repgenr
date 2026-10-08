@@ -511,6 +511,28 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- Version probing (#235): a version query that crashed with a Python
+  traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
+  is no longer recorded as the tool's version. A broken cactus environment
+  was recorded as cactus 3.12.0 and passed the 2.5 floor.
+- Containers (#235): without `--wave`, an adapter that declares only a conda
+  spec runs on the host, so auto-selection now counts it as available only
+  when its binaries are on `PATH`. Preflight runs `docker info` once and exits
+  4 when the daemon cannot be reached. An image Docker cannot start (exit 125
+  with Docker's own error) is named instead of the tool. A set
+  `CHECKM_DATA_PATH` is passed into the container, with its directory bound.
+  Containers are named and stopped with `docker stop` when repgenr is stopped,
+  so a tool that ignores SIGTERM does not keep running. An unknown
+  `--container` value exits 2, and container options without effect are named
+  in a warning. racon's minimap2 image is recorded.
+- `versions` (#235): a tool recorded with different versions by two stages
+  is listed once per stage as `tool (stage)` instead of keeping only the last
+  value, and a stage that did not finish is named on stderr.
+- `list-tools --check` (#235): shows the import error of a broken plugin and
+  reports an adapter whose preflight raises unexpectedly on its own line; the
+  auto-select warning about a broken plugin is printed once per run.
+- Gubbins (#235): the thread count is capped at the CPUs where Gubbins runs,
+  since its IQ-TREE tree builder refuses more threads than cores.
 - Resume (#234): a stage that refuses (exit 2, 3, or 4 for a tool missing at
   preflight) without changing any declared output leaves its record as it
   was: none on a first run, the last finished one on a re-run. It was left

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 # A value a YAML 1.1 loader would not keep as a string: a date or timestamp
@@ -26,6 +27,28 @@ _NEEDS_QUOTES = re.compile(r"^\d{4}-\d{2}-\d{2}|: |^[\s'\"{\[&*!|>%@`#]")
 
 def _scalar(value: str) -> str:
     return json.dumps(value) if _NEEDS_QUOTES.search(value) else value
+
+
+def merge_stage_versions(stage_versions: Mapping[str, Mapping[str, str]]) -> dict[str, str]:
+    """Combine per-stage ``tool -> version`` maps into one mapping.
+
+    A tool recorded with one version by every stage that ran it keeps its
+    plain name. A tool recorded with different versions (a pinned image in one
+    stage, the host binary in another) gets one ``"<tool> (<stage>)"`` entry
+    per stage, so no value is lost and the keys stay unique.
+    """
+    by_tool: dict[str, dict[str, str]] = {}
+    for stage, versions in stage_versions.items():
+        for tool, version in versions.items():
+            by_tool.setdefault(tool, {})[stage] = version
+    merged: dict[str, str] = {}
+    for tool, per_stage in by_tool.items():
+        if len(set(per_stage.values())) == 1:
+            merged[tool] = next(iter(per_stage.values()))
+        else:
+            for stage, version in per_stage.items():
+                merged[f"{tool} ({stage})"] = version
+    return merged
 
 
 def write_versions_fragment(path: str | Path, versions: dict[str, str]) -> None:

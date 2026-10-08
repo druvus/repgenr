@@ -55,13 +55,13 @@ contract test, which checks the argument vector against canned output.
 | tree builder | raxmlng | yes | yes | test_species_set, test_container_runs (pinned image) |
 | tree builder | mashtree | yes | yes | test_treebuilders_offline, test_species_set, test_container_runs (pinned image) |
 | tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
-| assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
+| assembler | skesa | yes | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host); native by hand in the reads audit (#226) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
-| assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
+| assembler | flye | yes | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig); native by hand in the reads audit (#226) |
 | classifier | sourmash | yes | yes | genome-qc and assemble on Wolbachia assemblies against the GTDB rs226 sketch, native and pinned image (2026-09-14) |
 | polisher | medaka | no | yes | test_reads (SRR28800588 through the pinned image, see below); CheckM2 before/after recorded below |
-| polisher | racon | no | no | offline contract test (minimap2 and racon argv, rounds, stdout capture) |
-| quality | checkm2 | no | no | offline test on a canned quality report; live use needs the CheckM2 database (not on the audit machine) |
+| polisher | racon | yes | no | offline contract test (minimap2 and racon argv, rounds, stdout capture); native by hand in the reads audit (#226) |
+| quality | checkm2 | no | yes | offline test on a canned quality report; pinned image with the CheckM2 database by hand in the reads audit (#226), because the host builds fail on macOS |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their
@@ -497,6 +497,19 @@ parser), so they also apply to commands other than the one named.
 | snptype, phylo | The `simple` typer filled sequence a genome lacks with the reference base, so a copy of a genome with 500 kb removed differed from that genome at 20539 sites on the 50-genome set. Uncovered reference positions are now N, a column is variable only with two or more of A, C, G, T, and distances count sites where both genomes have a base: the pair now differs at 0 sites. Mapping uses minimap2 `asm20`; on three genomes of that set the distances are within one site of the true substitution counts (default settings: 8 to 111 sites off) | #232 |
 | snptype, phylo | With a gzipped reference genome the `simple` typer exited 1 (UnicodeDecodeError); three `.fasta.gz` genomes of the 50-genome set now type to the same distances as the uncompressed files | #232 |
 | snptype, phylo | Review of #232: an unaligned genome became all N with distance 0 to every genome, and IQ-TREE refuses an all-N sequence; it is now refused by the typer (exit 3), coverage is logged, and pairs without a shared site are `NA`. Deletions in the genome are N. Gubbins' default `--filter-percentage 25` leaves mostly-N taxa out of its analysis while writing them, unmasked, to its outputs (live: a genome with 1 Mb of 2 Mb missing); repgenr passes 100, and a user-set value that would exclude a taxon exits 3 before Gubbins runs. Gzipped genomes are named without `.fasta.gz` in alignments and trees | #232 |
+| list-tools, versions | `cactus-pangenome --version` in a broken environment printed a Python traceback, and the interpreter path in it (`python3.12`) was recorded as cactus 3.12.0, which passed the 2.5 floor; a crashed query and numbers inside longer tokens are no longer read as versions | #235 |
+| dereplicate, list-tools | Under `--container` without `--wave`, a conda spec counted as an image, so `--tool auto` above 2000 genomes chose skder, which then ran on the host and exited 4 when absent; availability now mirrors where the tool runs | #235 |
+| list-tools, all stages | With the Docker daemon down, `list-tools --check` reported every image-backed tool as ok and a stage failed with exit 6 ("sourmash failed (exit 1)"); preflight now runs `docker info` and exits 4 naming the unreachable daemon | #235 |
+| all stages | A pinned image Docker could not pull failed as "sourmash failed (exit 125)"; the message now names the engine, the image and the daemon's error | #235 |
+| dereplicate | install.md said to provide dRep's CheckM data through `CHECKM_DATA_PATH`, but the variable never reached the container and its directory was not bound; it is now forwarded and bound | #235 |
+| versions | A tool recorded by two stages with different versions kept only the last one (dereplicate's sourmash image was hidden by phylo's host sourmash); each differing version is now listed as `tool (stage)` and an unfinished stage is named on stderr | #235 |
+| list-tools | `--check` printed "broken (see list-tools)" for a plugin that failed to import, and an adapter whose preflight raised an unexpected error ended the listing with exit 1; the import error is shown and the adapter is reported on its own line | #235 |
+| dereplicate | The auto-select warning about a broken plugin was printed twice per run (precheck and run) | #235 |
+| global options | `--container bogus` ended in a traceback with exit 1; it now exits 2. `--platform`, `--wave`, `--container-engine` and `--container-cache` were silently ignored without `--container` (and the cache by Docker); each is named in a warning. The help called `--container-cache` the Wave cache, which is not stored there | #235 |
+| assemble | Under a container backend racon's minimap2 image was not recorded | #235 |
+| all stages | Under `--container docker`, a tool that ignores the SIGTERM forwarded through `--init` kept its container running after repgenr was stopped (seen with busybox); containers are now named and stopped with `docker stop` when the run is interrupted | #235 |
+| snptype | `--mask gubbins` passed the default 16 threads to Gubbins, whose IQ-TREE tree builder refuses more threads than cores (11 on the audit machine); the masker now caps them at the CPUs where Gubbins runs | #235 |
+| install | install.md presented `environment.yml` as the Linux single-environment route, but a linux-64 dry-run does not solve (Gubbins needs Python 3.8 to 3.10; mashtree's BioPerl chain needs zlib older than 1.3, against harvesttools and medaka); the docs now say so | #235 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

@@ -20,8 +20,10 @@ import os
 import re
 import shlex
 import shutil
+import subprocess
 import tempfile
 import time
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,7 +42,7 @@ class ContainerConfig:
     backend: str = NATIVE
     engine: str | None = None  # explicit engine binary; defaults per backend
     platform: str | None = None  # e.g. "linux/amd64" for emulated BioContainers
-    cache_dir: Path | None = None  # where Singularity .sif / Wave cache live
+    cache_dir: Path | None = None  # where Singularity .sif images and caches live
     wave_enabled: bool = False
     extra_mounts: tuple[Path, ...] = field(default_factory=tuple)
 
@@ -104,6 +106,97 @@ def get_config() -> ContainerConfig:
     return _CONFIG
 
 
+# Configurations whose engine answered: the check costs a round trip to the
+# daemon, and a stage preflights several adapters.
+_ENGINE_READY: set[tuple] = set()
+_ENGINE_TIMEOUT = 60
+
+
+def check_engine_ready(config: ContainerConfig | None = None) -> None:
+    """Raise :class:`MissingBinaryError` when the Docker daemon cannot be reached.
+
+    ``docker --version`` answers without a daemon, so a stopped Docker Desktop
+    passed the binary check and every tool then failed with the engine's error
+    hidden in the run log. ``docker info`` (also answered by podman) needs the
+    daemon. Singularity and Apptainer have no daemon and are not asked.
+    """
+    config = config or _CONFIG
+    if config.backend != DOCKER:
+        return
+    key = config.cache_key()
+    if key in _ENGINE_READY:
+        return
+    engine = config.engine_binary()
+    cmd = [engine, "info"]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_ENGINE_TIMEOUT,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise MissingBinaryError(
+            f"The {engine} daemon did not answer '{engine} info' within "
+            f"{_ENGINE_TIMEOUT} s. Start it (Docker Desktop on macOS) or run "
+            "without --container."
+        ) from exc
+    except OSError as exc:
+        raise MissingBinaryError(f"Could not run '{engine} info': {exc}") from exc
+    if proc.returncode != 0:
+        text = (proc.stderr or "") + (proc.stdout or "")
+        detail = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        raise MissingBinaryError(
+            f"The {engine} daemon is not reachable"
+            + (f" ({detail})" if detail else "")
+            + ". Start it (Docker Desktop on macOS) or run without --container."
+        )
+    _ENGINE_READY.add(key)
+
+
+# Docker CPU counts per configuration (Docker Desktop runs tools in a VM whose
+# CPU count can be lower than the host's).
+_ENGINE_CPUS: dict[tuple, int] = {}
+
+
+def available_cpus(caps: ToolCapabilities) -> int:
+    """CPUs the tool sees where it runs: the host's, or the Docker engine's.
+
+    Singularity shares the host's CPUs. When Docker does not answer, the host
+    count is used.
+    """
+    # The CPUs this process may run on (an affinity mask set by a scheduler or
+    # taskset), else all CPUs. A cgroup CPU quota (docker --cpus, a Slurm or
+    # Kubernetes limit) is not reflected here, so a quota below the CPU count
+    # still lets more threads through than the quota allows.
+    affinity = getattr(os, "sched_getaffinity", None)  # absent on macOS
+    try:
+        host = (len(affinity(0)) if affinity else 0) or os.cpu_count() or 1
+    except OSError:
+        host = os.cpu_count() or 1
+    config = _CONFIG
+    if config.backend != DOCKER or runs_on_host(caps):
+        return host
+    key = config.cache_key()
+    if key not in _ENGINE_CPUS:
+        count = host
+        try:
+            proc = subprocess.run(
+                [config.engine_binary(), "info", "--format", "{{.NCPU}}"],
+                capture_output=True,
+                text=True,
+                timeout=_ENGINE_TIMEOUT,
+                stdin=subprocess.DEVNULL,
+            )
+            if proc.returncode == 0 and proc.stdout.strip().isdigit():
+                count = max(1, int(proc.stdout.strip()))
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _ENGINE_CPUS[key] = count
+    return _ENGINE_CPUS[key]
+
+
 def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None) -> str | None:
     """Return the image URI for an adapter, or None to run natively.
 
@@ -157,8 +250,6 @@ def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
         cmd += ["--conda-package", pkg]
     if config.platform:
         cmd += ["--platform", config.platform]
-    import subprocess
-
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired as exc:
@@ -190,6 +281,21 @@ def _engine_env(config: ContainerConfig) -> dict[str, str]:
     }
 
 
+# Host variables that point a containerized tool at reference data (dRep runs
+# CheckM, which reads CHECKM_DATA_PATH). When set, each is passed into the
+# container and the directory it names is bound at the same path.
+_FORWARDED_DATA_ENV = ("CHECKM_DATA_PATH",)
+
+
+def _forwarded_data_env() -> dict[str, str]:
+    # Absolute, because the container's working directory is not the host's.
+    return {
+        name: os.path.abspath(os.environ[name])
+        for name in _FORWARDED_DATA_ENV
+        if os.environ.get(name)
+    }
+
+
 def _default_mounts(
     config: ContainerConfig,
     cwd: str | os.PathLike[str] | None,
@@ -210,6 +316,9 @@ def _default_mounts(
     mounts.append(absp(cwd) if cwd is not None else absp(os.getcwd()))
     mounts.append(absp(tempfile.gettempdir()))
     mounts.extend(absp(m) for m in config.extra_mounts)
+    for value in _forwarded_data_env().values():
+        if Path(value).exists():
+            mounts.append(absp(value))
     # Per-call mounts for inputs referenced indirectly (e.g. genome paths listed
     # inside a manifest file rather than passed as argv tokens).
     for m in extra_mounts:
@@ -322,11 +431,16 @@ def wrap_command(
         # the SIGTERM the client forwards when repgenr stops a tool ends it
         # (a tool running as process 1 ignores a signal it has no handler for).
         cmd = [config.engine_binary(), "run", "--rm", "--init", "--entrypoint", ""]
+        # A name lets repgenr stop the container when it is stopped itself
+        # (see _stop_container).
+        cmd += ["--name", f"repgenr-{os.getpid()}-{uuid.uuid4().hex[:12]}"]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
         # Run as an arbitrary host UID with no passwd entry, so HOME defaults to
         # "/" and is not writable. Point it at the mounted, writable workdir so
         # tools that touch HOME (e.g. Toil/Cactus creating its config dir) work.
         cmd += ["-e", f"HOME={workdir}"]
+        for name, value in _forwarded_data_env().items():
+            cmd += ["-e", f"{name}={value}"]
         if config.platform:
             cmd += ["--platform", config.platform]
         for m in mounts:
@@ -341,6 +455,62 @@ def wrap_command(
         cmd += ["--bind", str(m)]
     cmd += ["--pwd", workdir, source, *argv]
     return cmd
+
+
+def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
+    """Stop the named Docker container of an interrupted ``docker run``.
+
+    When repgenr is stopped it forwards SIGTERM to the docker client, which
+    passes it through --init to the tool. A tool that ignores SIGTERM kept its
+    container running after repgenr and the client had exited. The forwarded
+    SIGTERM was the tool's notice, so ``docker stop --time 0`` kills it at
+    once: a scheduler that sends SIGKILL a few seconds after SIGTERM must not
+    find the container still waiting out a second grace period.
+    Errors are ignored: the container may already be gone.
+    """
+    if config.backend != DOCKER or "--name" not in wrapped:
+        return
+    name = wrapped[list(wrapped).index("--name") + 1]
+    try:
+        subprocess.run(
+            [config.engine_binary(), "stop", "--time", "0", name],
+            capture_output=True,
+            timeout=20,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+# `docker run` exits 125 when the engine itself fails (image not found, pull
+# denied, bad option): the tool never started.
+_DOCKER_ENGINE_FAILURE = 125
+_ENGINE_ERROR = re.compile(r"^(docker|podman): |Error response from daemon|Unable to find image")
+
+
+def _engine_failure(
+    exc: ToolExecutionError, image: str, caps: ToolCapabilities, config: ContainerConfig
+) -> ToolExecutionError:
+    """Name a failure of the engine itself instead of blaming the tool."""
+    if (
+        config.backend != DOCKER
+        or exc.returncode != _DOCKER_ENGINE_FAILURE
+        or exc.timeout is not None
+    ):
+        return exc
+    lines = [line.strip() for line in (exc.output or "").splitlines() if line.strip()]
+    # A tool may exit 125 itself; only the engine's own error marks a failure
+    # to start the image.
+    engine_lines = [line for line in lines if _ENGINE_ERROR.search(line)]
+    if not engine_lines:
+        return exc
+    detail = engine_lines[-1]
+    message = f"{config.engine_binary()} could not start image {image} for {caps.name} (exit 125)"
+    if detail:
+        message += f": {detail}"
+    return ToolExecutionError(
+        exc.command, exc.returncode, output=exc.output, tool=exc.tool, message=message
+    )
 
 
 def run_tool(
@@ -389,16 +559,22 @@ def run_tool(
         image, argv, config=config, cwd=cwd, logger=logger, extra_mounts=extra_mounts
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
-    return process.run(
-        wrapped,
-        logger=logger,
-        cwd=cwd,
-        env=merged_env,
-        check=check,
-        stdout_path=stdout_path,
-        log_prefix=log_prefix or caps.name,
-        timeout=timeout,
-    )
+    try:
+        return process.run(
+            wrapped,
+            logger=logger,
+            cwd=cwd,
+            env=merged_env,
+            check=check,
+            stdout_path=stdout_path,
+            log_prefix=log_prefix or caps.name,
+            timeout=timeout,
+        )
+    except ToolExecutionError as exc:
+        raise _engine_failure(exc, image, caps, config) from exc
+    except (SystemExit, KeyboardInterrupt):
+        _stop_container(wrapped, config)
+        raise
 
 
 def run_chain(
@@ -454,14 +630,20 @@ def run_chain(
         extra_mounts=[*extra_mounts, *paths],
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
-    process.run(
-        wrapped,
-        logger=logger,
-        cwd=cwd,
-        env=merged_env,
-        log_prefix=caps.name,
-        timeout=timeout,
-    )
+    try:
+        process.run(
+            wrapped,
+            logger=logger,
+            cwd=cwd,
+            env=merged_env,
+            log_prefix=caps.name,
+            timeout=timeout,
+        )
+    except ToolExecutionError as exc:
+        raise _engine_failure(exc, image, caps, config) from exc
+    except (SystemExit, KeyboardInterrupt):
+        _stop_container(wrapped, config)
+        raise
 
 
 def run_tool_with_retries(

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from ..assemblers.base import ReadSet
 from ..core.binaries import BinarySpec
-from ..core.containers import run_tool
-from ..core.plugins import ToolCapabilities
+from ..core.containers import run_tool, runs_on_host
+from ..core.plugins import ToolCapabilities, preflight
 from .base import Polisher, PolishParams, PolishResult, one_read_file, read_dirs
 
 # HiFi reads are already accurate; polishing them with racon does more harm than good.
@@ -35,6 +35,13 @@ class RaconPolisher(Polisher):
         ),
     )
     read_types = frozenset({"OXFORD_NANOPORE", "PACBIO_SMRT"})
+
+    def preflight(self) -> dict[str, str]:
+        """racon's version, and minimap2's: its image when it runs in one."""
+        versions = preflight(self.capabilities)
+        if not runs_on_host(_MINIMAP2):
+            versions.update(preflight(_MINIMAP2))
+        return versions
 
     def accepts(self, reads: ReadSet) -> bool:
         model = reads.instrument_model.lower()

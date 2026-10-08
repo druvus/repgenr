@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from repgenr.core.containers import (
     resolve_image,
     wrap_command,
 )
+from repgenr.core.errors import MissingBinaryError
 from repgenr.core.plugins import ToolCapabilities
 
 _LOG = logging.getLogger("test")
@@ -429,3 +431,198 @@ def test_containerized_failure_names_the_adapter_tool_not_the_engine(monkeypatch
     with pytest.raises(containers.ToolExecutionError) as ei:
         containers.run_tool(caps, ["spades.py", "-o", "x"], logger=_LOG)
     assert str(ei.value) == "spades.py failed (exit 3)"
+
+
+def _engine_env(monkeypatch, returncode: int, stderr: str = "") -> list[list[str]]:
+    import subprocess
+
+    from repgenr.core import binaries
+
+    calls: list[list[str]] = []
+
+    def run(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, returncode, stdout="", stderr=stderr)
+
+    monkeypatch.setattr(containers.subprocess, "run", run)
+    monkeypatch.setattr(binaries.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args: "29.5.3")
+    containers._ENGINE_READY.clear()
+    return calls
+
+
+def test_preflight_reports_an_unreachable_docker_daemon(monkeypatch) -> None:
+    # `docker --version` answers without a daemon, so list-tools --check said
+    # "ok" and the stage failed later with exit 6 and the cause only in the log.
+    from repgenr.core.plugins import ToolCapabilities, preflight
+
+    calls = _engine_env(monkeypatch, 1, "failed to connect to the docker API at unix:///x.sock\n")
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    try:
+        containers.configure_container("docker")
+        with pytest.raises(MissingBinaryError, match="daemon is not reachable") as exc:
+            preflight(caps)
+        assert "failed to connect to the docker API" in str(exc.value)
+    finally:
+        containers.configure_container("none")
+    assert calls == [["docker", "info"]]
+
+
+def test_engine_readiness_is_checked_once_per_configuration(monkeypatch) -> None:
+    from repgenr.core.plugins import ToolCapabilities, preflight
+
+    calls = _engine_env(monkeypatch, 0)
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    try:
+        containers.configure_container("docker")
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
+        containers.configure_container("singularity")
+        preflight(caps)  # no daemon to ask
+    finally:
+        containers.configure_container("none")
+    assert calls == [["docker", "info"]]
+
+
+def test_an_image_docker_cannot_start_is_named_as_an_engine_failure(monkeypatch) -> None:
+    # A pin with a missing tag: docker exits 125 before the tool starts. The
+    # message said "sourmash failed (exit 125)", as if sourmash had run.
+    caps = ToolCapabilities(name="sourmash", container="quay.io/x/sourmash:0.0.0")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers,
+        "wrap_command",
+        lambda image, argv, **kw: [
+            "sh",
+            "-c",
+            "echo \"Unable to find image 'quay.io/x/sourmash:0.0.0' locally\" >&2; "
+            "echo 'docker: Error response from daemon: manifest unknown' >&2; exit 125",
+        ],
+    )
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        containers.run_tool(caps, ["sourmash", "compare"], logger=_LOG)
+    msg = str(ei.value)
+    assert "docker could not start image quay.io/x/sourmash:0.0.0 for sourmash" in msg
+    assert "manifest unknown" in msg
+    assert ei.value.exit_code == 6 and ei.value.returncode == 125
+
+
+@pytest.mark.parametrize("backend", ["docker", "singularity"])
+def test_checkm_data_path_reaches_the_container(tmp_path, monkeypatch, backend) -> None:
+    # install.md tells dRep users to point CHECKM_DATA_PATH at the CheckM data;
+    # docker passed only HOME into the container and mounted nothing there.
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(containers.tempfile, "gettempdir", lambda: str(sys_tmp))
+    data = tmp_path / "checkm_data"
+    data.mkdir()
+    monkeypatch.setenv("CHECKM_DATA_PATH", str(data))
+    cmd = wrap_command(
+        "img:1",
+        ["dRep", "dereplicate"],
+        config=ContainerConfig(backend=backend),
+        cwd="/wd",
+        logger=_LOG,
+    )
+    if backend == "docker":
+        assert f"CHECKM_DATA_PATH={data}" in cmd
+        assert f"{data}:{data}" in cmd
+    else:
+        # Singularity passes the host environment; the directory needs a bind.
+        assert str(data) in cmd and cmd[cmd.index(str(data)) - 1] == "--bind"
+
+
+def test_an_unset_checkm_data_path_adds_nothing(monkeypatch) -> None:
+    monkeypatch.delenv("CHECKM_DATA_PATH", raising=False)
+    cmd = wrap_command(
+        "img:1", ["dRep"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    assert not any(c.startswith("CHECKM_DATA_PATH") for c in cmd)
+
+
+def test_docker_containers_are_named_for_cleanup() -> None:
+    cmd = wrap_command(
+        "img:1", ["tool"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    name = cmd[cmd.index("--name") + 1]
+    assert name.startswith("repgenr-")
+    assert cmd.index("--name") < cmd.index("img:1")
+
+
+@pytest.mark.parametrize("interrupt", [SystemExit(143), KeyboardInterrupt()])
+def test_a_stopped_repgenr_stops_the_container_too(monkeypatch, interrupt) -> None:
+    # A tool that ignores the SIGTERM forwarded through --init kept its
+    # container running after repgenr exited; the engine is asked to stop it.
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    calls: list[list[str]] = []
+
+    def run(cmd, **kw):
+        raise interrupt
+
+    def engine(argv, **kw):
+        import subprocess
+
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(containers.process, "run", run)
+    monkeypatch.setattr(containers.subprocess, "run", engine)
+    with pytest.raises(type(interrupt)):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert len(calls) == 1
+    assert calls[0][:4] == ["docker", "stop", "--time", "0"] and calls[0][-1].startswith("repgenr-")
+
+
+def test_a_tool_failure_does_not_stop_a_container(monkeypatch) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    calls: list[list[str]] = []
+
+    def run(cmd, **kw):
+        raise containers.ToolExecutionError(cmd, 2, output="bad")
+
+    monkeypatch.setattr(containers.process, "run", run)
+    monkeypatch.setattr(containers.subprocess, "run", lambda argv, **kw: calls.append(argv))
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert calls == []
+
+
+def test_a_tool_that_itself_exits_125_is_reported_as_the_tool(monkeypatch) -> None:
+    # Only docker's own error marks an engine failure; a tool may exit 125.
+    caps = ToolCapabilities(name="sourmash", container="quay.io/x/sourmash:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers,
+        "wrap_command",
+        lambda image, argv, **kw: ["sh", "-c", "echo 'bad k-mer size' >&2; exit 125"],
+    )
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        containers.run_tool(caps, ["sourmash", "compare"], logger=_LOG)
+    assert str(ei.value) == "sourmash failed (exit 125)"
+
+
+def test_a_relative_checkm_data_path_is_made_absolute(tmp_path, monkeypatch) -> None:
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(containers.tempfile, "gettempdir", lambda: str(sys_tmp))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "checkm").mkdir()
+    monkeypatch.setenv("CHECKM_DATA_PATH", "checkm")
+    cmd = wrap_command(
+        "img:1", ["dRep"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    data = os.path.abspath(tmp_path / "checkm")
+    assert f"CHECKM_DATA_PATH={data}" in cmd
+    assert f"{data}:{data}" in cmd
+
+
+def test_available_cpus_on_the_host_follows_the_affinity_mask(monkeypatch) -> None:
+    # A scheduler or taskset may confine repgenr to fewer CPUs than the host has.
+    caps = ToolCapabilities(name="gubbins")
+    monkeypatch.setattr(containers.os, "sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
+    monkeypatch.setattr(containers.os, "cpu_count", lambda: 64)
+    assert containers.available_cpus(caps) == 3
+    monkeypatch.delattr(containers.os, "sched_getaffinity", raising=False)
+    assert containers.available_cpus(caps) == 64

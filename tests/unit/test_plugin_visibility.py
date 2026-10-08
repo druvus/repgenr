@@ -75,6 +75,34 @@ def test_auto_select_logs_skipped_candidates(registry, caplog) -> None:
     assert skipped, "auto_select should log the skipped broken candidate"
 
 
+def test_auto_select_warns_once_per_broken_candidate(registry, caplog) -> None:
+    # A stage selects twice (precheck, then run); the skipped broken plugin
+    # was warned about twice in one dereplicate run.
+    registry.names()
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="repgenr"):
+        plugins.auto_select(registry, 10)
+        plugins.auto_select(registry, 10)
+    skipped = [r for r in caplog.records if "auto-select skipping 'badtool'" in r.getMessage()]
+    assert len(skipped) == 1
+
+
+def test_list_tools_check_shows_why_a_plugin_is_broken(registry, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    import repgenr.dereplicators.base as derep_base
+    from repgenr.cli.main import app
+
+    monkeypatch.setattr(derep_base, "registry", registry)
+    result = CliRunner().invoke(app, ["list-tools", "--check"])
+    assert result.exit_code == 0
+    assert "  badtool: broken (failed to load: boom: missing dependency)" in result.output
+    # An adapter whose preflight raises something unexpected (here it has
+    # none) is reported on its own line instead of ending the listing.
+    assert "  goodtool: error (AttributeError:" in result.output
+    assert "polishers:" in result.output
+
+
 def test_list_tools_marks_broken_entries(registry, monkeypatch) -> None:
     from typer.testing import CliRunner
 

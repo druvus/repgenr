@@ -11,6 +11,13 @@ from repgenr.maskers import gubbins as mod
 from repgenr.maskers.base import MaskParams
 
 
+@pytest.fixture(autouse=True)
+def _many_cpus(monkeypatch):
+    # The thread cap reads the CPU count where Gubbins runs; pin it so the
+    # requested threads pass through on any host (CI runners have 4 CPUs).
+    monkeypatch.setattr(mod, "available_cpus", lambda caps: 64)
+
+
 def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
     calls: list[list] = []
 
@@ -277,3 +284,48 @@ def test_a_non_numeric_filter_percentage_is_refused(tmp_path: Path) -> None:
     params = MaskParams(extra={"gubbins_args": "--filter-percentage lots"})
     with pytest.raises(UserInputError):
         mod.GubbinsMasker().mask(full, tmp_path / "gub", params, logging.getLogger("t"))
+
+
+def test_gubbins_threads_are_capped_at_the_available_cpus(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    # The global default is 16 threads; IQ-TREE as Gubbins' tree builder
+    # refuses more threads than cores ("more threads than CPU cores available").
+    calls: list[list] = []
+
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        calls.append([str(a) for a in argv])
+        out_prefix = str(kw["cwd"] / "gubbins") + ".filtered_polymorphic_sites.fasta"
+        Path(out_prefix).write_text(">a\nA\n", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "run_tool", fake_run_tool)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "available_cpus", lambda caps: 11)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGT\n", encoding="utf-8")
+    with caplog.at_level(logging.INFO):
+        mod.GubbinsMasker().mask(
+            full, tmp_path / "gub", MaskParams(threads=16), logging.getLogger("t")
+        )
+    argv = calls[0]
+    assert argv[argv.index("--threads") + 1] == "11"
+    assert any("16 threads" in r.getMessage() and "11" in r.getMessage() for r in caplog.records)
+
+
+def test_available_cpus_is_the_engine_count_under_docker(monkeypatch) -> None:
+    import subprocess
+
+    from repgenr.core import containers
+    from repgenr.core.plugins import ToolCapabilities
+
+    caps = ToolCapabilities(name="gubbins", container="quay.io/x/gubbins:1")
+    monkeypatch.setattr(containers, "_CONFIG", containers.ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers.subprocess,
+        "run",
+        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, "6\n", ""),
+    )
+    containers._ENGINE_CPUS.clear()
+    assert containers.available_cpus(caps) == 6
+    monkeypatch.setattr(containers, "_CONFIG", containers.ContainerConfig())
+    assert containers.available_cpus(caps) >= 1

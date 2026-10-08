@@ -53,12 +53,13 @@ the core (see [docs/developing.md](docs/developing.md)).
 
 ```bash
 pip install .                          # the package (Python 3.12+); tools are separate
-mamba env create -f environment.yml    # or: one conda environment with the tools (single-environment route)
 repgenr list-tools --check             # which tools are found, with versions
 ```
 
-Several environments, containers (including Apple Silicon) and the databases
-some tools need are described in [docs/install.md](docs/install.md).
+The tools come from several conda environments on `PATH` or from containers.
+`environment.yml` lists them all but does not currently solve as one
+environment. The environments, containers (including Apple Silicon) and the
+databases some tools need are described in [docs/install.md](docs/install.md).
 
 ## Quick start
 

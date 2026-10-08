@@ -416,7 +416,13 @@ def test_cli_doctor_exit_codes(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["stages: [\n  bad", "- a\n- b\n", "stages:\n  phylo:\n    params: oops\n"],
+    [
+        "stages: [\n  bad",
+        "- a\n- b\n",
+        "stages:\n  phylo:\n    params: oops\n",
+        "stages:\n  dereplicate: [1, 2]\n",
+        "stages:\n  dereplicate:\n    tool_versions: notamap\n",
+    ],
 )
 def test_malformed_record_is_a_config_failure_not_a_traceback(tmp_path: Path, text: str) -> None:
     wd = _base_workdir(tmp_path)
