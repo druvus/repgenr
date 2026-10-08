@@ -24,7 +24,7 @@ from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .contracts import atomic_path, record_name
 from .errors import ToolExecutionError, UserInputError, WorkdirError
@@ -89,7 +89,7 @@ def _run_final_stop_hooks() -> None:
             pass
 
 
-def _signal_group(proc: subprocess.Popen[bytes], sig: int) -> bool:
+def _signal_group(proc: subprocess.Popen[Any], sig: int) -> bool:
     """Send ``sig`` to the tool's process group (or the tool alone off POSIX).
 
     The group is signalled even when the tool itself has exited, because a
@@ -107,8 +107,12 @@ def _signal_group(proc: subprocess.Popen[bytes], sig: int) -> bool:
     return True
 
 
-def _stop_group(proc: subprocess.Popen[bytes], grace: float | None = None) -> None:
-    """Stop a tool and its helpers: SIGTERM, wait up to ``grace`` s, then SIGKILL."""
+def stop_group(proc: subprocess.Popen[Any], grace: float | None = None) -> None:
+    """Stop a tool and its helpers: SIGTERM, wait up to ``grace`` s, then SIGKILL.
+
+    The tool must lead its own process group (``start_new_session=True``), as
+    tools started by :func:`run` and version queries do.
+    """
     _signal_group(proc, signal.SIGTERM)
     try:
         proc.wait(timeout=STOP_GRACE_SECONDS if grace is None else grace)
@@ -373,7 +377,7 @@ def run(
         # the SystemExit of the termination handler) must not orphan the tool
         # or its helpers: stop the whole group before re-raising.
         if proc is not None:
-            _stop_group(proc)
+            stop_group(proc)
         if out_target is not None and out_tmp is not None:
             out_tmp.unlink(missing_ok=True)
         raise

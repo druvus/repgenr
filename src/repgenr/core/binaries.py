@@ -9,14 +9,27 @@ enough. Resolved versions are returned so the stage can record them in
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import re
 import shutil
 import subprocess
+from collections.abc import Iterator
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import process
 from .errors import MissingBinaryError
+
+# Seconds a version query may take. A cold start (a Java tool, a conda
+# wrapper on a network disk) can take several seconds; a query that has not
+# answered by then is stopped and its version is recorded as unknown.
+VERSION_TIMEOUT = 30.0
+_timeout_override: ContextVar[float | None] = ContextVar("version_timeout", default=None)
+# Seconds a stopped version query gets between SIGTERM and SIGKILL.
+_STOP_GRACE = 1.0
 
 # A version is not part of a longer token: "python3.12" in an interpreter path
 # or "GLIBC_2.17" in a loader error is not the tool's version. A leading "v"
@@ -50,23 +63,68 @@ def _parse_version(text: str) -> tuple[int, int, int] | None:
     return (int(major), int(minor), int(patch or 0))
 
 
-def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
+@contextlib.contextmanager
+def version_timeout(seconds: float) -> Iterator[None]:
+    """Use ``seconds`` as the version-query timeout of :func:`check_binaries` calls
+    made inside the block (``list-tools --check`` asks with a short one)."""
+    token = _timeout_override.set(seconds)
     try:
-        proc = subprocess.run(
-            [name, *version_args],
-            capture_output=True,
-            text=True,
-            timeout=30,
+        yield
+    finally:
+        _timeout_override.reset(token)
+
+
+def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
+    """Run a version query; return its exit status and combined output.
+
+    The query runs in its own session, so on timeout the whole process group
+    is stopped: a shell wrapper's helper that holds the output pipe open
+    would otherwise keep the read waiting after the wrapper was killed.
+    Returns None when it could not be run or did not answer in time.
+    """
+    try:
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             # A tool queried without arguments (FastTree) may otherwise wait
             # on an inherited terminal for input until the timeout.
             stdin=subprocess.DEVNULL,
+            text=True,
+            start_new_session=True,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    blob = (proc.stdout or "") + (proc.stderr or "")
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.stop_group(proc, grace=_STOP_GRACE)
+        try:
+            proc.communicate(timeout=5)
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            # A helper that left the group still holds the pipe; stop reading.
+            for stream in (proc.stdout, proc.stderr):
+                if stream is not None:
+                    stream.close()
+        logging.getLogger("repgenr").warning(
+            "%s did not answer within %g s; its version is recorded as unknown.",
+            " ".join([Path(argv[0]).name, *argv[1:]]),
+            timeout,
+        )
+        return None
+    return proc.returncode, (out or "") + (err or "")
+
+
+def _query_version(
+    name: str, version_args: tuple[str, ...], timeout: float | None = None
+) -> str | None:
+    answer = _ask([name, *version_args], VERSION_TIMEOUT if timeout is None else timeout)
+    if answer is None:
+        return None
+    returncode, blob = answer
     # A tool that crashed while answering (a Python traceback, exit != 0) has
     # not reported a version; numbers in its traceback are file paths.
-    if proc.returncode != 0 and "Traceback (most recent call last)" in blob:
+    if returncode != 0 and "Traceback (most recent call last)" in blob:
         return None
     parsed = _parse_version(blob)
     if parsed:
@@ -74,7 +132,7 @@ def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
     # Without a version number, keep the first line only when the tool accepted
     # the flag: a non-zero exit means the line is an error message (sibeliaz
     # has no version flag and answers `-v` with "illegal option"), not a version.
-    if proc.returncode != 0:
+    if returncode != 0:
         return None
     return blob.strip().splitlines()[0] if blob.strip() else None
 
@@ -119,11 +177,19 @@ def _metadata_version(name: str, path: str | None = None) -> str | None:
     return None
 
 
-def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
+def check_binaries(
+    specs: tuple[BinarySpec, ...], *, timeout: float | None = None
+) -> dict[str, str]:
     """Confirm all ``specs`` are present (and new enough). Return name -> version.
 
+    Each version query may take ``timeout`` seconds; None means the value set
+    by :func:`version_timeout`, or :data:`VERSION_TIMEOUT`. A query that does
+    not answer in time is stopped and logged, and its version is unknown.
     Raises :class:`MissingBinaryError` listing every missing or too-old binary.
     """
+    if timeout is None:
+        override = _timeout_override.get()
+        timeout = VERSION_TIMEOUT if override is None else override
     versions: dict[str, str] = {}
     problems: list[str] = []
 
@@ -133,7 +199,7 @@ def check_binaries(specs: tuple[BinarySpec, ...]) -> dict[str, str]:
             problems.append(f"{spec.name}: not found on PATH")
             continue
 
-        reported = _query_version(spec.name, spec.version_args)
+        reported = _query_version(spec.name, spec.version_args, timeout=timeout)
         if _parse_version(reported or "") is None:
             # No version number from the tool itself: the conda package
             # record, when there is one, still names the installed version.

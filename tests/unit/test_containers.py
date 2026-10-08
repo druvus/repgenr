@@ -446,7 +446,7 @@ def _engine_env(monkeypatch, returncode: int, stderr: str = "") -> list[list[str
 
     monkeypatch.setattr(containers.subprocess, "run", run)
     monkeypatch.setattr(binaries.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(binaries, "_query_version", lambda name, args: "29.5.3")
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None: "29.5.3")
     containers._ENGINE_READY.clear()
     return calls
 
