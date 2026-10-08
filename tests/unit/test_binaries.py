@@ -133,7 +133,7 @@ def test_version_is_read_from_conda_meta_when_the_tool_reports_none(monkeypatch,
             )
         },
     )
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: str(exe))
     monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None: None)
     spec = BinarySpec("sibeliaz", version_args=("-v",), min_version="1.2")
     assert check_binaries((spec,)) == {"sibeliaz": "1.2.7"}
@@ -161,7 +161,7 @@ def test_tool_reported_version_is_preferred_over_conda_meta(monkeypatch, tmp_pat
         tmp_path,
         {"sibeliaz-1.2.7-0.json": json.dumps({"version": "1.2.7", "files": ["bin/sibeliaz"]})},
     )
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: str(exe))
     monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None: "1.3.0")
     assert check_binaries((BinarySpec("sibeliaz"),)) == {"sibeliaz": "1.3.0"}
 
@@ -176,7 +176,7 @@ def test_tool_reported_version_is_preferred_over_conda_meta(monkeypatch, tmp_pat
 )
 def test_missing_or_corrupt_conda_meta_gives_unknown(monkeypatch, tmp_path, records) -> None:
     exe = _conda_prefix(tmp_path, records)
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: str(exe))
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: str(exe))
     monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None: None)
     assert check_binaries((BinarySpec("sibeliaz"),)) == {"sibeliaz": "unknown"}
 

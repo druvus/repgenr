@@ -182,7 +182,12 @@ def test_an_unknown_tool_is_a_usage_error(tmp_path, via_env) -> None:
     else:
         result = _list_tools(["--bin-dir", f"nosuchtool={tmp_path}"])
     assert result.exit_code == 2
-    assert "nosuchtool" in _flat(result.output)
+    text = _flat(result.output)
+    assert "nosuchtool" in text
+    # The error names where the entry came from.
+    source = "REPGENR_BIN_DIRS" if via_env else "--bin-dir"
+    assert f"Invalidvaluefor'{source}'" in text
+    assert f"{source}namesunknowntool" in text
 
 
 def test_a_missing_directory_is_a_usage_error(tmp_path) -> None:
@@ -248,3 +253,17 @@ def test_the_stage_record_names_the_directory_a_tool_used(
     record = Config.load(workdir).stages["snptype"]
     assert record.bin_dirs == {"dirtyper": str(sat.resolve())}
     assert record.tool_versions == {"dirtyper": "1.2.0"}
+
+
+def test_a_tool_without_a_version_flag_reads_conda_meta_of_its_own_env(tmp_path) -> None:
+    # SibeliaZ has no version flag; its version comes from conda-meta next to
+    # the bin directory it was found in, here the --bin-dir environment.
+    prefix = tmp_path / "repgenr-sib"
+    _script(prefix / "bin", "nover", "echo usage; exit 1")
+    meta = prefix / "conda-meta"
+    meta.mkdir()
+    (meta / "nover-1.2.6-h0.json").write_text(
+        '{"name": "nover", "version": "1.2.6", "files": ["bin/nover"]}'
+    )
+    bindirs.configure_bin_dirs({"nv": prefix / "bin"})
+    assert preflight(_caps("nv", "nover")) == {"nover": "1.2.6"}

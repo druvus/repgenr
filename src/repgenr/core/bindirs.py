@@ -83,7 +83,7 @@ def host_which(binary: str, tool: str) -> str | None:
     return shutil.which(binary, path=tool_path(tool))
 
 
-def parse_entries(entries: Iterable[str]) -> dict[str, str]:
+def parse_entries(entries: Iterable[str], source: str = "--bin-dir") -> dict[str, str]:
     """``["gubbins=/p/bin", ...]`` -> ``{"gubbins": "/p/bin"}``; blank entries are skipped."""
     out: dict[str, str] = {}
     for raw in entries:
@@ -94,7 +94,7 @@ def parse_entries(entries: Iterable[str]) -> dict[str, str]:
         name, directory = name.strip(), directory.strip()
         if not sep or not name or not directory:
             raise UserInputError(
-                f"Bad --bin-dir entry {entry!r}: expected TOOL=DIR, e.g. gubbins=/path/env/bin."
+                f"Bad {source} entry {entry!r}: expected TOOL=DIR, e.g. gubbins=/path/env/bin."
             )
         out[name] = directory
     return out
@@ -130,24 +130,26 @@ def known_capabilities() -> dict[str, list[ToolCapabilities]]:
     return caps
 
 
-def validate(mapping: Mapping[str, str]) -> dict[str, Path]:
+def validate(mapping: Mapping[str, str], source: str = "--bin-dir") -> dict[str, Path]:
     """Check tool names and directories; return absolute directories.
 
     Raises :class:`UserInputError` (exit 2 at the CLI) for an unknown tool or
     a directory that does not exist.
     """
+    if not mapping:
+        return {}
     known = known_capabilities()
     unknown = sorted(set(mapping) - set(known))
     if unknown:
         raise UserInputError(
-            f"--bin-dir names unknown tool(s): {', '.join(unknown)}. "
+            f"{source} names unknown tool(s): {', '.join(unknown)}. "
             f"Known tools: {', '.join(sorted(known))}."
         )
     resolved: dict[str, Path] = {}
     for name, directory in mapping.items():
         path = Path(directory).expanduser()
         if not path.is_dir():
-            raise UserInputError(f"--bin-dir {name}={directory}: not a directory.")
+            raise UserInputError(f"{source} {name}={directory}: not a directory.")
         resolved[name] = path.resolve()
     return resolved
 

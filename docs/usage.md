@@ -1230,6 +1230,8 @@ setting or changing it does not rerun a finished stage; the tool's version is
 recorded as before. Under `--container`, a tool that runs in an image is not
 affected, and a warning names it. In Nextflow, pass the option through
 `params.repgenr_opts`, for example `--repgenr_opts '--bin-dir gubbins=/p/bin'`.
+This value replaces the one a container profile sets, so with `-profile docker`
+give `--repgenr_opts '--container docker --bin-dir gubbins=/p/bin'`.
 
 ### Container profiles in Nextflow
 

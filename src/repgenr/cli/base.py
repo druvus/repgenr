@@ -832,12 +832,15 @@ def _configure_bin_dirs(entries: list[str], backend: str, wave: bool) -> None:
     if not entries and not raw.strip():
         bindirs.configure_bin_dirs({})
         return
-    try:
-        mapping = bindirs.parse_entries(raw.split(","))
-        mapping.update(bindirs.parse_entries(entries))
-        bindirs.configure_bin_dirs(bindirs.validate(mapping))
-    except UserInputError as exc:
-        raise typer.BadParameter(str(exc), param_hint="'--bin-dir'") from exc
+    resolved = {}
+    # Each source is checked on its own, so an error names where the bad
+    # entry came from: the variable or the option.
+    for source, items in ((bindirs.ENV_VAR, raw.split(",")), ("--bin-dir", entries)):
+        try:
+            resolved.update(bindirs.validate(bindirs.parse_entries(items, source), source))
+        except UserInputError as exc:
+            raise typer.BadParameter(str(exc), param_hint=f"'{source}'") from exc
+    bindirs.configure_bin_dirs(resolved)
     if backend != "none":
         for name in bindirs.ineffective_under_backend(wave_enabled=wave):
             typer.echo(

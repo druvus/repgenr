@@ -43,8 +43,10 @@ All notable changes to RepGenR are documented here. The format follows
   preflight (lookup and version query) and in every host subprocess it runs,
   so a satellite environment's tool uses its own helpers and never shadows
   core's. Gubbins' tree-builder choice, the FastTree binary name and the
-  SibeliaZ wrapper lookup use the same per-tool path. An unknown tool or a
-  missing directory exits 2; under `--container` a tool that runs in an image
+  SibeliaZ wrapper lookup use the same per-tool path, and a tool without a
+  version flag is read from `conda-meta` of the environment it was found in.
+  An unknown tool or a missing directory exits 2, and the error names
+  `--bin-dir` or `REPGENR_BIN_DIRS`, whichever held the entry; under `--container` a tool that runs in an image
   is named in a warning. The directory each tool used is recorded under
   `bin_dirs` in the stage record and is not part of the resume fingerprint, so
   existing workdirs do not rerun. The live suite passes its `[bin_dirs]`
