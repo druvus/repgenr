@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from .config import CONFIG_FILENAME, Config
 from .contracts import (
     CLUSTERS_TSV,
+    CORE_SNP_FASTA,
     GENOME_STATUS_TSV,
     GENOMES_MAP_TSV,
     SELECTION_TSV,
@@ -32,7 +33,7 @@ from .contracts import (
     read_clusters,
     read_selection,
 )
-from .inputs import inputs_digest, manifest_digest_for_stage
+from .inputs import file_digest, inputs_digest, manifest_digest_for_stage
 from .integrity import (
     check_genome_completeness,
     check_representatives_consistency,
@@ -282,12 +283,22 @@ def _check_tree(workdir: Path, config: Config) -> list[Finding]:
 def _check_phylo_stamp_in_snp(workdir: Path, config: Config) -> list[Finding]:
     """A reuse stamp in snp/, left by phylo before its typing pass moved to tree/msa/.
 
-    That phylo version typed into snp/, the snptype stage's directory, so the
-    tables there may be phylo's (outgroup included), not the ones the snptype
-    record describes. phylo no longer reads or writes snp/.
+    That phylo version typed into snp/, the snptype stage's directory. Only
+    when the stamp's digest still matches snp/core_snp.fasta are the tables
+    there phylo's (outgroup included) rather than the snptype stage's; a
+    snptype run since then replaced them, and the stamp is then harmless.
+    phylo no longer reads or writes snp/.
     """
+    import json
+
     stamp = workdir / "snp" / "msa_source.json"
     if not stamp.is_file():
+        return []
+    try:
+        recorded = json.loads(stamp.read_text(encoding="utf-8")).get("artifact_digest")
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not recorded or recorded != file_digest(workdir / "snp" / CORE_SNP_FASTA):
         return []
     return [
         Finding(
@@ -326,7 +337,6 @@ def _layout(workdir: Path) -> SimpleNamespace:
         representatives_dir=workdir / "derep" / "representatives",
         snp_dir=workdir / "snp",
         tree_dir=workdir / "tree",
-        phylo_msa_dir=workdir / "tree" / "msa",
     )
 
 

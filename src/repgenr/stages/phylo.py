@@ -564,7 +564,8 @@ def _clear_previous_builder_files(tree_dir: Path) -> None:
     ``tree/`` holds the current tree builder's own files; a matrix or a set of
     bootstrap trees left by another builder would describe a different run.
     ``tree.nwk`` stays until the new tree replaces it atomically, and
-    ``msa/`` stays: it holds the alignment the tree is built from. An entry may
+    ``msa/`` stays: it is the reuse cache of the SNP typing pass, which may
+    date from an earlier run with another MSA source. An entry may
     vanish after listing (macOS drops a file's ``._`` AppleDouble sibling on
     non-HFS volumes when the file is removed), so missing entries are skipped.
     """

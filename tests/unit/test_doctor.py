@@ -161,14 +161,39 @@ def test_leftover_temp_files_are_a_warning(tmp_path: Path) -> None:
     assert any(f.level == "warn" and "tree.nwk.part" in f.message for f in findings)
 
 
+def _legacy_snp_stamp(wd: Path, table: str, stamped: str) -> None:
+    """snp/core_snp.fasta and a stamp from the earlier phylo layout naming the
+    digest of ``stamped``."""
+    import hashlib
+    import json
+
+    (wd / "snp").mkdir()
+    (wd / "snp" / "core_snp.fasta").write_text(table, encoding="utf-8")
+    digest = hashlib.sha256(stamped.encode("utf-8")).hexdigest()
+    (wd / "snp" / "msa_source.json").write_text(
+        json.dumps({"artifact_digest": digest}), encoding="utf-8"
+    )
+
+
 def test_phylo_stamp_left_in_snp_is_a_warning(tmp_path: Path) -> None:
     """Before tree/msa/, phylo's typing pass wrote snp/ and its stamp there;
-    the tables in snp/ may then be phylo's, not the snptype stage's."""
+    while the stamp still describes snp/core_snp.fasta, the tables are phylo's,
+    not the snptype stage's."""
     wd = _base_workdir(tmp_path)
-    (wd / "snp").mkdir()
-    (wd / "snp" / "msa_source.json").write_text("{}", encoding="utf-8")
+    _legacy_snp_stamp(wd, ">og\nACGT\n", ">og\nACGT\n")
     warned = [f for f in diagnose(wd) if f.level == "warn" and f.area == "snptype"]
     assert len(warned) == 1 and "snp/msa_source.json" in warned[0].message
+
+
+def test_phylo_stamp_in_snp_replaced_by_snptype_is_not_a_warning(tmp_path: Path) -> None:
+    """A snptype run after the old phylo pass rewrote snp/core_snp.fasta; the
+    stamp no longer matches it and the tables are the snptype stage's (#223
+    ran snptype after phylo, so such workdirs are common)."""
+    wd = _base_workdir(tmp_path)
+    _legacy_snp_stamp(wd, ">from_snptype\nTTTT\n", ">og\nACGT\n")
+    assert not [f for f in diagnose(wd) if f.area == "snptype"]
+    (wd / "snp" / "msa_source.json").write_text("not json", encoding="utf-8")
+    assert not [f for f in diagnose(wd) if f.area == "snptype"]
 
 
 def test_phylo_stamp_under_tree_msa_is_not_a_warning(tmp_path: Path) -> None:
