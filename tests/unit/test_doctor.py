@@ -656,3 +656,17 @@ def test_quick_still_reports_missing_and_dangling_genomes(tmp_path: Path) -> Non
     findings = diagnose(wd, quick=True)
     text = _messages(findings, "fail")
     assert "point at files that no longer exist" in text
+
+
+def test_a_record_without_a_fingerprint_is_a_warning(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)  # metadata and genome recorded without fingerprints
+    cfg = Config.load(wd)
+    cfg.stages["genome"].fingerprint = "abc"
+    cfg.record_stage("derep_stock", params={"action": "delete", "name": "r1"}, completed="t")
+    cfg.save(wd)
+    findings = diagnose(wd)
+    warned = {f.area for f in findings if f.level == "warn" and "resume fingerprint" in f.message}
+    assert warned == {"metadata"}
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert result.exit_code == 0
+    assert "[WARN] metadata: completed without a resume fingerprint" in result.stdout

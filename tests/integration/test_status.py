@@ -292,3 +292,66 @@ def test_status_json_with_an_unquoted_timestamp(tmp_path: Path) -> None:
     payload = _status_json(tmp_path)
     completed = _by_name(payload)["metadata"]["completed"]
     assert isinstance(completed, str) and completed.startswith("2026-01-01")
+
+def test_status_with_an_empty_record_names_the_entry_stages(tmp_path: Path) -> None:
+    # An emptied record used to be read as the bacterial chain ("Next:
+    # repgenr metadata"), although the outputs may come from any lineage.
+    Config().save(tmp_path)
+    (tmp_path / "genomes").mkdir()
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Next: repgenr metadata" not in result.stdout
+    assert "repgenr.yaml records no stage." in result.stdout
+    assert "Start with 'repgenr metadata' (bacteria)" in result.stdout
+    assert "run repgenr doctor" in result.stdout
+    payload = _status_json(tmp_path)
+    assert payload["pipeline"] is None and payload["stages"] == [] and payload["next"] is None
+
+
+def test_status_with_an_empty_record_and_no_outputs_omits_the_doctor_hint(tmp_path: Path) -> None:
+    Config().save(tmp_path)
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert "records no stage" in result.stdout
+    assert "run repgenr doctor" not in result.stdout
+
+
+def test_status_without_an_entry_stage_follows_the_shared_tail(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("dereplicate", tool="sourmash", completed="t", fingerprint="f")
+    cfg.save(tmp_path)
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Pipeline: unrecorded entry stage" in result.stdout
+    assert "metadata" not in result.stdout
+    assert "Next: repgenr" in result.stdout
+    payload = _status_json(tmp_path)
+    assert payload["pipeline"] is None
+    assert [s["name"] for s in payload["stages"]] == ["dereplicate", "phylo", "tree2tax"]
+
+
+def test_status_notes_a_record_without_a_fingerprint(tmp_path: Path, write_deliverables) -> None:
+    cfg = Config()
+    cfg.record_stage("metadata", completed="2026-01-01T00:00:00")
+    cfg.record_stage("genome", completed="2026-01-01T00:01:00", fingerprint="abc")
+    cfg.save(tmp_path)
+    write_deliverables(tmp_path)
+    lines = _runner.invoke(app, ["status", "-wd", str(tmp_path)]).stdout.splitlines()
+    metadata = next(line for line in lines if "[done]    metadata" in line)
+    genome = next(line for line in lines if "[done]    genome" in line)
+    assert "(no resume fingerprint: recorded by an older version or restored by" in metadata
+    assert "its next invocation recomputes it)" in metadata
+    assert "no resume fingerprint" not in genome
+    stages = _by_name(_status_json(tmp_path))
+    assert stages["metadata"]["state"] == "done"
+    assert stages["metadata"]["fingerprint"] is False
+    assert stages["genome"]["fingerprint"] is True
+
+
+def test_status_does_not_note_a_derep_stock_record(tmp_path: Path) -> None:
+    cfg = Config()
+    cfg.record_stage("ingest", completed="t", fingerprint="f")
+    cfg.record_stage("derep_stock", params={"action": "delete", "name": "r1"}, completed="t")
+    cfg.save(tmp_path)
+    result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
+    assert "derep_stock" in result.stdout
+    assert "no resume fingerprint" not in result.stdout

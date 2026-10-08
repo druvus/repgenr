@@ -37,7 +37,7 @@ top level, and the execution reports under `pipeline_info/`.
 | `derep/` | dereplicate | Representative genomes and per-tool intermediates. |
 | `derep/representatives/` | dereplicate | The representative genomes, one genome file per cluster; the distinct values of the first column of `clusters.tsv`. |
 | `derep/unpacked/<representative>/` | derep-unpack | One directory per cluster with its member genomes (and the representative unless `--no-representant`), hard-linked from `genomes/` where the file system allows it and copied otherwise. The directory is named by the representative's file name without its genome extension, or by its full file name when two representatives would otherwise share a directory (`x.fasta` and `x.fna`; names differing only in case). The gzip suffixes (`.fasta.gz`, `.fna.gz`, `.fa.gz`) are removed as a whole. Replaced on each run. |
-| `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv`, a `representatives/` directory of links to the representative genomes, and `record.json`, the completed `dereplicate` record at pack time (tool, params, tool_versions, completed; absent when there was none). `unpack` restores it, re-stamps the `dereplicate` record from `record.json`, and rebuilds `derep/cluster_summary.tsv` from the restored clusters and the current manifest; the stored summary keeps the quality of pack time. |
+| `derep/stock/<name>/` | derep-stock | A named, stored dereplication run written by `pack`: `clusters.tsv`, `genome_status.tsv`, `cluster_summary.tsv`, a `representatives/` directory of links to the representative genomes, and `record.json`, the completed `dereplicate` record at pack time (tool, params, tool_versions, completed; absent when there was none). `unpack` restores it, re-stamps the `dereplicate` record from `record.json`, and rebuilds `derep/cluster_summary.tsv` from the restored clusters and the current manifest; the stored summary keeps the quality of pack time. The re-stamped record holds no resume fingerprint, so a later `dereplicate` or `repgenr run` recomputes the restored dereplication; run `phylo` directly to build on it. |
 | `glance_clustering_dendrogram.pdf` | glance | Clustering dendrogram over all genomes: dRep's own with `--tool drep`; average-linkage clustering on 1 - ANI with `--tool sourmash`. `--tool auto`, the default, uses dRep when it can run and sourmash otherwise. |
 | `glance_MASH_ANI_similarity_boxplot.png`, `glance_MASH_ANI_similarity_histogram.png` | glance | Box plot and histogram of the all-against-all ANI values (Mash ANI from dRep, the sketch-based ANI estimate from sourmash; the axes name which) within `--plot-min`/`--plot-max`, one value per genome pair (self-comparisons left out); the histogram counts genome pairs. A run removes the previous glance plots and dendrogram once the comparison succeeds, so a plot with no values in range is absent rather than stale. |
 | `glance_wd/` | glance | Working files of the comparison tool; kept only with `--keep-files`. With `--tool sourmash` it holds `pairwise_ani.csv` (`genome1`, `genome2`, `similarity`, one row per genome pair), `dendrogram_leaves.txt` (the dendrogram's leaf order) and the signatures. |
@@ -167,14 +167,18 @@ wording between releases.
 ```
 
 - `pipeline` is `bacterial`, `viral`, `local` or `reads` (the lineage `status`
-  follows), and null when the workdir has no `repgenr.yaml`; `stages` is then
-  empty and `notes` names the entry stages.
+  follows). It is null when the workdir has no `repgenr.yaml` or the record
+  holds no stage (`stages` is then empty and `notes` names the entry stages),
+  and when stages are recorded but no entry stage (`stages` then follows
+  dereplicate, phylo and tree2tax).
 - `stages` lists the stages of that lineage in order (`in_chain` true), then
   any other recorded stage (`in_chain` false), such as `snptype` or `glance`.
 - `state` is `done`, `stale` (completed, but an input changed or an output is
   missing; `reason` says which), `interrupted` (started and did not finish) or
   `pending` (not run).
-- `fingerprint` is true when the record holds a resume fingerprint. `detail`
+- `fingerprint` is true when the record holds a resume fingerprint. A `done`
+  stage without one (written by an older version, or restored by
+  `derep-stock --action unpack`) is recomputed by its next invocation. `detail`
   holds the GTDB release or API query date of `metadata`, else null.
 - `next` is the first stage of the lineage that is not done, or null when all
   are. `notes` holds advice about that stage, for example that `phylo` will

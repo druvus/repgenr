@@ -96,6 +96,17 @@ def _gtdb_note(params: dict) -> str:
 
 STATUS_SCHEMA = "repgenr.status/1"
 DOCTOR_SCHEMA = "repgenr.doctor/1"
+ENTRY_HINT = (
+    "Start with 'repgenr metadata' (bacteria), 'vmetadata' (viruses), "
+    "'ingest' (local genomes) or 'reads' (sequencing reads), with -wd <wd>."
+)
+# The stages every lineage shares, followed when no entry stage is recorded.
+_SHARED_TAIL = ("dereplicate", "phylo", "tree2tax")
+# Shown after a completed record that holds no resume fingerprint.
+NO_FINGERPRINT_NOTE = (
+    "no resume fingerprint: recorded by an older version or restored by derep-stock "
+    "unpack; its next invocation recomputes it"
+)
 HELP_JSON = (
     "Print one versioned JSON object on stdout instead of the text report "
     "(schema in docs/output.md); exit codes are unchanged."
@@ -127,10 +138,7 @@ def status(
 
     require_existing_workdir(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
-        notes = [
-            "Start with 'repgenr metadata' (bacteria), 'vmetadata' (viruses), "
-            "'ingest' (local genomes) or 'reads' (sequencing reads), with -wd <wd>."
-        ]
+        notes = [ENTRY_HINT]
         if as_json:
             _echo_json(_status_envelope(workdir, None, [], None, notes, None))
             raise typer.Exit()
@@ -180,18 +188,35 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
     stale reason), tool, completed, fingerprint and detail (the GTDB note of
     metadata).
     """
+    from ..core.config import CONFIG_FILENAME
+    from ..core.doctor import holds_outputs, stale_stages
+
     recorded = cfg.stages
+    if not recorded:
+        # An emptied or replaced record: no lineage to follow, so the entry
+        # stages are named instead of guessing one.
+        notes: list[str] = [f"{CONFIG_FILENAME} records no stage.", ENTRY_HINT]
+        if holds_outputs(workdir):
+            notes.append(
+                f"The workdir holds outputs that {CONFIG_FILENAME} does not record; "
+                "run repgenr doctor."
+            )
+        return _status_envelope(workdir, None, [], None, notes, None)
     chain: tuple[str, ...]
-    if "reads" in recorded and "metadata" not in recorded:
+    lineage: str | None
+    if any(name in recorded for name in ("reads", "assemble")) and "metadata" not in recorded:
         lineage, chain = "reads", PIPELINE_READS
     elif "ingest" in recorded:
         lineage, chain = "local", PIPELINE_LOCAL
     elif any(name in recorded for name in ("vmetadata", "vgenome")):
         lineage, chain = "viral", PIPELINE_VIRAL
-    else:
+    elif any(name in recorded for name in ("metadata", "genome")):
         lineage, chain = "bacterial", PIPELINE_BACTERIAL
-
-    from ..core.doctor import stale_stages
+    else:
+        # Stages are recorded, but none of an entry stage (for example a
+        # dereplicate record restored into a fresh workdir): follow the
+        # stages every lineage shares.
+        lineage, chain = None, _SHARED_TAIL
 
     unchecked: str | None
     try:
@@ -236,7 +261,7 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
     stages = [entry(stage, True) for stage in chain]
     stages += [entry(stage, False) for stage in recorded if stage not in chain]
     next_stage = next((s["name"] for s in stages if s["in_chain"] and s["state"] != "done"), None)
-    notes: list[str] = []
+    notes = []
     if next_stage is not None:
         hint = _next_stage_note(workdir, next_stage, recorded)
         if hint:
@@ -248,7 +273,11 @@ def _render_status_text(report: dict[str, Any]) -> None:
     """The text form of `status`: one line per stage, then the next step."""
     workdir = report["workdir"]
     typer.echo(f"RepGenR workdir: {workdir}")
-    typer.echo(f"Pipeline: {report['pipeline']}\n")
+    if not report["stages"]:
+        for line in report["notes"]:
+            typer.echo(line)
+        return
+    typer.echo(f"Pipeline: {report['pipeline'] or 'unrecorded entry stage'}\n")
 
     for s in report["stages"]:
         if not s["in_chain"]:
@@ -257,7 +286,7 @@ def _render_status_text(report: dict[str, Any]) -> None:
         tool = f" [{s['tool']}]" if s["tool"] else ""
         note = f"  ({s['detail']})" if s["detail"] else ""
         if s["state"] == "done":
-            typer.echo(f"  [done]    {stage}{tool}  {s['completed']}{note}")
+            typer.echo(f"  [done]    {stage}{tool}  {s['completed']}{note}{_fingerprint_note(s)}")
         elif s["state"] == "stale":
             # Completed, but an input changed or an output is missing since:
             # the stage re-runs on its next invocation.
@@ -283,7 +312,7 @@ def _render_status_text(report: dict[str, Any]) -> None:
             elif s["state"] == "stale":
                 when = f"{s['completed']}  [stale] ({s['reason']})"
             else:
-                when = s["completed"] or ""
+                when = (s["completed"] or "") + _fingerprint_note(s)
             typer.echo(f"    {s['name']}{tool}  {when}")
 
     if report["unchecked"] is not None:
@@ -294,6 +323,17 @@ def _render_status_text(report: dict[str, Any]) -> None:
         typer.echo(f"\nNext: repgenr {report['next']} -wd {workdir} ...")
         for line in report["notes"]:
             typer.echo(line)
+
+
+def _fingerprint_note(stage: dict[str, Any]) -> str:
+    """The note after a completed record that its next invocation recomputes.
+
+    derep_stock records are exempt: a delete is never fingerprinted, and the
+    store is not resumed.
+    """
+    if stage["state"] != "done" or stage["fingerprint"] or stage["name"] == "derep_stock":
+        return ""
+    return f"  ({NO_FINGERPRINT_NOTE})"
 
 
 def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str | None:

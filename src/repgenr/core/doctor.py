@@ -121,11 +121,14 @@ def _genome_set_stages(config: Config) -> tuple[str, str]:
     return "metadata", "genome"
 
 
+def holds_outputs(workdir: Path) -> bool:
+    """Whether the workdir holds pipeline outputs (genomes, selection, derep, tree)."""
+    return any((workdir / name).exists() for name in ("genomes", SELECTION_TSV, "derep", "tree"))
+
+
 def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     out: list[Finding] = []
-    if not config.stages and any(
-        (workdir / name).exists() for name in ("genomes", SELECTION_TSV, "derep", "tree")
-    ):
+    if not config.stages and holds_outputs(workdir):
         out.append(
             Finding(
                 "warn",
@@ -137,6 +140,17 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     for name, record in config.stages.items():
         if not record.interrupted:
             out.append(Finding("ok", name, f"completed {record.completed}"))
+            # derep_stock is exempt: a delete is never fingerprinted.
+            if not record.fingerprint and name != "derep_stock":
+                out.append(
+                    Finding(
+                        "warn",
+                        name,
+                        "completed without a resume fingerprint (recorded by an older "
+                        "version or restored by derep-stock unpack); its next invocation "
+                        "recomputes it.",
+                    )
+                )
         else:
             out.append(
                 Finding(
