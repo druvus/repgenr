@@ -1,0 +1,47 @@
+"""The one sourmash tool specification shared by every sourmash caller.
+
+The dereplicator, the tree builder, the classifier and the genome sketches
+(:mod:`repgenr.core.sketches`) all run the same ``sourmash`` binary, from the
+host or from one pinned BioContainer. The image, the conda spec and the binary
+check are declared here once, so the container pin cannot drift between them;
+each adapter derives its own :class:`ToolCapabilities` with
+:func:`sourmash_capabilities`, adding only its parameters.
+
+This module lives in ``core`` and imports no adapter, so every adapter family
+can import it without an import cycle.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from typing import Any
+
+from .binaries import BinarySpec
+from .plugins import ToolCapabilities
+
+SOURMASH_IMAGE = "quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0"
+SOURMASH_CONDA: tuple[str, ...] = ("bioconda::sourmash",)
+SOURMASH_BINARY = BinarySpec("sourmash", version_args=("--version",), min_version="4.0")
+
+# The base specification. ``name`` is also the key of --bin-dir and of the
+# per-tool container settings, so every caller shares it.
+SOURMASH_TOOL = ToolCapabilities(
+    name="sourmash",
+    required_binaries=(SOURMASH_BINARY,),
+    container=SOURMASH_IMAGE,
+    conda=SOURMASH_CONDA,
+)
+
+
+def sourmash_capabilities(**overrides: Any) -> ToolCapabilities:
+    """The shared sourmash specification with adapter-specific fields set.
+
+    The image, conda spec and binary check cannot be overridden here; pass
+    only parameter fields (``default_params``, ``accepted_extras``,
+    ``ignored_params``, ``reads_gzip``, scale hints).
+    """
+    fixed = {"name", "required_binaries", "container", "conda"}
+    clash = sorted(fixed & overrides.keys())
+    if clash:
+        raise ValueError(f"sourmash_capabilities: {', '.join(clash)} come from the shared spec")
+    return dataclasses.replace(SOURMASH_TOOL, **overrides)

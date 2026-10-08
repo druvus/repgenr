@@ -7,11 +7,10 @@ import csv
 import logging
 from pathlib import Path
 
-from ..core.binaries import BinarySpec
 from ..core.containers import run_chain, run_tool
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
-from ..core.plugins import ToolCapabilities
+from ..core.sourmash import sourmash_capabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
 # Peak resident memory of one gather against the GTDB rs226 representatives
@@ -28,11 +27,7 @@ def gather_workers(n_genomes: int, threads: int, memory_gb: float | None) -> int
 
 
 class SourmashClassifier(Classifier):
-    capabilities = ToolCapabilities(
-        name="sourmash",
-        container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
-        conda=("bioconda::sourmash",),
-        required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
+    capabilities = sourmash_capabilities(
         default_params={"ksize": 31, "scaled": 1000, "threshold_bp": 50000},
         accepted_extras=frozenset({"ksize", "scaled", "threshold_bp"}),
     )

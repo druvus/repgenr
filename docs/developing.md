@@ -128,6 +128,23 @@ it, and maps back to it where the tool rewrites names (ParSNP's `.ref`,
 cactus's `.` to `_`). The phylo stage checks tree leaves against the same
 names and rebuilds a reused alignment whose records differ from them.
 
+Genome sketches (`core/sketches.py`) are a contract written by the
+genome-writing stages and by `repgenr sketch`: `sketches/<record name>.sig.zip`
+per genome, three DNA signatures (k=21, 31, 51; scaled=1000), with the sketch
+file, parameter string and FASTA SHA-256 recorded in the manifest (schema
+version 4) or, for an outgroup without a manifest row, in
+`sketches/outgroup.json`. Staleness is decided from those records, not from
+file times. The writers call `sketch_stage_genomes` after the manifest is
+updated and before the stage record is written; sketches are not in
+`STAGE_DELIVERABLES` of the writers, and `sketch` is excluded from the resume
+fingerprint. Every sourmash caller (the dereplicator, the tree builder, the
+classifier and the sketch step) derives its `ToolCapabilities` from the one
+specification in `core/sourmash.py` (`SOURMASH_TOOL`,
+`sourmash_capabilities(...)`), so the container image, conda spec and binary
+check live in one place; the Nextflow `SKETCH` module
+(`nextflow/modules/local/dataflow/sketch.nf`) names the same image, which a
+unit test checks.
+
 ## Adding a tool
 
 A new tool is a self-contained adapter plus one entry-point line. The core never

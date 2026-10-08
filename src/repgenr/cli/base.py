@@ -67,6 +67,10 @@ HELP_TARGET_SPECIES = "Restrict the selection to this species."
 HELP_OUTGROUP_ACCESSION = "Accession to fetch and set aside as the outgroup."
 HELP_NO_OUTGROUP = "Do not root with an outgroup."
 HELP_KEEP_FILES = "Keep download and scratch intermediates."
+HELP_SKETCH = (
+    "Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). "
+    "Default: when sourmash can run; --sketch requires it, --no-sketch skips it."
+)
 HELP_WORKDIR = "Working directory."
 HELP_WORKDIR_CREATED = "Working directory (created)."
 HELP_GTDB_RELEASE = "GTDB release (tsv source)."
@@ -163,7 +167,7 @@ COMMAND_PANELS: dict[str, tuple[str, ...]] = {
     PANEL_PIPELINE: ("run", "status"),
     PANEL_ENTRY: ("metadata", "genome", "vmetadata", "vgenome", "ingest", "reads", "assemble"),
     PANEL_CORE: ("dereplicate", "snptype", "phylo", "tree2tax"),
-    PANEL_INSPECT: ("glance", "cluster-summary", "derep-unpack", "derep-stock"),
+    PANEL_INSPECT: ("glance", "cluster-summary", "derep-unpack", "derep-stock", "sketch"),
     PANEL_ENV: ("list-tools", "doctor", "versions"),
     PANEL_STEPS: (
         "genome-fetch",
@@ -316,6 +320,8 @@ STAGE_INPUTS: dict[str, Any] = {
     "derep_unpack": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV, ctx.genomes_dir],
     "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTERS_TSV],
     "derep_stock": _derep_stock_inputs,
+    # The genome set: the files and the selection that names them.
+    "sketch": lambda ctx, p: [ctx.genomes_dir, ctx.outgroup_dir, ctx.workdir / SELECTION_TSV],
 }
 
 
@@ -383,6 +389,12 @@ def _genome_set_deliverables(ctx: WorkdirContext) -> list[Path]:
     ]
 
 
+def _sketch_deliverables(ctx: WorkdirContext) -> list[Path]:
+    from ..core.sketches import expected_sketch_files
+
+    return expected_sketch_files(ctx.workdir)
+
+
 def _dereplicate_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
     """The four derep tables and directories, plus each listed representative.
 
@@ -438,6 +450,10 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     ),
     "cluster_summary": lambda ctx, p: [ctx.derep_dir / CLUSTER_SUMMARY_TSV],
     "derep_stock": _derep_stock_deliverables,
+    # One sketch per genome file selection.tsv names; a sketch deleted by hand
+    # reruns the command. The genome-writing stages do not list sketches:
+    # a genome set without them is complete.
+    "sketch": lambda ctx, p: _sketch_deliverables(ctx),
 }
 
 
@@ -701,7 +717,10 @@ def _require_unit_interval(value: float | None, label: str) -> None:
 # must not force an otherwise-identical stage to recompute from scratch.
 # allow_incomplete only gates the input-completeness refusal; on complete
 # inputs it changes nothing, so it must not invalidate the resume cache.
-_NON_RESULT_PARAMS = frozenset({"threads", "num_processes", "allow_incomplete"})
+# sketch (--sketch/--no-sketch of the genome-writing stages) adds sketches/,
+# which is not a deliverable, so it changes no result either; a workdir
+# finished without sketches gets them from `repgenr sketch`.
+_NON_RESULT_PARAMS = frozenset({"threads", "num_processes", "allow_incomplete", "sketch"})
 
 
 # Fingerprint format version. Bumping it guarantees fingerprints from older

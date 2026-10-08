@@ -59,6 +59,7 @@ from ..core.errors import (
 from ..core.executors import parallel_map
 from ..core.manifest import MANIFEST_FILENAME, record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
+from ..core.sketches import remove_stale, require_sourmash_if_requested, sketch_stage_genomes
 from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
 from .assemble_qc import (
@@ -113,6 +114,9 @@ class AssembleParams:
     classifier: str = "auto"
     gtdb_sketch: str | None = None
     gtdb_lineages: str | None = None
+    # Genome sketches (core.sketches): None sketches when sourmash can run,
+    # True requires it, False skips them. --append sketches the new genomes only.
+    sketch: bool | None = None
     # Tool tuning from ``--tool-arg``; each adapter declares the keys it reads.
     extra: dict = field(default_factory=dict)
 
@@ -145,6 +149,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if not rows:
         raise WorkdirError(f"{READS_TSV} lists no runs.")
     _check_outgroup_file(params.outgroup)
+    require_sourmash_if_requested(params.sketch)
 
     assemblies = ctx.workdir / "assemblies"
     scratch = ctx.scratch_dir / "assemble"
@@ -283,6 +288,15 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     write_selection(ctx.workdir / SELECTION_TSV, selection_rows)
     write_assembly_stats(ctx.workdir / ASSEMBLY_STATS_TSV, [_stats_row(o) for o in assembled])
     outgroup_row = next((r for r in selection_rows if r.is_outgroup), None)
+    sketches, sketch_versions = sketch_stage_genomes(
+        ctx,
+        params.sketch,
+        "assemble",
+        logger,
+        threads=params.threads,
+        only=[ctx.genomes_dir / _name(o) for o in assembled] if params.append else None,
+    )
+    versions.update(sketch_versions)
 
     assemblers_used = sorted({o.assembler for o in assembled if o.assembler})
     ctx.config.record_stage(
@@ -303,6 +317,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "n_disagree": n_disagree,
             "n_genus_renamed": sum(1 for o in assembled if o.taxonomy_flag == GENUS_RENAMED),
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
+            "sketches": sketches,
         },
         tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),
@@ -924,6 +939,7 @@ def precheck(ctx: WorkdirContext, params: AssembleParams) -> None:
     """Refuse a wrong database path or a missing QC tool before the harness marks
     a finished record incomplete (registered in the CLI's stage prechecks)."""
     _check_outgroup_file(params.outgroup)
+    require_sourmash_if_requested(params.sketch)
     check_quality_inputs(
         checkm2_db=params.checkm2_db or checkm2_db_from_env(),
         classifier=classifier_for(params.classifier, params.gtdb_sketch),
@@ -1324,6 +1340,7 @@ def _clear_genome_set(ctx: WorkdirContext, logger: logging.Logger) -> None:
     (ctx.workdir / ASSEMBLY_STATS_TSV).unlink(missing_ok=True)
     _stage_outgroup(ctx, None, logger)
     ctx.manifest.replace_genomes([])
+    remove_stale(ctx, logger)
 
 
 def _unlink_previous(genomes_dir: Path, accession: str) -> None:

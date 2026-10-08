@@ -7,6 +7,24 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Genome sketches as a working-directory contract (step 1 of 2):
+  `genome`, `vgenome`, `ingest` and `assemble` write
+  `sketches/<name>.sig.zip` per genome, outgroup included, with DNA
+  signatures at k=21, 31 and 51 (scaled=1000) named after the genome's record
+  name, when sourmash can run. `--sketch` requires sourmash (exit 4 before the
+  stage writes anything) and `--no-sketch` leaves the step out; the flag does
+  not change the resume fingerprint. Only missing and stale sketches are
+  written (stale: the FASTA SHA-256 or the parameters differ from the
+  record), `assemble --append` sketches only the genomes it adds,
+  `ingest --from-workdir` copies a matching source sketch, and sketches are
+  pruned with the genome set. The new command `repgenr sketch -wd WD [-t N]`
+  sketches an existing working directory and logs the counts; `status` shows
+  `sketches: n/m`. The manifest moves to schema version 4 with the columns
+  `sketch_file`, `sketch_params` and `sketch_digest`; a version 3 manifest is
+  migrated when a stage opens it, and its digest for the resume fingerprint is
+  unchanged. A Nextflow `SKETCH` module (stub-tested, not yet wired into the
+  workflows) sketches a genome directory. The dereplicator, tree builder and
+  classifier do not read the sketches yet (step 2).
 - `ingest --from-workdir WD` (repeatable, alone or with `--genomes-dir`;
   also on `run`) takes the genome set of an earlier working directory: its
   `selection.tsv` rows, with taxonomy, CheckM quality and
@@ -255,6 +273,10 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- The sourmash dereplicator, tree builder and classifier take their container
+  image, conda spec and binary check from one shared specification
+  (`core/sourmash.py`), which the genome sketch step also uses; the pinned
+  image is unchanged.
 - Quality keeper (#254): the score is `completeness - 5 x contamination +
   0.5 x log10(N50)`, dRep's default weights, with the N50 read once per
   genome from its FASTA (gzip-aware). Equal scores go to higher completeness,

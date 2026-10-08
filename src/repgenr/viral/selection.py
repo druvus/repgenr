@@ -31,6 +31,7 @@ from ..core.contracts import (
 from ..core.errors import UserInputError
 from ..core.manifest import record_from_selection
 from ..core.process import staged_dir
+from ..core.sketches import sketch_stage_genomes
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -139,6 +140,7 @@ def run_records(
         segments_path.unlink(missing_ok=True)
     ctx.manifest.replace_genomes([record_from_selection(r, "ncbi_virus") for r in selection_rows])
     n_written = sum(1 for r in selection_rows if not r.is_outgroup)
+    sketches, sketch_versions = sketch_stage_genomes(ctx, params.sketch, "vgenome", logger)
     ctx.config.record_stage(
         "vgenome",
         # The outgroup search is the one external tool; none when it did not run.
@@ -149,8 +151,9 @@ def run_records(
             "group_segments": params.group_segments,
             "no_outgroup": params.no_outgroup,
             "outgroup_accession": params.outgroup_accession,
+            "sketches": sketches,
         },
-        tool_versions=tool_versions,
+        tool_versions={**tool_versions, **sketch_versions},
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

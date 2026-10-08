@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 311 flags (311 with a live test or an n/a reason, 0 pending).
+29 commands, 317 flags (317 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -46,6 +46,15 @@ dispatch: `stage`
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--no-representant` |  | DerepUnpackParams.no_representant | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant | docs/cli-reference.md, docs/audit/cli-matrix.md |
+
+## sketch
+
+dispatch: `stage`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--workdir` | -wd | workdir | stage | n/a: workdir command; the SKETCH module sketches a genome directory | tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
+| `--threads` | -t | SketchParams.threads | range | n/a: workdir command; the SKETCH module sketches a genome directory | tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## dereplicate
 
@@ -130,6 +139,7 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_api_genus_representatives | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--accession-list-only` |  | GenomeParams.accession_list_only | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_genome_accession_list_only_is_a_pure_query | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | GenomeParams.keep_files | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketch` |  | GenomeParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py) | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## genome-fetch
 
@@ -168,6 +178,7 @@ dispatch: `stage`
 | `--outgroup` |  | IngestParams.outgroup | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--copy` |  | IngestParams.copy | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--drop-foreign` |  | IngestParams.drop_foreign | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline guard tests in tests/integration/test_ingest_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketch` |  | IngestParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## list-tools
 
@@ -269,6 +280,7 @@ dispatch: `stage`
 | `--gtdb-sketch` |  | AssembleParams.gtdb_sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--gtdb-lineages` |  | AssembleParams.gtdb_lineages | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--append` |  | AssembleParams.append | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketch` |  | AssembleParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py) | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## reads
 
@@ -451,6 +463,7 @@ dispatch: `stage`
 | `--print-fasta-headers` |  | VgenomeParams.print_fasta_headers | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--ignore-duplicates` |  | VgenomeParams.ignore_duplicates | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_bvbrc_needs_ignore_duplicates | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | VgenomeParams.keep_files | none | params.vgenome_args | tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--sketch` |  | VgenomeParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py) | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## vmetadata
 

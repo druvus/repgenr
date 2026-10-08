@@ -94,10 +94,14 @@ def metadata_params(
     )
 
 
-def genome_params(*, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET) -> GenomeParams:
+def genome_params(
+    *, accession_list_only: Any = _UNSET, keep_files: Any = _UNSET, sketch: Any = _UNSET
+) -> GenomeParams:
     from ..stages.genome import GenomeParams
 
-    return _build(GenomeParams, accession_list_only=accession_list_only, keep_files=keep_files)
+    return _build(
+        GenomeParams, accession_list_only=accession_list_only, keep_files=keep_files, sketch=sketch
+    )
 
 
 def _absolute(path: str) -> str:
@@ -112,6 +116,7 @@ def ingest_params(
     outgroup: Any = _UNSET,
     copy: Any = _UNSET,
     drop_foreign: Any = _UNSET,
+    sketch: Any = _UNSET,
 ) -> IngestParams:
     from ..core.errors import UserInputError
     from ..stages.ingest import IngestParams
@@ -144,6 +149,7 @@ def ingest_params(
         outgroup=outgroup,
         copy=copy,
         drop_foreign=drop_foreign,
+        sketch=sketch,
     )
 
 
@@ -204,6 +210,7 @@ def assemble_params(
     classifier: Any = _UNSET,
     gtdb_sketch: Any = _UNSET,
     gtdb_lineages: Any = _UNSET,
+    sketch: Any = _UNSET,
     extra: Any = _UNSET,
 ) -> AssembleParams:
     from ..assemblers.base import registry as _asm_registry
@@ -236,6 +243,7 @@ def assemble_params(
         classifier=classifier,
         gtdb_sketch=gtdb_sketch,
         gtdb_lineages=gtdb_lineages,
+        sketch=sketch,
         extra=extra,
     )
 
@@ -294,6 +302,7 @@ def vgenome_params(
     print_fasta_headers: Any = _UNSET,
     ignore_duplicates: Any = _UNSET,
     keep_files: Any = _UNSET,
+    sketch: Any = _UNSET,
 ) -> VgenomeParams:
     from ..stages.vgenome import VgenomeParams
     from ..viral._outgroup import distance_matrix_builders
@@ -324,6 +333,7 @@ def vgenome_params(
         print_fasta_headers=print_fasta_headers,
         ignore_duplicates=ignore_duplicates,
         keep_files=keep_files,
+        sketch=sketch,
     )
 
 

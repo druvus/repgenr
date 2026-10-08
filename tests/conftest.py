@@ -52,6 +52,21 @@ def _hermetic_reachability_probe(request: pytest.FixtureRequest, monkeypatch) ->
     monkeypatch.setattr(http, "_probe_session", _ReachableSession)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_sourmash_sketches(request: pytest.FixtureRequest, monkeypatch) -> None:
+    """The genome-writing stages sketch their genomes when sourmash can run.
+
+    The development environment has sourmash on the PATH; outside the live
+    suite the sketch step sees it as unavailable, so no test runs a real
+    sourmash. Tests of the sketch step set availability themselves.
+    """
+    if request.node.get_closest_marker("live"):
+        return
+    from repgenr.core import sketches
+
+    monkeypatch.setattr(sketches, "tool_available", lambda caps: False)
+
+
 @pytest.fixture
 def workdir(tmp_path: Path) -> Path:
     return tmp_path / "wd"
@@ -117,3 +132,62 @@ def write_deliverables():
                     (path / "placeholder.fasta").write_text(">x\nA\n", encoding="utf-8")
 
     return _write
+
+
+class FakeSourmash:
+    """Stands in for ``sourmash sketch``: writes the ``-o`` file, records calls.
+
+    The file holds the signature name and the input path. ``fail`` names
+    genomes (record names) whose call writes a partial file and then fails,
+    as a tool killed mid-write would; ``delay`` holds each call open so
+    concurrency can be measured (``peak``).
+    """
+
+    def __init__(self) -> None:
+        import threading
+
+        self.calls: list[str] = []
+        self.fail: set[str] = set()
+        self.delay = 0.0
+        self.peak = 0
+        self._active = 0
+        self._lock = threading.Lock()
+
+    def run_tool(self, caps, command, *, logger, **kwargs) -> int:
+        import time
+
+        from repgenr.core.errors import ToolExecutionError
+
+        argv = [str(c) for c in command]
+        assert argv[:5] == ["sourmash", "sketch", "dna", "-p", "k=21,k=31,k=51,scaled=1000"]
+        name = argv[argv.index("--name") + 1]
+        out = Path(argv[argv.index("-o") + 1])
+        with self._lock:
+            self.calls.append(name)
+            self._active += 1
+            self.peak = max(self.peak, self._active)
+        try:
+            if self.delay:
+                time.sleep(self.delay)
+            if name in self.fail:
+                out.write_text("partial", encoding="utf-8")
+                raise ToolExecutionError(argv, 1, output="killed", tool="sourmash")
+            out.write_text(f"{name}\n{argv[-1]}\n", encoding="utf-8")
+        finally:
+            with self._lock:
+                self._active -= 1
+        return 0
+
+
+@pytest.fixture
+def fake_sourmash(monkeypatch) -> FakeSourmash:
+    """sourmash available to the sketch step, run by :class:`FakeSourmash`."""
+    from repgenr.core import sketches
+    from repgenr.stages import sketch as sketch_stage
+
+    fake = FakeSourmash()
+    monkeypatch.setattr(sketches, "tool_available", lambda caps: True)
+    monkeypatch.setattr(sketches, "preflight", lambda caps: {"sourmash": "4.9.4"})
+    monkeypatch.setattr(sketch_stage, "preflight", lambda caps: {"sourmash": "4.9.4"})
+    monkeypatch.setattr(sketches, "run_tool", fake.run_tool)
+    return fake

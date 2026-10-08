@@ -8,6 +8,7 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
+    HELP_SKETCH,
     HELP_THREADS,
     HELP_WORKDIR,
     HELP_WORKDIR_CREATED,
@@ -167,6 +168,11 @@ def assemble(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
     ),
+    sketch: bool | None = typer.Option(
+        None,
+        "--sketch/--no-sketch",
+        help=HELP_SKETCH + " With --append only the new genomes are sketched.",
+    ),
 ) -> None:
     """Fetch and assemble the selected runs; write genomes/ and selection.tsv."""
     from .param_builders import assemble_params
@@ -190,6 +196,7 @@ def assemble(
             classifier=classifier,
             gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),
             gtdb_lineages=None if gtdb_lineages is None else str(gtdb_lineages),
+            sketch=sketch,
             extra=_parse_key_values(tool_arg, "--tool-arg"),
         )
 

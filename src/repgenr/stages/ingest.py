@@ -47,6 +47,12 @@ from ..core.contracts import (
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import FOREIGN_SOURCES, refuse_foreign_rows
 from ..core.manifest import MANIFEST_FILENAME, Manifest, record_from_selection
+from ..core.sketches import (
+    SketchSource,
+    require_sourmash_if_requested,
+    sketch_stage_genomes,
+    sources_from_workdir,
+)
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
 
@@ -63,6 +69,10 @@ class IngestParams:
     # Earlier working directories whose selection.tsv and genomes/ are merged
     # into this one.
     from_workdirs: list[str] = field(default_factory=list)
+    # Genome sketches (core.sketches): None sketches when sourmash can run,
+    # True requires it, False skips them. An up-to-date sketch of a
+    # --from-workdir genome is copied instead of sketched again.
+    sketch: bool | None = None
 
 
 # Manifest source of a genome that no source manifest describes.
@@ -131,6 +141,7 @@ def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
     (and the stages built on it) looking interrupted.
     """
     plan = _plan(params, ctx.workdir, logger=None)
+    require_sourmash_if_requested(params.sketch)
     # Only an existing manifest can hold appended genomes; opening one in a new
     # workdir would create an empty manifest.sqlite for a refused ingest.
     if not params.drop_foreign and (ctx.workdir / MANIFEST_FILENAME).exists():
@@ -295,6 +306,7 @@ def _manifest_sources(wd: Path, origin: str) -> dict[str, str]:
 def run(ctx: WorkdirContext, params: IngestParams) -> int:
     logger = ctx.logger
     plan = _plan(params, ctx.workdir, logger)
+    require_sourmash_if_requested(params.sketch)
     refuse_foreign_rows(
         ctx,
         "ingest",
@@ -325,6 +337,12 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
 
     ctx.manifest.replace_genomes([record_from_selection(c.row, c.source) for c in plan.chosen])
     write_selection(ctx.workdir / SELECTION_TSV, [c.row for c in plan.chosen])
+    reuse: dict[str, SketchSource] = {}
+    for wd in params.from_workdirs:
+        reuse.update(sources_from_workdir(Path(wd).expanduser()))
+    sketches, sketch_versions = sketch_stage_genomes(
+        ctx, params.sketch, "ingest", logger, reuse=reuse
+    )
 
     mode = "copied" if params.copy else "linked"
     per_origin = [(o, sum(c.origin == o for c in ingroup)) for o in plan.origins]
@@ -356,7 +374,9 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
             "total": len(ingroup),
             # Ingroup genomes per manifest source (gtdb, sra, local, ...).
             "sources": dict(sorted(by_source.items())),
+            "sketches": sketches,
         },
+        tool_versions=sketch_versions,
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

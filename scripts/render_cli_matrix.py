@@ -106,7 +106,11 @@ def _option_rows(cmd) -> list[str]:
         if getattr(p, "required", False):
             default = "required"
         elif getattr(p, "is_flag", False):
-            default = "off" if not p.default else "on"
+            # A --x/--no-x pair without a default decides at run time.
+            if p.default is None and getattr(p, "secondary_opts", None):
+                default = "auto"
+            else:
+                default = "off" if not p.default else "on"
         else:
             default = _format_default(p.default)
         rows.append(f"| {names} | {default} | {_cell(p.help or '')} |")

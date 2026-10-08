@@ -28,6 +28,7 @@ from .base import (
     HELP_PROCESS_SIZE,
     HELP_REDUCE,
     HELP_SECONDARY_ANI,
+    HELP_SKETCH,
     HELP_TARGET_FAMILY,
     HELP_TARGET_GENUS,
     HELP_TARGET_REPS,
@@ -115,12 +116,15 @@ def genome(
         False, "--accession-list-only", help="Write the accession list and stop (no download)."
     ),
     keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    sketch: bool | None = typer.Option(None, "--sketch/--no-sketch", help=HELP_SKETCH),
 ) -> None:
     """Download and organize genomes selected by the metadata stage."""
     from .param_builders import genome_params
 
     def build():
-        return genome_params(accession_list_only=accession_list_only, keep_files=keep_files)
+        return genome_params(
+            accession_list_only=accession_list_only, keep_files=keep_files, sketch=sketch
+        )
 
     _run("genome", workdir, build)
 
