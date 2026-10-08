@@ -20,6 +20,7 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -119,6 +120,12 @@ def check_engine_ready(config: ContainerConfig | None = None) -> None:
     passed the binary check and every tool then failed with the engine's error
     hidden in the run log. ``docker info`` (also answered by podman) needs the
     daemon. Singularity and Apptainer have no daemon and are not asked.
+
+    The check runs through :func:`subprocess.run`, not :func:`process.run`, so
+    a termination signal is not forwarded to it. None is needed: the client
+    stays in repgenr's process group, which a terminal Ctrl-C or a group-wide
+    scheduler signal reaches directly, and on the main thread the handler's
+    SystemExit interrupts the wait, after which subprocess.run kills the child.
     """
     config = config or _CONFIG
     if config.backend != DOCKER:
@@ -434,6 +441,12 @@ def wrap_command(
         # A name lets repgenr stop the container when it is stopped itself
         # (see _stop_container).
         cmd += ["--name", f"repgenr-{os.getpid()}-{uuid.uuid4().hex[:12]}"]
+        # Labels find the containers of a repgenr that was killed with SIGKILL,
+        # which no handler sees (a label filter matches exactly, a name
+        # filter matches substrings):
+        #   docker ps -q --filter label=repgenr.pid=<pid> | xargs -r docker stop
+        cmd += ["--label", f"repgenr.pid={os.getpid()}"]
+        cmd += ["--label", f"repgenr.host={socket.gethostname()}"]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
         # Run as an arbitrary host UID with no passwd entry, so HOME defaults to
         # "/" and is not writable. Point it at the mounted, writable workdir so
@@ -463,23 +476,101 @@ def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
     When repgenr is stopped it forwards SIGTERM to the docker client, which
     passes it through --init to the tool. A tool that ignores SIGTERM kept its
     container running after repgenr and the client had exited. The forwarded
-    SIGTERM was the tool's notice, so ``docker stop --time 0`` kills it at
+    SIGTERM was the tool's notice, so ``docker stop -t 0`` kills it at
     once: a scheduler that sends SIGKILL a few seconds after SIGTERM must not
     find the container still waiting out a second grace period.
     Errors are ignored: the container may already be gone.
+
+    ``docker stop`` runs outside the registry of :func:`process.run`; it is
+    the cleanup itself, and when a second signal ends repgenr while it runs,
+    the client runs on and completes the stop.
     """
-    if config.backend != DOCKER or "--name" not in wrapped:
+    name = _container_name(wrapped, config)
+    if name is None:
         return
-    name = wrapped[list(wrapped).index("--name") + 1]
     try:
         subprocess.run(
-            [config.engine_binary(), "stop", "--time", "0", name],
+            [config.engine_binary(), "stop", "-t", "0", name],
             capture_output=True,
             timeout=20,
             stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.SubprocessError):
         pass
+
+
+def _container_name(wrapped: Sequence[str], config: ContainerConfig) -> str | None:
+    """The ``--name`` of a wrapped ``docker run`` command, else None."""
+    if config.backend != DOCKER or "--name" not in wrapped:
+        return None
+    return wrapped[list(wrapped).index("--name") + 1]
+
+
+# Names of the Docker containers whose ``docker run`` client is running now,
+# guarded by process._live_lock (reentrant, also taken by the signal handler).
+# A second signal ends repgenr without Python's cleanup, so the final stop hook
+# stops these containers instead.
+_live_names: dict[str, str] = {}  # container name -> engine binary
+
+
+def _register_container(wrapped: Sequence[str], config: ContainerConfig) -> str | None:
+    name = _container_name(wrapped, config)
+    if name is not None:
+        with process._live_lock:
+            _live_names[name] = config.engine_binary()
+    return name
+
+
+def _unregister_container(name: str | None) -> None:
+    if name is not None:
+        with process._live_lock:
+            _live_names.pop(name, None)
+
+
+def _stop_live_containers() -> None:
+    """Start one detached ``docker stop -t 0`` for every live container.
+
+    Runs from the termination handler on a second signal, just before repgenr
+    exits: it starts the client in its own session and does not wait, so the
+    stop completes after repgenr has gone.
+    """
+    with process._live_lock:
+        by_engine: dict[str, list[str]] = {}
+        for name, engine in _live_names.items():
+            by_engine.setdefault(engine, []).append(name)
+    for engine, names in by_engine.items():
+        try:
+            subprocess.Popen(
+                [engine, "stop", "-t", "0", *names],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError:
+            pass
+
+
+process.register_final_stop_hook(_stop_live_containers)
+
+
+def _stop_after_failure(
+    exc: ToolExecutionError, wrapped: Sequence[str], config: ContainerConfig
+) -> None:
+    """Stop the container of a ``docker run`` whose client was killed.
+
+    The client is killed while repgenr stops, and on a timeout (the ``timeout``
+    argument or REPGENR_SUBPROCESS_TIMEOUT). Killing the client does not stop
+    the container, so a tool that ignores the forwarded SIGTERM, or never got
+    it, would keep running. On a pool thread the termination handler does not
+    interrupt the wait: the escalation timer kills the client and process.run
+    raises ToolExecutionError rather than SystemExit. A tool that was never
+    started has no container to stop.
+    """
+    if exc.timeout is not None or (
+        process.stop_requested.is_set() and exc.output != process.NOT_STARTED
+    ):
+        _stop_container(wrapped, config)
 
 
 # `docker run` exits 125 when the engine itself fails (image not found, pull
@@ -559,8 +650,9 @@ def run_tool(
         image, argv, config=config, cwd=cwd, logger=logger, extra_mounts=extra_mounts
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
+    name = _register_container(wrapped, config)
     try:
-        return process.run(
+        returncode = process.run(
             wrapped,
             logger=logger,
             cwd=cwd,
@@ -570,11 +662,18 @@ def run_tool(
             log_prefix=log_prefix or caps.name,
             timeout=timeout,
         )
+        if returncode != 0 and process.stop_requested.is_set():
+            # check=False: the killed client returned instead of raising.
+            _stop_container(wrapped, config)
+        return returncode
     except ToolExecutionError as exc:
+        _stop_after_failure(exc, wrapped, config)
         raise _engine_failure(exc, image, caps, config) from exc
     except (SystemExit, KeyboardInterrupt):
         _stop_container(wrapped, config)
         raise
+    finally:
+        _unregister_container(name)
 
 
 def run_chain(
@@ -630,6 +729,7 @@ def run_chain(
         extra_mounts=[*extra_mounts, *paths],
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
+    name = _register_container(wrapped, config)
     try:
         process.run(
             wrapped,
@@ -640,10 +740,13 @@ def run_chain(
             timeout=timeout,
         )
     except ToolExecutionError as exc:
+        _stop_after_failure(exc, wrapped, config)
         raise _engine_failure(exc, image, caps, config) from exc
     except (SystemExit, KeyboardInterrupt):
         _stop_container(wrapped, config)
         raise
+    finally:
+        _unregister_container(name)
 
 
 def run_tool_with_retries(

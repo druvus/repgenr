@@ -571,7 +571,7 @@ def test_a_stopped_repgenr_stops_the_container_too(monkeypatch, interrupt) -> No
     with pytest.raises(type(interrupt)):
         containers.run_tool(caps, ["tool"], logger=_LOG)
     assert len(calls) == 1
-    assert calls[0][:4] == ["docker", "stop", "--time", "0"] and calls[0][-1].startswith("repgenr-")
+    assert calls[0][:4] == ["docker", "stop", "-t", "0"] and calls[0][-1].startswith("repgenr-")
 
 
 def test_a_tool_failure_does_not_stop_a_container(monkeypatch) -> None:
@@ -626,3 +626,162 @@ def test_available_cpus_on_the_host_follows_the_affinity_mask(monkeypatch) -> No
     assert containers.available_cpus(caps) == 3
     monkeypatch.delattr(containers.os, "sched_getaffinity", raising=False)
     assert containers.available_cpus(caps) == 64
+
+
+def test_docker_containers_carry_pid_and_host_labels() -> None:
+    # A repgenr killed with SIGKILL runs no cleanup; the labels let its
+    # containers be found exactly (a name filter matches substrings).
+    import socket
+
+    cmd = wrap_command(
+        "img:1", ["tool"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    labels = [cmd[i + 1] for i, part in enumerate(cmd) if part == "--label"]
+    assert labels == [f"repgenr.pid={os.getpid()}", f"repgenr.host={socket.gethostname()}"]
+    assert cmd.index("--label") < cmd.index("img:1")
+
+
+def _stopping_engine(monkeypatch, run):  # noqa: ANN001, ANN202
+    """Docker backend with ``process.run`` replaced and engine calls recorded."""
+    import subprocess
+
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    calls: list[list[str]] = []
+
+    def engine(argv, **kw):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(containers.process, "run", run)
+    monkeypatch.setattr(containers.subprocess, "run", engine)
+    return calls
+
+
+@pytest.fixture
+def _stopping(monkeypatch):
+    """repgenr has received its first termination signal."""
+    monkeypatch.setattr(containers.process, "stop_requested", __import__("threading").Event())
+    containers.process.stop_requested.set()
+
+
+def _killed_client(cmd, **kw):  # noqa: ANN001, ANN202
+    # What a pool thread sees once the escalation timer killed its client.
+    raise containers.ToolExecutionError(cmd, -9, output="")
+
+
+@pytest.mark.usefixtures("_stopping")
+def test_a_worker_whose_client_was_killed_stops_its_container(monkeypatch) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    calls = _stopping_engine(monkeypatch, _killed_client)
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert len(calls) == 1
+    assert calls[0][:4] == ["docker", "stop", "-t", "0"] and calls[0][-1].startswith("repgenr-")
+
+
+@pytest.mark.usefixtures("_stopping")
+def test_a_worker_chain_whose_client_was_killed_stops_its_container(monkeypatch) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    calls = _stopping_engine(monkeypatch, _killed_client)
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_chain(caps, [("a", ["a"]), ("b", ["b"])], logger=_LOG, cwd="/wd")
+    assert [c[:4] for c in calls] == [["docker", "stop", "-t", "0"]]
+
+
+@pytest.mark.usefixtures("_stopping")
+def test_an_unchecked_killed_client_stops_its_container(monkeypatch) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    calls = _stopping_engine(monkeypatch, lambda cmd, **kw: -9)
+    assert containers.run_tool(caps, ["tool"], logger=_LOG, check=False) == -9
+    assert [c[:2] for c in calls] == [["docker", "stop"]]
+
+
+@pytest.mark.usefixtures("_stopping")
+def test_a_tool_not_started_while_stopping_has_no_container_to_stop(monkeypatch) -> None:
+    # Tasks still queued in a pool reach run() after the signal; each would
+    # otherwise cost a docker call while repgenr shuts down.
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+
+    def not_started(cmd, **kw):
+        raise containers.ToolExecutionError(cmd, -15, output=containers.process.NOT_STARTED)
+
+    calls = _stopping_engine(monkeypatch, not_started)
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert calls == []
+
+
+@pytest.mark.parametrize("outcome", ["ok", "fail", "interrupt"])
+def test_the_container_name_is_registered_only_while_it_runs(monkeypatch, outcome) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    seen: list[dict[str, str]] = []
+
+    def run(cmd, **kw):
+        seen.append(dict(containers._live_names))
+        if outcome == "fail":
+            raise containers.ToolExecutionError(cmd, 2, output="bad")
+        if outcome == "interrupt":
+            raise KeyboardInterrupt
+        return 0
+
+    _stopping_engine(monkeypatch, run)
+    expected = {"ok": None, "fail": containers.ToolExecutionError, "interrupt": KeyboardInterrupt}
+    if expected[outcome] is None:
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    else:
+        with pytest.raises(expected[outcome]):
+            containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert len(seen) == 1 and len(seen[0]) == 1
+    ((name, engine),) = seen[0].items()
+    assert name.startswith("repgenr-") and engine == "docker"
+    assert containers._live_names == {}
+
+
+def test_the_final_stop_hook_stops_every_live_container_detached(monkeypatch) -> None:
+    started: list[tuple[list[str], dict]] = []
+    monkeypatch.setattr(
+        containers.subprocess, "Popen", lambda argv, **kw: started.append((list(argv), kw))
+    )
+    monkeypatch.setattr(
+        containers, "_live_names", {"repgenr-1-a": "docker", "repgenr-1-b": "docker"}
+    )
+    assert containers._stop_live_containers in containers.process._final_stop_hooks
+    containers._stop_live_containers()
+    assert len(started) == 1
+    argv, kw = started[0]
+    assert argv[:4] == ["docker", "stop", "-t", "0"]
+    assert sorted(argv[4:]) == ["repgenr-1-a", "repgenr-1-b"]
+    assert kw["start_new_session"] is True
+    assert kw["stdin"] == kw["stdout"] == kw["stderr"] == containers.subprocess.DEVNULL
+
+
+def test_the_final_stop_hook_without_live_containers_starts_nothing(monkeypatch) -> None:
+    started: list[list[str]] = []
+    monkeypatch.setattr(containers.subprocess, "Popen", lambda argv, **kw: started.append(argv))
+    monkeypatch.setattr(containers, "_live_names", {})
+    containers._stop_live_containers()
+    assert started == []
+
+
+def _timed_out_client(cmd, **kw):  # noqa: ANN001, ANN202
+    # process.run killed the docker client after the timeout expired.
+    raise containers.ToolExecutionError(cmd, -9, output="", timeout=5)
+
+
+@pytest.mark.parametrize("chain", [False, True])
+def test_a_timed_out_client_stops_its_container(monkeypatch, chain: bool) -> None:
+    # Killing the client on a timeout does not stop the container; a tool
+    # that ignores SIGTERM kept running after repgenr reported the timeout.
+    import threading
+
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    monkeypatch.setattr(containers.process, "stop_requested", threading.Event())
+    calls = _stopping_engine(monkeypatch, _timed_out_client)
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        if chain:
+            containers.run_chain(caps, [("a", ["a"])], logger=_LOG, cwd="/wd", timeout=5)
+        else:
+            containers.run_tool(caps, ["tool"], logger=_LOG, timeout=5)
+    assert ei.value.timeout == 5
+    assert len(calls) == 1
+    assert calls[0][:4] == ["docker", "stop", "-t", "0"] and calls[0][-1].startswith("repgenr-")

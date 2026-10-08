@@ -19,7 +19,7 @@ import subprocess
 import threading
 import zipfile
 from collections import deque
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -52,6 +52,34 @@ _live: set[subprocess.Popen[bytes]] = set()
 # Set by the termination handler: run() then starts no further tool, so tasks
 # still queued in a thread pool do not launch while repgenr shuts down.
 stop_requested = threading.Event()
+# Output of the ToolExecutionError that run() raises for a tool it did not
+# start because repgenr is stopping.
+NOT_STARTED = "not started: repgenr is stopping"
+# Called by the termination handler on a second signal, just before repgenr
+# takes the default action (see register_final_stop_hook).
+_final_stop_hooks: list[Callable[[], None]] = []
+
+
+def register_final_stop_hook(hook: Callable[[], None]) -> None:
+    """Call ``hook`` when a second signal ends repgenr at once.
+
+    A second signal skips Python's cleanup (``finally`` blocks, the container
+    stop in :mod:`repgenr.core.containers`), so a resource that outlives the
+    process, such as a container managed by a daemon, needs this hook. The hook
+    runs inside the signal handler on the main thread: it must be quick and
+    must not wait for a child. An exception it raises is ignored. Registering
+    the same hook twice has no effect.
+    """
+    if hook not in _final_stop_hooks:
+        _final_stop_hooks.append(hook)
+
+
+def _run_final_stop_hooks() -> None:
+    for hook in list(_final_stop_hooks):
+        try:
+            hook()
+        except Exception:  # repgenr is exiting; there is nothing to report to
+            pass
 
 
 def _signal_group(proc: subprocess.Popen[bytes], sig: int) -> bool:
@@ -110,7 +138,8 @@ def install_termination_handler() -> None:
     then exits with 128 + the signal number (SIGTERM, SIGHUP) or raises
     :class:`KeyboardInterrupt` (SIGINT), so the stage record stays marked as
     interrupted and a temporary output is removed. A second signal kills the
-    remaining tool groups at once and takes the default action. Only the main
+    remaining tool groups at once, calls the hooks given to
+    :func:`register_final_stop_hook`, and takes the default action. Only the main
     thread can install handlers. A signal that repgenr inherited as ignored
     (``nohup`` ignores SIGHUP; a shell ignores SIGINT for a background job of
     a script) stays ignored.
@@ -128,6 +157,7 @@ def install_termination_handler() -> None:
         if stop_requested.is_set():
             # Second signal: do not wait any longer.
             stop_running_tools(signal.SIGKILL)
+            _run_final_stop_hooks()
             signal.signal(signum, signal.SIG_DFL)
             os.kill(os.getpid(), signum)
             return
@@ -256,9 +286,7 @@ def run(
     cmd = [str(part) for part in command]
     prefix = f"[{log_prefix}] " if log_prefix else ""
     if stop_requested.is_set():
-        raise ToolExecutionError(
-            cmd, -signal.SIGTERM, output="not started: repgenr is stopping", tool=log_prefix
-        )
+        raise ToolExecutionError(cmd, -signal.SIGTERM, output=NOT_STARTED, tool=log_prefix)
     logger.info("%s$ %s", prefix, " ".join(cmd))
 
     full_env = {**os.environ, **env} if env else None

@@ -543,6 +543,15 @@ All notable changes to RepGenR are documented here. The format follows
 - Resume (#239): `genomes/` or `derep/representatives/` holding only a
   non-FASTA file such as `x.fasta.tmp` counts as a missing deliverable, so the
   stage that writes it re-runs instead of being skipped.
+- Containers (#240): with `--container docker`, a container started from a
+  parallel worker thread is now stopped when repgenr receives a termination
+  signal, also when its tool ignores SIGTERM; previously only the container of
+  the main thread was stopped. A second signal starts one detached
+  `docker stop -t 0` for every running container before repgenr exits. A
+  container whose client is killed on a timeout is stopped as well.
+  Containers carry the labels `repgenr.pid` and `repgenr.host`, so those of a
+  repgenr ended by SIGKILL can be found with
+  `docker ps --filter label=repgenr.pid=<pid>`.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment

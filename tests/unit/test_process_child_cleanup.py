@@ -499,3 +499,42 @@ def test_sigtstp_without_a_terminal_does_not_stop_repgenr(tmp_path: Path) -> Non
         proc.terminate()
         _finish(proc)
     _assert_gone_within(pids, 2)
+
+
+def test_a_second_signal_calls_the_final_stop_hooks(tmp_path: Path) -> None:
+    """A second signal ends repgenr without Python's cleanup; the registered
+    hooks run first (containers.py stops the live containers there), and a
+    hook that fails does not keep repgenr alive."""
+    import signal
+
+    marker = tmp_path / "hook.ran"
+    driver = _driver(_helper_tool(tmp_path, trap_term=True), grace=30).replace(
+        "process.install_termination_handler()\n",
+        "process.install_termination_handler()\n"
+        "def _fails(): raise RuntimeError('hook failed')\n"
+        "process.register_final_stop_hook(_fails)\n"
+        f"process.register_final_stop_hook(lambda: open({str(marker)!r}, 'w').close())\n",
+    )
+    proc = _start_driver(driver)
+    _wait_started(tmp_path, proc)
+    pids = _pids(tmp_path)
+    proc.send_signal(signal.SIGTERM)
+    time.sleep(0.5)
+    assert proc.poll() is None, "repgenr ended before the grace period"
+    assert not marker.exists()
+    proc.send_signal(signal.SIGTERM)
+    _finish(proc)
+    _assert_gone_within(pids, 2)
+    assert marker.exists()
+    assert proc.returncode == -signal.SIGTERM
+
+
+def test_a_hook_is_registered_once(monkeypatch) -> None:
+    monkeypatch.setattr(process, "_final_stop_hooks", [])
+
+    def hook() -> None:
+        pass
+
+    process.register_final_stop_hook(hook)
+    process.register_final_stop_hook(hook)
+    assert process._final_stop_hooks == [hook]
