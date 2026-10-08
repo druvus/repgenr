@@ -42,6 +42,7 @@ from ..core.contracts import (
     atomic_path,
     list_fasta,
     parse_genome_filename,
+    strip_fasta_suffix,
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.inputs import file_digest, paths_stat_digest
@@ -373,8 +374,9 @@ def build_tree(
             shutil.copy2(tree, tmp)
     logger.info("Phylogenetic tree written to %s", final)
     expected = [*genomes, outgroup_file] if outgroup_file is not None else list(genomes)
-    check_tree_leaves(final, [g.stem for g in expected], treebuilder)
-    restore_leaf_names(final, [g.stem for g in expected], logger)
+    leaf_names = [strip_fasta_suffix(g.name) for g in expected]
+    check_tree_leaves(final, leaf_names, treebuilder)
+    restore_leaf_names(final, leaf_names, logger)
     return PhyloOutcome(
         tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
     )
@@ -772,11 +774,11 @@ def resolve_outgroup_files(
     for f in candidates:
         if accession_from_filename(f.name) == accession:
             logger.info("Using %s as outgroup", f.name)
-            return f, f.stem
+            return f, strip_fasta_suffix(f.name)
     for f in candidates:
         if accession in f.name:
             logger.info("Using %s as outgroup (substring match)", f.name)
-            return f, f.stem
+            return f, strip_fasta_suffix(f.name)
     logger.warning("Outgroup accession %s not found in %s", accession, outgroup_dir)
     return None, None
 
@@ -830,7 +832,13 @@ def _build_msa(
             extra=_adapter_extra(params.extra),
             # A species-level outgroup breaks the recombination scan; the
             # masker runs on the ingroup and applies its regions to all.
-            mask_exclude=(outgroup_file.stem,) if outgroup_file is not None else (),
+            # Both name forms: a typer may name a gzipped genome's record
+            # with or without its FASTA suffix.
+            mask_exclude=(
+                (strip_fasta_suffix(outgroup_file.name), outgroup_file.stem)
+                if outgroup_file is not None
+                else ()
+            ),
         )
         snp_reference: Path | None = (
             _resolve_reference(params.reference, genomes, outgroup_file, logger)

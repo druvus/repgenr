@@ -173,7 +173,7 @@ def test_variable_fraction_estimates_divergence() -> None:
 def test_divergent_alignment_warns_before_gubbins_runs(tmp_path: Path, monkeypatch, caplog) -> None:
     def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
         Path(str(kw["cwd"] / "gubbins") + ".filtered_polymorphic_sites.fasta").write_text(
-            ">a\nA\n", encoding="utf-8"
+            ">a\nA\n>b\nT\n", encoding="utf-8"
         )
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
@@ -200,3 +200,80 @@ def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> 
         mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
     assert "within-species" in ei.value.details()
     assert ei.value.returncode == 1  # the tool's status survives for the retry rule
+
+
+def _fake_gubbins_keeping(kept: set[str], calls: list):
+    def fake_run_tool(caps, argv, **kw):  # noqa: ANN001
+        calls.append([str(a) for a in argv])
+        records = mod.read_fasta(Path(argv[-1]))
+        prefix = str(kw["cwd"] / "gubbins")
+        Path(prefix + ".filtered_polymorphic_sites.fasta").write_text(
+            "".join(f">{n}\n{s}\n" for n, s in records.items() if n in kept),
+            encoding="utf-8",
+        )
+        Path(prefix + ".recombination_predictions.gff").write_text(
+            "##gff-version 3\n", encoding="utf-8"
+        )
+
+    return fake_run_tool
+
+
+def test_gubbins_keeps_taxa_that_are_mostly_n(tmp_path: Path, monkeypatch) -> None:
+    """The simple typer writes N where a genome does not align; Gubbins must keep it."""
+    calls: list[list[str]] = []
+    monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c"}, calls))
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNN\n", encoding="utf-8")
+    mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
+    argv = calls[0]
+    assert argv[argv.index("--filter-percentage") + 1] == "100"
+
+    calls.clear()
+    params = MaskParams(extra={"gubbins_args": "--filter-percentage 90"})
+    mod.GubbinsMasker().mask(full, tmp_path / "gub2", params, logging.getLogger("t"))
+    assert calls[0].count("--filter-percentage") == 1, "the user's choice stands"
+
+
+@pytest.mark.parametrize("exclude", [frozenset(), frozenset({"og"})])
+@pytest.mark.parametrize(
+    "gubbins_args", ["--filter-percentage 25", "--filter-percentage=25", "-f 25"]
+)
+def test_taxa_a_user_filter_would_leave_out_are_refused(
+    tmp_path: Path, monkeypatch, exclude, gubbins_args
+) -> None:
+    """Gubbins would skip such a taxon in its scan yet keep it in its output."""
+    from repgenr.core.errors import WorkdirError
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c", "og"}, calls))
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNN\n>og\nGGGGG\n", encoding="utf-8")
+    params = MaskParams(exclude=exclude, extra={"gubbins_args": gubbins_args})
+    with pytest.raises(WorkdirError) as exc:
+        mod.GubbinsMasker().mask(full, tmp_path / "gub", params, logging.getLogger("t"))
+    assert ": c." in str(exc.value) and "--filter-percentage" in str(exc.value)
+    assert exc.value.exit_code == 3
+    assert calls == [], "refused before Gubbins runs"
+
+
+def test_a_user_filter_that_keeps_every_taxon_runs(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c"}, calls))
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNA\n", encoding="utf-8")
+    params = MaskParams(extra={"gubbins_args": "--filter-percentage 80"})
+    mod.GubbinsMasker().mask(full, tmp_path / "gub", params, logging.getLogger("t"))
+    assert len(calls) == 1
+
+
+def test_a_non_numeric_filter_percentage_is_refused(tmp_path: Path) -> None:
+    from repgenr.core.errors import UserInputError
+
+    full = tmp_path / "full.fasta"
+    full.write_text(">a\nACGTA\n>b\nATTTA\n", encoding="utf-8")
+    params = MaskParams(extra={"gubbins_args": "--filter-percentage lots"})
+    with pytest.raises(UserInputError):
+        mod.GubbinsMasker().mask(full, tmp_path / "gub", params, logging.getLogger("t"))

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool, runs_on_host
-from ..core.errors import ToolExecutionError, WorkdirError
+from ..core.errors import ToolExecutionError, UserInputError, WorkdirError
 from ..core.plugins import ToolCapabilities
 from .base import Masker, MaskParams
 
@@ -262,7 +262,18 @@ class GubbinsMasker(Masker):
         first = params.extra.get("gubbins_first_tree_builder")
         if first:
             argv += ["--first-tree-builder", str(first)]
-        argv += shlex.split(str(params.extra.get("gubbins_args", "")))
+        user_args = shlex.split(str(params.extra.get("gubbins_args", "")))
+        limit = _filter_percentage(user_args)
+        if limit is None:
+            # Gubbins leaves taxa with more than 25% gaps or N out of its
+            # analysis by default, and still writes them to its outputs, so
+            # they are never scanned for recombination. A SNP typer that masks
+            # unaligned positions (the simple typer) yields such taxa
+            # routinely; keep every taxon in the analysis.
+            argv += ["--filter-percentage", "100"]
+        else:
+            _refuse_filtered_taxa(scan_records, limit)
+        argv += user_args
         argv += ["--prefix", prefix, gubbins_input]
         try:
             run_tool(
@@ -304,3 +315,41 @@ class GubbinsMasker(Masker):
         out = Path(str(prefix) + ".masked_polymorphic_sites.fasta")
         write_fasta(out, polymorphic_sites(masked))
         return out
+
+
+def _filter_percentage(args: list[str]) -> float | None:
+    """The ``--filter-percentage``/``-f`` value in user arguments, or None."""
+    for i, arg in enumerate(args):
+        name, eq, value = arg.partition("=")
+        if name in ("--filter-percentage", "-f"):
+            raw = value if eq else (args[i + 1] if i + 1 < len(args) else "")
+            try:
+                return float(raw)
+            except ValueError:
+                raise UserInputError(
+                    f"--filter-percentage in gubbins_args needs a number, got {raw!r}"
+                ) from None
+    return None
+
+
+def _refuse_filtered_taxa(records: dict[str, str], limit: float) -> None:
+    """Refuse taxa that Gubbins' ``--filter-percentage`` would leave out of its analysis.
+
+    Gubbins counts N, n and '-' as missing data, excludes a taxon above the
+    limit from the recombination scan, and still writes it to its outputs, so
+    the omission is not visible in the result. Checked here, before the run.
+    """
+    over = sorted(
+        name
+        for name, seq in records.items()
+        if seq and 100 * (seq.count("N") + seq.count("n") + seq.count("-")) / len(seq) > limit
+    )
+    if over:
+        raise WorkdirError(
+            f"{len(over)} taxon/taxa have more than {limit:g}% gaps or N, so Gubbins "
+            f"(--filter-percentage {limit:g}) would leave them out of the recombination "
+            f"analysis while keeping them in its output: {', '.join(over[:10])}"
+            f"{' ...' if len(over) > 10 else ''}. Remove --filter-percentage from "
+            "--tool-arg gubbins_args (repgenr then passes 100), leave those genomes out, "
+            "or choose a reference closer to them."
+        )

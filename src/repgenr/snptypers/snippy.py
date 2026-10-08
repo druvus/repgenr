@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import strip_fasta_suffix
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import warn_argv_bytes
@@ -44,7 +45,7 @@ class SnippyTyper(SnpTyper):
         for genome in genomes:
             if genome.resolve() == reference.resolve():
                 continue
-            sdir = out_dir / genome.stem
+            sdir = out_dir / strip_fasta_suffix(genome.name)
             run_tool(
                 self.capabilities,
                 [
@@ -84,13 +85,13 @@ class SnippyTyper(SnpTyper):
         if not core_aln.exists():
             raise WorkdirError("snippy-core did not produce a core alignment (.aln)")
         core_fasta = out_dir / "core_snp.fasta"
-        _copy_naming_reference(core_aln, core_fasta, reference.stem)
+        _copy_naming_reference(core_aln, core_fasta, strip_fasta_suffix(reference.name))
 
         full_aln = Path(str(core_prefix) + ".full.aln")
         full: Path | None = None
         if full_aln.exists():
             full = out_dir / "full_alignment.fasta"
-            _copy_naming_reference(full_aln, full, reference.stem)
+            _copy_naming_reference(full_aln, full, strip_fasta_suffix(reference.name))
 
         return SnpResult(core_snp_fasta=core_fasta, masked=False, full_alignment=full)
 

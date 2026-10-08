@@ -3,10 +3,11 @@
 A lightweight reference-based core-SNP pipeline that needs no dedicated typing
 tool. For each genome: align to the reference (minimap2, assembly preset asm20
 by default), call SNP-only variants (bcftools), and build a SNP-only consensus
-that preserves reference length. Reference positions that no primary or
-supplementary alignment of the genome covers are set to N in its consensus, so
-sequence a genome lacks is recorded as missing rather than as the reference
-base. The per-genome consensuses (plus the reference) are stacked into a
+that preserves reference length. Reference positions where no primary or
+supplementary alignment of the genome places a base (outside the alignments,
+and within deletions) are set to N in its consensus, so sequence a genome
+lacks is recorded as missing rather than as the reference base. The
+per-genome consensuses (plus the reference) are stacked into a
 whole-genome alignment, then reduced to the columns where at least two of A, C,
 G and T occur to form the core-SNP alignment.
 
@@ -32,7 +33,8 @@ import numpy.typing as npt
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_chain, run_tool
-from ..core.errors import WorkdirError
+from ..core.contracts import strip_fasta_suffix
+from ..core.errors import UserInputError, WorkdirError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
 from .base import SnpParams, SnpResult, SnpTyper
@@ -63,6 +65,30 @@ _CAPABILITIES = ToolCapabilities(
 )
 
 
+# minimap2 presets accepted for ``--tool-arg preset=...``; "none" passes no -x.
+_PRESETS = ("asm5", "asm10", "asm20", "map-ont", "map-pb", "map-hifi", "sr", "none")
+
+# A genome whose alignments cover less of the reference than this is warned
+# about: its sequence is mostly N in the alignment.
+_LOW_COVERAGE = 0.5
+
+
+def _preset_args(params: SnpParams) -> list[str]:
+    """minimap2 ``-x`` arguments for the preset in ``params``; refuse unknown names."""
+    preset = str(params.extra.get("preset", _CAPABILITIES.default_params["preset"])).strip()
+    if preset not in _PRESETS:
+        raise UserInputError(
+            f"Unknown minimap2 preset {preset!r} for the simple SNP typer "
+            f"(--tool-arg preset=...). Choose one of: {', '.join(_PRESETS)}."
+        )
+    return [] if preset == "none" else ["-x", preset]
+
+
+def genome_name(path: Path) -> str:
+    """Record name of a genome: its file name without the FASTA suffix (and .gz)."""
+    return strip_fasta_suffix(path.name)
+
+
 class SimpleSnpTyper(SnpTyper):
     capabilities = _CAPABILITIES
     requires_reference = True
@@ -78,13 +104,15 @@ class SimpleSnpTyper(SnpTyper):
         genomes = list(genomes)
         if reference is None:
             reference = genomes[0]
+        _preset_args(params)  # refuse an unknown preset before any work
         out_dir.mkdir(parents=True, exist_ok=True)
 
         ref = out_dir / "reference.fasta"
         _copy_plain_fasta(reference, ref)
         run_tool(_CAPABILITIES, ["samtools", "faidx", ref], logger=logger, log_prefix="samtools")
 
-        consensuses: dict[str, str] = {reference.stem: _concat_fasta(ref)}
+        ref_name = genome_name(reference)
+        consensuses: dict[str, str] = {ref_name: _concat_fasta(ref)}
         contigs = _reference_contigs(ref)
         per_genome_dir = out_dir / "per_genome"
         per_genome_dir.mkdir(exist_ok=True)
@@ -106,7 +134,8 @@ class SimpleSnpTyper(SnpTyper):
             workers,
             logger=logger,
         )
-        consensuses.update(zip((g.stem for g in others), called, strict=True))
+        consensuses.update(zip((genome_name(g) for g in others), called, strict=True))
+        _log_coverage(consensuses, ref_name, logger)
 
         full_fasta = out_dir / "full_alignment.fasta"
         with open(full_fasta, "w", encoding="utf-8") as fo:
@@ -115,19 +144,33 @@ class SimpleSnpTyper(SnpTyper):
 
         core_fasta = out_dir / "core_snp.fasta"
         snp_matrix = out_dir / "snp_distance_matrix.tsv"
-        n_sites = _write_core_snps(consensuses, core_fasta, snp_matrix)
+        names = list(consensuses)
+        core = _core_columns([consensuses[n] for n in names], _common_length(consensuses))
+        n_sites = int(core.shape[1])
         logger.info(
             "simple SNP typer: %d core SNP sites across %d genomes", n_sites, len(consensuses)
         )
         if n_sites == 0:
             raise WorkdirError(
                 f"No variable sites found among {len(consensuses)} genomes against the "
-                f"reference {reference.stem}, so no SNP tree can be built. The genomes "
+                f"reference {ref_name}, so no SNP tree can be built. The genomes "
                 "either are identical at every position they share or did not align to "
                 "the reference (unaligned positions are N and do not count). Try a "
                 "closer reference (--reference), more divergent genomes, or an "
                 "alignment-free tree (phylo --treebuilder mashtree)."
             )
+        empty = [n for n, row in zip(names, core, strict=True) if not (row != _NO_BASE).any()]
+        if empty:
+            raise WorkdirError(
+                f"{len(empty)} genome(s) have no base at any of the {n_sites} core SNP sites: "
+                f"{', '.join(empty[:10])}{' ...' if len(empty) > 10 else ''}. They did not "
+                f"align to the reference {ref_name} where the other genomes vary (see the "
+                "coverage lines in the log), and a tree builder refuses a sequence of N "
+                "only. Choose a closer reference (--reference), map with minimap2's "
+                "default settings (--tool-arg preset=none), leave the genome out, or use "
+                "an alignment-free tree (phylo --treebuilder mashtree)."
+            )
+        _write_core_tables(names, core, core_fasta, snp_matrix)
 
         return SnpResult(
             core_snp_fasta=core_fasta,
@@ -162,11 +205,10 @@ def _call_one(
     contigs: list[tuple[str, int]] | None = None,
 ) -> str:
     """Consensus of ``genome`` in reference coordinates, N where it does not align."""
-    stem = genome.stem
+    stem = genome_name(genome)
     if contigs is None:
         contigs = _reference_contigs(ref)
-    preset = str(params.extra.get("preset", _CAPABILITIES.default_params["preset"])).strip()
-    preset_args = [] if preset.lower() in ("", "none") else ["-x", preset]
+    preset_args = _preset_args(params)
     sam = work / f"{stem}.sam"
     bam = work / f"{stem}.bam"
     # Compressed BCF, not plain VCF: the pileup of a bacterial genome is a
@@ -268,9 +310,11 @@ def _reference_contigs(ref: Path) -> list[tuple[str, int]]:
     return contigs
 
 
-# CIGAR operations that consume the reference: M, D, N, = and X.
+# CIGAR operations that consume the reference: M, = and X align a query base
+# to it; D and N skip reference positions the query does not have.
 _CIGAR_OP = re.compile(r"(\d+)([MIDNSHP=X])")
-_REF_CONSUMING = frozenset("MDN=X")
+_REF_ALIGNED = frozenset("M=X")
+_REF_SKIPPED = frozenset("DN")
 # SAM flags of records that do not describe where the genome aligns:
 # unmapped (0x4) and secondary (0x100).
 _SKIP_FLAGS = 0x4 | 0x100
@@ -280,9 +324,10 @@ def _covered_positions(sam: Path, contigs: list[tuple[str, int]]) -> npt.NDArray
     """Reference positions spanned by the genome's alignments, over the concatenated contigs.
 
     Primary and supplementary records count; secondary and unmapped records do
-    not. A record covers its reference span from POS to the end given by the
-    CIGAR, deletions included, since the consensus there is defined by the
-    alignment.
+    not. Within a record, positions under M, = and X operations are covered;
+    a deletion (D) or skip (N) advances along the reference without covering,
+    since the genome has no base there and the consensus would otherwise keep
+    the reference base.
     """
     offsets: dict[str, int] = {}
     total = 0
@@ -300,9 +345,13 @@ def _covered_positions(sam: Path, contigs: list[tuple[str, int]]) -> npt.NDArray
             offset = offsets.get(fields[2])
             if offset is None or fields[5] == "*":
                 continue
-            span = sum(int(n) for n, op in _CIGAR_OP.findall(fields[5]) if op in _REF_CONSUMING)
-            start = offset + int(fields[3]) - 1
-            covered[start : start + span] = True
+            pos = offset + int(fields[3]) - 1
+            for n, op in _CIGAR_OP.findall(fields[5]):
+                if op in _REF_ALIGNED:
+                    covered[pos : pos + int(n)] = True
+                    pos += int(n)
+                elif op in _REF_SKIPPED:
+                    pos += int(n)
     return covered
 
 
@@ -373,12 +422,63 @@ def _core_columns(seqs: list[str], length: int) -> npt.NDArray[np.uint8]:
     return np.concatenate(kept, axis=1)
 
 
+def _common_length(consensuses: dict[str, str]) -> int:
+    return min((len(s) for s in consensuses.values()), default=0)
+
+
+def _log_coverage(consensuses: dict[str, str], ref_name: str, logger: logging.Logger) -> None:
+    """Log the fraction of the reference's bases each genome has a base at.
+
+    One line per genome, a summary line, and a warning for each genome below
+    ``_LOW_COVERAGE``: such a genome is mostly N in the alignment, which is
+    expected for a divergent genome (an outgroup) under the asm20 preset.
+    """
+    ref_bases = _base_count(consensuses[ref_name])
+    if ref_bases == 0:
+        return
+    fractions: dict[str, float] = {}
+    for name, seq in consensuses.items():
+        if name == ref_name:
+            continue
+        fractions[name] = _base_count(seq) / ref_bases
+        logger.info("%s: %.1f%% of the reference covered", name, 100 * fractions[name])
+    if not fractions:
+        return
+    values = sorted(fractions.values())
+    logger.info(
+        "Reference coverage across %d genome(s): minimum %.1f%%, median %.1f%%, maximum %.1f%%",
+        len(values),
+        100 * values[0],
+        100 * values[len(values) // 2],
+        100 * values[-1],
+    )
+    for name, fraction in fractions.items():
+        if fraction < _LOW_COVERAGE:
+            logger.warning(
+                "%s covers only %.1f%% of the reference %s; the rest is N in its "
+                "alignment. A genome this divergent may suit an alignment-free tree "
+                "or minimap2's default settings (--tool-arg preset=none) better.",
+                name,
+                100 * fraction,
+                ref_name,
+            )
+
+
+def _base_count(seq: str) -> int:
+    codes = _BASE_CODE[np.frombuffer(seq.encode("ascii", "replace"), dtype=np.uint8)]
+    return int((codes != _NO_BASE).sum())
+
+
 def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: Path) -> int:
     names = list(consensuses)
-    seqs = [consensuses[n] for n in names]
-    length = min(len(s) for s in seqs) if seqs else 0
+    core = _core_columns([consensuses[n] for n in names], _common_length(consensuses))
+    _write_core_tables(names, core, core_fasta, snp_matrix)
+    return int(core.shape[1])
 
-    core = _core_columns(seqs, length)
+
+def _write_core_tables(
+    names: list[str], core: npt.NDArray[np.uint8], core_fasta: Path, snp_matrix: Path
+) -> None:
     n_sites = int(core.shape[1])
     with open(core_fasta, "w", encoding="utf-8") as fo:
         for name, row in zip(names, core, strict=True):
@@ -388,13 +488,16 @@ def _write_core_snps(consensuses: dict[str, str], core_fasta: Path, snp_matrix: 
                 fo.write(snp_seq[pos : pos + 80] + "\n")
 
     # Pairwise SNP distances over those columns, counting only sites where both
-    # genomes have a base. Each row is compared against the whole matrix at
-    # once; the work is still quadratic in genomes, but each pair costs a
-    # vector comparison instead of a Python loop.
+    # genomes have a base; a pair with no such site has no distance (NA). Each
+    # row is compared against the whole matrix at once; the work is still
+    # quadratic in genomes, but each pair costs a vector comparison instead of
+    # a Python loop.
     has_base = core != _NO_BASE
     with open(snp_matrix, "w", encoding="utf-8") as fo:
         fo.write("\t" + "\t".join(names) + "\n")
         for name, row, row_base in zip(names, core, has_base, strict=True):
-            dists = ((core != row) & has_base & row_base).sum(axis=1)
-            fo.write(name + "\t" + "\t".join(str(int(d)) for d in dists) + "\n")
-    return n_sites
+            shared = has_base & row_base
+            dists = ((core != row) & shared).sum(axis=1)
+            n_shared = shared.sum(axis=1)
+            cells = (str(int(d)) if k else "NA" for d, k in zip(dists, n_shared, strict=True))
+            fo.write(name + "\t" + "\t".join(cells) + "\n")

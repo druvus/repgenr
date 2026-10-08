@@ -771,7 +771,12 @@ such build it switches to IQ-TREE (or to one thread when IQ-TREE is missing
 too) and says so in the log. `--tool-arg gubbins_tree_builder=raxmlng`,
 `--tool-arg gubbins_first_tree_builder=rapidnj` and
 `--tool-arg gubbins_args="--min-snps 5"` pass the choice, the first-iteration
-builder and any further `run_gubbins.py` arguments through.
+builder and any further `run_gubbins.py` arguments through. Gubbins
+leaves taxa with more than 25% gaps or N (`--filter-percentage`) out of its
+recombination analysis but still writes them to its outputs, unmasked. Since
+the `simple` typer writes N where a genome does not align, repgenr passes
+`--filter-percentage 100`. A value given in `gubbins_args` takes precedence;
+a taxon above it is then refused (exit 3) before Gubbins runs, with its name.
 
 The `simple` typer maps each genome independently, so `--threads` buys
 concurrent genomes first and threads inside one genome's chain only when there
@@ -783,28 +788,44 @@ backend each genome's chain of tools runs in a single container, so a genome
 costs one engine start rather than eight.
 
 The `simple` typer builds each genome's consensus by applying its SNP calls to
-the reference, and then sets every reference position that none of the genome's
-primary or supplementary alignments covers to N (the spans come from the
-minimap2 CIGAR strings). Sequence a genome lacks is therefore missing data, not
-the reference base. A column of `snp/core_snp.fasta` is kept only when at least
-two of A, C, G and T occur in it; N, other ambiguity codes and gaps do not make
-a column variable, and they are written as N. `snp/snp_distance_matrix.tsv`
-counts, for each pair, the differing sites among those where both genomes have
-a base, so two genomes are not separated by a region one of them lacks. On the
-50-genome test set a copy of one genome with 500 kb removed now differs from
-that genome at 0 sites; before masking it differed at 20539, all but one of
-them within the removed region. The distances between genomes of different gene
-content are computed over different numbers of sites, so they are not directly
-comparable as proportions.
+the reference, and then sets to N every reference position where none of the
+genome's primary or supplementary alignments places a base: positions outside
+the alignments, and positions within a deletion (CIGAR D or N operations), as
+read from the minimap2 SAM. Sequence a genome lacks is therefore missing data,
+not the reference base. A column of `snp/core_snp.fasta` is kept only when at
+least two of A, C, G and T occur in it; N, other ambiguity codes and gaps do
+not make a column variable, and they are written as N.
+`snp/snp_distance_matrix.tsv` counts, for each pair, the differing sites among
+those where both genomes have a base, so two genomes are not separated by a
+region one of them lacks; a pair that shares no such site has the distance
+`NA`. On the 50-genome test set a copy of one genome with 500 kb removed now
+differs from that genome at 0 sites; before masking it differed at 20539, all
+but one of them within the removed region. Distances between genomes of
+different gene content are computed over different numbers of sites, so they
+are not directly comparable as proportions.
+
+The log has one line per genome with the fraction of the reference's bases
+that genome covers, and a summary line (minimum, median, maximum). A genome
+below 50% is warned about. A genome with no base at any core SNP site, usually
+one that did not align to the reference at all, is refused (exit 3), since
+tree builders refuse a sequence of N only; the message names it.
 
 The `simple` typer maps assemblies with the minimap2 preset `asm20`, which
 suits assembly-to-reference alignment up to several percent divergence. Three
 genomes of the 50-genome test set have equal length (2 Mb), so their true
 substitution counts are position-wise differences. With `asm20` the typer's
 distances were within one site of those counts; with minimap2's default
-settings, used before, they differed by 8 to 111 sites. `--tool-arg
-preset=asm5` suits near-identical genomes, and `--tool-arg preset=none`
-restores minimap2's default settings.
+settings, used before, they differed by 8 to 111 sites. A genome more divergent
+than `asm20` tolerates, such as an outgroup from another species, aligns over
+less of the reference and is correspondingly more N; check the coverage lines
+in the log. `--tool-arg preset=` accepts `asm5`, `asm10`, `asm20`, `map-ont`,
+`map-pb`, `map-hifi`, `sr` and `none` (minimap2's default settings, no `-x`),
+and refuses any other value (exit 2). `asm5` suits near-identical genomes, and
+`none` aligns more divergent sequence at the cost of the accuracy above.
+
+Records in the SNP typers' alignments, and tree leaves, are named by the
+genome file name without its FASTA suffix and `.gz` (`x.fasta.gz` gives `x`),
+as `clusters.tsv` and tree2tax name genomes.
 
 `parsnp` names its records by file name and marks the reference with `.ref`;
 the typer renames them to the genome names, as the other typers write them.

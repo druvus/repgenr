@@ -51,3 +51,10 @@ def test_unresolvable_outgroup_warns_and_returns_none(tmp_path: Path) -> None:
     og_dir, acc_file = _setup(tmp_path, "GCF_9.9", ["Fam_Out_grp_GCF_1.1.fasta"])
     file, leaf = resolve_outgroup_files(og_dir, acc_file, _LOG)
     assert file is None and leaf is None
+
+
+def test_a_gzipped_outgroup_leaf_is_named_without_its_suffix(tmp_path: Path) -> None:
+    og_dir, acc_file = _setup(tmp_path, "GCF_1.1", ["Fam_Out_grp_GCF_1.1.fasta.gz"])
+    file, leaf = resolve_outgroup_files(og_dir, acc_file, _LOG)
+    assert file is not None and leaf == "Fam_Out_grp_GCF_1.1"
+    assert _resolve_outgroup_leaf_from(og_dir, acc_file, _LOG) == "Fam_Out_grp_GCF_1.1"

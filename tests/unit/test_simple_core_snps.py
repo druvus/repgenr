@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import pytest
+
 from repgenr.snptypers.simple import _write_core_snps
 
 
@@ -123,8 +125,9 @@ def test_n_against_one_base_is_not_a_variable_column(tmp_path: Path) -> None:
 
     consensuses = {"ref": "ACGT", "s1": "ANGT", "s2": "A-GN"}
     assert _write_core_snps(consensuses, tmp_path / "c.fasta", tmp_path / "d.tsv") == 0
+    # No core site, so no pair shares one: every distance is NA.
     lines = (tmp_path / "d.tsv").read_text().splitlines()
-    assert [line.split("\t")[1:] for line in lines[1:]] == [["0"] * 3] * 3
+    assert [line.split("\t")[1:] for line in lines[1:]] == [["NA"] * 3] * 3
 
 
 def test_a_real_snp_still_counts_beside_missing_data(tmp_path: Path) -> None:
@@ -209,7 +212,7 @@ def test_covered_positions_follow_primary_and_supplementary_cigar_spans(tmp_path
     sam = tmp_path / "g.sam"
     sam.write_text(
         _sam(
-            ("q", 0, "c1", 2, "2S3M1I2D1M5H"),  # reference span 2..7 (M, D count; S, I, H do not)
+            ("q", 0, "c1", 2, "2S3M1I2D1M5H"),  # 2..4 and 7 aligned; 5..6 deleted
             ("q", 2048, "c2", 1, "2="),  # supplementary on the second contig: 1..2
             ("q", 256, "c2", 3, "3M"),  # secondary: ignored
             ("q", 4, "*", 0, "*"),  # unmapped: ignored
@@ -218,7 +221,7 @@ def test_covered_positions_follow_primary_and_supplementary_cigar_spans(tmp_path
         encoding="utf-8",
     )
     covered = _covered_positions(sam, [("c1", 8), ("c2", 6)])
-    assert "".join("1" if c else "0" for c in covered) == "01111110" + "110010"
+    assert "".join("1" if c else "0" for c in covered) == "01110010" + "110010"
 
 
 def _fake_genome_chain(monkeypatch, sam_text: str, consensus: str, calls: list) -> None:
@@ -340,4 +343,111 @@ def test_gzipped_reference_and_query_genomes_are_read(tmp_path: Path, monkeypatc
     assert (out / "reference.fasta").read_text(encoding="utf-8") == ">c1\nACGTACGT\n"
     minimap2 = next(c for c in calls if c[0] == "minimap2")
     assert minimap2[-1] == str(query.resolve())
-    assert _read_fasta(result.core_snp_fasta) == {"refgenome.fasta": "T", "g1.fasta": "A"}
+    # Records are named without the FASTA suffix and .gz, as elsewhere.
+    assert _read_fasta(result.core_snp_fasta) == {"refgenome": "T", "g1": "A"}
+
+
+def test_a_deletion_in_the_genome_is_n_in_its_consensus(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref = tmp_path / "reference.fasta"
+    ref.write_text(">c1\nACGTACGTAC\n", encoding="utf-8")
+    work = tmp_path / "work"
+    work.mkdir()
+    _fake_genome_chain(monkeypatch, _sam(("g", 0, "c1", 1, "3M4D3M")), "ACGTACGTAC", [])
+    seq = mod._call_one(
+        tmp_path / "g.fasta",
+        ref,
+        work,
+        1,
+        SnpParams(),
+        logging.getLogger("t"),
+        contigs=[("c1", 10)],
+    )
+    assert seq == "ACGNNNNTAC"
+
+
+def test_pairs_without_a_shared_site_have_no_distance(tmp_path: Path) -> None:
+    from repgenr.snptypers.simple import _write_core_snps
+
+    consensuses = {"ref": "AAAA", "s1": "TTNN", "s2": "NNTT"}
+    assert _write_core_snps(consensuses, tmp_path / "core.fasta", tmp_path / "dist.tsv") == 4
+    rows = {
+        line.split("\t")[0]: line.split("\t")[1:]
+        for line in (tmp_path / "dist.tsv").read_text().splitlines()[1:]
+    }
+    assert rows["s1"] == ["2", "0", "NA"]
+    assert rows["s2"] == ["2", "NA", "0"]
+
+
+def _typer_with_consensuses(tmp_path: Path, monkeypatch, called: dict[str, str]):
+    from repgenr.snptypers import simple as mod
+
+    ref = tmp_path / "ref.fasta"
+    ref.write_text(">c1\nAAAAAAAAAA\n", encoding="utf-8")
+    genomes = [ref]
+    for name in called:
+        p = tmp_path / f"{name}.fasta"
+        p.write_text(">c1\nAAAAAAAAAA\n", encoding="utf-8")
+        genomes.append(p)
+    monkeypatch.setattr(mod, "run_tool", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "_call_one", lambda genome, *a, **k: called[genome.stem])
+    return ref, genomes
+
+
+def test_a_genome_without_a_base_at_any_core_site_is_refused(tmp_path: Path, monkeypatch) -> None:
+    """An unaligned genome would be all N; tree builders refuse such a sequence."""
+    from repgenr.core.errors import WorkdirError
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref, genomes = _typer_with_consensuses(
+        tmp_path, monkeypatch, {"g1": "TAAAAAAAAA", "outg": "NNNNNNNNNN"}
+    )
+    with pytest.raises(WorkdirError) as exc:
+        mod.SimpleSnpTyper().call(
+            genomes, ref, tmp_path / "out", SnpParams(threads=1), logging.getLogger("t")
+        )
+    assert exc.value.exit_code == 3
+    assert "outg" in str(exc.value)
+    assert "preset=none" in str(exc.value)
+    assert "alignment-free" in str(exc.value)
+
+
+def test_coverage_is_logged_and_low_coverage_warned(tmp_path: Path, monkeypatch, caplog) -> None:
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref, genomes = _typer_with_consensuses(
+        tmp_path, monkeypatch, {"g1": "TAAAAAAAAA", "g2": "ATNNNNNNNN"}
+    )
+    with caplog.at_level(logging.INFO):
+        mod.SimpleSnpTyper().call(
+            genomes, ref, tmp_path / "out", SnpParams(threads=1), logging.getLogger("t")
+        )
+    text = caplog.text
+    assert "g1: 100.0% of the reference covered" in text
+    assert "g2: 20.0% of the reference covered" in text
+    assert "minimum 20.0%" in text
+    warned = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warned) == 1 and "g2 covers only 20.0%" in warned[0].getMessage()
+
+
+def test_an_unknown_preset_is_refused_before_any_work(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.core.errors import UserInputError
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref, genomes = _typer_with_consensuses(tmp_path, monkeypatch, {"g1": "TAAAAAAAAA"})
+    with pytest.raises(UserInputError) as exc:
+        mod.SimpleSnpTyper().call(
+            genomes,
+            ref,
+            tmp_path / "out",
+            SnpParams(threads=1, extra={"preset": "asm30"}),
+            logging.getLogger("t"),
+        )
+    assert exc.value.exit_code == 2
+    assert "asm20" in str(exc.value)
+    assert not (tmp_path / "out").exists()
