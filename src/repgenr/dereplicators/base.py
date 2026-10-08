@@ -9,9 +9,10 @@ every dereplicator interchangeable with zero downstream change.
 
 from __future__ import annotations
 
+import csv
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +32,10 @@ class DerepParams:
     """Normalized dereplication parameters shared across tools.
 
     ``extra`` carries tool-specific overrides keyed by adapter name.
+    ``quality`` maps genome filename to (completeness, contamination) from the
+    manifest or selection.tsv, for genomes that carry both values; adapters
+    that can use genome quality read it (dRep's ``--genomeInfo``, galah's
+    input order) and the others ignore it.
     """
 
     primary_ani: float = 0.90
@@ -38,6 +43,7 @@ class DerepParams:
     aligned_fraction: float = 0.50
     threads: int = 16
     extra: dict = field(default_factory=dict)
+    quality: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -116,6 +122,54 @@ def check_result_complete(result: DerepResult, genome_names: Collection[str]) ->
             f"{len(doubled)} genome(s) appear in more than one cluster "
             f"(e.g. {', '.join(doubled[:3])})."
         )
+
+
+def run_quality(
+    quality: Mapping[str, tuple[float, float]],
+    names: Collection[str],
+    logger: logging.Logger,
+    *,
+    source: str,
+) -> dict[str, tuple[float, float]]:
+    """The genome quality given to the dereplicator for a whole run.
+
+    Adapters that read ``DerepParams.quality`` (dRep's ``--genomeInfo``,
+    galah's ``--genome-info``) need values for every genome they receive. The
+    decision is taken once per run, over all genomes in ``names``, so that
+    every chunk and the merge pass use the same source: the values when they
+    cover every genome, otherwise none (dRep then runs CheckM, galah orders
+    the genomes by file size). ``--keeper quality`` uses the partial values
+    either way.
+    """
+    lacking = sorted(n for n in names if n not in quality)
+    if not lacking:
+        return {n: quality[n] for n in names}
+    if len(lacking) < len(names):
+        logger.warning(
+            "The %s has completeness and contamination for %d of %d genomes (missing e.g. %s); "
+            "the dereplicator is given no genome quality for this run, so dRep scores "
+            "genomes with CheckM and galah takes them by descending file size.",
+            source,
+            len(names) - len(lacking),
+            len(names),
+            ", ".join(lacking[:3]),
+        )
+    return {}
+
+
+def write_genome_info(path: Path, rows: Iterable[tuple[str, float, float]]) -> Path:
+    """Write a dRep-style genome info table (genome,completeness,contamination).
+
+    dRep and galah both read this layout; each matches the genome column in its
+    own way (dRep the basename of the file it reads, galah the name without its
+    FASTA suffix, as ``strip_fasta_suffix`` gives).
+    """
+    with open(path, "w", encoding="utf-8", newline="") as fo:
+        writer = csv.writer(fo, lineterminator="\n")
+        writer.writerow(["genome", "completeness", "contamination"])
+        for genome, completeness, contamination in rows:
+            writer.writerow([genome, f"{completeness:g}", f"{contamination:g}"])
+    return path
 
 
 class Dereplicator(ABC):

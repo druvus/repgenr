@@ -198,6 +198,45 @@ All notable changes to RepGenR are documented here. The format follows
   of running on the earlier genomes. A set written by another stage, or kept
   because every run failed to download, stays and the error names it; a first
   call writes no empty set. Finished runs under `assemblies/` stay (#230).
+- `dereplicate --tool galah` (#PR): without manifest quality for every genome,
+- `dereplicate --tool galah` (#233): without manifest quality for every genome,
+  galah receives the genomes by descending file size instead of by name. galah
+  keeps the first listed genome of a cluster when it has no quality, so a
+  fragment whose name sorted first became the representative. With quality for
+  every genome the order is unchanged and `--keeper quality` picks the
+- `dereplicate --tool galah` (#233): when the manifest (or `selection.tsv`)
+  has completeness and contamination for every genome of the run, they are
+  passed as `--genome-info` (galah 0.4 and later), so galah ranks genomes by
+  quality for both the representative and the greedy membership, also under
+  `--keeper tool`. Otherwise galah receives the genomes by descending file
+  size instead of by name: galah keeps the first listed genome of a cluster
+  when it has no quality, so a fragment whose name sorted first became the
+  representative. A finished dereplication is not re-made by this change;
+  `--force` applies it.
+- `dereplicate --tool drep` (#233): when the manifest (or `selection.tsv`, for
+  `dereplicate-chunk` and `dereplicate-merge`) has completeness and
+  contamination for every genome of the run, they are passed as
+  `--genomeInfo`, so dRep runs without CheckM and scores genomes with the
+  values `--keeper quality` uses. `--virus` still passes
+  `--ignoreGenomeQuality` instead.
+- Dereplicators receive genome quality through a new `DerepParams.quality`
+  field (#233). Whether a run passes it is decided once, over every genome of
+  the run, so all chunks and the merge pass use the same source: with values
+  for only some genomes none are passed (dRep then runs CheckM, galah orders
+  by size) and a warning names genomes without values. `--keeper quality`
+  still uses the partial values.
+- `dereplicate --tool sourmash --process-size N --target-reps M` (#233): the
+  merge-level signature collection, whose genome set changes with the
+  threshold at each search step, is assembled with `sourmash sig cat` from the
+  chunk zips in the shared sketch cache instead of sketching the genomes again.
+  Each sketched zip gets an index of its signature names with the size and
+  modification time of each genome file; a set the indexed zips do not cover,
+  or a failed `sig cat`, is sketched as before. Cache entries (zip digests,
+  index entries, and per-genome signatures of the dense back-end) now follow
+  the genome file's size and modification time as well as its name, so a
+  genome replaced under the same name in a persistent `--tool-arg
+  sketch_cache=DIR` is sketched again. The sketch CSV and picklist are
+  csv-quoted, so a genome name containing a comma is one field.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.

@@ -37,7 +37,13 @@ from ..core.plugins import (
     warn_unconsumed_extras,
 )
 from ..core.process import link_or_copy, remove_tree
-from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
+from ..dereplicators.base import (
+    DerepParams,
+    DerepResult,
+    check_result_complete,
+    registry,
+    run_quality,
+)
 from .cluster_summary import summarise_clusters, taxonomy_lookup
 
 
@@ -138,12 +144,17 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     caps = adapter.capabilities
     extra = {**caps.default_params, **(params.extra or {})}
     warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
+    # Manifest quality is an adapter input whichever keeper rule applies
+    # (dRep --genomeInfo, galah --genome-info). Whether the adapters get it is
+    # decided once for the run, so all chunks and the merge use one source.
+    manifest_quality = quality_lookup(ctx)
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
         secondary_ani=params.secondary_ani,
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
         extra=extra,
+        quality=run_quality(manifest_quality, [g.name for g in genomes], logger, source="manifest"),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
 
@@ -164,7 +175,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     if params.keeper == "quality":
         from .derep_keeper import rescore_representatives
 
-        quality = quality_lookup(ctx)
+        quality = manifest_quality
         if quality:
             result, keeper_swaps = rescore_representatives(result, quality, logger)
         else:
@@ -191,7 +202,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     check_result_complete(result, [g.name for g in genomes])
     # The summary reports quality whichever keeper rule was used, so a
     # --keeper tool run still shows where a member outscores the keeper.
-    _write_contract(ctx, result, quality or quality_lookup(ctx))
+    _write_contract(ctx, result, manifest_quality)
     _update_manifest(ctx, result)
 
     ctx.config.record_stage(

@@ -636,3 +636,97 @@ def test_chunk_and_merge_summary_take_species_from_selection_tsv(tmp_path: Path,
     dereplicate_chunk(ChunkParams(tool="halver", genomes=genomes, out_dir=tmp_path / "bare"), _LOG)
     bare = read_cluster_summary(tmp_path / "bare" / CLUSTER_SUMMARY_TSV)
     assert all(r.n_species == 0 for r in bare)
+
+
+class _QualityRecorder(_Halver):
+    capabilities = ToolCapabilities(name="qualityrecorder", supports_native_scaling=True)
+    seen: list[dict] = []
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        type(self).seen.append(dict(params.quality))
+        return super().dereplicate(genomes, out_dir, params, logger)
+
+
+def _selection_with_quality(path: Path, genomes: list[Path]) -> dict[str, tuple[float, float]]:
+    quality = {g.name: (90.0 + i, 0.5 * i) for i, g in enumerate(genomes)}
+    write_selection(
+        path,
+        [
+            SelectionRow(
+                accession=f"GCF_{i:06d}.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=g.name,
+                completeness=quality[g.name][0],
+                contamination=quality[g.name][1],
+            )
+            for i, g in enumerate(genomes)
+        ],
+    )
+    return quality
+
+
+def test_chunk_and_merge_pass_selection_quality_to_the_adapter(tmp_path: Path, reg) -> None:
+    """The steps hand selection.tsv quality to the adapter, as the stage does
+    with the manifest; the merge step passes the union's genomes only."""
+    registry.register("qualityrecorder", _QualityRecorder, replace=True)
+    _QualityRecorder.seen = []
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    selection = tmp_path / "selection.tsv"
+    quality = _selection_with_quality(selection, genomes)
+    try:
+        dereplicate_chunk(
+            ChunkParams(
+                tool="qualityrecorder",
+                genomes=genomes,
+                out_dir=tmp_path / "chunk0",
+                selection_tsv=selection,
+            ),
+            _LOG,
+        )
+        dereplicate_merge(
+            MergeParams(
+                tool="qualityrecorder",
+                chunk_dirs=[tmp_path / "chunk0"],
+                out_dir=tmp_path / "merged",
+                selection_tsv=selection,
+            ),
+            _LOG,
+        )
+    finally:
+        registry._classes.pop("qualityrecorder", None)
+    chunk_seen, merge_seen = _QualityRecorder.seen
+    assert chunk_seen == quality
+    # halver keeps genomes 0 and 2 in the chunk; only they reach the merge
+    assert merge_seen == {g.name: quality[g.name] for g in (genomes[0], genomes[2])}
+
+
+def test_partial_selection_quality_reaches_no_chunk(tmp_path: Path, reg) -> None:
+    """The steps decide over the whole selection: one unscored genome in
+    another chunk means no chunk is given quality."""
+    registry.register("qualityrecorder", _QualityRecorder, replace=True)
+    _QualityRecorder.seen = []
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    selection = tmp_path / "selection.tsv"
+    _selection_with_quality(selection, genomes)
+    text = selection.read_text(encoding="utf-8").splitlines()
+    last = text[-1].split("\t")
+    header = text[0].split("\t")
+    last[header.index("completeness")] = ""
+    last[header.index("contamination")] = ""
+    selection.write_text("\n".join([*text[:-1], "\t".join(last)]) + "\n", encoding="utf-8")
+    try:
+        dereplicate_chunk(
+            ChunkParams(
+                tool="qualityrecorder",
+                genomes=genomes[:2],  # both scored
+                out_dir=tmp_path / "chunk0",
+                selection_tsv=selection,
+            ),
+            _LOG,
+        )
+    finally:
+        registry._classes.pop("qualityrecorder", None)
+    assert _QualityRecorder.seen == [{}]

@@ -89,18 +89,24 @@ Notes on the table:
 | Tool | Scaling shape | Representative criterion | Clone-block behaviour | Needs CheckM data | Verified |
 |---|---|---|---|---|---|
 | `skder` (default) | Superlinear in practice: 5 times the genomes cost about 10 times the wall time and 6 times the memory. Single pass: about 7 min at 1000 and 69 min at 5000, memory up to 8.2 GB. Chunked: about 15 min at 5000. | Its own aggregate score. Not quality-aware. | One representative per block. Which member is arbitrary. | No | Native and container (Wave) |
-| `galah` | Built for large sets. About 4 to 6 min at 1000 and 63 min at 5000. | Filename sort position within a clone block. | The alphabetically first member in the three orderings tested. | No | Native and container |
+| `galah` | Built for large sets. About 4 to 6 min at 1000 and 63 min at 5000. | With manifest quality for every genome of the run, galah's quality score (passed as `--genome-info`). Otherwise input position, with the genomes listed by descending file size, so a fragment is not preferred over a complete genome. | Without quality, the first listed member in the three orderings tested. | No; used when present | Native and container |
 | `sourmash` | Sparse back-end close to linear in close pairs. About 5.5 min at 5000, 0.3 to 0.7 GB. Dense back-end is capped at 5000. | Most-connected genome, alphabetical tie-break. | Biased toward the most-sequenced genotype. The sparse and dense back-ends can pick different members. | No | Native and container |
-| `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes: CheckM on `PATH`, or `--virus`, which passes `--ignoreGenomeQuality`. Without either, dRep stops and `dereplicate` exits 6. | Container only |
+| `drep` | Quadratic within primary clusters. Declared limit 2000, chunk-wrapped. | Completeness, contamination, N50 and size score. Quality-aware. | Best-scored member, so least sensitive to block size. | Yes: completeness and contamination in the manifest (or `selection.tsv` for the Nextflow steps) for every genome of the run, passed as `--genomeInfo`; else CheckM on `PATH`; or `--virus`, which passes `--ignoreGenomeQuality`. Without any of these, dRep stops and `dereplicate` exits 6. | Container only |
 
 Guidance:
 
 - Use `skder`, the default, for most sets.
 - Use `sourmash` with `--derep_process_size 2000` (Nextflow) or `--process-size
   2000` for 10000 genomes or more (not measured at this size).
-- Use `drep` only when CheckM is available, and keep it under about 2000
-  genomes. Genomes dRep's filter removes (`--tool-arg length=N`, or CheckM
-  thresholds) are `fail_qc` in `genome_status.tsv` and in no cluster.
+- Use `drep` when every genome has manifest quality (GTDB selections) or
+  CheckM is available, and keep it under about 2000 genomes. With manifest
+  quality for every genome, dRep scores genomes with those values instead of
+  running CheckM, the same values `--keeper quality` uses; when some genomes
+  lack them, the values are not passed (dRep needs all of them) and the log
+  says so. The decision covers the whole run, so a chunked run never scores
+  one chunk from the manifest and another with CheckM. Genomes dRep's filter removes (`--tool-arg length=N`, or its
+  completeness and contamination thresholds) are `fail_qc` in
+  `genome_status.tsv` and in no cluster.
 - The representative inside a clone block depends on the tool, its back-end and
   the accession names, not on genome quality. The default `--keeper quality`
   re-picks each cluster's representative by completeness minus 5 times
@@ -251,7 +257,7 @@ auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
 
 The default for `--tool` on `dereplicate` is `skder`, not `auto`. With `auto`
 and all tools available, `drep` (limit 2000) would be preferred for up to 2000
-genomes, and it needs CheckM data.
+genomes, and it needs manifest quality for every genome or CheckM.
 
 Passing a tool by name past its limit logs a warning and runs anyway. Adapter
 authors set the limit in `ToolCapabilities` (see

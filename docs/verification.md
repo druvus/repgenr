@@ -440,6 +440,10 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | A gzipped genome in `genomes/` made `--tool drep` exit 3, since dRep names its decompressed copy | #225 |
 | dereplicate | Genomes dRep's filter removed (`--tool-arg length=N`) had no status and the stage exited 3; they are now `fail_qc` | #225 |
 | dereplicate | A deleted `genome_status.tsv` or `cluster_summary.tsv` was not rebuilt: `doctor` asked for a rerun and the rerun skipped | #225 |
+| dereplicate | Without manifest quality, `--tool galah` kept a 40 percent fragment whose name sorted first as its cluster's representative (galah prefers the first listed genome); the genomes are now listed by descending file size, and with quality for every genome galah receives it as `--genome-info` (galah 0.4.2 and 0.5.2: the best-scored member represents each cluster under `--keeper tool`; rows are matched by name without the FASTA suffix, checked for all seven suffixes including `.fna.gz` and `.fa.gz`) | #233 |
+| dereplicate | `--tool drep` needed CheckM even when the manifest had completeness and contamination for every genome; these are now passed as `--genomeInfo` | #233 |
+| dereplicate | Chunked `--tool sourmash --target-reps` sketched the merge-level union again at each search step; it is now assembled from the chunk zips with `sourmash sig cat` | #233 |
+| dereplicate | Chunks of one run could be scored from different sources (dRep `--genomeInfo` in a fully scored chunk, CheckM in another); the quality decision now covers the whole run | #233 |
 | tree2tax, doctor | A `tree.nwk` holding two concatenated trees passed the completeness check, and tree2tax used the first; both now refuse it (exit 3 in tree2tax) | #223 |
 | snptype, phylo | ParSNP records kept harvesttools' names (`x.fasta`, `x.fasta.ref`); phylo accepted the tree, but tree2tax could not find the outgroup leaf and exited 3, and the Gubbins outgroup exclusion missed it. Records are now named by genome stem (verified on the 50-genome set) | #223 |
 | snptype | ParSNP copied every query genome into scratch; they are now hardlinked | #223 |
