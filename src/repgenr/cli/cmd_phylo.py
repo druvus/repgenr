@@ -33,6 +33,7 @@ from .base import (
     _snp_help,
     _tree_help,
     app,
+    resolve_threads,
 )
 
 
@@ -43,7 +44,9 @@ def snptype(
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     all_genomes: bool = typer.Option(False, "--all-genomes", help=HELP_ALL_GENOMES),
     mask: str = typer.Option("none", "--mask", help=_mask_help()),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Tool tuning as key=value (repeatable)."
     ),
@@ -94,7 +97,9 @@ def phylo(
         "--aligner-arg",
         help=HELP_ALIGNER_ARG,
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     mask: str = typer.Option(
         "none",
         "--mask",

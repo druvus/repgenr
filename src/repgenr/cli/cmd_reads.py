@@ -18,6 +18,7 @@ from .base import (
     _polisher_help,
     _run,
     app,
+    resolve_threads,
 )
 
 _HELP_TAXON = (
@@ -101,7 +102,9 @@ def reads(
 def assemble(
     workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
     assembler: str = typer.Option("auto", "--assembler", help=_assembler_help()),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     jobs: int | None = typer.Option(
         None,
         "--jobs",

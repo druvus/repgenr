@@ -71,6 +71,7 @@ from .base import (
     _tree_help,
     app,
     gated_extra,
+    resolve_threads,
     stage_errors,
 )
 from .cmd_viral import _validate_released_after
@@ -316,7 +317,9 @@ def run(
         help=HELP_COLLAPSE_LENGTH,
     ),
     # --- common ---
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     allow_incomplete: bool = typer.Option(
         False,
         "--allow-incomplete",

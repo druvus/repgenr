@@ -9,7 +9,6 @@ manifest derep status is updated.
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -37,6 +36,7 @@ from ..core.plugins import (
     warn_unconsumed_extras,
 )
 from ..core.process import link_or_copy, remove_tree
+from ..core.resources import usable_cpus
 from ..dereplicators.base import (
     DerepParams,
     DerepResult,
@@ -310,10 +310,11 @@ def _auto_num_processes(threads: int) -> int:
     faster at 4 workers and ~3x at 8 vs serial chunks, because a single tool run
     doesn't use many threads efficiently on one chunk. Target ~4 threads per
     worker (a balanced point, leaving per-chunk threading for larger genomes),
-    capped by the core count; never exceed the thread budget (so threads/worker
-    stays >= 1 and nothing is oversubscribed).
+    capped by the CPUs this process may use (affinity mask and cgroup CPU
+    quota); never exceed the thread budget (so threads/worker stays >= 1 and
+    nothing is oversubscribed).
     """
-    cores = os.cpu_count() or threads
+    cores = usable_cpus()
     return max(1, min(threads // 4, cores))
 
 

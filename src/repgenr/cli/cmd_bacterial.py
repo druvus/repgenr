@@ -43,6 +43,7 @@ from .base import (
     _run,
     app,
     gated_extra,
+    resolve_threads,
 )
 
 
@@ -133,7 +134,9 @@ def dereplicate(
     aligned_fraction: float = typer.Option(
         0.50, "-af", "--aligned-fraction", help=HELP_ALIGNED_FRACTION
     ),
-    threads: int = typer.Option(DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
     process_size: int | None = typer.Option(
         None,
         "-s",

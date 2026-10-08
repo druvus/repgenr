@@ -35,6 +35,14 @@ Every stage command takes the working directory with `-wd` (long form
 what ran. Large run-time data (scratch, downloads, the Cactus job store) also
 lives under the working directory and `TMPDIR`, so put it on a disk with room.
 
+Commands that run a threaded tool take `-t/--threads`. Without it the count is
+16, or the CPU limit of the repgenr process when that is lower: the CPUs it may
+run on (a Slurm cpuset, `taskset`) and a cgroup CPU quota (`docker run --cpus`,
+a Kubernetes CPU limit), rounded up. A lowered default is reported once on
+the console. An explicit `-t` is used as given, with a warning when it exceeds
+that limit. The thread count is not a result parameter, so changing it does
+not make a finished stage rerun.
+
 ### Bacteria
 
 ```bash

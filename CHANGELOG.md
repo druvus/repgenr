@@ -201,6 +201,14 @@ All notable changes to RepGenR are documented here. The format follows
   a failure, including a malformed `repgenr.yaml` or a check that could not
   complete; it exited 1, the status of an unexpected error. A script that
   tested for 1 after `doctor` must test for 7. Warnings alone still exit 0.
+- CLI (PR_NUM): the default of `-t/--threads` is 16, or the CPU limit of the
+  process when that is lower: the affinity mask capped by a cgroup v1 or v2
+  CPU quota (`docker run --cpus`, a Kubernetes CPU limit), previously not
+  seen. A lowered default is reported once; an explicit `-t` above the limit
+  is kept with one warning. The same limit now applies to the host CPU count
+  that caps Gubbins threads and to the automatic `--num-processes` of
+  `dereplicate`. The thread count is not a result parameter, so finished
+  stages do not rerun.
 - `phylo --msa-source snptype` (#228) writes its typing pass under
   `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
   under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the

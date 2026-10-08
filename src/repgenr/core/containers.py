@@ -32,6 +32,7 @@ from pathlib import Path
 from . import process
 from .errors import MissingBinaryError, ToolExecutionError, UserInputError
 from .plugins import ToolCapabilities
+from .resources import usable_cpus
 
 NATIVE = "none"
 DOCKER = "docker"
@@ -173,15 +174,11 @@ def available_cpus(caps: ToolCapabilities) -> int:
     Singularity shares the host's CPUs. When Docker does not answer, the host
     count is used.
     """
-    # The CPUs this process may run on (an affinity mask set by a scheduler or
-    # taskset), else all CPUs. A cgroup CPU quota (docker --cpus, a Slurm or
-    # Kubernetes limit) is not reflected here, so a quota below the CPU count
-    # still lets more threads through than the quota allows.
-    affinity = getattr(os, "sched_getaffinity", None)  # absent on macOS
-    try:
-        host = (len(affinity(0)) if affinity else 0) or os.cpu_count() or 1
-    except OSError:
-        host = os.cpu_count() or 1
+    # The CPUs this process may use: the affinity mask (a scheduler's cpuset,
+    # taskset) capped by a cgroup CPU quota (docker --cpus, a Kubernetes
+    # limit). A Docker engine's containers do not inherit repgenr's cgroup,
+    # so the engine branch below asks the engine instead.
+    host = usable_cpus()
     config = _CONFIG
     if config.backend != DOCKER or runs_on_host(caps):
         return host
