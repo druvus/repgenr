@@ -45,9 +45,10 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `-wd`, `--workdir` | required | Working directory (created). |
 | `--viral` | off | Run the viral chain (vmetadata -> vgenome) instead of bacterial. |
 | `--genomes-dir` |  | Start from local genome FASTAs (the ingest chain) instead of downloading. |
+| `--from-workdir` |  | Start the ingest chain from the genome set of an earlier working directory (selection.tsv and genomes/); repeatable, and may be combined with --genomes-dir. |
 | `--selection` |  | With --genomes-dir: selection.tsv naming the genomes to take (accession, taxonomy, filename, outgroup flag, quality). |
-| `--outgroup` |  | With --genomes-dir: the outgroup genome, a name under the directory or a path to a FASTA file. |
-| `--copy` | off | With --genomes-dir: copy the files into genomes/ instead of linking. |
+| `--outgroup` |  | With --genomes-dir or --from-workdir: the outgroup genome, a name found in those sources or a path to a FASTA file. |
+| `--copy` | off | With --genomes-dir or --from-workdir: copy the files into genomes/ instead of linking. |
 | `--reads` | off | Run the reads chain (reads -> assemble) from ENA/SRA sequencing runs selected by -tf/-tg/-ts or --accession-file, instead of downloading assemblies. |
 | `--accession-file` |  | With --reads: file of run/sample/study accessions. |
 | `--platform` | `any` | With --reads: any, illumina, ont or pacbio. |
@@ -206,9 +207,10 @@ Populate a working directory from local genomes (no download).
 | option | default | description |
 |---|---|---|
 | `-wd`, `--workdir` | required | Working directory (created). |
-| `--genomes-dir` | required | Directory of genome FASTA files (.fasta, .fa, .fna, .fas, .fasta.gz, .fna.gz or .fa.gz; subdirectories are not searched) to stage under genomes/. |
-| `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
-| `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir, or a path to a FASTA file elsewhere. |
+| `--genomes-dir` |  | Directory of genome FASTA files (.fasta, .fa, .fna, .fas, .fasta.gz, .fna.gz or .fa.gz; subdirectories are not searched) to stage under genomes/. At least one of --genomes-dir and --from-workdir is required. |
+| `--from-workdir` |  | Earlier working directory whose genome set (selection.tsv and genomes/) is added, with taxonomy, quality, the GTDB representative flag and the manifest source of each genome; its outgroup is not carried over. Repeatable; may be combined with --genomes-dir. |
+| `--selection` |  | selection.tsv (accession, taxonomy, filename, outgroup flag, quality) naming the genomes to take from --genomes-dir; default: every FASTA under --genomes-dir, taxonomy parsed from canonical Family_genus_species_ACCESSION names. |
+| `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir or in a --from-workdir (genomes/ or outgroup/), or a path to a FASTA file elsewhere. |
 | `--copy` | off | Copy the files into genomes/ instead of symlinking them. |
 | `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
 

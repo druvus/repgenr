@@ -14,13 +14,22 @@ quality`` and the ``gtdb_representative`` flag for ``--keeper gtdb``, 0 when
 the column is absent) or, failing that, from
 canonical ``Family_genus_species_ACCESSION.fasta`` filenames; any other name
 yields an empty taxonomy and the file stem as accession.
+
+``--from-workdir`` (repeatable, alone or beside ``--genomes-dir``) takes the
+genome set of an earlier working directory: its ``selection.tsv`` rows are
+read unchanged (taxonomy, quality, ``gtdb_representative``), each file is
+resolved under its ``genomes/``, and the manifest source of each genome
+(gtdb, sra, ncbi_virus, bvbrc, local) is kept when that workdir has a manifest.
+The outgroup of a source workdir is not carried over; ``--outgroup`` sets the
+outgroup of the new workdir and may name a genome from any source.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
-from dataclasses import dataclass, replace
+import sqlite3
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -36,32 +45,82 @@ from ..core.contracts import (
     write_selection,
 )
 from ..core.errors import UserInputError, WorkdirError
-from ..core.integrity import refuse_foreign_rows
-from ..core.manifest import MANIFEST_FILENAME, GenomeRecord, record_from_selection
+from ..core.integrity import FOREIGN_SOURCES, refuse_foreign_rows
+from ..core.manifest import MANIFEST_FILENAME, Manifest, record_from_selection
 
 OUTGROUP_ACCESSION_TXT = "outgroup_accession.txt"
 
 
 @dataclass
 class IngestParams:
-    genomes_dir: str
+    genomes_dir: str | None = None
     selection: str | None = None
     outgroup: str | None = None
     copy: bool = False
     # Discard genomes another entry path appended (assemble --append) instead
     # of refusing to overwrite the selection that holds them.
     drop_foreign: bool = False
+    # Earlier working directories whose selection.tsv and genomes/ are merged
+    # into this one.
+    from_workdirs: list[str] = field(default_factory=list)
+
+
+# Manifest source of a genome that no source manifest describes.
+LOCAL_SOURCE = "local"
+
+
+@dataclass
+class _Candidate:
+    """A genome ingest can stage: its selection row, its file, its manifest
+    source, and where it came from (named in messages)."""
+
+    row: SelectionRow
+    path: Path
+    source: str
+    origin: str
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.origin, self.row.filename
 
 
 @dataclass
 class _Plan:
     """What ingest will stage, resolved and checked before anything is written."""
 
-    source: Path
-    by_name: dict[str, Path]
-    ingroup: list[SelectionRow]
-    outgroup_row: SelectionRow | None
-    outgroup_file: Path | None
+    origins: list[str]
+    ingroup: list[_Candidate]
+    outgroup: _Candidate | None
+
+    @property
+    def chosen(self) -> list[_Candidate]:
+        return [*self.ingroup, *([self.outgroup] if self.outgroup is not None else [])]
+
+    def foreign_accessions(self) -> set[str]:
+        """Accessions of genomes with an appended source (sra) that this ingest
+        stages again, so that re-running it does not drop them."""
+        return {c.row.accession for c in self.chosen if c.source in FOREIGN_SOURCES}
+
+
+def _not_appended_here(ctx: WorkdirContext, plan: _Plan) -> set[str]:
+    """Accessions the foreign-row guard need not protect in this workdir.
+
+    Genomes this ingest stages again are not dropped. Other genomes with
+    source sra are left unprotected only when they cannot have been appended
+    here: the last ingest of this workdir took ``--from-workdir`` (the one
+    other way an sra genome gets in) and no ``assemble`` has been recorded in
+    it. Otherwise they are protected, as before ``--from-workdir`` existed.
+    """
+    keep = plan.foreign_accessions()
+    stages = ctx.config.stages
+    prior = stages.get("ingest")
+    if prior is not None and prior.params.get("from_workdirs") and "assemble" not in stages:
+        keep |= {
+            g.accession
+            for g in ctx.manifest.all_genomes(include_outgroup=True)
+            if g.source in FOREIGN_SOURCES
+        }
+    return keep
 
 
 def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
@@ -71,16 +130,68 @@ def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
     a mistyped directory or a bad genome file does not leave a finished ingest
     (and the stages built on it) looking interrupted.
     """
+    plan = _plan(params, ctx.workdir, logger=None)
     # Only an existing manifest can hold appended genomes; opening one in a new
     # workdir would create an empty manifest.sqlite for a refused ingest.
     if not params.drop_foreign and (ctx.workdir / MANIFEST_FILENAME).exists():
-        refuse_foreign_rows(ctx, "ingest", drop_foreign=False, logger=ctx.logger)
-    _plan(params, logger=None)
+        refuse_foreign_rows(
+            ctx, "ingest", drop_foreign=False, logger=ctx.logger, keep=_not_appended_here(ctx, plan)
+        )
 
 
-def _plan(params: IngestParams, logger) -> _Plan:
+def _plan(params: IngestParams, target: Path, logger) -> _Plan:
     """Resolve and check the genome set; warn through ``logger`` when given."""
-    source = Path(params.genomes_dir).expanduser()
+    if not params.genomes_dir and not params.from_workdirs:
+        raise UserInputError("ingest needs --genomes-dir, --from-workdir, or both.")
+    if params.selection and not params.genomes_dir:
+        raise UserInputError(
+            "--selection names genomes under --genomes-dir; give --genomes-dir with it "
+            "(a --from-workdir brings its own selection.tsv)."
+        )
+    given = [Path(wd).expanduser().resolve() for wd in params.from_workdirs]
+    repeated = sorted({str(wd) for wd in given if given.count(wd) > 1})
+    if repeated:
+        raise UserInputError(f"--from-workdir names {', '.join(repeated)} more than once.")
+    origins: list[str] = []
+    ingroup: list[_Candidate] = []
+    marked: list[_Candidate] = []
+    # Outgroup genomes of the source workdirs: not carried over, but
+    # --outgroup may name one of them.
+    others: list[_Candidate] = []
+    if params.genomes_dir:
+        origin = f"--genomes-dir {Path(params.genomes_dir).expanduser()}"
+        origins.append(origin)
+        for c in _genomes_dir_candidates(params, origin, logger):
+            (marked if c.row.is_outgroup else ingroup).append(c)
+    for wd in params.from_workdirs:
+        origin = f"--from-workdir {Path(wd).expanduser()}"
+        origins.append(origin)
+        rows, outgroups = _workdir_candidates(Path(wd).expanduser(), target, origin)
+        ingroup.extend(rows)
+        others.extend(outgroups)
+
+    outgroup = _resolve_outgroup(ingroup, marked, others, params.outgroup)
+    if outgroup is not None:
+        ingroup = [c for c in ingroup if c.key != outgroup.key]
+    plan = _Plan(origins, ingroup, outgroup)
+    _refuse_duplicates(plan.chosen)
+    _refuse_unusable([c.path for c in plan.chosen])
+    if logger is not None:
+        for c in others:
+            if outgroup is None or c.key != outgroup.key:
+                logger.info(
+                    "%s: its outgroup %s (%s) is not carried over; --outgroup sets the "
+                    "outgroup of the new working directory.",
+                    c.origin,
+                    c.row.accession,
+                    c.row.filename,
+                )
+    return plan
+
+
+def _genomes_dir_candidates(params: IngestParams, origin: str, logger) -> list[_Candidate]:
+    """The genomes of ``--genomes-dir``, from ``--selection`` or the filenames."""
+    source = Path(params.genomes_dir or "").expanduser()
     if not source.is_dir():
         raise UserInputError(f"--genomes-dir {source} is not a directory.")
     files = list_fasta(source)
@@ -110,63 +221,141 @@ def _plan(params: IngestParams, logger) -> _Plan:
                 ", ".join(FASTA_SUFFIXES),
                 _examples(skipped),
             )
+    return [_Candidate(r, by_name[r.filename], LOCAL_SOURCE, origin) for r in rows]
 
-    outgroup_row, outgroup_file = _resolve_outgroup(rows, by_name, params.outgroup)
-    outgroup_name = outgroup_row.filename if outgroup_row is not None else None
-    ingroup = [r for r in rows if not r.is_outgroup and r.filename != outgroup_name]
-    _refuse_duplicates([*ingroup, *([outgroup_row] if outgroup_row is not None else [])])
 
-    _refuse_unusable(
-        [by_name[r.filename] for r in ingroup]
-        + ([outgroup_file] if outgroup_file is not None else [])
-    )
-    return _Plan(source, by_name, ingroup, outgroup_row, outgroup_file)
+def _workdir_candidates(
+    wd: Path, target: Path, origin: str
+) -> tuple[list[_Candidate], list[_Candidate]]:
+    """The ingroup and the outgroup genomes of an earlier working directory.
+
+    Rows are read from its ``selection.tsv`` unchanged; each ingroup file must
+    exist under its ``genomes/`` (an outgroup row is looked up under
+    ``outgroup/`` only when ``--outgroup`` names it). The manifest source of
+    each genome is kept when the workdir has a manifest.
+    """
+    if not wd.is_dir():
+        raise UserInputError(f"{origin} is not a directory.")
+    if wd.resolve() == target.resolve():
+        raise UserInputError(
+            f"{origin} is the working directory being written (-wd); name another one."
+        )
+    selection = wd / SELECTION_TSV
+    genomes = wd / "genomes"
+    absent = [
+        name
+        for name, present in ((SELECTION_TSV, selection.is_file()), ("genomes/", genomes.is_dir()))
+        if not present
+    ]
+    if absent:
+        raise UserInputError(
+            f"{origin} holds no {' or '.join(absent)}; name a working directory in which "
+            "a genome set was written (genome, ingest, vgenome or assemble)."
+        )
+    try:
+        rows = read_selection(selection)
+    except WorkdirError as exc:
+        raise UserInputError(f"{origin}: {exc}") from exc
+    sources = _manifest_sources(wd, origin)
+
+    def candidate(row: SelectionRow, directory: Path) -> _Candidate:
+        source = sources.get(row.accession) or LOCAL_SOURCE
+        return _Candidate(replace(row, is_outgroup=False), directory / row.filename, source, origin)
+
+    ingroup = [candidate(r, genomes) for r in rows if not r.is_outgroup]
+    missing = [c.row.filename for c in ingroup if not c.path.exists()]
+    if missing:
+        raise UserInputError(
+            f"{len(missing)} selection row(s) of {origin} name a file not present under "
+            f"{genomes} (e.g. {', '.join(missing[:3])})."
+        )
+    outgroups = [candidate(r, wd / "outgroup") for r in rows if r.is_outgroup]
+    return ingroup, outgroups
+
+
+def _manifest_sources(wd: Path, origin: str) -> dict[str, str]:
+    """accession -> manifest source of a source workdir; empty without a manifest."""
+    path = wd / MANIFEST_FILENAME
+    if not path.is_file():
+        return {}
+    try:
+        manifest = Manifest.open_readonly(path)
+        try:
+            return {
+                g.accession: g.source
+                for g in manifest.all_genomes(include_outgroup=True)
+                if g.source
+            }
+        finally:
+            manifest.close()
+    except (WorkdirError, sqlite3.Error) as exc:
+        raise UserInputError(f"{origin}: cannot read {MANIFEST_FILENAME} ({exc}).") from exc
 
 
 def run(ctx: WorkdirContext, params: IngestParams) -> int:
     logger = ctx.logger
-    refuse_foreign_rows(ctx, "ingest", drop_foreign=params.drop_foreign, logger=logger)
-    plan = _plan(params, logger)
-    source, by_name, ingroup = plan.source, plan.by_name, plan.ingroup
-    outgroup_row, outgroup_file = plan.outgroup_row, plan.outgroup_file
+    plan = _plan(params, ctx.workdir, logger)
+    refuse_foreign_rows(
+        ctx,
+        "ingest",
+        drop_foreign=params.drop_foreign,
+        logger=logger,
+        keep=_not_appended_here(ctx, plan),
+    )
+    ingroup, outgroup = plan.ingroup, plan.outgroup
 
     ctx.genomes_dir.mkdir(parents=True, exist_ok=True)
     if params.copy:
-        logger.info("Copying %d genomes from %s into %s", len(ingroup), source, ctx.genomes_dir)
-    _prune(ctx.genomes_dir, {r.filename for r in ingroup}, logger)
-    for row in ingroup:
-        _stage(by_name[row.filename], ctx.genomes_dir / row.filename, params.copy)
+        logger.info("Copying %d genomes into %s", len(ingroup), ctx.genomes_dir)
+    _prune(ctx.genomes_dir, {c.row.filename for c in ingroup}, logger)
+    for c in ingroup:
+        _stage(c.path, ctx.genomes_dir / c.row.filename, params.copy)
 
     acc_file = ctx.workdir / OUTGROUP_ACCESSION_TXT
-    if outgroup_row is not None and outgroup_file is not None:
+    if outgroup is not None:
         ctx.outgroup_dir.mkdir(parents=True, exist_ok=True)
-        _prune(ctx.outgroup_dir, {outgroup_row.filename}, logger)
-        _stage(outgroup_file, ctx.outgroup_dir / outgroup_row.filename, params.copy)
-        acc_file.write_text(outgroup_row.accession + "\n", encoding="utf-8")
-        logger.info("Outgroup: %s (%s)", outgroup_row.accession, outgroup_row.filename)
+        _prune(ctx.outgroup_dir, {outgroup.row.filename}, logger)
+        _stage(outgroup.path, ctx.outgroup_dir / outgroup.row.filename, params.copy)
+        acc_file.write_text(outgroup.row.accession + "\n", encoding="utf-8")
+        logger.info("Outgroup: %s (%s)", outgroup.row.accession, outgroup.row.filename)
     else:
         if ctx.outgroup_dir.exists():
             _prune(ctx.outgroup_dir, set(), logger)
         acc_file.unlink(missing_ok=True)
 
-    selection_rows = [*ingroup, *([outgroup_row] if outgroup_row is not None else [])]
-    ctx.manifest.replace_genomes([_record(r) for r in selection_rows])
-    write_selection(ctx.workdir / SELECTION_TSV, selection_rows)
+    ctx.manifest.replace_genomes([record_from_selection(c.row, c.source) for c in plan.chosen])
+    write_selection(ctx.workdir / SELECTION_TSV, [c.row for c in plan.chosen])
 
     mode = "copied" if params.copy else "linked"
-    logger.info("Ingested %d genomes from %s (%s)", len(ingroup), source, mode)
+    per_origin = [(o, sum(c.origin == o for c in ingroup)) for o in plan.origins]
+    logger.info(
+        "Ingested %d genomes (%s): %s",
+        len(ingroup),
+        mode,
+        "; ".join(f"{n} from {o}" for o, n in per_origin),
+    )
+    by_source: dict[str, int] = {}
+    for c in ingroup:
+        by_source[c.source] = by_source.get(c.source, 0) + 1
     ctx.config.record_stage(
         "ingest",
         params={
-            "genomes_dir": str(source),
+            "genomes_dir": (
+                str(Path(params.genomes_dir).expanduser()) if params.genomes_dir else None
+            ),
+            # The source workdirs, as given (doctor re-derives the resume
+            # inputs from them).
+            "from_workdirs": [str(Path(wd).expanduser()) for wd in params.from_workdirs],
             "selection": params.selection,
             # The raw flag (doctor re-derives the resume inputs from it) and
             # the accession it resolved to.
             "outgroup": params.outgroup,
-            "outgroup_accession": outgroup_row.accession if outgroup_row is not None else None,
+            "outgroup_accession": outgroup.row.accession if outgroup is not None else None,
             "copy": params.copy,
             "drop_foreign": params.drop_foreign,
             "total": len(ingroup),
+            # Ingroup genomes per manifest source (gtdb, sra, local, ...).
+            "sources": dict(sorted(by_source.items())),
         },
         completed=datetime.now(UTC).isoformat(),
     )
@@ -229,38 +418,57 @@ def _refuse_unusable(paths: list[Path]) -> None:
     if bad:
         raise UserInputError(
             f"{len(bad)} genome file(s) are empty or unreadable: {_examples(bad)}. "
-            "Remove them from --genomes-dir (or from --selection) and re-run."
+            "Remove them from --genomes-dir (or from --selection, or from the "
+            "selection.tsv of a --from-workdir) and re-run."
         )
 
 
-def _refuse_duplicates(rows: list[SelectionRow]) -> None:
-    """Fail when two genomes share an accession or a selection names one file twice.
+def _refuse_duplicates(chosen: list[_Candidate]) -> None:
+    """Fail when two genomes share an accession or a filename.
 
     The manifest is keyed by accession, so a shared accession kept one row of
     several while genomes/ and selection.tsv kept them all. Non-canonical names
     with four or more tokens (``sample_1_run_A.fasta``) are parsed as
-    Family_genus_species_ACCESSION and can collide this way.
+    Family_genus_species_ACCESSION and can collide this way. Two sources
+    (``--genomes-dir`` and the ``--from-workdir`` directories) that hold the
+    same genome are refused as well: neither is given precedence.
     """
     for attr, label in (("accession", "an accession"), ("filename", "a filename")):
-        seen: dict[str, str] = {}
-        clashes: list[str] = []
-        for row in rows:
-            key = getattr(row, attr)
-            if key in seen:
-                clashes.append(f"{key} ({seen[key]}, {row.filename})")
+        seen: dict[str, _Candidate] = {}
+        within: list[str] = []
+        across: list[str] = []
+        for c in chosen:
+            key = getattr(c.row, attr)
+            prior = seen.get(key)
+            if prior is None:
+                seen[key] = c
+            elif prior.origin == c.origin:
+                within.append(f"{key} ({prior.row.filename}, {c.row.filename})")
             else:
-                seen[key] = row.filename
-        if clashes:
-            shown = "; ".join(clashes[:3]) + (
-                f" (+{len(clashes) - 3} more)" if len(clashes) > 3 else ""
+                across.append(
+                    f"{key} ({prior.row.filename} from {prior.origin}; "
+                    f"{c.row.filename} from {c.origin})"
+                )
+        if across:
+            raise UserInputError(
+                f"{len(across)} genome(s) from different sources share {label}: "
+                f"{_shown(across)}. Remove each such genome from all but one source "
+                "(its selection.tsv or genome directory) and re-run."
             )
+        if within:
             hint = (
                 " Give each genome its own accession with --selection, or rename the files "
                 "(Family_genus_species_ACCESSION.fasta)."
                 if attr == "accession"
                 else " List each file once in --selection."
             )
-            raise UserInputError(f"{len(clashes)} genome(s) share {label}: {shown}.{hint}")
+            raise UserInputError(f"{len(within)} genome(s) share {label}: {_shown(within)}.{hint}")
+
+
+def _shown(items: list[str], limit: int = 3) -> str:
+    return "; ".join(items[:limit]) + (
+        f" (+{len(items) - limit} more)" if len(items) > limit else ""
+    )
 
 
 def _row_from_filename(name: str) -> SelectionRow:
@@ -269,51 +477,61 @@ def _row_from_filename(name: str) -> SelectionRow:
 
 
 def _resolve_outgroup(
-    rows: list[SelectionRow], by_name: dict[str, Path], flag: str | None
-) -> tuple[SelectionRow | None, Path | None]:
-    """The outgroup row and its source file, from the selection or ``--outgroup``.
+    ingroup: list[_Candidate],
+    marked: list[_Candidate],
+    others: list[_Candidate],
+    flag: str | None,
+) -> _Candidate | None:
+    """The outgroup genome, from the ``--selection`` outgroup row or ``--outgroup``.
 
-    ``--outgroup`` names a source genome (filename, stem or accession) or points
-    at a FASTA file anywhere. When the selection also marks an outgroup, both
-    must name the same genome; a conflict is an error rather than a silent drop
-    of the selection's outgroup row.
+    ``marked`` holds the rows ``--selection`` marks as outgroup; ``others`` the
+    outgroup genomes of the ``--from-workdir`` directories, which only
+    ``--outgroup`` selects. ``--outgroup`` names a genome of any source
+    (filename, stem or accession) or points at a FASTA file anywhere. When the
+    selection also marks an outgroup, both must name the same genome; a
+    conflict is an error rather than a silent drop of the selection's
+    outgroup row.
     """
-    from_selection = [r for r in rows if r.is_outgroup]
-    if len(from_selection) > 1:
+    if len(marked) > 1:
         raise UserInputError("The selection marks more than one genome as outgroup.")
+    marked_rows = [c.row for c in marked]
     if flag is None:
-        if not from_selection:
-            return None, None
-        return from_selection[0], by_name[from_selection[0].filename]
+        return _as_outgroup(marked[0]) if marked else None
 
-    candidate = Path(flag).expanduser()
-    if candidate.is_file():
+    known = [*ingroup, *marked, *others]
+    path = Path(flag).expanduser()
+    if path.is_file():
         # phylo, tree2tax and doctor resolve the outgroup among the FASTA
         # files under outgroup/ only; a file staged under another name would
         # leave the tree unrooted.
-        if not candidate.name.endswith(FASTA_SUFFIXES):
+        if not path.name.endswith(FASTA_SUFFIXES):
             raise UserInputError(
                 f"--outgroup {flag} has no FASTA suffix; name it with one of "
                 f"{', '.join(FASTA_SUFFIXES)}."
             )
-        # A path to a genome under --genomes-dir is that genome's row, so its
+        # A path to a genome of a source is that genome's row, so its
         # selection accession is kept rather than one parsed from the filename.
-        resolved = candidate.resolve()
-        for row in rows:
-            if by_name[row.filename].resolve() == resolved:
-                _refuse_conflict(from_selection, row, flag)
-                return replace(row, is_outgroup=True), by_name[row.filename]
-        row = replace(_row_from_filename(candidate.name), is_outgroup=True)
-        _refuse_conflict(from_selection, row, flag)
-        _refuse_external_clash(rows, row, flag)
-        return row, candidate
-    for row in rows:
-        if flag in (row.filename, strip_fasta_suffix(row.filename), row.accession):
-            _refuse_conflict(from_selection, row, flag)
-            return replace(row, is_outgroup=True), by_name[row.filename]
+        resolved = path.resolve()
+        for c in known:
+            if c.path.resolve() == resolved:
+                _refuse_conflict(marked_rows, c.row, flag)
+                return _as_outgroup(c)
+        row = replace(_row_from_filename(path.name), is_outgroup=True)
+        _refuse_conflict(marked_rows, row, flag)
+        _refuse_external_clash([c.row for c in ingroup], row, flag)
+        return _Candidate(row, path, LOCAL_SOURCE, f"--outgroup {path}")
+    for c in known:
+        if flag in (c.row.filename, strip_fasta_suffix(c.row.filename), c.row.accession):
+            _refuse_conflict(marked_rows, c.row, flag)
+            return _as_outgroup(c)
     raise UserInputError(
-        f"--outgroup {flag!r} is neither a FASTA file nor a genome under --genomes-dir."
+        f"--outgroup {flag!r} is neither a FASTA file nor a genome of --genomes-dir or "
+        "--from-workdir."
     )
+
+
+def _as_outgroup(c: _Candidate) -> _Candidate:
+    return replace(c, row=replace(c.row, is_outgroup=True))
 
 
 def _refuse_conflict(from_selection: list[SelectionRow], chosen: SelectionRow, flag: str) -> None:
@@ -331,21 +549,19 @@ def _refuse_conflict(from_selection: list[SelectionRow], chosen: SelectionRow, f
 
 
 def _refuse_external_clash(rows: list[SelectionRow], chosen: SelectionRow, flag: str) -> None:
-    """Fail when an outgroup file from outside --genomes-dir shares an ingroup genome's
-    filename or accession.
+    """Fail when an outgroup file from outside the genome sources shares an ingroup
+    genome's filename or accession.
 
     Both name a genome in genomes/, the manifest and the tree, so the outgroup
     would silently replace that ingroup genome rather than sit beside it.
     """
     for row in rows:
-        if row.is_outgroup:
-            continue
         if row.filename == chosen.filename or row.accession == chosen.accession:
             raise UserInputError(
-                f"--outgroup {flag!r} is a file outside --genomes-dir, but its name gives "
-                f"{chosen.filename} ({chosen.accession}), which is also the ingroup genome "
-                f"{row.filename} ({row.accession}). Rename the outgroup file, or name the "
-                "genome under --genomes-dir to set that genome aside."
+                f"--outgroup {flag!r} is a file outside --genomes-dir and --from-workdir, "
+                f"but its name gives {chosen.filename} ({chosen.accession}), which is also "
+                f"the ingroup genome {row.filename} ({row.accession}). Rename the outgroup "
+                "file, or name the ingroup genome to set that genome aside."
             )
 
 
@@ -368,7 +584,3 @@ def _prune(directory: Path, keep: set[str], logger) -> None:
         if f.is_symlink() or f.is_file():
             f.unlink()
             logger.info("Removed %s (no longer selected)", f.name)
-
-
-def _record(row: SelectionRow) -> GenomeRecord:
-    return record_from_selection(row, "local")

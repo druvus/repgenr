@@ -227,11 +227,22 @@ def _metadata_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
 
 
 def _ingest_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
-    paths = [Path(params.genomes_dir).expanduser()]
+    paths: list[Path] = []
+    if getattr(params, "genomes_dir", None):
+        paths.append(Path(params.genomes_dir).expanduser())
     if getattr(params, "selection", None):
         paths.append(Path(params.selection).expanduser())
-    outgroup = getattr(params, "outgroup", None)
-    if outgroup and Path(outgroup).expanduser().is_file():
+    outgroup: str = getattr(params, "outgroup", None) or ""
+    outgroup_file = bool(outgroup) and Path(outgroup).expanduser().is_file()
+    # Each source workdir's selection (by content) and genomes/ (FASTA files
+    # only); its outgroup/ only when --outgroup may name a genome there. The
+    # source manifest, which gives only the source label, is not digested.
+    for wd in getattr(params, "from_workdirs", None) or []:
+        root = Path(wd).expanduser()
+        paths += [root / SELECTION_TSV, root / "genomes"]
+        if outgroup and not outgroup_file:
+            paths.append(root / "outgroup")
+    if outgroup_file:
         paths.append(Path(outgroup).expanduser())
     return paths
 
