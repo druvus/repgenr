@@ -835,10 +835,11 @@ record.
 `repgenr metadata --limit N` caps the bacterial selection at N genomes. The
 cap is not the first N rows of the GTDB table: candidates are grouped by
 species and taken round-robin, the best-quality genome of every species first,
-then each species' next best, until N. Within a species genomes rank by CheckM
-completeness minus five times contamination (the keeper score without its N50
-term, since no genome is downloaded yet), unscored genomes last, then the GTDB species-representative flag, then
-accession, so the result is deterministic. A heavily sequenced species
+then each species' next best, until N. Within a species genomes rank by the
+CheckM part of the keeper score (completeness minus five times
+contamination): the ranking happens before download, so no N50 exists yet.
+Unscored genomes come last, and ties go to the GTDB species-representative
+flag, then the accession, so the result is deterministic. A heavily sequenced species
 therefore cannot fill the cap on its own. With `-d rep` there is one genome
 per species and the rule reduces to a quality ranking across species. On the
 `--source api` path the per-genome quality cards are fetched for every
