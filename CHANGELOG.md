@@ -511,6 +511,21 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- Resume (#PR): input directories are digested from their genome FASTA
+  files only (the files `list_fasta` returns), so a leftover `x.fasta.tmp`, a
+  `.fai` index or a README in `genomes/`, `derep/representatives/` or the
+  `ingest` source no longer re-runs dereplicate, snptype, phylo, glance,
+  derep-unpack or ingest. A directory holding only FASTA files keeps the
+  digest it had, so a clean workdir does not re-run; one recorded with such a
+  file present re-runs that stage once (an `ingest` source with `truth.json`,
+  for example). `derep-stock --action unpack` digests the stored run's
+  tables and representatives file by file and repeats once after the upgrade.
+- `phylo`, `tree2tax` and `doctor` (#PR): the outgroup is resolved among the
+  genome FASTA files under `outgroup/` only; a partial `GCF_x.fasta.tmp` could
+  win the substring match before.
+- Resume (#PR): `genomes/` or `derep/representatives/` holding only a
+  non-FASTA file such as `x.fasta.tmp` counts as a missing deliverable, so the
+  stage that writes it re-runs instead of being skipped.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment

@@ -259,7 +259,12 @@ A stage's skip decision digests its declared inputs (`STAGE_INPUTS` in
 `repgenr/cli/base.py`) plus its parameters and the container identity. An
 adapter therefore needs no resume logic of its own -- but it must only read
 the inputs the stage declares; a tool that reads undeclared files would
-resume incorrectly. Outputs are not part of the fingerprint; instead a
+resume incorrectly. A declared directory is digested from its genome FASTA
+files only (`core.inputs.dir_stat_digest`, the files `list_fasta` returns),
+so a stage that reads anything else from a directory (a table, an index)
+declares that file by its own path; derep-stock's unpack, for example, lists
+the stored run's `clusters.tsv`, `genome_status.tsv`, `record.json` and
+`representatives/` one by one. Outputs are not part of the fingerprint; instead a
 matching stage is skipped only when every path its entry in
 `STAGE_DELIVERABLES` (same module) lists exists, a directory being non-empty.
 A new stage adds an entry to both tables. A stage whose one record serves

@@ -252,11 +252,8 @@ def _check_outgroup(workdir: Path, config: Config) -> list[Finding]:
     if not accession:
         return []
     outgroup_dir = workdir / "outgroup"
-    candidates = (
-        [p for p in sorted(outgroup_dir.iterdir()) if not p.name.startswith(".")]
-        if outgroup_dir.exists()
-        else []
-    )
+    # The rule phylo's resolve_outgroup_files applies: genome FASTA files only.
+    candidates = list_fasta(outgroup_dir)
     resolved = any(
         accession_from_filename(f.name) == accession or accession in f.name for f in candidates
     )

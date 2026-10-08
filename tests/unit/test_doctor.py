@@ -153,6 +153,16 @@ def test_unresolvable_outgroup_is_a_warning(tmp_path: Path) -> None:
     assert any(f.level == "warn" and "GCF_9.1" in f.message for f in findings)
 
 
+def test_outgroup_resolved_only_by_a_temporary_file_is_a_warning(tmp_path: Path) -> None:
+    # doctor applies phylo's rule: a partial GCF_9.1 download is no outgroup.
+    wd = _base_workdir(tmp_path)
+    og = wd / "outgroup" / "Fam_Out_grp_GCF_9.1.fasta"
+    og.rename(og.with_name(og.name + ".tmp"))
+    findings = diagnose(wd)
+    assert any(f.level == "warn" and f.area == "outgroup" for f in findings)
+    assert not any(f.level == "ok" and f.area == "outgroup" for f in findings)
+
+
 def test_leftover_temp_files_are_a_warning(tmp_path: Path) -> None:
     wd = _base_workdir(tmp_path)
     (wd / "tree").mkdir()

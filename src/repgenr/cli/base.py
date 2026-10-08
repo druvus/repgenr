@@ -33,6 +33,7 @@ from ..core.contracts import (
     SELECTION_TSV,
     TREE2TAX_TSV,
     TREE_NWK,
+    list_fasta,
     read_clusters,
 )
 from ..core.errors import (
@@ -239,10 +240,17 @@ def _derep_stock_inputs(ctx: WorkdirContext, params: Any) -> list[Path]:
     if action == "pack":
         return [ctx.derep_dir / CLUSTERS_TSV, ctx.representatives_dir]
     if action == "unpack":
-        # The live derep outputs are inputs too: unpack replaces them, so a
-        # repeat unpack after a new dereplicate must restore the run again.
+        # The stored run's files are listed one by one: directories are
+        # digested from their FASTA files only, and the stored run holds
+        # tables. The live derep outputs are inputs too: unpack replaces
+        # them, so a repeat unpack after a new dereplicate must restore the
+        # run again.
+        stored = ctx.derep_dir / "stock" / name
         return [
-            ctx.derep_dir / "stock" / name,
+            stored / CLUSTERS_TSV,
+            stored / GENOME_STATUS_TSV,
+            stored / "record.json",
+            stored / "representatives",
             ctx.derep_dir / CLUSTERS_TSV,
             ctx.representatives_dir,
         ]
@@ -423,8 +431,12 @@ STAGE_DELIVERABLES: dict[str, Any] = {
 _LOGGED_MISSING = 5  # missing deliverables named one per line before a count
 
 
-def _deliverable_present(path: Path) -> bool:
+def _deliverable_present(path: Path, *, fasta_dir: bool = False) -> bool:
     if path.is_dir():
+        # A genome directory counts only with a genome in it: one holding a
+        # leftover x.fasta.tmp is as empty as one holding nothing.
+        if fasta_dir:
+            return bool(list_fasta(path))
         # Dotfiles do not count: Finder leaves .DS_Store in a directory it
         # showed, and exFAT keeps ._ AppleDouble companions.
         return any(not entry.name.startswith(".") for entry in path.iterdir())
@@ -436,7 +448,12 @@ def missing_deliverables(ctx: Any, stage_name: str, params: Any) -> list[Path]:
     spec = STAGE_DELIVERABLES.get(stage_name)
     if spec is None:
         return []
-    return [path for path in spec(ctx, params) if not _deliverable_present(path)]
+    fasta_dirs = {getattr(ctx, "genomes_dir", None), getattr(ctx, "representatives_dir", None)}
+    return [
+        path
+        for path in spec(ctx, params)
+        if not _deliverable_present(path, fasta_dir=path in fasta_dirs)
+    ]
 
 
 def _deliverables_state(ctx: Any, stage_name: str, params: Any) -> list[tuple[str, object]]:
@@ -456,7 +473,9 @@ def _deliverables_state(ctx: Any, stage_name: str, params: Any) -> list[tuple[st
     state: list[tuple[str, object]] = []
     for path in spec(ctx, params) if spec is not None else []:
         if path.is_dir():
-            state.append((str(path), dir_stat_digest(path)))
+            # Every file, not only FASTA: a refusal that left a partial
+            # x.fasta.tmp behind has changed the directory.
+            state.append((str(path), dir_stat_digest(path, fasta_only=False)))
         elif path.exists():
             st = path.stat()
             state.append((str(path), (st.st_size, st.st_mtime_ns)))
