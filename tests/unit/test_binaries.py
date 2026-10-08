@@ -225,6 +225,72 @@ def test_a_hanging_version_query_is_stopped_with_its_helpers(tmp_path, caplog) -
     assert not _alive(helper)
     warning = next(r for r in caplog.records if r.levelno == logging.WARNING)
     assert "hangtool --version did not answer within 1 s" in warning.getMessage()
+    assert "unless its conda package record names one" in warning.getMessage()
+
+
+def test_an_interrupted_version_query_is_stopped_with_its_helpers(tmp_path) -> None:
+    # The query runs in its own session, so Ctrl-C at the terminal does not
+    # reach it; the KeyboardInterrupt in repgenr must stop its group.
+    import signal
+    import time
+
+    from repgenr.core import process
+
+    script, pidfile = _hanging_tool(tmp_path)
+    started: list = []
+    real_register = process.register_live
+
+    def register(proc):
+        started.append(proc)
+        real_register(proc)
+
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+
+    previous = signal.signal(signal.SIGALRM, interrupt)
+    try:
+        process.register_live = register  # type: ignore[assignment]
+        signal.setitimer(signal.ITIMER_REAL, 0.5)
+        with pytest.raises(KeyboardInterrupt):
+            binaries._query_version(str(script), ("--version",), timeout=60)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+        process.register_live = real_register  # type: ignore[assignment]
+    (proc,) = started
+    assert proc not in process._live
+    helper = int(pidfile.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 5
+    while _alive(helper) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert proc.poll() is not None
+    assert not _alive(helper)
+
+
+def test_a_running_version_query_is_reached_by_stop_running_tools(tmp_path) -> None:
+    # The termination handler signals every tool in process._live; a version
+    # query must be among them while it runs.
+    import threading
+    import time
+
+    from repgenr.core import process
+
+    script, pidfile = _hanging_tool(tmp_path)
+    result: list = []
+    worker = threading.Thread(
+        target=lambda: result.append(
+            binaries._query_version(str(script), ("--version",), timeout=60)
+        )
+    )
+    worker.start()
+    deadline = time.monotonic() + 5
+    while not pidfile.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert process.stop_running_tools() >= 1
+    worker.join(timeout=10)
+    assert not worker.is_alive()
+    assert result == [None]  # killed by the signal: exit != 0, no output
+    assert not _alive(int(pidfile.read_text(encoding="utf-8")))
 
 
 def test_check_binaries_passes_its_timeout_and_reports_unknown(monkeypatch) -> None:

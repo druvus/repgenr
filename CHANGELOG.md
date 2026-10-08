@@ -637,9 +637,10 @@ All notable changes to RepGenR are documented here. The format follows
 - Version queries (#246): a binary that does not answer its version flag
   is stopped after `VERSION_TIMEOUT` (30 s; 8 s under `list-tools --check`)
   together with the helpers it started, which run in its own process group,
-  and a warning names the binary; its version is recorded as `unknown`.
-  Before, the query waited 30 s without a message, and a helper of a shell
-  wrapper kept running.
+  and a warning names the binary; its version is `unknown` unless its conda
+  package record names one. Ctrl-C or a termination signal to repgenr also
+  stops a running query and its helpers. Before, the query waited 30 s
+  without a message, and a helper of a shell wrapper kept running.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment

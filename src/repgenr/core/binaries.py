@@ -95,6 +95,9 @@ def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
+    # Registered while it runs, so a termination signal to repgenr stops the
+    # query's group too (it is in its own session and gets no terminal SIGINT).
+    process.register_live(proc)
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -107,11 +110,19 @@ def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
                 if stream is not None:
                     stream.close()
         logging.getLogger("repgenr").warning(
-            "%s did not answer within %g s; its version is recorded as unknown.",
+            "%s did not answer within %g s; its version is unknown unless its "
+            "conda package record names one.",
             " ".join([Path(argv[0]).name, *argv[1:]]),
             timeout,
         )
         return None
+    except BaseException:
+        # Ctrl-C or the termination handler's SystemExit: the query and its
+        # helpers are in their own session, so stop them before re-raising.
+        process.stop_group(proc, grace=0)
+        raise
+    finally:
+        process.unregister_live(proc)
     return proc.returncode, (out or "") + (err or "")
 
 

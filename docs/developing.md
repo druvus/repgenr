@@ -201,10 +201,12 @@ capabilities = ToolCapabilities(
   running natively. Each version query runs in its own process group and
   may take `core.binaries.VERSION_TIMEOUT` seconds (30; `list-tools --check`
   uses 8). A query that does not answer is stopped together with any helper
-  it started, a warning names the binary, and the version is recorded as
+  it started, and a warning names the binary. A binary that does not answer,
+  or prints no version number, is looked up in the conda package records of
+  its environment (`conda-meta`); without such a record its version is
   `unknown` (a `strict_version` floor then fails with "no version
-  reported"). A binary that prints no version number is looked up in the
-  conda package records of its environment (`conda-meta`).
+  reported"). A version query is tracked like a running tool, so Ctrl-C or
+  a termination signal to repgenr stops it and its helpers as well.
 * `default_params` holds the adapter's own tunable defaults. The
   dereplication steps merge them under `params.extra`; the other stages pass
   the user's extras only, so read a default with

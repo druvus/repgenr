@@ -55,7 +55,7 @@ STOP_GRACE_SECONDS = 5.0
 # runs on the main thread, which may hold the lock inside run() when the
 # signal arrives.
 _live_lock = threading.RLock()
-_live: set[subprocess.Popen[bytes]] = set()
+_live: set[subprocess.Popen[Any]] = set()
 # Set by the termination handler: run() then starts no further tool, so tasks
 # still queued in a thread pool do not launch while repgenr shuts down.
 stop_requested = threading.Event()
@@ -124,6 +124,18 @@ def stop_group(proc: subprocess.Popen[Any], grace: float | None = None) -> None:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         pass
+
+
+def register_live(proc: subprocess.Popen[Any]) -> None:
+    """Track a process started outside :func:`run` (a version query), so
+    :func:`stop_running_tools` reaches its process group too."""
+    with _live_lock:
+        _live.add(proc)
+
+
+def unregister_live(proc: subprocess.Popen[Any]) -> None:
+    with _live_lock:
+        _live.discard(proc)
 
 
 def stop_running_tools(sig: int = signal.SIGTERM) -> int:
