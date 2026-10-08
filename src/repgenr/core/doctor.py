@@ -102,9 +102,9 @@ def _examples(names: list[str]) -> str:
 def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     out: list[Finding] = []
     for name, record in config.stages.items():
-        if record.completed:
+        if not record.interrupted:
             out.append(Finding("ok", name, f"completed {record.completed}"))
-        elif record.params or record.tool:
+        else:
             out.append(
                 Finding(
                     "fail",

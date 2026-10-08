@@ -31,6 +31,19 @@ class StageRecord:
     fingerprint: str | None = None  # hash of the stage invocation, for resume
     inputs: dict[str, str] = field(default_factory=dict)  # input path -> digest
 
+    @property
+    def interrupted(self) -> bool:
+        """True for a record without a completion stamp.
+
+        The stage harness writes a record before a stage runs (a provisional
+        one on a first run, or the last finished one with its stamp cleared
+        on a re-run) and the stage stamps it when it finishes, so a record
+        without a stamp is a run that failed or was killed. ``status`` and
+        ``doctor`` both use this test, so they never disagree; a stage with
+        no parameters (``cluster_summary``) has an empty record and counts.
+        """
+        return not self.completed
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "tool": self.tool,

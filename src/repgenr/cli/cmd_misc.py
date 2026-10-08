@@ -123,13 +123,13 @@ def status(
     next_stage: str | None = None
     for stage in chain:
         rec = recorded.get(stage)
-        if rec is not None and rec.completed:
+        if rec is not None and not rec.interrupted:
             tool = f" [{rec.tool}]" if rec.tool else ""
             note = _gtdb_note(rec.params) if stage == "metadata" else ""
             typer.echo(f"  [done]    {stage}{tool}  {rec.completed}{note}")
-        elif rec is not None and (rec.params or rec.tool):
-            # A record without a completed stamp but with provenance: the stage
-            # started a (re-)run and failed or was killed; outputs may be partial.
+        elif rec is not None:
+            # The stage started a (re-)run and failed or was killed; outputs
+            # may be partial.
             typer.echo(
                 f"  [interrupted] {stage}  "
                 "(did not finish; outputs may be partial; see repgenr.log)"

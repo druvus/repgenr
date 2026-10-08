@@ -431,3 +431,20 @@ def test_malformed_record_is_a_config_failure_not_a_traceback(tmp_path: Path, te
         result = _runner.invoke(app, [command, "-wd", str(wd)])
         assert result.exit_code == 3, result.output
         assert "not a readable RepGenR record" in result.output
+
+
+def test_interrupted_stage_without_params_is_a_failure(tmp_path: Path) -> None:
+    # cluster_summary has no parameters: a run killed on its first attempt
+    # leaves a record with neither params nor tool, which status already
+    # listed as interrupted while doctor reported nothing.
+    wd = _base_workdir(tmp_path)
+    cfg = Config.load(wd)
+    cfg.record_stage("cluster_summary")
+    cfg.record_stage("dereplicate")
+    cfg.save(wd)
+    findings = diagnose(wd)
+    failed = {f.area for f in findings if f.level == "fail"}
+    assert {"cluster_summary", "dereplicate"} <= failed
+    status = _runner.invoke(app, ["status", "-wd", str(wd)])
+    assert "[interrupted] dereplicate" in status.stdout
+    assert "cluster_summary  [interrupted]" in status.stdout
