@@ -60,7 +60,9 @@ def only_two_tools(monkeypatch):
     monkeypatch.setattr(derep_base, "registry", reg)
     monkeypatch.setattr(binaries.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(
-        binaries, "_query_version", lambda name, args: "29.5.3" if name == "docker" else "1.0"
+        binaries,
+        "_query_version",
+        lambda name, args, timeout=None: "29.5.3" if name == "docker" else "1.0",
     )
     containers._ENGINE_READY.clear()
     inspected: list[list[str]] = []

@@ -403,7 +403,9 @@ verified before a run without a working directory. Under a container
 backend each line names where the tool runs: '[image <ref>]' or
 '[host]'; --images adds, for each tool that passed, whether its images
 (secondary ones such as racon's minimap2 included) are present
-locally. --check alone
+locally. A version query that does not answer within 8 s is stopped,
+and the version is shown as unknown unless the tool's conda package
+record names one. --check alone
 always exits 0, since a host that has only some families installed is
 normal; --check --strict exits 4 when any adapter is missing or errored,
 or 5 when any plugin failed to load, so a script can verify an

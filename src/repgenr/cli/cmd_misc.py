@@ -588,12 +588,15 @@ def list_tools(
     backend each line names where the tool runs: '[image <ref>]' or
     '[host]'; --images adds, for each tool that passed, whether its images
     (secondary ones such as racon's minimap2 included) are present
-    locally. --check alone
+    locally. A version query that does not answer within 8 s is stopped,
+    and the version is shown as unknown unless the tool's conda package
+    record names one. --check alone
     always exits 0, since a host that has only some families installed is
     normal; --check --strict exits 4 when any adapter is missing or errored,
     or 5 when any plugin failed to load, so a script can verify an
     environment.
     """
+    from ..core.binaries import version_timeout
     from ..core.errors import MissingBinaryError, PluginError
     from ..core.logging import configure_logging
 
@@ -636,7 +639,8 @@ def list_tools(
         if not check:
             continue
         for name in reg.names():
-            state, text = _preflight_summary(reg, name, images=images)
+            with version_timeout(_CHECK_VERSION_TIMEOUT):
+                state, text = _preflight_summary(reg, name, images=images)
             statuses.add(state)
             typer.echo(f"  {name}: {text}")
     from ..dereplicators.base import compare_supporters
@@ -650,6 +654,11 @@ def list_tools(
             raise typer.Exit(code=PluginError.exit_code)
         if statuses & {"missing", "error"}:
             raise typer.Exit(code=MissingBinaryError.exit_code)
+
+
+# Seconds each version query may take under `list-tools --check`: a listing
+# of every adapter should not wait the full stage timeout on a tool that hangs.
+_CHECK_VERSION_TIMEOUT = 8.0
 
 
 def _one_line(exc: Exception) -> str:
