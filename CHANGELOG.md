@@ -621,7 +621,7 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
-- Console output (#PR): a tool command line is shortened on the console, so
+- Console output (#251): a tool command line is shortened on the console, so
   `dereplicate --tool skder`, which passes every genome path on argv, no
   longer prints a line of several thousand characters (6006 for 50 genomes).
   A run of input paths is shown as its first path and a count, other paths by
