@@ -28,7 +28,7 @@ pip install -e ".[dev]"  # for development
 |---|---|---|
 | Linux x86_64 workstation | One conda environment from `environment.yml` | The single-environment route. `environment.yml` covers every tool except Cactus and the databases; it is not expected to solve on macOS (see section 2). |
 | HPC cluster | `--container singularity` with `--container-cache` on shared storage | Tools run from pinned images without site installs. Images are pulled once and reused. |
-| macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, skesa, shovill, flye, medaka, racon and CheckM2 | Except racon and CheckM2, which have offline tests only, these were run inside containers on the audit machine (`verification.md`). skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins and the tree builders ran natively. |
+| macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, shovill, medaka and CheckM2 | These were run inside containers on the audit machine (`verification.md`); the CheckM2 host builds fail on macOS. skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins, the tree builders, skesa, flye and racon ran natively. |
 | Nextflow on a cluster | A site image or conda per profile; `-profile slurm,singularity` | The `slurm` profile sets only the executor. The container profiles set `--container` for every stage. |
 | Nextflow on a cloud executor | A site config with the executor, queue and an image that provides `repgenr` and the tools | No cloud profile ships, because the region, queue and image are site-specific (see [usage.md](usage.md#profiles)). |
 
@@ -211,12 +211,12 @@ carries no pin and needs `--wave` to run in an image. Minimum versions are in
 | Tree builder | raxmlng | `raxml-ng` | yes | `raxml-ng:2.0.3` | none |
 | Tree builder | mashtree | `mashtree` | yes | `mashtree:1.4.6` | none |
 | Tree builder | sourmash | `sourmash` | yes | `sourmash:4.9.4` | none |
-| Assembler | skesa | `skesa` | no | `skesa:2.5.1` | none |
+| Assembler | skesa | `skesa` | yes | `skesa:2.5.1` | none |
 | Assembler | shovill | `shovill` | no | `shovill:1.4.2` | none |
-| Assembler | flye | `flye` | no | `flye:2.9.6` | none |
+| Assembler | flye | `flye` | yes | `flye:2.9.6` | none |
 | Classifier | sourmash | `sourmash` | yes | `sourmash:4.9.4` | a GTDB sourmash sketch and its lineages CSV |
 | Polisher | medaka | `medaka` | no | `medaka:2.2.2` | medaka models. Reads from SRA have no basecaller in their headers; the adapter then assumes ONT's bacterial R10.4.1 model and records it. Give another with `--tool-arg model=...` |
-| Polisher | racon | `racon`, `minimap2` | no | `racon:1.5.0` | none |
+| Polisher | racon | `racon`, `minimap2` | yes | `racon:1.5.0`; minimap2 runs from `minimap2:2.28` | none |
 | Quality (reads chain) | checkm2 | `checkm2` | no | `checkm2:1.1.0` | CheckM2 database: `checkm2 database --download`, then `--checkm2-db` or `CHECKM2DB` |
 
 The genome download steps also need `ncbi-datasets-cli`.

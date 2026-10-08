@@ -217,3 +217,24 @@ def test_medaka_retries_without_bacteria_when_medaka_refuses(monkeypatch, tmp_pa
     assert [("--bacteria" in c) for c in calls] == [True, False]
     assert result.tool_stats["bacteria"] is False and result.contigs.exists()
     assert any("no bacterial model" in r.getMessage() for r in caplog.records)
+
+
+def test_racon_records_the_minimap2_image_under_a_container_backend(monkeypatch) -> None:
+    # racon runs minimap2 from its own pinned image; only the racon image
+    # reached the stage record and `versions`.
+    from repgenr.core import containers
+    from repgenr.polishers.racon import _MINIMAP2, RaconPolisher
+
+    monkeypatch.setattr(containers, "check_engine_ready", lambda config=None: None)
+    monkeypatch.setattr(
+        "repgenr.core.plugins.check_binaries", lambda specs: {s.name: "x" for s in specs}
+    )
+    try:
+        containers.configure_container("docker")
+        versions = RaconPolisher().preflight()
+    finally:
+        containers.configure_container("none")
+    assert versions == {
+        "racon": RaconPolisher.capabilities.container,
+        "minimap2": _MINIMAP2.container,
+    }

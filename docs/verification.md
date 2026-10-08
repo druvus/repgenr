@@ -55,13 +55,13 @@ contract test, which checks the argument vector against canned output.
 | tree builder | raxmlng | yes | yes | test_species_set, test_container_runs (pinned image) |
 | tree builder | mashtree | yes | yes | test_treebuilders_offline, test_species_set, test_container_runs (pinned image) |
 | tree builder | sourmash | yes | yes | test_treebuilders_offline, test_container_runs (pinned image) |
-| assembler | skesa | no | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host) |
+| assembler | skesa | yes | yes | test_container_runs (pinned image, simulated reads; a `requires_binary` test covers the host); native by hand in the reads audit (#226) |
 | assembler | shovill | no | yes | test_container_runs (pinned image, simulated reads) |
-| assembler | flye | no | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig) |
+| assembler | flye | yes | yes | test_container_runs (pinned image, simulated 120 kb genome at 40x ONT-like reads, one contig); native by hand in the reads audit (#226) |
 | classifier | sourmash | yes | yes | genome-qc and assemble on Wolbachia assemblies against the GTDB rs226 sketch, native and pinned image (2026-09-14) |
 | polisher | medaka | no | yes | test_reads (SRR28800588 through the pinned image, see below); CheckM2 before/after recorded below |
-| polisher | racon | no | no | offline contract test (minimap2 and racon argv, rounds, stdout capture) |
-| quality | checkm2 | no | no | offline test on a canned quality report; live use needs the CheckM2 database (not on the audit machine) |
+| polisher | racon | yes | no | offline contract test (minimap2 and racon argv, rounds, stdout capture); native by hand in the reads audit (#226) |
+| quality | checkm2 | no | yes | offline test on a canned quality report; pinned image with the CheckM2 database by hand in the reads audit (#226), because the host builds fail on macOS |
 
 drep, progressivemauve, cactus and snippy have been verified only inside
 containers. skder and SibeliaZ run in Wave-minted images only: their
