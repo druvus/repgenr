@@ -26,16 +26,16 @@ All notable changes to RepGenR are documented here. The format follows
   `--max-contamination` applies the stored scores instead of running CheckM2
   again (about 5 minutes for two genomes under emulation). The first CheckM2
   pass after upgrading stores the scores; no stage reruns because of this
-  change. `genome-qc` stores nothing, since Nextflow stages its inputs (#PR).
+  change. `genome-qc` stores nothing, since Nextflow stages its inputs (#230).
 - `assembly_stats.tsv` flags a genome `genus_renamed` when the GTDB genus
   differs from the submitted one but the species epithet agrees (NCBI
   Mycoplasmopsis arginini, GTDB Metamycoplasma arginini). The submitted name
   stays, the genome is not excused, the line is logged as information, and the
-  stage record counts these as `n_genus_renamed` apart from `n_disagree` (#PR).
+  stage record counts these as `n_genus_renamed` apart from `n_disagree` (#230).
 - `genome-qc --memory-gb` (default 16; the Nextflow module passes the task
   memory). With `assemble --memory-gb`, it bounds the number of concurrent
   sourmash gathers at about 0.6 GB each, as well as the thread count; the log
-  names the number chosen (#PR).
+  names the number chosen (#230).
 - `glance --tool sourmash`: sourmash is a second comparison backend for
   `glance`. It sketches every genome with the parameters `dereplicate --tool
   sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts the
@@ -186,13 +186,13 @@ All notable changes to RepGenR are documented here. The format follows
   `unsupported_layout` before downloading it, rather than after; `auto` still
   assembles it with SKESA. An explicit assembler that takes a run's platform
   but not its layout gives the reason `unsupported_layout` in place of
-  `unsupported_platform` (#PR).
+  `unsupported_platform` (#230).
 - When every run is excused, `assemble` (without `--append`) no longer leaves
   the previous genome set in place: `genomes/` is emptied, `selection.tsv`
   keeps only its header, the manifest lists no genomes, `assembly_stats.tsv`
   and a staged outgroup are removed, and the stage still exits 3. `dereplicate`
   then exits 3 instead of running on the earlier genomes without a warning.
-  Finished runs under `assemblies/` stay for a later call (#PR).
+  Finished runs under `assemblies/` stay for a later call (#230).
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.
