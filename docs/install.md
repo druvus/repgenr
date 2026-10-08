@@ -26,7 +26,7 @@ pip install -e ".[dev]"  # for development
 
 | Situation | Recommended method | Why |
 |---|---|---|
-| Linux x86_64 workstation | One conda environment from `environment.yml` | The single-environment route. `environment.yml` covers every tool except Cactus and the databases; it is not expected to solve on macOS (see section 2). |
+| Linux x86_64 workstation | Per-tool conda environments on `PATH` (section 2), or containers | `environment.yml` lists every tool except Cactus and the databases, but it does not currently solve as one environment (see section 1). |
 | HPC cluster | `--container singularity` with `--container-cache` on shared storage | Tools run from pinned images without site installs. Images are pulled once and reused. |
 | macOS on Apple Silicon | Per-tool conda environments on `PATH` for the core tools; containers for progressiveMauve, Cactus, snippy, dRep, shovill, medaka and CheckM2 | These were run inside containers on the audit machine (`verification.md`); the CheckM2 host builds fail on macOS. skder, galah, sourmash, SibeliaZ, `simple`, parsnp, ska2, Gubbins, the tree builders, skesa, flye and racon ran natively. |
 | Nextflow on a cluster | A site image or conda per profile; `-profile slurm,singularity` | The `slurm` profile sets only the executor. The container profiles set `--container` for every stage. |
@@ -37,7 +37,14 @@ pip install -e ".[dev]"  # for development
 ### 1. One conda environment
 
 `environment.yml` lists the package and every tool except Cactus and the
-databases. It is the single-environment route and is not expected to solve on macOS (see section 2). progressiveMauve from bioconda needs the adapter's `boost-cpp=1.74.0` pin, or the pinned image, so check that tool first with `repgenr list-tools --check`.
+databases. It is meant as the single-environment route, but a linux-64
+dry-run on 2026-10-08 did not solve. Every Gubbins build on bioconda needs
+Python 3.8 to 3.10, while RepGenR needs 3.12 or later. Without Gubbins the
+solve still fails: mashtree's BioPerl chain (`perl-bio-samtools`) needs zlib
+older than 1.3, which conflicts with harvesttools (zlib 1.3.1 or later) and
+medaka (samtools 1.14 or later). Until the file is split, use one
+environment per tool group on `PATH` (section 2) or the containers (section 3).
+It is not expected to solve on macOS either (see section 2). progressiveMauve from bioconda needs the adapter's `boost-cpp=1.74.0` pin, or the pinned image, so check that tool first with `repgenr list-tools --check`.
 
 ```bash
 mamba env create -f environment.yml

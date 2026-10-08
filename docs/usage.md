@@ -1170,8 +1170,8 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
 ## Troubleshooting
 
 - **`MissingBinaryError` / a tool is not found.** The Python package does not
-  install the bioinformatics tools (see [install.md](install.md)). Use the conda environment
-  (`mamba env create -f environment.yml`) or put the tool on `PATH`. Run
+  install the bioinformatics tools (see [install.md](install.md)). Put the tool
+  on `PATH` from a conda environment. Run
   `repgenr list-tools` to see the adapters and each tool's declared genome
   limit (`list-tools --check` also runs every adapter's preflight and reports
   which binaries are missing or too old) and `--container docker` (or
