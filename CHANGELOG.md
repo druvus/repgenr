@@ -634,6 +634,7 @@ All notable changes to RepGenR are documented here. The format follows
   2 naming the file, and free disk space is checked before the copies are
   written.
 - Version queries (#PRNUM): a binary that does not answer its version flag
+- Version queries (#246): a binary that does not answer its version flag
   is stopped after `VERSION_TIMEOUT` (30 s; 8 s under `list-tools --check`)
   together with the helpers it started, which run in its own process group,
   and a warning names the binary; its version is recorded as `unknown`.
