@@ -489,6 +489,10 @@ All notable changes to RepGenR are documented here. The format follows
   reaches the console; exFAT `._` files are not counted as leftovers.
 - `phylo` (#234): the refusal for fewer than three representatives named a
   lower ANI threshold, which leaves fewer; it now names `--secondary-ani`.
+- `snptype --tool simple` and `phylo --msa-source snptype --snptyper simple`
+  (#232) exited 1 with a UnicodeDecodeError when the reference was a gzipped
+  genome (`.fasta.gz`). The reference copy is decompressed; query genomes are
+  passed to minimap2, which reads gzip itself.
 - `metadata` (#224): under `--limit` the automatic outgroup could be a target
   genome the cap left out; it now lies outside the target taxon. The API path
   keeps GTDB suffixes (`Bacillus_A`) and lowers a capitalised epithet. A

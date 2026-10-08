@@ -20,8 +20,10 @@ with the genome count.
 
 from __future__ import annotations
 
+import gzip
 import logging
 import re
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -79,7 +81,7 @@ class SimpleSnpTyper(SnpTyper):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         ref = out_dir / "reference.fasta"
-        ref.write_text(reference.read_text())
+        _copy_plain_fasta(reference, ref)
         run_tool(_CAPABILITIES, ["samtools", "faidx", ref], logger=logger, log_prefix="samtools")
 
         consensuses: dict[str, str] = {reference.stem: _concat_fasta(ref)}
@@ -226,6 +228,21 @@ def _call_one(
     for leftover in (sam, bam, Path(f"{bam}.bai"), pileup, calls, snps, Path(f"{snps}.csi"), cons):
         leftover.unlink(missing_ok=True)
     return consensus
+
+
+def _copy_plain_fasta(src: Path, dest: Path) -> None:
+    """Copy ``src`` to ``dest`` uncompressed.
+
+    The reference copy is indexed with ``samtools faidx`` and read here as
+    text, so a gzipped genome (judged by its magic bytes, not its name) is
+    decompressed. Query genomes are passed to minimap2 as they are, since
+    minimap2 reads gzipped FASTA itself.
+    """
+    with open(src, "rb") as fh:
+        gzipped = fh.read(2) == b"\x1f\x8b"
+    opener = gzip.open if gzipped else open
+    with opener(src, "rb") as fi, open(dest, "wb") as fo:
+        shutil.copyfileobj(fi, fo, 1 << 20)
 
 
 def _reference_contigs(ref: Path) -> list[tuple[str, int]]:

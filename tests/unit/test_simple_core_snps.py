@@ -313,3 +313,31 @@ def test_reference_contigs_are_read_in_file_order(tmp_path: Path) -> None:
     ref = tmp_path / "reference.fasta"
     ref.write_text(">c2 desc\nAC\nGT\n>c1\nA\n", encoding="utf-8")
     assert _reference_contigs(ref) == [("c2", 4), ("c1", 1)]
+
+
+def test_gzipped_reference_and_query_genomes_are_read(tmp_path: Path, monkeypatch) -> None:
+    """A .fasta.gz reference is decompressed for faidx; minimap2 gets the query as it is."""
+    import gzip
+
+    from repgenr.snptypers import simple as mod
+    from repgenr.snptypers.base import SnpParams
+
+    ref = tmp_path / "refgenome.fasta.gz"
+    with gzip.open(ref, "wt", encoding="utf-8") as fh:
+        fh.write(">c1\nACGTACGT\n")
+    query = tmp_path / "g1.fasta.gz"
+    with gzip.open(query, "wt", encoding="utf-8") as fh:
+        fh.write(">c1\nACGAACGT\n")
+
+    calls: list[list[str]] = []
+    _fake_genome_chain(monkeypatch, _sam(("c1", 0, "c1", 1, "8M")), "ACGAACGT", calls)
+    monkeypatch.setattr(mod, "run_tool", lambda *a, **k: None)
+
+    out = tmp_path / "out"
+    result = mod.SimpleSnpTyper().call(
+        [ref, query], ref, out, SnpParams(threads=1), logging.getLogger("t")
+    )
+    assert (out / "reference.fasta").read_text(encoding="utf-8") == ">c1\nACGTACGT\n"
+    minimap2 = next(c for c in calls if c[0] == "minimap2")
+    assert minimap2[-1] == str(query.resolve())
+    assert _read_fasta(result.core_snp_fasta) == {"refgenome.fasta": "T", "g1.fasta": "A"}
