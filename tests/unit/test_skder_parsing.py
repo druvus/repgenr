@@ -133,3 +133,28 @@ def test_skder_refuses_ani_below_80_percent_before_running(tmp_path, monkeypatch
     params = DerepParams(secondary_ani=0.78, threads=1)
     with pytest.raises(UserInputError, match="80 percent"):
         SkderDereplicator().dereplicate([tmp_path / "g.fasta"], tmp_path / "out", params, _LOG)
+
+
+def test_many_placements_are_one_line_capped_on_the_console(tmp_path: Path) -> None:
+    # Twelve members pass only the ANI cutoff: one warning, whose console form
+    # names the first few and counts the rest, while the full text lists all.
+    rows = "".join(f"/g/repA.fasta\t/g/mem{i:02d}.fasta\t99.5\t95\t30\trA\tm\n" for i in range(12))
+    edges = "Ref_file\tQuery_file\tANI\tAlign_fraction_ref\tAlign_fraction_query\tR\tQ\n" + rows
+    out = _make_skder_out(tmp_path, edges)
+    genomes = [Path("/g/repA.fasta"), Path("/g/repB.fasta")]
+    genomes += [Path(f"/g/mem{i:02d}.fasta") for i in range(12)]
+    log = logging.getLogger("test.skder.many")
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    log.addHandler(handler)
+    try:
+        result = _parse_skder_output(out, genomes, ani_cutoff=99.0, af_cutoff=50.0, logger=log)
+    finally:
+        log.removeHandler(handler)
+    assert len(result.clusters["repA.fasta"]) == 12
+    warnings = [r for r in records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert all(f"mem{i:02d}.fasta" in warnings[0].getMessage() for i in range(12))
+    console = warnings[0].repgenr_console  # type: ignore[attr-defined]
+    assert "and 7 more" in console and "mem11.fasta" not in console

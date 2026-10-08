@@ -764,7 +764,7 @@ def run_chain(
 
     argvs = [[str(part) for part in command] for _, command in steps]
     for (prefix, _), argv in zip(steps, argvs, strict=True):
-        logger.info("[%s] $ %s", prefix, " ".join(argv))
+        process.log_command(logger, argv, f"[{prefix}] ")
     # The commands live inside a script string, so the mount scan cannot see
     # their paths in argv; hand it every absolute path they name.
     paths = [token for argv in argvs for token in argv if token.startswith("/")]

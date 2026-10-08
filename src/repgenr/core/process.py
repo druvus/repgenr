@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from .contracts import atomic_path, record_name
 from .errors import ToolExecutionError, UserInputError, WorkdirError
+from .logging import console_extra
 
 if TYPE_CHECKING:
     from .plugins import ToolCapabilities
@@ -274,6 +275,68 @@ def _default_timeout() -> float | None:
     return None
 
 
+# Console budget for a tool command line; the run log keeps the full line.
+CONSOLE_COMMAND_CHARS = 160
+# A run of at least this many consecutive path arguments is counted, not listed.
+_MIN_PATH_RUN = 3
+
+
+def _path_like(arg: str) -> bool:
+    return not arg.startswith("-") and os.sep in arg
+
+
+def _abbreviate(arg: str) -> str:
+    name = Path(arg).name
+    return f".../{name}" if name and name != arg else arg
+
+
+def shorten_command(
+    command: Sequence[str | os.PathLike[str]], limit: int = CONSOLE_COMMAND_CHARS
+) -> str:
+    """A console form of ``command`` at most ``limit`` characters long.
+
+    A command that fits is returned as it is. Otherwise a run of path
+    arguments (genome files on argv) is shown as its first path and a count,
+    then paths are cut to their last component, and a line that is still too
+    long is cut at ``limit`` with "...".
+    """
+    parts = [str(p) for p in command]
+    full = " ".join(parts)
+    if len(full) <= limit:
+        return full
+    tokens: list[tuple[str, bool]] = []  # (text, is a path)
+    i = 0
+    while i < len(parts):
+        j = i
+        while j < len(parts) and _path_like(parts[j]):
+            j += 1
+        if j - i >= _MIN_PATH_RUN:
+            tokens.append((f"{_abbreviate(parts[i])} ... ({j - i} paths)", False))
+            i = j
+        elif j > i:
+            tokens.extend((p, True) for p in parts[i:j])
+            i = j
+        else:
+            tokens.append((parts[i], False))
+            i += 1
+    short = " ".join(text for text, _ in tokens)
+    if len(short) > limit:
+        short = " ".join(_abbreviate(text) if is_path else text for text, is_path in tokens)
+    if len(short) > limit:
+        short = short[: limit - 4].rstrip() + " ..."
+    return short
+
+
+def log_command(
+    logger: logging.Logger, command: Sequence[str | os.PathLike[str]], prefix: str = ""
+) -> None:
+    """Log a tool command line at INFO: in full in the run log, shortened on the console."""
+    full = " ".join(str(p) for p in command)
+    short = shorten_command(command)
+    extra = console_extra(f"{prefix}$ {short}") if short != full else None
+    logger.info("%s$ %s", prefix, full, extra=extra)
+
+
 def run(
     command: Sequence[str | os.PathLike[str]],
     *,
@@ -287,7 +350,8 @@ def run(
 ) -> int:
     """Run ``command`` (an argument vector) without a shell.
 
-    The command line is logged at INFO; the tool's own output is line-streamed
+    The command line is logged at INFO (in full in the run log, shortened on the
+    console; see :func:`log_command`); the tool's own output is line-streamed
     at DEBUG (progress bars and per-file chatter would otherwise dominate the
     log), and the last lines are kept for the error message on failure. A line
     a tool redraws in place with carriage returns is logged once, in its final
@@ -310,7 +374,7 @@ def run(
     prefix = f"[{log_prefix}] " if log_prefix else ""
     if stop_requested.is_set():
         raise ToolExecutionError(cmd, -signal.SIGTERM, output=NOT_STARTED, tool=log_prefix)
-    logger.info("%s$ %s", prefix, " ".join(cmd))
+    log_command(logger, cmd, prefix)
 
     full_env = {**os.environ, **env} if env else None
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)

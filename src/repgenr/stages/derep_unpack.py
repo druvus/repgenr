@@ -15,6 +15,7 @@ from pathlib import Path
 from ..core.context import WorkdirContext
 from ..core.contracts import CLUSTERS_TSV, FASTA_SUFFIXES, read_clusters
 from ..core.errors import WorkdirError
+from ..core.logging import capped_names, console_extra
 from ..core.process import link_or_copy, staged_dir
 
 
@@ -103,17 +104,19 @@ _MAX_MISSING_LINES = 10
 def _warn_missing(missing: list[str], genomes_dir: Path, logger) -> None:
     """Name the cluster members that are not under ``genomes/``.
 
-    One line per genome, or one line listing them all when there are more
-    than ten, so a large gap does not flood the console.
+    One line per genome, or one line when there are more than ten, so a
+    large gap does not flood the console: the console shows the first names
+    and a count, and the run log lists them all.
     """
     if not missing:
         return
     if len(missing) > _MAX_MISSING_LINES:
+        head = f"{len(missing)} cluster members are not in {genomes_dir} and were left out"
         logger.warning(
-            "%d cluster members are not in %s and were left out: %s",
-            len(missing),
-            genomes_dir,
+            "%s: %s",
+            head,
             ", ".join(missing),
+            extra=console_extra(f"{head}: {capped_names(missing)}"),
         )
         return
     for genome in missing:
