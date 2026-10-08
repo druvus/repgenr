@@ -166,7 +166,14 @@ def available_cpus(caps: ToolCapabilities) -> int:
     Singularity shares the host's CPUs. When Docker does not answer, the host
     count is used.
     """
-    host = os.cpu_count() or 1
+    # The CPUs this process may run on (an affinity mask set by a scheduler or
+    # taskset), else all CPUs. A cgroup CPU quota (docker --cpus, a Slurm or
+    # Kubernetes limit) is not reflected here, so a quota below the CPU count
+    # still lets more threads through than the quota allows.
+    try:
+        host = len(os.sched_getaffinity(0)) or os.cpu_count() or 1
+    except (AttributeError, OSError):  # not available on macOS
+        host = os.cpu_count() or 1
     config = _CONFIG
     if config.backend != DOCKER or runs_on_host(caps):
         return host
@@ -454,19 +461,20 @@ def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
 
     When repgenr is stopped it forwards SIGTERM to the docker client, which
     passes it through --init to the tool. A tool that ignores SIGTERM kept its
-    container running after repgenr and the client had exited. ``docker stop``
-    sends SIGTERM and then SIGKILL after the same grace period repgenr uses.
+    container running after repgenr and the client had exited. The forwarded
+    SIGTERM was the tool's notice, so ``docker stop --time 0`` kills it at
+    once: a scheduler that sends SIGKILL a few seconds after SIGTERM must not
+    find the container still waiting out a second grace period.
     Errors are ignored: the container may already be gone.
     """
     if config.backend != DOCKER or "--name" not in wrapped:
         return
     name = wrapped[list(wrapped).index("--name") + 1]
-    grace = int(process.STOP_GRACE_SECONDS)
     try:
         subprocess.run(
-            [config.engine_binary(), "stop", "--time", str(grace), name],
+            [config.engine_binary(), "stop", "--time", "0", name],
             capture_output=True,
-            timeout=grace + 20,
+            timeout=20,
             stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.SubprocessError):

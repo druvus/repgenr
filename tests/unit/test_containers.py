@@ -571,7 +571,7 @@ def test_a_stopped_repgenr_stops_the_container_too(monkeypatch, interrupt) -> No
     with pytest.raises(type(interrupt)):
         containers.run_tool(caps, ["tool"], logger=_LOG)
     assert len(calls) == 1
-    assert calls[0][:2] == ["docker", "stop"] and calls[0][-1].startswith("repgenr-")
+    assert calls[0][:4] == ["docker", "stop", "--time", "0"] and calls[0][-1].startswith("repgenr-")
 
 
 def test_a_tool_failure_does_not_stop_a_container(monkeypatch) -> None:
@@ -616,3 +616,13 @@ def test_a_relative_checkm_data_path_is_made_absolute(tmp_path, monkeypatch) -> 
     data = os.path.abspath(tmp_path / "checkm")
     assert f"CHECKM_DATA_PATH={data}" in cmd
     assert f"{data}:{data}" in cmd
+
+
+def test_available_cpus_on_the_host_follows_the_affinity_mask(monkeypatch) -> None:
+    # A scheduler or taskset may confine repgenr to fewer CPUs than the host has.
+    caps = ToolCapabilities(name="gubbins")
+    monkeypatch.setattr(containers.os, "sched_getaffinity", lambda pid: {0, 1, 2}, raising=False)
+    monkeypatch.setattr(containers.os, "cpu_count", lambda: 64)
+    assert containers.available_cpus(caps) == 3
+    monkeypatch.delattr(containers.os, "sched_getaffinity", raising=False)
+    assert containers.available_cpus(caps) == 64

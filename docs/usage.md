@@ -1239,7 +1239,14 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   running; each tool's process group ID is its own PID, so
   `pkill -g <tool pid>` stops a tool with its helpers. With
   `--container docker`, the container runs with `--init`, so the SIGTERM
-  the `docker run` client forwards ends the tool in the container.
+  the `docker run` client forwards ends the tool in the container. Each
+  container is named `repgenr-<repgenr pid>-<hex>`, and when repgenr is
+  stopped it also runs `docker stop --time 0` on the container of the tool
+  it was running, so a tool that ignores SIGTERM does not keep running.
+  This covers the tool the main thread runs; a container started from a
+  parallel worker thread is not stopped when its tool ignores SIGTERM.
+  SIGKILL to repgenr leaves its containers running; list and stop them with
+  `docker ps --filter name=repgenr-<repgenr pid>-` and `docker stop <name>`.
 - **Exit codes.** A script can tell the failure classes apart without
   reading the log:
 
