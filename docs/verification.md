@@ -513,6 +513,7 @@ parser), so they also apply to commands other than the one named.
 | doctor, status | `doctor` exited 1 for failures found and for an unexpected error alike, and neither command had machine-readable output; `doctor` now exits 7 for failures, and both accept `--json` | #242 |
 | status, doctor | An emptied `repgenr.yaml` was read as the bacterial chain ("Next: repgenr metadata"), and a record without a resume fingerprint (an older version, or restored by `derep-stock unpack`) was shown as done with no hint that its next invocation recomputes it; status now names the entry stages or follows the shared stages, and both commands note such a record | #245 |
 | snptype, phylo | Gzipped genomes, accepted by `ingest` since #229, failed in progressiveMauve (signal 11), ParSNP (UnicodeDecodeError), snippy (exit 2 and 25) and SibeliaZ (empty MAF, reported as spoa out of memory); these tools now receive decompressed copies in scratch (see [Gzipped genomes](#gzipped-genomes-in-the-aligners-and-typers-2026-10-08)) | #PR |
+| snptype, phylo | Gzipped genomes, accepted by `ingest` since #229, failed in progressiveMauve (signal 11), ParSNP (UnicodeDecodeError), snippy (exit 2 and 25) and SibeliaZ (empty MAF, reported as spoa out of memory); these tools now receive decompressed copies in scratch (see [Gzipped genomes](#gzipped-genomes-in-the-aligners-and-typers-2026-10-08)) | #249 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

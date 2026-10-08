@@ -613,7 +613,7 @@ All notable changes to RepGenR are documented here. The format follows
   Containers carry the labels `repgenr.pid` and `repgenr.host`, so those of a
   repgenr ended by SIGKILL can be found with
   `docker ps --filter label=repgenr.pid=<pid>`.
-- `phylo`, `snptype` (#PR): gzipped genomes, accepted by `ingest` since
+- `phylo`, `snptype` (#249): gzipped genomes, accepted by `ingest` since
   #229, failed in the tools that cannot read gzip. progressiveMauve crashed
   with signal 11, ParSNP and snippy exited with a parse error, and SibeliaZ
   exited 0 with an empty MAF, which the adapter reported as spoa running out of
