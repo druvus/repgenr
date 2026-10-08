@@ -105,7 +105,7 @@ HELP_JSON = (
 def _echo_json(payload: dict[str, Any]) -> None:
     import json
 
-    typer.echo(json.dumps(payload, indent=2))
+    typer.echo(json.dumps(payload, indent=2, default=str))
 
 
 @app.command(rich_help_panel=PANEL_PIPELINE)

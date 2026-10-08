@@ -281,3 +281,14 @@ def test_status_json_on_a_malformed_record_leaves_stdout_empty(tmp_path: Path) -
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path), "--json"])
     assert result.exit_code == 3
     assert result.stdout == ""
+
+
+def test_status_json_with_an_unquoted_timestamp(tmp_path: Path) -> None:
+    # YAML loads an unquoted ISO timestamp as a datetime; the JSON report
+    # prints it as text instead of failing.
+    (tmp_path / "repgenr.yaml").write_text(
+        "stages:\n  metadata:\n    completed: 2026-01-01T00:00:00\n", encoding="utf-8"
+    )
+    payload = _status_json(tmp_path)
+    completed = _by_name(payload)["metadata"]["completed"]
+    assert isinstance(completed, str) and completed.startswith("2026-01-01")
