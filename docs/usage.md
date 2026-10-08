@@ -792,12 +792,13 @@ the reference, and then sets to N every reference position where none of the
 genome's primary or supplementary alignments places a base: positions outside
 the alignments, and positions within a deletion (CIGAR D or N operations), as
 read from the minimap2 SAM. Sequence a genome lacks is therefore missing data,
-not the reference base. A column of `snp/core_snp.fasta` is kept only when at
-least two of A, C, G and T occur in it; N, other ambiguity codes and gaps do
-not make a column variable, and they are written as N.
-`snp/snp_distance_matrix.tsv` counts, for each pair, the differing sites among
-those where both genomes have a base, so two genomes are not separated by a
-region one of them lacks; a pair that shares no such site has the distance
+not the reference base. A column of the core-SNP alignment (`snp/core_snp.fasta`,
+or `tree/msa/core_snp.fasta` from the typing pass of `phylo`) is kept only when
+at least two of A, C, G and T occur in it; N, other ambiguity codes and gaps do
+not make a column variable, and they are written as N. The distance matrix
+(`snp_distance_matrix.tsv` beside it) counts, for each pair, the differing
+sites among those where both genomes have a base, so two genomes are not
+separated by a region one of them lacks; a pair that shares no such site has the distance
 `NA`. On the 50-genome test set a copy of one genome with 500 kb removed now
 differs from that genome at 0 sites; before masking it differed at 20539, all
 but one of them within the removed region. Distances between genomes of
