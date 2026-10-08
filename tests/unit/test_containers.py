@@ -504,3 +504,36 @@ def test_an_image_docker_cannot_start_is_named_as_an_engine_failure(monkeypatch)
     assert "docker could not start image quay.io/x/sourmash:0.0.0 for sourmash" in msg
     assert "manifest unknown" in msg
     assert ei.value.exit_code == 6 and ei.value.returncode == 125
+
+
+@pytest.mark.parametrize("backend", ["docker", "singularity"])
+def test_checkm_data_path_reaches_the_container(tmp_path, monkeypatch, backend) -> None:
+    # install.md tells dRep users to point CHECKM_DATA_PATH at the CheckM data;
+    # docker passed only HOME into the container and mounted nothing there.
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(containers.tempfile, "gettempdir", lambda: str(sys_tmp))
+    data = tmp_path / "checkm_data"
+    data.mkdir()
+    monkeypatch.setenv("CHECKM_DATA_PATH", str(data))
+    cmd = wrap_command(
+        "img:1",
+        ["dRep", "dereplicate"],
+        config=ContainerConfig(backend=backend),
+        cwd="/wd",
+        logger=_LOG,
+    )
+    if backend == "docker":
+        assert f"CHECKM_DATA_PATH={data}" in cmd
+        assert f"{data}:{data}" in cmd
+    else:
+        # Singularity passes the host environment; the directory needs a bind.
+        assert str(data) in cmd and cmd[cmd.index(str(data)) - 1] == "--bind"
+
+
+def test_an_unset_checkm_data_path_adds_nothing(monkeypatch) -> None:
+    monkeypatch.delenv("CHECKM_DATA_PATH", raising=False)
+    cmd = wrap_command(
+        "img:1", ["dRep"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    assert not any(c.startswith("CHECKM_DATA_PATH") for c in cmd)

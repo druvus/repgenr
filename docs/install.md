@@ -171,8 +171,10 @@ BioContainers are `linux/amd64`. On Apple Silicon pass
   emulation, or use `--wave` for arm64-native images.
 - The macOS SibeliaZ BSD-wrapper workaround is skipped automatically when
   running in a (Linux) container.
-- dRep's CheckM step needs its reference data at run time. Mount it through
-  `CHECKM_DATA_PATH`, or run dRep with `--ignoreGenomeQuality`.
+- dRep's CheckM step needs its reference data at run time. Set
+  `CHECKM_DATA_PATH` on the host: RepGenR passes it into the container and
+  binds that directory at the same path. Otherwise run dRep with
+  `--ignoreGenomeQuality`.
 - The bioconda `mauve` (progressiveMauve) build is broken upstream (boost ABI,
   `undefined symbol`). Use the pinned image, or run that tool natively on
   Linux.

@@ -238,6 +238,16 @@ def _engine_env(config: ContainerConfig) -> dict[str, str]:
     }
 
 
+# Host variables that point a containerized tool at reference data (dRep runs
+# CheckM, which reads CHECKM_DATA_PATH). When set, each is passed into the
+# container and the directory it names is bound at the same path.
+_FORWARDED_DATA_ENV = ("CHECKM_DATA_PATH",)
+
+
+def _forwarded_data_env() -> dict[str, str]:
+    return {name: os.environ[name] for name in _FORWARDED_DATA_ENV if os.environ.get(name)}
+
+
 def _default_mounts(
     config: ContainerConfig,
     cwd: str | os.PathLike[str] | None,
@@ -258,6 +268,9 @@ def _default_mounts(
     mounts.append(absp(cwd) if cwd is not None else absp(os.getcwd()))
     mounts.append(absp(tempfile.gettempdir()))
     mounts.extend(absp(m) for m in config.extra_mounts)
+    for value in _forwarded_data_env().values():
+        if Path(value).exists():
+            mounts.append(absp(value))
     # Per-call mounts for inputs referenced indirectly (e.g. genome paths listed
     # inside a manifest file rather than passed as argv tokens).
     for m in extra_mounts:
@@ -375,6 +388,8 @@ def wrap_command(
         # "/" and is not writable. Point it at the mounted, writable workdir so
         # tools that touch HOME (e.g. Toil/Cactus creating its config dir) work.
         cmd += ["-e", f"HOME={workdir}"]
+        for name, value in _forwarded_data_env().items():
+            cmd += ["-e", f"{name}={value}"]
         if config.platform:
             cmd += ["--platform", config.platform]
         for m in mounts:
