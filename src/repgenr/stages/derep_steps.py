@@ -256,9 +256,11 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
 
     if params.reduce != "none":
         resolvable = {rep.name for r in stage1 for rep in r.representatives}
+        # As in the dereplicate stage: --keeper tool ranks the representatives
+        # of a taxon by cluster size alone, without the selection.tsv quality.
         quality = (
             {}
-            if params.selection_tsv is None
+            if params.selection_tsv is None or params.keeper == "tool"
             else {
                 name: qual
                 for name, qual in _quality_from_selection(params.selection_tsv).items()

@@ -559,6 +559,55 @@ def test_merge_reduce_species_uses_selection_taxonomy(tmp_path: Path, register_t
     assert sorted(status.values()).count(STATUS_CONTAINED) == 1
 
 
+def test_merge_reduce_keeper_tool_ignores_selection_quality(
+    tmp_path: Path, register_tool
+) -> None:
+    """--keeper tool: the --reduce keeper is the largest cluster, as in the stage.
+
+    The merge step used to rank the representatives by selection.tsv quality
+    whatever --keeper said, so a scored fragment displaced an unscored genome
+    that stood for more of the set.
+    """
+    register_tool(registry, "keepall", _KeepAll)
+    register_tool(registry, "anidep", _AniDep)
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    genomes = []
+    for _acc, fn, _g, _s in _TAXA[:3]:
+        (gdir / fn).write_text(">x\nACGT\n")
+        genomes.append(gdir / fn)
+    # Chunk 0 folds genome 2 into genome 1 (a cluster of two); chunk 1 keeps
+    # genome 3 alone. Genomes 1 and 3 are given the same species below.
+    dereplicate_chunk(
+        ChunkParams(tool="anidep", genomes=genomes[:2], out_dir=tmp_path / "c0", secondary_ani=0.5),
+        _LOG,
+    )
+    dereplicate_chunk(
+        ChunkParams(tool="keepall", genomes=genomes[2:], out_dir=tmp_path / "c1"), _LOG
+    )
+    selection = tmp_path / "selection.tsv"
+    rows = [SelectionRow(acc, "Fam", g, "aaa-sp1", False, fn) for acc, fn, g, _s in _TAXA[:3]]
+    rows[2].completeness, rows[2].contamination = 40.0, 0.0  # only the singleton is scored
+    write_selection(selection, rows)
+
+    def merged(keeper: str) -> list[str]:
+        final = dereplicate_merge(
+            MergeParams(
+                tool="keepall",
+                chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+                out_dir=tmp_path / f"m-{keeper}",
+                selection_tsv=selection,
+                keeper=keeper,
+                reduce="species",
+            ),
+            _LOG,
+        )
+        return [r.name for r in final.representatives]
+
+    assert merged("tool") == [_TAXA[0][1]]
+    assert merged("quality") == [_TAXA[2][1]]
+
+
 def test_merge_reduce_genus_falls_back_to_filename_taxonomy(tmp_path: Path, register_tool) -> None:
     chunk = _taxa_chunk(tmp_path, register_tool)
     final = dereplicate_merge(
