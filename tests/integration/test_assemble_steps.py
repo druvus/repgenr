@@ -87,7 +87,7 @@ def test_assemble_run_writes_contigs_and_a_marker(tmp_path: Path, fakes) -> None
     marker = json.loads((out / "assembly.ok").read_text(encoding="utf-8"))
     assert marker["assembler"] == "fakeasm" and marker["stats"]["total_length"] == 1200
     assert marker["tool_stats"]["threads"] == 3
-    assert "fakeasm: 1.0" in versions.read_text(encoding="utf-8")
+    assert "fakeasm: \"1.0\"" in versions.read_text(encoding="utf-8")  # quoted: YAML reads 1.0 as a float
     assert not (out / "scratch").exists() and not list(tmp_path.glob("**/asm"))
 
 
@@ -197,7 +197,7 @@ def test_genome_qc_scores_and_classifies_every_assembly(tmp_path, fakes, monkeyp
     assert classified["SRR1"].taxonomy.endswith("s__Francisella tularensis")
     assert classified["SRR1"].db_version == "gtdb-rs226.k31"
     versions = (tmp_path / "v.yml").read_text(encoding="utf-8")
-    assert "checkm2: 1.1.0" in versions and "fakecls: 1.0" in versions
+    assert "checkm2: 1.1.0" in versions and "fakecls: \"1.0\"" in versions
 
 
 def test_genome_qc_passes_its_memory_budget_and_stores_no_scores(
