@@ -259,7 +259,11 @@ auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
 
 The default for `--tool` on `dereplicate` is `skder`, not `auto`. With `auto`
 and all tools available, `drep` (limit 2000) would be preferred for up to 2000
-genomes, and it needs manifest quality for every genome or CheckM.
+genomes, and it needs manifest quality for every genome or CheckM. Under
+`--container docker` or `singularity` dRep always counts as available, because
+its image is pinned, so `auto` chooses it for up to 2000 genomes. Without
+manifest quality, set `CHECKM_DATA_PATH` on the host (see
+[install.md](install.md#notes)) or name another tool.
 
 Passing a tool by name past its limit logs a warning and runs anyway. Adapter
 authors set the limit in `ToolCapabilities` (see
