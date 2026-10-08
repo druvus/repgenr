@@ -170,9 +170,10 @@ def available_cpus(caps: ToolCapabilities) -> int:
     # taskset), else all CPUs. A cgroup CPU quota (docker --cpus, a Slurm or
     # Kubernetes limit) is not reflected here, so a quota below the CPU count
     # still lets more threads through than the quota allows.
+    affinity = getattr(os, "sched_getaffinity", None)  # absent on macOS
     try:
-        host = len(os.sched_getaffinity(0)) or os.cpu_count() or 1
-    except (AttributeError, OSError):  # not available on macOS
+        host = (len(affinity(0)) if affinity else 0) or os.cpu_count() or 1
+    except OSError:
         host = os.cpu_count() or 1
     config = _CONFIG
     if config.backend != DOCKER or runs_on_host(caps):
