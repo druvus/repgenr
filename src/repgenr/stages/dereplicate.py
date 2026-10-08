@@ -37,7 +37,13 @@ from ..core.plugins import (
     warn_unconsumed_extras,
 )
 from ..core.process import link_or_copy, remove_tree
-from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
+from ..dereplicators.base import (
+    DerepParams,
+    DerepResult,
+    check_result_complete,
+    registry,
+    run_quality,
+)
 from .cluster_summary import summarise_clusters, taxonomy_lookup
 
 
@@ -138,8 +144,9 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     caps = adapter.capabilities
     extra = {**caps.default_params, **(params.extra or {})}
     warn_unconsumed_extras(caps, params.extra or {}, logger, family="Dereplicator")
-    # Manifest quality is an adapter input whichever keeper rule applies:
-    # dRep reads it as --genomeInfo, galah's input order depends on it.
+    # Manifest quality is an adapter input whichever keeper rule applies
+    # (dRep --genomeInfo, galah --genome-info). Whether the adapters get it is
+    # decided once for the run, so all chunks and the merge use one source.
     manifest_quality = quality_lookup(ctx)
     derep_params = DerepParams(
         primary_ani=params.primary_ani,
@@ -147,7 +154,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         aligned_fraction=params.aligned_fraction,
         threads=params.threads,
         extra=extra,
-        quality=manifest_quality,
+        quality=run_quality(manifest_quality, [g.name for g in genomes], logger, source="manifest"),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
 

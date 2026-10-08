@@ -11,6 +11,7 @@ mistaken for this one's.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from repgenr.dereplicators import sourmash
@@ -351,3 +352,69 @@ def test_chunked_target_reps_sketches_each_chunk_once(tmp_path: Path, monkeypatc
     # two chunks sketched once; every search step collects its merge-level union
     assert len(_names(calls, "manysketch")) == 2
     assert len(_names(calls, "pairwise")) > 3
+
+
+# --- cache keys follow the genome file, not only its name ------------------------
+
+
+def _bump(path: Path, text: str) -> None:
+    """Replace a genome under the same name with different content and a later mtime."""
+    st = path.stat()
+    path.write_text(text, encoding="utf-8")
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+
+
+def test_replaced_genome_is_not_collected_from_the_old_zip(tmp_path: Path, monkeypatch) -> None:
+    chunk = _genomes(tmp_path, ("g1.fasta", "g2.fasta", "g3.fasta"))
+    cache = tmp_path / "sketches"
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(sourmash, "run_tool", _fake_run_tool(calls))
+
+    _sparse(chunk, tmp_path / "chunk", cache)
+    _bump(chunk[0], ">x\nACGTACGTACGT\n")
+    _sparse(chunk[:2], tmp_path / "merge", cache)
+    assert _names(calls, "sigcat") == []
+    assert _names(calls, "manysketch")[-1] == ["g1.fasta", "g2.fasta"]
+
+
+def test_replaced_genome_changes_the_set_digest(tmp_path: Path) -> None:
+    genomes = _genomes(tmp_path)
+    before = sourmash._genome_set_digest(genomes, 31, 1000)
+    _bump(genomes[1], ">x\nACGTAC\n")
+    assert sourmash._genome_set_digest(genomes, 31, 1000) != before
+
+
+def test_dense_signature_older_than_its_genome_is_resketched(tmp_path: Path, monkeypatch) -> None:
+    genomes = _genomes(tmp_path)
+    cache = tmp_path / "sketches"
+    cache.mkdir()
+    for g in genomes:
+        (cache / f"{g.stem}.sig").write_text("sig")
+    # g1.sig was made from an earlier g1.fasta: older than the current file
+    old = genomes[0].stat().st_mtime_ns - 10 * 10**9
+    os.utime(cache / "g1.sig", ns=(old, old))
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(sourmash, "run_tool", _fake_run_tool(calls))
+
+    SourmashDereplicator()._dense_dereplicate(
+        genomes, tmp_path / "out", 31, 1000, 0.9, _LOG, sketch_cache=cache
+    )
+    assert _names(calls, "sketch") == [["g1.fasta"]]
+
+
+def test_names_with_commas_stay_one_csv_field(tmp_path: Path, monkeypatch) -> None:
+    import csv
+
+    chunk = _genomes(tmp_path, ("a,b.fasta", "c.fasta", "d.fasta"))
+    cache = tmp_path / "sketches"
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(sourmash, "run_tool", _fake_run_tool(calls))
+
+    _sparse(chunk, tmp_path / "chunk", cache)
+    _sparse(chunk[:2], tmp_path / "merge", cache)
+    with open(tmp_path / "chunk" / "manysketch.csv", encoding="utf-8", newline="") as fo:
+        rows = list(csv.reader(fo))
+    assert [r[0] for r in rows[1:]] == ["a,b", "c", "d"]
+    assert all(len(r) == 3 for r in rows)
+    with open(tmp_path / "merge" / "picklist.csv", encoding="utf-8", newline="") as fo:
+        assert list(csv.reader(fo)) == [["name"], ["a,b"], ["c"]]

@@ -448,7 +448,7 @@ def test_adapters_receive_the_manifest_quality(
     registry.register("qualityrecorder", _QualityRecorder, replace=True)
     _QualityRecorder.seen = []
     ctx = WorkdirContext(workdir, create=True)
-    quality = {genome_files[0].name: (97.0, 1.0), genome_files[1].name: (88.0, 2.0)}
+    quality = {g.name: (90.0 + i, 0.5 * i) for i, g in enumerate(genome_files)}
     for filename, (completeness, contamination) in quality.items():
         ctx.manifest.upsert(
             GenomeRecord(
@@ -463,3 +463,49 @@ def test_adapters_receive_the_manifest_quality(
     finally:
         registry._classes.pop("qualityrecorder", None)
     assert _QualityRecorder.seen == [quality]
+
+
+class _ChunkQualityRecorder(_QualityRecorder):
+    capabilities = ToolCapabilities(name="chunkquality", supports_native_scaling=False)
+
+
+@pytest.mark.parametrize("scored", [7, 6])
+def test_every_chunk_and_the_merge_get_the_same_quality_source(
+    workdir: Path, genome_files, fake_tool, scored: int
+) -> None:
+    """With quality for some genomes only, the run gives the adapter none, so
+    a chunk whose genomes all happen to be scored is not treated differently
+    from one that is not (dRep --genomeInfo in one chunk, CheckM in another)."""
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    gdir = workdir / "genomes"
+    for i in range(4, 8):
+        (gdir / f"Francisellaceae_francisella_tularensis_GCA_00000{i}.fasta").write_text(
+            f">s{i}\n{'ACGT' * 10}\n"
+        )
+    names = sorted(p.name for p in gdir.iterdir())
+    assert len(names) == 7
+    registry.register("chunkquality", _ChunkQualityRecorder, replace=True)
+    _QualityRecorder.seen = []
+    ctx = WorkdirContext(workdir, create=True)
+    for i, filename in enumerate(names[:scored]):
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(filename),
+                filename=filename,
+                completeness=95.0,
+                contamination=float(i),
+            )
+        )
+    try:
+        run(ctx, DereplicateParams(tool="chunkquality", process_size=3))
+    finally:
+        registry._classes.pop("chunkquality", None)
+    seen = _QualityRecorder.seen
+    assert len(seen) == 3  # chunks of 3 and 4 genomes (a lone last genome joins), and the merge
+    if scored == 7:
+        assert all(len(q) == 7 for q in seen)
+    else:
+        # the first chunk is fully scored, yet no call gets quality
+        assert all(q == {} for q in seen)

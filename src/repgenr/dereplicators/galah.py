@@ -26,6 +26,7 @@ from .base import (
     Dereplicator,
     DerepParams,
     DerepResult,
+    write_genome_info,
 )
 
 
@@ -58,7 +59,9 @@ class GalahDereplicator(Dereplicator):
 
         # Pass the genome list via a file (--genome-fasta-list), never on argv:
         # 1000s-10000s of paths would exceed ARG_MAX.
-        fofn = write_fofn(_galah_order(genomes, params.quality), out_dir / "genomes.fofn")
+        genome_info = _write_galah_genome_info(genomes, params.quality, out_dir, logger)
+        order = list(genomes) if genome_info else _by_size(genomes)
+        fofn = write_fofn(order, out_dir / "genomes.fofn")
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         cmd: list[str | Path] = [
             "galah",
@@ -78,6 +81,9 @@ class GalahDereplicator(Dereplicator):
             "--output-cluster-definition",
             clusters_file,
         ]
+        if genome_info is not None:
+            cmd += ["--genome-info", genome_info]
+            genome_dirs.append(str(genome_info))
         run_tool(
             self.capabilities, cmd, logger=logger, log_prefix="galah", extra_mounts=genome_dirs
         )
@@ -115,18 +121,42 @@ class GalahDereplicator(Dereplicator):
         )
 
 
-def _galah_order(genomes: Sequence[Path], quality: Mapping[str, tuple[float, float]]) -> list[Path]:
-    """The order in which galah is given the genomes.
+def _write_galah_genome_info(
+    genomes: Sequence[Path],
+    quality: Mapping[str, tuple[float, float]],
+    out_dir: Path,
+    logger: logging.Logger,
+) -> Path | None:
+    """Write galah's ``--genome-info`` table when every genome has quality.
 
-    Without genome quality, galah prefers genomes listed earlier as cluster
-    representatives, so a name-sorted list can make a fragment that sorts
-    first the representative. Unless every genome has manifest quality (in
-    which case ``--keeper quality`` re-picks each representative), list the
-    genomes by descending file size, then by name. The size of a gzipped file
-    is its compressed size, a rough proxy only.
+    galah then ranks genomes by its quality formula (completeness minus 5 x
+    contamination, less small penalties for contig count and ambiguous bases)
+    for both the representative and the greedy membership, instead of by
+    input order. galah stops when a genome has no row, so a partial table is
+    never written. Rows name the genome without its last extension, which is
+    how galah matches them (verified with galah 0.4.2 and 0.5.2).
     """
-    if genomes and all(Path(g).name in quality for g in genomes):
-        return list(genomes)
+    if not genomes or not all(Path(g).name in quality for g in genomes):
+        return None
+    path = write_genome_info(
+        out_dir / "genome_info.csv",
+        ((Path(g).stem, *quality[Path(g).name]) for g in genomes),
+    )
+    logger.info(
+        "galah uses the manifest completeness and contamination of %d genomes (--genome-info)",
+        len(genomes),
+    )
+    return path
+
+
+def _by_size(genomes: Sequence[Path]) -> list[Path]:
+    """Genomes by descending file size, then name.
+
+    Without genome quality galah prefers genomes listed earlier as cluster
+    representatives, so a name-sorted list can make a fragment that sorts
+    first the representative. The size of a gzipped file is its compressed
+    size, a rough proxy only.
+    """
     return sorted(genomes, key=lambda g: (-_file_size(g), Path(g).name))
 
 

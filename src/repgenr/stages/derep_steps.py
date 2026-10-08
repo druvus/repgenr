@@ -45,7 +45,13 @@ from ..core.errors import WorkdirError
 from ..core.plugins import warn_ignored_params, warn_unconsumed_extras
 from ..core.process import link_or_copy, remove_tree
 from ..core.versions import write_versions_fragment
-from ..dereplicators.base import DerepParams, DerepResult, check_result_complete, registry
+from ..dereplicators.base import (
+    DerepParams,
+    DerepResult,
+    check_result_complete,
+    registry,
+    run_quality,
+)
 from .cluster_summary import Taxonomy, summarise_clusters
 from .derep_keeper import rescore_representatives
 from .dereplicate import (
@@ -137,8 +143,9 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         threads=params.threads,
         extra={**caps.default_params, **(params.extra or {})},
         # As in the stage: selection.tsv quality is an adapter input (dRep
-        # --genomeInfo, galah input order) whichever keeper rule applies.
-        quality=_summary_quality(params.selection_tsv),
+        # --genomeInfo, galah --genome-info) whichever keeper rule applies,
+        # decided over the whole selection so every chunk agrees.
+        quality=_adapter_quality(params.selection_tsv, logger),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
@@ -200,7 +207,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         extra={**caps.default_params, **(params.extra or {})},
         quality={
             name: qual
-            for name, qual in _summary_quality(params.selection_tsv).items()
+            for name, qual in _adapter_quality(params.selection_tsv, logger).items()
             if name in union_names
         },
     )
@@ -377,6 +384,20 @@ def _write_step_contract(
     write_genome_status(out_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
         out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality, taxonomy)
+    )
+
+
+def _adapter_quality(
+    selection_tsv: Path | None, logger: logging.Logger
+) -> dict[str, tuple[float, float]]:
+    """selection.tsv quality for the adapters: all of it when every selected
+    (non-outgroup) genome has values, else none. Decided over the whole
+    selection, not the chunk, so all chunks and the merge of a run agree."""
+    if selection_tsv is None:
+        return {}
+    names = [r.filename for r in read_selection(selection_tsv) if not r.is_outgroup and r.filename]
+    return run_quality(
+        _quality_from_selection(selection_tsv), names, logger, source="selection.tsv"
     )
 
 

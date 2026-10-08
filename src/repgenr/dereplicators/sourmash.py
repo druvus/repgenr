@@ -339,11 +339,16 @@ class SourmashDereplicator(Dereplicator):
             # manysketch reads a CSV of (name, genome_filename, protein_filename).
             # The name becomes the signature name, which is what pairwise reports --
             # plain sketch leaves it empty, so the edge list would be unlabelled.
+            # Fields are csv-quoted, so a name or path with a comma stays one
+            # field (manysketch, sig cat and pairwise all accept quoted fields).
             sketch_csv = out_dir / "manysketch.csv"
-            lines = ["name,genome_filename,protein_filename"]
-            for g in genomes:
-                lines.append(f"{g.stem},{os.path.abspath(g)},")
-            sketch_csv.write_text("\n".join(lines) + "\n")
+            _write_csv(
+                sketch_csv,
+                [
+                    ["name", "genome_filename", "protein_filename"],
+                    *([g.stem, os.path.abspath(g), ""] for g in genomes),
+                ],
+            )
 
             # Unique temp name beside the final zip (same dir, so the replace is
             # atomic and concurrent writers of the same set cannot collide).
@@ -423,15 +428,14 @@ class SourmashDereplicator(Dereplicator):
         every genome or ``sig cat`` fails.
         """
         sources = _select_cached_zips(
-            {g.stem for g in genomes}, _read_zip_indexes(sketch_cache, ksize, scaled)
+            {g.stem: _file_key(g) for g in genomes}, _read_zip_indexes(sketch_cache, ksize, scaled)
         )
         if sources is None:
             return False
         picklist = out_dir / "picklist.csv"
-        picklist.write_text(
-            "name\n" + "".join(f"{g.stem}\n" for g in sorted(genomes, key=lambda g: g.stem)),
-            encoding="utf-8",
-        )
+        # csv quoting keeps a name with a comma one field (sourmash reads the
+        # picklist with Python's csv module).
+        _write_csv(picklist, [["name"], *([g.stem] for g in sorted(genomes, key=lambda g: g.stem))])
         tmp_zip = sigs_zip.parent / f".{sigs_zip.stem}.{uuid.uuid4().hex}.partial.zip"
         cmd: list[str | Path] = ["sourmash", "sig", "cat", *sources]
         cmd += [
@@ -480,19 +484,41 @@ class SourmashDereplicator(Dereplicator):
 _INDEX_SUFFIX = ".names.json"
 
 
+def _write_csv(path: Path, rows: Iterable[Sequence[str]]) -> None:
+    with open(path, "w", encoding="utf-8", newline="") as fo:
+        csv.writer(fo, lineterminator="\n").writerows(rows)
+
+
+def _file_key(path: Path) -> tuple[int, int]:
+    """(size, mtime in ns) of a genome file, following symlinks; (-1, -1) if unreadable.
+
+    Part of every sketch-cache key, so a genome replaced under the same name
+    (in a persistent ``--tool-arg sketch_cache=`` directory) is sketched again
+    rather than matched to the old signature.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return (-1, -1)
+    return (st.st_size, st.st_mtime_ns)
+
+
 def _write_zip_index(sigs_zip: Path, genomes: Sequence[Path], ksize: int, scaled: int) -> None:
     index = sigs_zip.with_name(sigs_zip.stem + _INDEX_SUFFIX)
     tmp = index.with_name(f".{index.name}.{uuid.uuid4().hex}.partial")
+    names = {g.stem: list(_file_key(g)) for g in genomes}
     tmp.write_text(
-        json.dumps({"ksize": ksize, "scaled": scaled, "names": sorted(g.stem for g in genomes)}),
+        json.dumps({"ksize": ksize, "scaled": scaled, "names": names}, sort_keys=True),
         encoding="utf-8",
     )
     os.replace(tmp, index)
 
 
-def _read_zip_indexes(sketch_cache: Path, ksize: int, scaled: int) -> dict[Path, frozenset[str]]:
-    """Sketched zips in ``sketch_cache`` made with these parameters -> their names."""
-    out: dict[Path, frozenset[str]] = {}
+def _read_zip_indexes(
+    sketch_cache: Path, ksize: int, scaled: int
+) -> dict[Path, dict[str, tuple[int, int]]]:
+    """Sketched zips in ``sketch_cache`` made with these parameters -> name: file key."""
+    out: dict[Path, dict[str, tuple[int, int]]] = {}
     for index in sorted(sketch_cache.glob(f"signatures-*{_INDEX_SUFFIX}")):
         zip_path = index.with_name(index.name[: -len(_INDEX_SUFFIX)] + ".zip")
         try:
@@ -503,24 +529,33 @@ def _read_zip_indexes(sketch_cache: Path, ksize: int, scaled: int) -> dict[Path,
             continue
         if data.get("ksize") != ksize or data.get("scaled") != scaled:
             continue
-        out[zip_path] = frozenset(str(n) for n in data.get("names", []))
+        names = data.get("names")
+        if not isinstance(names, dict):
+            continue
+        try:
+            out[zip_path] = {str(n): (int(k[0]), int(k[1])) for n, k in names.items()}
+        except (TypeError, ValueError, IndexError):
+            continue
     return out
 
 
 def _select_cached_zips(
-    wanted: set[str], indexes: Mapping[Path, frozenset[str]]
+    wanted: Mapping[str, tuple[int, int]],
+    indexes: Mapping[Path, Mapping[str, tuple[int, int]]],
 ) -> list[Path] | None:
     """Zips that together hold every wanted name, none sharing a wanted name.
 
-    Greedy, largest overlap first. Returns None when the zips cannot cover the
-    set without overlap, in which case the caller sketches the genomes.
+    A zip holds a name only when it was sketched from a file of the same size
+    and modification time. Greedy, largest overlap first. Returns None when the
+    zips cannot cover the set without overlap; the caller then sketches.
     """
+    hits = {
+        zip_path: {n for n, key in names.items() if wanted.get(n) == key}
+        for zip_path, names in indexes.items()
+    }
     remaining = set(wanted)
     chosen: list[Path] = []
-    for zip_path, names in sorted(
-        indexes.items(), key=lambda kv: (-len(kv[1] & wanted), kv[0].name)
-    ):
-        hit = names & wanted
+    for zip_path, hit in sorted(hits.items(), key=lambda kv: (-len(kv[1]), kv[0].name)):
         if not hit or not hit <= remaining:
             continue
         chosen.append(zip_path)
@@ -536,21 +571,30 @@ def _find_signatures(sig_dir: Path, genomes: Sequence[Path]) -> dict[Path, Path]
     ``sourmash sketch --outdir`` names signatures after the input file
     (``<name>.sig``); some producers use the stem instead, so both are accepted.
     Only exact per-genome matches count -- a shared cache dir may hold
-    signatures for other genome sets, which must never satisfy a lookup.
+    signatures for other genome sets, which must never satisfy a lookup --
+    and only signatures at least as new as the genome file.
     """
     out: dict[Path, Path] = {}
     for g in genomes:
+        genome_mtime = _file_key(g)[1]
         for cand in (f"{g.name}.sig", f"{g.name}.sig.gz", f"{g.stem}.sig", f"{g.stem}.sig.gz"):
             p = sig_dir / cand
-            if p.exists():
+            # A signature older than its genome file was made from an earlier
+            # file of that name (a persistent sketch_cache); sketch again.
+            if p.exists() and p.stat().st_mtime_ns >= genome_mtime:
                 out[g] = p
                 break
     return out
 
 
 def _genome_set_digest(genomes: Sequence[Path], ksize: int, scaled: int) -> str:
-    """Short digest identifying a genome set + sketch params for cache keying."""
-    blob = "\n".join(sorted(g.name for g in genomes)) + f"|k={ksize}|scaled={scaled}"
+    """Short digest identifying a genome set + sketch params for cache keying.
+
+    Each genome counts by name, size and modification time, so a file
+    replaced under the same name gives a different digest.
+    """
+    entries = sorted(f"{g.name}:{_file_key(g)[0]}:{_file_key(g)[1]}" for g in genomes)
+    blob = "\n".join(entries) + f"|k={ksize}|scaled={scaled}"
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 

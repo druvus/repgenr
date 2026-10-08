@@ -701,3 +701,32 @@ def test_chunk_and_merge_pass_selection_quality_to_the_adapter(tmp_path: Path, r
     assert chunk_seen == quality
     # halver keeps genomes 0 and 2 in the chunk; only they reach the merge
     assert merge_seen == {g.name: quality[g.name] for g in (genomes[0], genomes[2])}
+
+
+def test_partial_selection_quality_reaches_no_chunk(tmp_path: Path, reg) -> None:
+    """The steps decide over the whole selection: one unscored genome in
+    another chunk means no chunk is given quality."""
+    registry.register("qualityrecorder", _QualityRecorder, replace=True)
+    _QualityRecorder.seen = []
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    selection = tmp_path / "selection.tsv"
+    _selection_with_quality(selection, genomes)
+    text = selection.read_text(encoding="utf-8").splitlines()
+    last = text[-1].split("\t")
+    header = text[0].split("\t")
+    last[header.index("completeness")] = ""
+    last[header.index("contamination")] = ""
+    selection.write_text("\n".join([*text[:-1], "\t".join(last)]) + "\n", encoding="utf-8")
+    try:
+        dereplicate_chunk(
+            ChunkParams(
+                tool="qualityrecorder",
+                genomes=genomes[:2],  # both scored
+                out_dir=tmp_path / "chunk0",
+                selection_tsv=selection,
+            ),
+            _LOG,
+        )
+    finally:
+        registry._classes.pop("qualityrecorder", None)
+    assert _QualityRecorder.seen == [{}]

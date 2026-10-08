@@ -31,6 +31,7 @@ from .base import (
     Dereplicator,
     DerepParams,
     DerepResult,
+    write_genome_info,
 )
 
 
@@ -224,13 +225,10 @@ def _write_genome_info(
                 "No genome quality in the manifest; dRep scores genome quality with CheckM."
             )
         return None
-    path = out_dir / "genome_info.csv"
-    with open(path, "w", encoding="utf-8", newline="") as fo:
-        writer = csv.writer(fo, lineterminator="\n")
-        writer.writerow(["genome", "completeness", "contamination"])
-        for src, st in zip(genomes, staged, strict=True):
-            completeness, contamination = quality[src.name]
-            writer.writerow([st.name, f"{completeness:g}", f"{contamination:g}"])
+    path = write_genome_info(
+        out_dir / "genome_info.csv",
+        ((st.name, *quality[src.name]) for src, st in zip(genomes, staged, strict=True)),
+    )
     logger.info(
         "dRep uses the manifest completeness and contamination of %d genomes (--genomeInfo)",
         len(genomes),

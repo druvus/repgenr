@@ -517,13 +517,25 @@ quality at all the stage warns, and `repgenr.yaml` records
 `keeper_effective: tool` next to the requested `keeper` and the swap count.
 
 The same manifest values also reach the dereplicator, whichever keeper rule is
-chosen (the Nextflow chunk and merge steps read them from `selection.tsv`).
-dRep receives them as `--genomeInfo` when every genome has both values, and
-then runs without CheckM; otherwise the values are not passed and dRep runs
-CheckM, with a warning naming the genomes that lack values. galah keeps the
-first listed genome of a cluster when it has no quality, so unless every genome
-has manifest quality RepGenR lists the genomes by descending file size, which
-makes a complete genome rather than a fragment the representative.
+chosen (the Nextflow chunk and merge steps read them from `selection.tsv`),
+when every genome of the run has both values. dRep receives them as
+`--genomeInfo` and then runs without CheckM; galah receives them as
+`--genome-info` and ranks genomes by quality. The decision is taken once for
+the run, so every chunk and the merge pass use the same source. When some
+genomes lack values, none are passed and a warning names them: dRep runs
+CheckM, and galah, which otherwise keeps the first listed genome of a cluster,
+receives the genomes by descending file size, so a complete genome rather than
+a fragment becomes the representative.
+
+`--tool sourmash` keeps its signatures in a sketch cache. `--target-reps`
+shares one cache across its search steps; `--tool-arg sketch_cache=DIR` sets a
+directory that persists across runs. With the branchwater plugin, cache
+entries are matched by genome file name, size and modification time; without
+it, a per-genome signature is reused when it is not older than the genome
+file. A genome replaced under the same name is therefore sketched again,
+except when the new file carries an older timestamp (copied with `cp -p` or
+`rsync -t`) or, with the plugin, the same size and timestamp. Empty the
+directory after such a replacement.
 
 `--reduce species|genus` collapses the ANI representatives to one per taxon
 after dereplication, choosing the keeper by quality when scores are known and
