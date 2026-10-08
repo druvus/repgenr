@@ -156,6 +156,7 @@ Download and organize genomes selected by the metadata stage.
 | `-wd`, `--workdir` | required | Working directory. |
 | `--accession-list-only` | off | Write the accession list and stop (no download). |
 | `--keep-files` | off | Keep download and scratch intermediates. |
+| `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. |
 
 ### vmetadata
 
@@ -199,6 +200,7 @@ Select and organize viral genomes (virus equivalent of genome).
 | `--print-fasta-headers` | off | Print the headers of the selected records. |
 | `--ignore-duplicates` | off | bvbrc: tolerate duplicate record ids (last wins). |
 | `--keep-files` | off | Keep download and scratch intermediates. |
+| `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. |
 
 ### ingest
 
@@ -213,6 +215,7 @@ Populate a working directory from local genomes (no download).
 | `--outgroup` |  | Genome to set aside as the outgroup: a filename, stem or accession under --genomes-dir or in a --from-workdir (genomes/ or outgroup/), or a path to a FASTA file elsewhere. |
 | `--copy` | off | Copy the files into genomes/ instead of symlinking them. |
 | `--drop-foreign` | off | Discard genomes appended from sequencing runs (assemble --append) instead of refusing to overwrite the selection that holds them. |
+| `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. A --from-workdir sketch of the same genome is copied. |
 
 ### reads
 
@@ -258,6 +261,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |
 | `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+| `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. With --append only the new genomes are sketched. |
 
 ## Core stages
 
@@ -390,6 +394,22 @@ Store, load, list or delete named dereplication runs.
 | `-wd`, `--workdir` | required | Working directory. |
 | `--action` | required | list, pack, unpack or delete. |
 | `--name` |  | Run name for pack/unpack/delete: up to 100 letters, digits, '.', '_' or '-', starting with a letter or digit. |
+
+### sketch
+
+Write the sourmash sketch of each genome to sketches/.
+
+One file per genome, sketches/<name>.sig.zip, with DNA signatures at
+k=21, 31 and 51 (scaled=1000) named after the genome. Only missing and
+stale sketches are written (stale: the FASTA or the parameters changed);
+sketches of genomes no longer in the set are removed. repgenr --force
+sketch writes every sketch again. Needs sourmash (on the PATH, or via the
+container backend).
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` | required | Working directory. |
+| `-t`, `--threads` | `16` | Threads for the external tool (default 16, or the CPU limit when lower). |
 
 ## Environment and diagnostics
 

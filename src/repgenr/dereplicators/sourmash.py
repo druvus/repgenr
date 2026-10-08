@@ -42,11 +42,11 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.errors import MissingBinaryError, ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
+from ..core.sourmash import sourmash_capabilities
 from .base import (
     STATUS_CONTAINED,
     STATUS_REPRESENTATIVE,
@@ -66,14 +66,10 @@ _MEASURE = "ANI"
 
 
 class SourmashDereplicator(Dereplicator):
-    capabilities = ToolCapabilities(
-        name="sourmash",
-        container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
-        conda=("bioconda::sourmash",),
+    capabilities = sourmash_capabilities(
         accepted_extras=frozenset({"ksize", "scaled", "sketch_cache", "dense_fallback"}),
         # k-mer containment has no primary/secondary split and no alignment.
         ignored_params=frozenset({"primary_ani", "aligned_fraction"}),
-        required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=None,
         supports_native_scaling=True,

@@ -10,6 +10,7 @@ import typer
 from .base import (
     HELP_KEEP_FILES,
     HELP_NO_OUTGROUP,
+    HELP_SKETCH,
     HELP_TARGET_GENUS,
     HELP_TARGET_SPECIES,
     HELP_WORKDIR,
@@ -135,6 +136,7 @@ def vgenome(
         False, "--ignore-duplicates", help="bvbrc: tolerate duplicate record ids (last wins)."
     ),
     keep_files: bool = typer.Option(False, "--keep-files", help=HELP_KEEP_FILES),
+    sketch: bool | None = typer.Option(None, "--sketch/--no-sketch", help=HELP_SKETCH),
 ) -> None:
     """Select and organize viral genomes (virus equivalent of genome)."""
     from .param_builders import vgenome_params
@@ -159,6 +161,7 @@ def vgenome(
             print_fasta_headers=print_fasta_headers,
             ignore_duplicates=ignore_duplicates,
             keep_files=keep_files,
+            sketch=sketch,
         )
 
     _run("vgenome", workdir, build)

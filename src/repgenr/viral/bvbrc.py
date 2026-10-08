@@ -27,6 +27,7 @@ from ..core.contracts import SELECTION_TSV, SelectionRow, write_selection
 from ..core.errors import UserInputError, WorkdirError
 from ..core.manifest import record_from_selection
 from ..core.process import staged_dir
+from ..core.sketches import sketch_stage_genomes
 from . import _outgroup
 from ._common import (
     parse_custom_filter,
@@ -95,13 +96,18 @@ def run_select(
     # so dereplicate, tree2tax and doctor see one contract.
     write_selection(ctx.workdir / SELECTION_TSV, rows)
     ctx.manifest.replace_genomes([record_from_selection(r, "bvbrc") for r in rows])
+    sketches, sketch_versions = sketch_stage_genomes(ctx, params.sketch, "vgenome", logger)
 
     ctx.config.record_stage(
         "vgenome",
         # The outgroup search is the one external tool; none when it did not run.
         tool=params.outgroup_treebuilder if tool_versions else None,
-        params={"selected": n_written, "no_outgroup": params.no_outgroup},
-        tool_versions=tool_versions,
+        params={
+            "selected": n_written,
+            "no_outgroup": params.no_outgroup,
+            "sketches": sketches,
+        },
+        tool_versions={**tool_versions, **sketch_versions},
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

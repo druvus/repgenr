@@ -25,6 +25,7 @@ from ..core.http import NCBI_DATASETS_URL, require_reachable, verify_md5
 from ..core.integrity import looks_like_fasta
 from ..core.plugins import ToolCapabilities, preflight
 from ..core.process import check_free_disk, remove_tree
+from ..core.sketches import require_sourmash_if_requested, sketch_stage_genomes
 
 _DATASETS = BinarySpec("datasets", version_args=("--version",))
 DATASETS_CAPS = ToolCapabilities(
@@ -63,11 +64,16 @@ def no_assembly_matched(exc: ToolExecutionError) -> bool:
 class GenomeParams:
     accession_list_only: bool = False
     keep_files: bool = False
+    # Genome sketches (core.sketches): None sketches when sourmash can run,
+    # True requires it, False skips them.
+    sketch: bool | None = None
 
 
 def run(ctx: WorkdirContext, params: GenomeParams) -> int:
     logger = ctx.logger
     versions = preflight(DATASETS_CAPS)
+    if not params.accession_list_only:
+        require_sourmash_if_requested(params.sketch)
 
     manifest = ctx.manifest
     selected = [g for g in manifest.all_genomes(include_outgroup=False)]
@@ -120,11 +126,12 @@ def run(ctx: WorkdirContext, params: GenomeParams) -> int:
         g.filename = filenames[g.accession]
     manifest.upsert_many(list(selected))
 
+    sketches, sketch_versions = sketch_stage_genomes(ctx, params.sketch, "genome", logger)
     ctx.config.record_stage(
         "genome",
         tool="datasets",
-        params={"downloaded": len(to_download), "total": len(selected)},
-        tool_versions=versions,
+        params={"downloaded": len(to_download), "total": len(selected), "sketches": sketches},
+        tool_versions={**versions, **sketch_versions},
         completed=datetime.now(UTC).isoformat(),
     )
     ctx.save_config()

@@ -92,6 +92,40 @@ A named outgroup must lie outside the target taxon on both sources, like the
 automatic one (exit 2 otherwise); a target genome that `-d rep` or `--limit`
 left out of the selection is still not an outgroup.
 
+#### Genome sketches
+
+`genome`, `vgenome`, `ingest` and `assemble` end by writing a sourmash sketch
+of each genome, outgroup included, to `sketches/<name>.sig.zip`, where
+`<name>` is the genome's file name without its FASTA suffix (the name it
+carries in alignments and trees). Each file holds three DNA signatures, at
+k=21, k=31 and k=51 with scaled=1000 and no abundance, named after the genome.
+By default the step runs when sourmash can run (on the PATH, or through the
+container backend) and is otherwise left out with one INFO line;
+`--sketch` requires sourmash and exits 4 without it, before any genome or
+sketch is written (the run log may already exist), and
+`--no-sketch` leaves it out. A sketch is written again only when the genome
+FASTA (its SHA-256) or the sketch parameters changed, so a rerun of a stage
+sketches only new and changed genomes; `assemble --append` sketches only the
+genomes it adds, and `ingest --from-workdir` copies the sketch of a source
+genome whose recorded digest matches. Sketches of genomes that leave the set
+are removed with them. The sketches are not stage outputs: a genome set
+without them is complete, the flag does not change the resume fingerprint,
+and a stage skipped as already complete does not sketch (with `--sketch`
+the skip message names `repgenr sketch`). A failed sketch is a
+warning under the default and an error with `--sketch`.
+
+`repgenr sketch -wd $WD [-t N]` sketches an existing working directory: it
+writes the missing and stale sketches, removes those of genomes no longer in
+the set, and logs one line with the counts (present, written, stale replaced,
+removed). `repgenr --force sketch -wd $WD` writes every sketch again; sketches that
+were current are counted as `replaced (--force)`, apart from stale ones. It is
+recorded as a stage, so `status` lists it, and `status` shows `sketches: n/m`
+(genomes with a sketch, genomes present) on the line of the stage that wrote
+the genome set once `sketches/` exists. In this release the sketches are
+written but not yet read: a later release will make `dereplicate --tool
+sourmash`, `glance`, the sourmash tree builder of `phylo` and the sourmash
+classifier of `assemble` reuse them instead of sketching each genome again.
+
 Or run the whole chain in one command (bacterial by default; `--viral` for the
 NCBI Virus path), then check progress at any time:
 

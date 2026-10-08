@@ -8,12 +8,12 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.contracts import atomic_replace, record_name
 from ..core.errors import WorkdirError
-from ..core.plugins import ToolCapabilities, parse_extra_int
+from ..core.plugins import parse_extra_int
 from ..core.process import write_fofn
+from ..core.sourmash import sourmash_capabilities
 from ..tree.newick import neighbor_joining
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
@@ -23,15 +23,11 @@ _NJ_MAX_GENOMES = 5000
 
 
 class SourmashBuilder(TreeBuilder):
-    capabilities = ToolCapabilities(
-        name="sourmash",
+    capabilities = sourmash_capabilities(
         reads_gzip=True,
-        container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
-        conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled"}),
         # A distance-based NJ tree has no bootstrap step.
         ignored_params=frozenset({"bootstrap"}),
-        required_binaries=(BinarySpec("sourmash", version_args=("--version",), min_version="4.0"),),
         default_params={"ksize": 31, "scaled": 1000},
         recommended_max_genomes=2000,
     )

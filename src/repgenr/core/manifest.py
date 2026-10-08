@@ -20,7 +20,7 @@ from typing import Any
 from .errors import WorkdirError
 
 MANIFEST_FILENAME = "manifest.sqlite"
-SCHEMA_VERSION = 3  # bump + add a migration step when the table layout changes
+SCHEMA_VERSION = 4  # bump + add a migration step when the table layout changes
 BUSY_TIMEOUT_MS = 30000  # wait up to 30s for a competing writer before erroring
 
 _UPSERT_SQL = """
@@ -46,6 +46,14 @@ _UPSERT_SQL = """
 
 _SET_DEREP_SQL = "UPDATE genomes SET derep_status=?, representative=? WHERE accession=?"
 
+# The sketch columns are written only by set_sketches: the genome upserts above
+# leave them as they are, so re-selecting a genome keeps its sketch record
+# (core.sketches decides from the FASTA digest whether it is still current).
+_SKETCH_COLUMNS = ("sketch_file", "sketch_params", "sketch_digest")
+_SET_SKETCH_SQL = (
+    "UPDATE genomes SET sketch_file=?, sketch_params=?, sketch_digest=? WHERE accession=?"
+)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS genomes (
     accession   TEXT PRIMARY KEY,
@@ -59,7 +67,10 @@ CREATE TABLE IF NOT EXISTS genomes (
     representative TEXT,                -- accession of the representative, if contained
     completeness REAL,                 -- CheckM completeness percentage, if known
     contamination REAL,                -- CheckM contamination percentage, if known
-    gtdb_representative INTEGER DEFAULT 0  -- 1 for a GTDB species representative
+    gtdb_representative INTEGER DEFAULT 0,  -- 1 for a GTDB species representative
+    sketch_file TEXT,                  -- sketches/<name>.sig.zip, workdir-relative
+    sketch_params TEXT,                -- sourmash parameter string of that sketch
+    sketch_digest TEXT                 -- sha256 of the FASTA the sketch was built from
 );
 CREATE INDEX IF NOT EXISTS idx_genomes_species ON genomes(species);
 CREATE INDEX IF NOT EXISTS idx_genomes_derep ON genomes(derep_status);
@@ -80,6 +91,19 @@ class GenomeRecord:
     completeness: float | None = None
     contamination: float | None = None
     gtdb_representative: bool = False
+    # Read from the manifest; written only through Manifest.set_sketches.
+    sketch_file: str | None = None
+    sketch_params: str | None = None
+    sketch_digest: str | None = None
+
+
+@dataclass(frozen=True)
+class SketchRecord:
+    """The recorded sketch of one genome (see core.sketches)."""
+
+    file: str | None
+    params: str | None
+    digest: str | None
 
 
 def record_from_selection(row: Any, source: str) -> GenomeRecord:
@@ -203,6 +227,12 @@ class Manifest:
                 # v3 adds the GTDB species-representative flag. Rows of an
                 # older database read 0 until the metadata stage runs again.
                 _add_column(self._conn, "gtdb_representative", "INTEGER DEFAULT 0")
+            if version < 4:
+                # v4 records the genome sketch of each row (core.sketches).
+                # Rows of an older database have none; the next sketch step
+                # builds them.
+                for col in _SKETCH_COLUMNS:
+                    _add_column(self._conn, col, "TEXT")
             self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._conn.commit()
         except BaseException:
@@ -355,6 +385,37 @@ class Manifest:
         )
         return {r["filename"] for r in rows}
 
+    def sketch_records(self) -> dict[str, SketchRecord]:
+        """accession -> recorded sketch, for rows that have one.
+
+        A pre-v4 manifest opened read-only lacks the columns; it records none.
+        """
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
+        if not set(_SKETCH_COLUMNS) <= cols:
+            return {}
+        rows = self._conn.execute(
+            "SELECT accession, sketch_file, sketch_params, sketch_digest FROM genomes "
+            "WHERE sketch_file IS NOT NULL"
+        )
+        return {
+            r["accession"]: SketchRecord(r["sketch_file"], r["sketch_params"], r["sketch_digest"])
+            for r in rows
+        }
+
+    def set_sketches(self, updates: Sequence[tuple[str, SketchRecord | None]]) -> None:
+        """Record (or, with None, clear) the sketch of each accession, in one transaction."""
+        rows = [
+            (
+                rec.file if rec else None,
+                rec.params if rec else None,
+                rec.digest if rec else None,
+                accession,
+            )
+            for accession, rec in updates
+        ]
+        with self.transaction() as conn:
+            conn.executemany(_SET_SKETCH_SQL, rows)
+
 
 def _enable_wal(conn: sqlite3.Connection) -> None:
     """Switch the database to WAL, retrying while another connection holds it.
@@ -428,4 +489,7 @@ def _row_to_record(row: sqlite3.Row) -> GenomeRecord:
         gtdb_representative=bool(row["gtdb_representative"])
         if "gtdb_representative" in keys
         else False,
+        sketch_file=row["sketch_file"] if "sketch_file" in keys else None,
+        sketch_params=row["sketch_params"] if "sketch_params" in keys else None,
+        sketch_digest=row["sketch_digest"] if "sketch_digest" in keys else None,
     )

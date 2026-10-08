@@ -249,7 +249,7 @@ def test_v2_manifest_is_migrated_with_the_flag_unset(tmp_path) -> None:
     path = tmp_path / "old.sqlite"
     _v2_database(path)
     m = Manifest(path)
-    assert int(m._conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION == 3
+    assert int(m._conn.execute("PRAGMA user_version").fetchone()[0]) == SCHEMA_VERSION == 4
     (record,) = m.all_genomes()
     assert record.gtdb_representative is False and record.completeness == 99.0
     assert m.gtdb_representatives() == set()
@@ -358,7 +358,7 @@ def _open_after_barrier(path: str, barrier, errors) -> None:  # noqa: ANN001
 
 
 @pytest.mark.parametrize("wal", [True, False])
-@pytest.mark.parametrize("old_schema", ["v1", "v2"])
+@pytest.mark.parametrize("old_schema", ["v1", "v2", "v3"])
 def test_concurrent_opens_of_an_old_manifest_migrate_once(tmp_path, old_schema, wal) -> None:
     """Two processes opening an old manifest at once (Nextflow scatter, two
     invocations on one workdir) both succeed; neither sees a duplicate column."""
@@ -370,6 +370,10 @@ def test_concurrent_opens_of_an_old_manifest_migrate_once(tmp_path, old_schema, 
         schema = schema.replace(", completeness REAL, contamination REAL", "").replace(
             "user_version=2", "user_version=1"
         )
+    elif old_schema == "v3":
+        schema = schema.replace(
+            "contamination REAL)", "contamination REAL, gtdb_representative INTEGER DEFAULT 0)"
+        ).replace("user_version=2", "user_version=3")
     for trial in range(6):
         path = tmp_path / f"m{trial}.sqlite"
         conn = sqlite3.connect(path)
@@ -394,6 +398,7 @@ def test_concurrent_opens_of_an_old_manifest_migrate_once(tmp_path, old_schema, 
         m = Manifest(path)
         cols = {r[1] for r in m._conn.execute("PRAGMA table_info(genomes)")}
         assert {"completeness", "contamination", "gtdb_representative"} <= cols
+        assert {"sketch_file", "sketch_params", "sketch_digest"} <= cols
         m.close()
 
 

@@ -1,0 +1,38 @@
+nextflow_process {
+
+    name "SKETCH (stub)"
+    script "../modules/local/dataflow/sketch.nf"
+    tag "stub"
+    process "SKETCH"
+    options "-stub"
+
+    test("writes one sketch per genome, named by the record name") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    [ file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000003.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000004.1.fasta") ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.sketches.get(0)) {
+                assert get(0).id == 'test'
+                def names = new File(get(1).toString()).list().findAll { n -> !n.startsWith('.') }.sort()
+                assert names == [
+                    'Fam_g_s_GCA_000001.1.sig.zip',
+                    'Fam_g_s_GCA_000002.1.sig.zip',
+                    'Fam_g_s_GCA_000003.1.sig.zip',
+                    'Fam_g_s_GCA_000004.1.sig.zip',
+                ]
+            }
+            assert process.out.versions.size() == 1
+        }
+    }
+}

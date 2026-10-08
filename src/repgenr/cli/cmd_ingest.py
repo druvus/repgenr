@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from .base import HELP_WORKDIR_CREATED, PANEL_ENTRY, _run, app
+from .base import HELP_SKETCH, HELP_WORKDIR_CREATED, PANEL_ENTRY, _run, app
 
 
 @app.command(rich_help_panel=PANEL_ENTRY)
@@ -50,6 +50,11 @@ def ingest(
         help="Discard genomes appended from sequencing runs (assemble --append) instead of "
         "refusing to overwrite the selection that holds them.",
     ),
+    sketch: bool | None = typer.Option(
+        None,
+        "--sketch/--no-sketch",
+        help=HELP_SKETCH + " A --from-workdir sketch of the same genome is copied.",
+    ),
 ) -> None:
     """Populate a working directory from local genomes (no download)."""
     from .param_builders import ingest_params
@@ -62,6 +67,7 @@ def ingest(
             outgroup=outgroup,
             copy=copy,
             drop_foreign=drop_foreign,
+            sketch=sketch,
         )
 
     _run("ingest", workdir, build, create=True)

@@ -1,4 +1,4 @@
-"""Auxiliary commands: status, doctor, glance, derep-unpack, derep-stock, list-tools."""
+"""Auxiliary commands: status, doctor, glance, derep-unpack, derep-stock, sketch, list-tools."""
 
 from __future__ import annotations
 
@@ -118,6 +118,20 @@ HELP_JSON = (
     "Print one versioned JSON object on stdout instead of the text report "
     "(schema in docs/output.md); exit codes are unchanged."
 )
+
+
+# Stages whose status line reports the sketches of the genome set.
+_SKETCH_STAGES = frozenset({"genome", "vgenome", "ingest", "assemble", "sketch"})
+
+
+def _sketch_note(workdir: Path) -> str:
+    """'sketches: n/m' when sketches/ exists: genomes with a sketch / genomes present."""
+    from ..core.sketches import sketch_counts
+
+    counts = sketch_counts(workdir)
+    if counts is None:
+        return ""
+    return f"sketches: {counts[0]}/{counts[1]}"
 
 
 def _echo_json(payload: dict[str, Any]) -> None:
@@ -256,6 +270,10 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
             detail = _gtdb_note(rec.params) or None
         elif stage == "ingest" and not rec.interrupted:
             detail = _ingest_note(rec.params) or None
+        if stage in _SKETCH_STAGES and not rec.interrupted:
+            sketches = _sketch_note(workdir)
+            if sketches:
+                detail = f"{detail}; {sketches}" if detail else sketches
         return {
             "name": stage,
             "in_chain": in_chain,
@@ -322,7 +340,8 @@ def _render_status_text(report: dict[str, Any]) -> None:
                 when = f"{s['completed']}  [stale] ({s['reason']})"
             else:
                 when = (s["completed"] or "") + _fingerprint_note(s)
-            typer.echo(f"    {s['name']}{tool}  {when}")
+            note = f"  ({s['detail']})" if s["detail"] and s["state"] != "interrupted" else ""
+            typer.echo(f"    {s['name']}{tool}  {when}{note}")
 
     if report["unchecked"] is not None:
         typer.echo(f"\nStale stages were not checked ({report['unchecked']}); run repgenr doctor.")
@@ -551,6 +570,27 @@ def derep_stock(
         return DerepStockParams(action=action, name=name)
 
     _run("derep_stock", workdir, build)
+
+
+@app.command(name="sketch", rich_help_panel=PANEL_INSPECT)
+def sketch(
+    workdir: Path = typer.Option(..., "-wd", "--workdir", help=HELP_WORKDIR),
+    threads: int = typer.Option(
+        DEFAULT_THREADS, "-t", "--threads", min=1, help=HELP_THREADS, callback=resolve_threads
+    ),
+) -> None:
+    """Write the sourmash sketch of each genome to sketches/.
+
+    One file per genome, sketches/<name>.sig.zip, with DNA signatures at
+    k=21, 31 and 51 (scaled=1000) named after the genome. Only missing and
+    stale sketches are written (stale: the FASTA or the parameters changed);
+    sketches of genomes no longer in the set are removed. repgenr --force
+    sketch writes every sketch again. Needs sourmash (on the PATH, or via the
+    container backend).
+    """
+    from ..stages.sketch import SketchParams
+
+    _run("sketch", workdir, lambda: SketchParams(threads=threads))
 
 
 def _tool_label(reg: Any, name: str) -> str:

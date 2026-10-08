@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from ..core.context import WorkdirContext
 from ..core.errors import WorkdirError
+from ..core.sketches import require_sourmash_if_requested
 
 
 @dataclass
@@ -42,6 +43,9 @@ class VgenomeParams:
     print_fasta_headers: bool = False
     ignore_duplicates: bool = False
     keep_files: bool = False
+    # Genome sketches (core.sketches): None sketches when sourmash can run,
+    # True requires it, False skips them.
+    sketch: bool | None = None
     extra: dict = field(default_factory=dict)
 
 
@@ -52,6 +56,8 @@ def run(ctx: WorkdirContext, params: VgenomeParams) -> int:
     records_json = download_wd / "virus_records.json"
     if not fasta.exists():
         raise WorkdirError("Viral metadata missing. Run the vmetadata stage first.")
+    if not params.glance:
+        require_sourmash_if_requested(params.sketch)
 
     # NCBI Virus records present -> default back-end; otherwise the legacy
     # BV-BRC tables must be present.

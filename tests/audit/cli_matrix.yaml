@@ -239,6 +239,39 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_derep_unpack_with_and_without_representant
         observable: cluster dirs lack the representative
+  sketch:
+    dispatch: stage
+    base_args:
+    - -wd
+    - '{wd}'
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: workdir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/output.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the SKETCH module sketches a genome directory'
+        live: tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command
+        observable: sketches/ holds one .sig.zip per genome
+      --threads:
+        aliases:
+        - -t
+        param: SketchParams.threads
+        value: '2'
+        validated: range
+        invalid: '0'
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the SKETCH module sketches a genome directory'
+        live: tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command
   dereplicate:
     dispatch: stage
     base_args:
@@ -842,6 +875,18 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_network.py::test_genome_keep_files_retains_the_download_scratch
+      --sketch:
+        secondary:
+        - --no-sketch
+        param: GenomeParams.sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py)'
+        observable: sketches/ holds one .sig.zip per genome
   genome-fetch:
     dispatch: step:repgenr.stages.genome_steps.genome_fetch
     base_args:
@@ -1050,6 +1095,18 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: offline guard tests in tests/integration/test_ingest_stage.py'
+      --sketch:
+        secondary:
+        - --no-sketch
+        param: IngestParams.sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_sketches_live.py::test_ingest_sketches_and_sketch_command
+        observable: sketches/ holds one .sig.zip per genome
   list-tools:
     dispatch: query
     base_args: []
@@ -1814,6 +1871,18 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: offline stage tests in tests/integration/test_assemble_stage.py'
+      --sketch:
+        secondary:
+        - --no-sketch
+        param: AssembleParams.sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py)'
+        observable: sketches/ holds one .sig.zip per genome
 
   reads:
     dispatch: stage
@@ -3252,6 +3321,18 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.vgenome_args
         live: tests/live/test_network.py::test_vgenome_discard_glance_headers_keep_files
+      --sketch:
+        secondary:
+        - --no-sketch
+        param: VgenomeParams.sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py)'
+        observable: sketches/ holds one .sig.zip per genome
   vmetadata:
     dispatch: stage
     base_args:
