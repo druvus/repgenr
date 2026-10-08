@@ -156,6 +156,12 @@ def _run_ncbi_virus(ctx, params, download_wd, logger) -> int:
             "host": params.host,
             "released_after": params.released_after,
             "sequences": len(records),
+            # How many records took their species from NCBI Taxonomy, the
+            # report lineage or the organism name.
+            "species_source": {
+                src: sum(1 for r in records if r.species_source == src)
+                for src in sorted({r.species_source for r in records})
+            },
         },
         tool_versions=tool_versions,
         completed=datetime.now(UTC).isoformat(),

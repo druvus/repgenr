@@ -755,14 +755,24 @@ def read_excused_runs(path: Path) -> list[ExcusedRun]:
         return [ExcusedRun(row[0], row[1], row[2]) for row in reader if len(row) >= 3]
 
 
-def write_segments(path: Path, members: dict[str, list[str]]) -> None:
-    """Write isolate token -> member accession rows (one row per member)."""
+def write_segments(
+    path: Path,
+    members: dict[str, list[str]],
+    labels: dict[str, tuple[str, str]] | None = None,
+) -> None:
+    """Write isolate token -> member accession rows (one row per member).
+
+    ``labels`` maps a member accession to its (normalised segment, segment
+    label as submitted); the two columns are empty for an accession without.
+    """
+    labels = labels or {}
     with atomic_replace(path, newline="") as fo:
         writer = _tsv_writer(fo)
-        writer.writerow(["isolate", "accession"])
+        writer.writerow(["isolate", "accession", "segment", "segment_label"])
         for token, accessions in members.items():
             for accession in accessions:
-                writer.writerow([token, accession])
+                segment, label = labels.get(accession, ("", ""))
+                writer.writerow([token, accession, segment, label])
 
 
 def read_segments(path: Path) -> dict[str, list[str]]:
