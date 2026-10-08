@@ -111,6 +111,9 @@ class Registry[T]:
         self.group = group
         self._classes: dict[str, type[T]] = {}
         self._loaded = False
+        # Broken plugins auto-selection has already warned about: a stage
+        # selects twice (precheck, then run) and should warn once.
+        self._skip_warned: set[str] = set()
 
     def _load(self) -> None:
         if self._loaded:
@@ -157,6 +160,12 @@ class Registry[T]:
         """True when ``name`` is registered but its adapter failed to import."""
         self._load()
         return isinstance(self._classes.get(name), _BrokenPlugin)
+
+    def load_error(self, name: str) -> Exception | None:
+        """The import error of a broken plugin, or None."""
+        self._load()
+        cls = self._classes.get(name)
+        return cls.error if isinstance(cls, _BrokenPlugin) else None
 
     def get(self, name: str) -> type[T]:
         self._load()
@@ -282,11 +291,13 @@ def auto_select(registry: Registry, n_items: int) -> str | None:
     for name in registry.names():
         cap = _capabilities_of(registry, name)
         if cap is None:
-            logging.getLogger("repgenr").warning(
-                "auto-select skipping '%s' (%s): the plugin failed to load.",
-                name,
-                registry.group,
-            )
+            if name not in registry._skip_warned:
+                registry._skip_warned.add(name)
+                logging.getLogger("repgenr").warning(
+                    "auto-select skipping '%s' (%s): the plugin failed to load.",
+                    name,
+                    registry.group,
+                )
             continue
         limit = cap.recommended_max_genomes
         limit_value = inf if limit is None else float(limit)

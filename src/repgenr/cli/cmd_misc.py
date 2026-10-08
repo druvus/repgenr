@@ -444,12 +444,14 @@ def _preflight_summary(reg, name: str) -> str:
     from ..core.errors import MissingBinaryError, RepGenRError
 
     if reg.is_broken(name):
-        return "broken (see list-tools)"
+        return f"broken (failed to load: {_one_line(reg.load_error(name))})"
     try:
         versions = reg.create(name).preflight()
     except MissingBinaryError as exc:
         return f"missing ({_one_line(exc)})"
     except RepGenRError as exc:
         return f"error ({_one_line(exc)})"
+    except Exception as exc:  # a third-party adapter must not end the listing
+        return f"error ({type(exc).__name__}: {_one_line(exc)})"
     shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
     return f"ok ({shown})"
