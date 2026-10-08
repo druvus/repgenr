@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 
 from repgenr.core import containers
-from repgenr.core.errors import MissingBinaryError
 from repgenr.core.containers import (
     ContainerConfig,
     configure_container,
     resolve_image,
     wrap_command,
 )
+from repgenr.core.errors import MissingBinaryError
 from repgenr.core.plugins import ToolCapabilities
 
 _LOG = logging.getLogger("test")

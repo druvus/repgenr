@@ -790,7 +790,9 @@ def main(
         )
     except UserInputError as exc:
         raise typer.BadParameter(str(exc), param_hint="'--container'") from exc
-    _warn_ineffective_container_options(container, container_engine, container_cache, platform, wave)
+    _warn_ineffective_container_options(
+        container, container_engine, container_cache, platform, wave
+    )
 
 
 def _warn_ineffective_container_options(
