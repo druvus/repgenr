@@ -627,7 +627,12 @@ All notable changes to RepGenR are documented here. The format follows
   input genomes with one record name (`x.fasta` and `x.fasta.gz`, or
   `x.fna`) are refused with exit 2 before an aligner, SNP typer or
   genome-input tree builder runs, since their records and tree leaves could
-  not be told apart.
+  not be told apart. `snptype --reference X` now resolves X in the genome
+  set being typed before `representatives/`, so `--all-genomes` with a
+  reference that is also a representative types it once (it was typed twice,
+  as two records named X). A truncated or corrupt gzip genome stops with exit
+  2 naming the file, and free disk space is checked before the copies are
+  written.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment

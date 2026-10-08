@@ -107,3 +107,64 @@ def test_reads_gzip_flags_of_the_builtin_adapters() -> None:
     expected_false = {"progressivemauve", "sibeliaz", "snp:parsnp", "snp:snippy"}
     assert {k for k in expected_true if flags.get(k)} == {k for k in expected_true if k in flags}
     assert not any(flags.get(k) for k in expected_false)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(None, id="truncated"),
+        pytest.param(b"\x1f\x8b" + b"\x00" * 30, id="bad-header"),
+    ],
+)
+def test_corrupt_gzip_is_a_user_input_error_naming_the_file(tmp_path: Path, data) -> None:
+    src = tmp_path / "x.fasta.gz"
+    if data is None:
+        whole = gzip.compress(_CONTENT * 1000)
+        data = whole[: len(whole) // 2]
+    src.write_bytes(data)
+    with pytest.raises(UserInputError, match="x.fasta.gz"):
+        stage_plain_inputs([src], _PLAIN, tmp_path / "staged", _LOG)
+    assert not list((tmp_path / "staged").glob("*")), "no partial copy is left"
+
+
+def test_staging_refuses_early_without_free_disk(tmp_path: Path, monkeypatch) -> None:
+    import shutil
+    from collections import namedtuple
+
+    from repgenr.core import process
+    from repgenr.core.errors import WorkdirError
+
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: usage(10**12, 10**12, 1000))
+    src = _gz(tmp_path / "x.fasta.gz")
+    with pytest.raises(WorkdirError, match="free"):
+        stage_plain_inputs([src], _PLAIN, tmp_path / "staged", _LOG)
+    assert not (tmp_path / "staged").exists(), "nothing is decompressed"
+
+    # Above the floor but below about four times the gzip size: a warning.
+    estimate_seen: list[int] = []
+    real = process.check_free_disk
+
+    def recording(path, estimate, logger, *, what):
+        estimate_seen.append(estimate)
+        return real(path, estimate, logger, what=what)
+
+    monkeypatch.setattr(process, "check_free_disk", recording)
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda p: usage(10**12, 0, process.MIN_FREE_BYTES + 1)
+    )
+    stage_plain_inputs([src], _PLAIN, tmp_path / "staged", _LOG)
+    assert estimate_seen == [4 * src.stat().st_size]
+
+
+def test_no_disk_check_when_nothing_is_decompressed(tmp_path: Path, monkeypatch) -> None:
+    from repgenr.core import process
+
+    def fail(*a, **k):
+        raise AssertionError("no copy, no disk check")
+
+    monkeypatch.setattr(process, "check_free_disk", fail)
+    plain = tmp_path / "x.fasta"
+    plain.write_bytes(_CONTENT)
+    stage_plain_inputs([plain], _PLAIN, tmp_path / "staged", _LOG)
+    stage_plain_inputs([_gz(tmp_path / "y.fasta.gz")], _GZ, tmp_path / "staged", _LOG)

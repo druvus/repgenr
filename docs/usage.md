@@ -173,7 +173,10 @@ cannot (they crashed or wrote an empty alignment before this was handled), so
 the stage's scratch directory (`scratch/snptype/inputs/`,
 `scratch/phylo_snptype/inputs/` or `scratch/phylo_inputs/`) and remove the
 copies when the tool has finished. The scratch directory therefore needs
-room for the uncompressed genomes while the tool runs. The copies keep the
+room for the uncompressed genomes while the tool runs; the stage checks the
+free space first (about four times the gzip size) and stops when less than
+1 GB is free. A truncated or corrupt gzip genome stops the stage with exit 2
+naming the file. The copies keep the
 genome's record name, so alignments and trees are the same as for
 uncompressed files.
 Subdirectories are not searched (an NCBI Datasets download keeps each genome

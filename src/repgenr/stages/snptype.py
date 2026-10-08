@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
+from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta, record_name
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import scale_warning, warn_ignored_params, warn_unconsumed_extras
@@ -285,6 +285,18 @@ def _reference_path(ctx, reference_name, genomes, logger: logging.Logger) -> Pat
             raise UserInputError(
                 f"--reference must be a genome file basename, not a path: {reference_name}"
             )
+        # The genome set being typed first: under --all-genomes a representative
+        # is in genomes/ too, and representatives/X beside genomes/X would be
+        # two inputs with one record name. A genome of the set with the same
+        # record name (X.fasta.gz for --reference X.fasta) is the reference too.
+        for genome in genomes:
+            if genome.name == reference_name:
+                return genome
+        wanted = record_name(reference_name)
+        for genome in genomes:
+            if record_name(genome) == wanted:
+                logger.info("Using %s as the reference %s", genome.name, reference_name)
+                return genome
         for base in (ctx.representatives_dir, ctx.genomes_dir):
             cand = base / reference_name
             if cand.exists():

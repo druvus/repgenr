@@ -19,6 +19,7 @@ import signal
 import subprocess
 import threading
 import zipfile
+import zlib
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -574,10 +575,19 @@ def is_gzip(path: str | os.PathLike[str]) -> bool:
 
 
 def copy_plain_fasta(src: str | os.PathLike[str], dest: str | os.PathLike[str]) -> None:
-    """Copy ``src`` to ``dest`` uncompressed (gzip judged by magic bytes)."""
+    """Copy ``src`` to ``dest`` uncompressed (gzip judged by magic bytes).
+
+    A truncated or corrupt gzip file is a UserInputError naming ``src``.
+    """
     opener = gzip.open if is_gzip(src) else open
-    with opener(src, "rb") as fi, open(dest, "wb") as fo:
-        shutil.copyfileobj(fi, fo, 1 << 20)
+    try:
+        with opener(src, "rb") as fi, open(dest, "wb") as fo:
+            shutil.copyfileobj(fi, fo, 1 << 20)
+    except (EOFError, gzip.BadGzipFile, zlib.error) as exc:
+        raise UserInputError(
+            f"Genome {src} is a truncated or corrupt gzip file ({exc}); "
+            "replace it with a complete copy."
+        ) from exc
 
 
 def stage_plain_inputs(
@@ -609,9 +619,19 @@ def stage_plain_inputs(
             )
     if caps.reads_gzip:
         return {p: p for p in unique}
+    gzipped = [p for p in unique if is_gzip(p)]
+    if gzipped:
+        # Genome FASTA compresses about three- to fourfold; refuse before the
+        # first copy rather than fail part-way through.
+        check_free_disk(
+            _existing_parent(dest_dir),
+            4 * sum(p.stat().st_size for p in gzipped),
+            logger,
+            what=f"decompress {len(gzipped)} genome(s) for {caps.name}",
+        )
     staged: dict[Path, Path] = {}
     for p in unique:
-        if not is_gzip(p):
+        if p not in gzipped:
             staged[p] = p
             continue
         dest = dest_dir / f"{record_name(p)}.fasta"
@@ -627,3 +647,11 @@ def stage_plain_inputs(
             dest_dir,
         )
     return staged
+
+
+def _existing_parent(path: Path) -> Path:
+    """``path`` or its nearest existing ancestor, for a free-space query."""
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            return candidate
+    return Path(".")
