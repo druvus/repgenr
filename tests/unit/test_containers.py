@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -586,3 +587,32 @@ def test_a_tool_failure_does_not_stop_a_container(monkeypatch) -> None:
     with pytest.raises(containers.ToolExecutionError):
         containers.run_tool(caps, ["tool"], logger=_LOG)
     assert calls == []
+
+
+def test_a_tool_that_itself_exits_125_is_reported_as_the_tool(monkeypatch) -> None:
+    # Only docker's own error marks an engine failure; a tool may exit 125.
+    caps = ToolCapabilities(name="sourmash", container="quay.io/x/sourmash:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers,
+        "wrap_command",
+        lambda image, argv, **kw: ["sh", "-c", "echo 'bad k-mer size' >&2; exit 125"],
+    )
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        containers.run_tool(caps, ["sourmash", "compare"], logger=_LOG)
+    assert str(ei.value) == "sourmash failed (exit 125)"
+
+
+def test_a_relative_checkm_data_path_is_made_absolute(tmp_path, monkeypatch) -> None:
+    sys_tmp = tmp_path / "systmp"
+    sys_tmp.mkdir()
+    monkeypatch.setattr(containers.tempfile, "gettempdir", lambda: str(sys_tmp))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "checkm").mkdir()
+    monkeypatch.setenv("CHECKM_DATA_PATH", "checkm")
+    cmd = wrap_command(
+        "img:1", ["dRep"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    data = os.path.abspath(tmp_path / "checkm")
+    assert f"CHECKM_DATA_PATH={data}" in cmd
+    assert f"{data}:{data}" in cmd

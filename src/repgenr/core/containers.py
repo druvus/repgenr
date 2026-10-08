@@ -280,7 +280,12 @@ _FORWARDED_DATA_ENV = ("CHECKM_DATA_PATH",)
 
 
 def _forwarded_data_env() -> dict[str, str]:
-    return {name: os.environ[name] for name in _FORWARDED_DATA_ENV if os.environ.get(name)}
+    # Absolute, because the container's working directory is not the host's.
+    return {
+        name: os.path.abspath(os.environ[name])
+        for name in _FORWARDED_DATA_ENV
+        if os.environ.get(name)
+    }
 
 
 def _default_mounts(
@@ -471,6 +476,7 @@ def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
 # `docker run` exits 125 when the engine itself fails (image not found, pull
 # denied, bad option): the tool never started.
 _DOCKER_ENGINE_FAILURE = 125
+_ENGINE_ERROR = re.compile(r"^(docker|podman): |Error response from daemon|Unable to find image")
 
 
 def _engine_failure(
@@ -484,7 +490,12 @@ def _engine_failure(
     ):
         return exc
     lines = [line.strip() for line in (exc.output or "").splitlines() if line.strip()]
-    detail = next((line for line in reversed(lines) if "rror" in line), lines[-1] if lines else "")
+    # A tool may exit 125 itself; only the engine's own error marks a failure
+    # to start the image.
+    engine_lines = [line for line in lines if _ENGINE_ERROR.search(line)]
+    if not engine_lines:
+        return exc
+    detail = engine_lines[-1]
     message = f"{config.engine_binary()} could not start image {image} for {caps.name} (exit 125)"
     if detail:
         message += f": {detail}"
