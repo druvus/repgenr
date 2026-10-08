@@ -11,6 +11,13 @@ from repgenr.maskers import gubbins as mod
 from repgenr.maskers.base import MaskParams
 
 
+@pytest.fixture(autouse=True)
+def _many_cpus(monkeypatch):
+    # The thread cap reads the CPU count where Gubbins runs; pin it so the
+    # requested threads pass through on any host (CI runners have 4 CPUs).
+    monkeypatch.setattr(mod, "available_cpus", lambda caps: 64)
+
+
 def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
     calls: list[list] = []
 
