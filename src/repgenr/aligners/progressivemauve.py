@@ -16,7 +16,7 @@ from pathlib import Path
 from ..converters.xmfa_to_fasta import xmfa_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
-from ..core.contracts import MSA_FASTA
+from ..core.contracts import MSA_FASTA, record_name
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
@@ -76,7 +76,7 @@ class ProgressiveMauveAligner(Aligner):
         # progressiveMauve is single-threaded per alignment; run one process per
         # thread budget, each aligning an independent query to the reference.
         def align_query(query: Path) -> Path:
-            stem = query.stem
+            stem = record_name(query)
             xmfa = xmfa_dir / f"{stem}.xmfa"
             fa = xmfa_dir / f"{stem}.fa"
             run_tool(
@@ -96,13 +96,17 @@ class ProgressiveMauveAligner(Aligner):
 
 
 def _concatenate(per_query_fastas: list[Path], reference: Path, out_path: Path) -> None:
-    """Write the reference row once, then each query row; leaf names are stems."""
-    ref_stem = reference.stem
+    """Write the reference row once, then each query row; rows carry record names.
+
+    The per-query FASTA names each row by the genome's path, so the record
+    name is taken from that path.
+    """
+    ref_stem = record_name(reference)
     written_ref = False
     with open(out_path, "w", encoding="utf-8") as out:
         for fa in per_query_fastas:
             for name, seq in _read_fasta(fa):
-                leaf = Path(name).stem
+                leaf = record_name(name)
                 if leaf == ref_stem:
                     if written_ref:
                         continue

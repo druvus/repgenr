@@ -120,6 +120,14 @@ tree2tax.tsv              child <TAB> parent (FlexTaxD)
 genomes_map.tsv           accession <TAB> leaf
 ```
 
+A genome has one name in alignments, trees and tables:
+`core.contracts.record_name(path)`, its file name without the FASTA suffix
+and `.gz` (`x.fasta.gz` gives `x`; `Path.stem` would give `x.fasta`). An
+aligner, SNP typer or tree builder adapter names its records and leaves with
+it, and maps back to it where the tool rewrites names (ParSNP's `.ref`,
+cactus's `.` to `_`). The phylo stage checks tree leaves against the same
+names and rebuilds a reused alignment whose records differ from them.
+
 ## Adding a tool
 
 A new tool is a self-contained adapter plus one entry-point line. The core never

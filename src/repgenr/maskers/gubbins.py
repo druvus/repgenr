@@ -220,6 +220,17 @@ class GubbinsMasker(Masker):
         cleaned = sanitise_alignment(full_alignment, out_dir / "input_alignment.fasta", logger)
         records = read_fasta(cleaned)
         excluded = {name for name in records if name in params.exclude}
+        unmatched = sorted(set(params.exclude) - excluded)
+        if unmatched:
+            # A typer that names records otherwise than core.contracts.record_name
+            # (Path.stem gives 'x.fasta' for x.fasta.gz) would put the outgroup
+            # into the recombination scan without notice.
+            logger.warning(
+                "Gubbins: no alignment record is named %s, so it is not left out of "
+                "the recombination scan. The SNP typer should name records by the "
+                "genome file name without its FASTA suffix and .gz.",
+                ", ".join(unmatched),
+            )
         if excluded:
             # Gubbins sees the ingroup only; its predictions are applied to
             # every record below, so the excluded outgroup keeps its place.

@@ -16,7 +16,7 @@ from pathlib import Path
 from ..converters.maf_to_fasta import maf_to_fasta
 from ..core.binaries import BinarySpec
 from ..core.containers import get_config, run_tool
-from ..core.contracts import MSA_FASTA
+from ..core.contracts import MSA_FASTA, record_name
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
 from ..core.process import warn_argv_bytes
@@ -132,10 +132,10 @@ class SibeliazAligner(Aligner):
             )
 
         # SibeliaZ's MAF uses sequence/contig IDs (FASTA header first token), not
-        # genome filenames; build the seqid -> genome-stem map for the converter.
+        # genome filenames; build the seqid -> record-name map for the converter.
         name_map = _build_seqid_map(genomes)
         msa = out_dir / MSA_FASTA
-        maf_to_fasta(maf, reference.stem, msa, name_map=name_map)
+        maf_to_fasta(maf, record_name(reference), msa, name_map=name_map)
         return AlignResult(msa_fasta=msa, native_format=maf)
 
 
@@ -167,10 +167,10 @@ def _sibeliaz_invocation(out_dir: Path, logger: logging.Logger) -> list[str]:
 
 
 def _build_seqid_map(genomes) -> dict[str, str]:
-    """Map each FASTA sequence ID (header first token) to its genome stem."""
+    """Map each FASTA sequence ID (header first token) to its genome's record name."""
     name_map: dict[str, str] = {}
     for genome in genomes:
-        stem = genome.stem
+        stem = record_name(genome)
         with open(genome, encoding="utf-8") as fo:
             for line in fo:
                 if line.startswith(">"):

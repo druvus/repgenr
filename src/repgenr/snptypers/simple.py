@@ -33,7 +33,7 @@ import numpy.typing as npt
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_chain, run_tool
-from ..core.contracts import strip_fasta_suffix
+from ..core.contracts import record_name
 from ..core.errors import UserInputError, WorkdirError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
@@ -86,7 +86,7 @@ def _preset_args(params: SnpParams) -> list[str]:
 
 def genome_name(path: Path) -> str:
     """Record name of a genome: its file name without the FASTA suffix (and .gz)."""
-    return strip_fasta_suffix(path.name)
+    return record_name(path)
 
 
 class SimpleSnpTyper(SnpTyper):
