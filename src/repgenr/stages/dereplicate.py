@@ -175,14 +175,20 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     if params.keeper == "quality":
         from .derep_keeper import rescore_representatives
 
-        quality = manifest_quality
+        # Only the genomes being dereplicated count: manifest rows for the
+        # outgroup or for genomes no longer under genomes/ re-pick nothing, and
+        # must not make the record claim the quality rule applied.
+        names = {g.name for g in genomes}
+        quality = {n: q for n, q in manifest_quality.items() if n in names}
         if quality:
             result, keeper_swaps = rescore_representatives(result, quality, logger)
         else:
             logger.warning(
-                "No assembly quality in the manifest, so --keeper quality has no "
-                "effect: keeping the tool's own representatives. GTDB TSV selections "
-                "carry CheckM quality; API selections fetch it per genome card."
+                "No assembly quality in the manifest for the genomes under genomes/, "
+                "so --keeper quality has no effect: keeping the tool's own "
+                "representatives. GTDB selections carry CheckM quality, assemble "
+                "--checkm2-db scores assemblies, and ingest --selection reads the "
+                "completeness and contamination columns."
             )
     keeper_effective = "quality" if quality else "tool"
 
