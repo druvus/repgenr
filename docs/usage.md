@@ -1256,10 +1256,17 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   container is named `repgenr-<repgenr pid>-<hex>`, and when repgenr is
   stopped it also runs `docker stop --time 0` on the container of the tool
   it was running, so a tool that ignores SIGTERM does not keep running.
-  This covers the tool the main thread runs; a container started from a
-  parallel worker thread is not stopped when its tool ignores SIGTERM.
-  SIGKILL to repgenr leaves its containers running; list and stop them with
-  `docker ps --filter name=repgenr-<repgenr pid>-` and `docker stop <name>`.
+  This also applies to containers started from parallel worker threads,
+  which delay the exit by about a second each. A second signal ends repgenr
+  at once and starts one `docker stop --time 0` for all its running
+  containers, which completes after repgenr has exited. Each container
+  carries the labels `repgenr.pid=<repgenr pid>` and
+  `repgenr.host=<host name>`. SIGKILL to repgenr leaves its containers
+  running; stop them by label:
+
+  ```bash
+  docker ps -q --filter label=repgenr.pid=<repgenr pid> | xargs docker stop
+  ```
 - **Exit codes.** A script can tell the failure classes apart without
   reading the log:
 
