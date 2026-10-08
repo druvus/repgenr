@@ -276,6 +276,36 @@ All notable changes to RepGenR are documented here. The format follows
   outgroup leaf and the tree2tax outgroup lookup drop the whole FASTA suffix
   (#232): a genome `x.fasta.gz` is `x`, as in `clusters.tsv`, instead of
   `x.fasta`. Names of uncompressed genomes are unchanged.
+- `vmetadata`, `vgenome` (#227): on the NCBI Virus path the species of a
+  record is the current species of its taxid in NCBI Taxonomy. `vmetadata`
+  looks up every distinct taxid once after the download (`datasets summary
+  taxonomy taxon --inputfile`) and stores species, genus and family in
+  `virus_records.json`. The species was the organism name, which is often
+  strain-level or an earlier name, so one species was split across several
+  tokens (Orthohantavirus complete genomes: 107 organism names, 76 species;
+  Embecovirus: 56 and 7). The NCBI Virus report lineage nests sibling
+  species (Maguari virus under `Orthobunyavirus cacheense`) and can lack the
+  current species (Murutucu virus, `Orthobunyavirus maritubaense`), so it is
+  only the fallback when the lookup fails or gives no species: the
+  shallowest lineage name of the form genus plus one lower-case epithet,
+  with the genus above a subgenus and one binomial per taxid, else the
+  organism name. Each record's `species_source` names the rule, and the
+  `vmetadata` record counts them. A record filed at genus level no longer
+  takes the family as its genus. The species sets the filename token,
+  `--target-species`, the median-of-medians length window and the outgroup
+  candidate groups; the organism name stays in the `description` column of
+  `virus_metadata_base.tsv`. A `--target-species` value also selects the
+  species of the records whose organism name it is. Viral filenames change.
+  A finished workdir keeps its old names while its stages skip; when
+  `vgenome` reruns on it, it refuses the old records and asks for one
+  `repgenr --force vmetadata` with the same arguments, which renames the
+  genomes, after which `vgenome` and the later stages rerun once.
+- `vgenome --group-segments` (#227) compares normalised segment labels: the
+  text after `;` is dropped, molecule words (`RNA`, `DNA`, `segment`,
+  `circular`) are skipped, and small, medium, middle and large become S,
+  M, M and L, so `M`, `M; medium` and `middle` are one segment while `RNA 1`
+  and `RNA 2` stay distinct; `Unknown` counts as no label. `segments.tsv` gains the columns
+  `segment` (normalised) and `segment_label` (as submitted).
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.

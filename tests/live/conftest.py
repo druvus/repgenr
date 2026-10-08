@@ -325,8 +325,10 @@ def tsv_cache(cached_workdir) -> Path:
 
 @pytest.fixture(scope="session")
 def viral_cache(cached_workdir) -> Path:
+    # The records carry the lineage since the species comes from it; the
+    # cache name differs from the one earlier records were cached under.
     return cached_workdir(
-        "hepatovirus_ncbi_virus",
+        "hepatovirus_ncbi_virus_taxonomy",
         [
             ["vmetadata", "--target", "hepatovirus", "--complete-only"],
             ["vgenome", "-tg", "Hepatovirus"],
@@ -341,3 +343,25 @@ def copy_of(tmp_path: Path):
         return copy_workdir(cache, tmp_path / "wd")
 
     return _copy
+
+
+@pytest.fixture(scope="session")
+def mammarenavirus_cache(cached_workdir) -> Path:
+    """Mammarenavirus complete genomes (about 510 bisegmented records)."""
+    return cached_workdir(
+        "mammarenavirus_ncbi_virus_taxonomy",
+        [["vmetadata", "--target", "Mammarenavirus", "--complete-only"]],
+        "vmetadata",
+    )
+
+
+@pytest.fixture(scope="session")
+def cacheense_cache(cached_workdir) -> Path:
+    """Complete genomes under 'Orthobunyavirus cacheense' in the NCBI Virus
+    lineage, which also nests Maguari and Playas virus (current NCBI species
+    'Orthobunyavirus maguariense')."""
+    return cached_workdir(
+        "orthobunyavirus_cacheense_ncbi_virus_taxonomy",
+        [["vmetadata", "--target", "Orthobunyavirus cacheense", "--complete-only"]],
+        "vmetadata",
+    )

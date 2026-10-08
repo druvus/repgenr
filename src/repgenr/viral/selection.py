@@ -37,7 +37,7 @@ from ._common import (
     parse_targets,
     select_outgroup_from_matrix,
 )
-from .ncbi_virus import VirusRecord, read_records
+from .ncbi_virus import UNLABELLED_SEGMENTS, VirusRecord, normalise_segment, read_records
 
 if TYPE_CHECKING:
     from ..stages.vgenome import VgenomeParams
@@ -55,6 +55,7 @@ def run_records(
     if not targets:
         raise UserInputError("Select a taxonomy: --target-genus/-species/-serotype/-custom.")
     records = read_records(records_json)
+    targets = _resolve_species_targets(records, targets, logger)
     selected = [r for r in records if _record_matches(r, targets)]
     if not selected:
         raise UserInputError("No sequences matched the taxonomy selection.")
@@ -84,9 +85,18 @@ def run_records(
     # file is written; selection.tsv follows. A crash mid-write leaves the
     # previous genome set and its selection table as they were.
     segments: dict[str, list[str]] = {}
+    labels: dict[str, tuple[str, str]] = {}
     with staged_dir(ctx.genomes_dir) as genomes_dir:
         if params.group_segments:
             selection_rows = _write_isolate_groups(genomes_dir, kept, seqs, logger, segments)
+            # segments.tsv keeps each member's label as submitted beside the
+            # normalised segment the grouping used.
+            by_acc = {r.accession: r for r in kept}
+            labels = {
+                acc: (normalise_segment(by_acc[acc].segment), by_acc[acc].segment)
+                for accs in segments.values()
+                for acc in accs
+            }
         else:
             selection_rows = []
             for r in kept:
@@ -124,7 +134,7 @@ def run_records(
     # genomes_map; a run without grouping must not leave a stale table.
     segments_path = ctx.workdir / SEGMENTS_TSV
     if segments:
-        write_segments(segments_path, segments)
+        write_segments(segments_path, segments, labels)
     else:
         segments_path.unlink(missing_ok=True)
     ctx.manifest.replace_genomes([record_from_selection(r, "ncbi_virus") for r in selection_rows])
@@ -150,6 +160,42 @@ def run_records(
 
 def _norm(value: str) -> str:
     return value.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+def _resolve_species_targets(
+    records: list[VirusRecord], targets: dict[str, list[str]], logger: logging.Logger
+) -> dict[str, list[str]]:
+    """Add the species of records whose organism name a --target-species value is.
+
+    The species of a record is the ICTV binomial from the lineage, so a value
+    such as 'Junin virus' (an organism name) matches no species. A value
+    stands for the species it names and for the species of every record whose
+    organism name it is, so the whole species is selected rather than only the
+    records that carry that name. A value that is both ('Hepatovirus A' is a
+    species token without a binomial and an organism name under 'Hepatovirus
+    ahepa') selects the union, and the log names the added species.
+    """
+    values = targets.get("species")
+    if not values:
+        return targets
+    resolved: list[str] = []
+    for value in values:
+        resolved.append(value)
+        named = sorted(
+            {
+                r.species
+                for r in records
+                if _norm(r.organism) == _norm(value) and _norm(r.species) != _norm(value)
+            }
+        )
+        if named:
+            logger.info(
+                "--target-species '%s' is an organism name; also selecting its species %s",
+                value,
+                ", ".join(named),
+            )
+            resolved.extend(named)
+    return {**targets, "species": resolved}
 
 
 def _record_matches(rec, targets: dict[str, list[str]]) -> bool:
@@ -227,9 +273,16 @@ def _isolate_token(isolate: str) -> str:
     return f"iso-{token or 'NA'}"
 
 
+def _segment_of(r: VirusRecord) -> str:
+    """The normalised segment of a record; empty when it names no segment."""
+    segment = normalise_segment(r.segment)
+    return "" if segment in UNLABELLED_SEGMENTS else segment
+
+
 def _segment_labels(recs) -> set[str]:
-    """Distinct real segment labels of a record set (empty/ANONYMOUS ignored)."""
-    return {r.segment for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"}
+    """Distinct segments of a record set, by normalised label ('M', 'M; medium'
+    and 'middle' are one segment); unlabelled records are ignored."""
+    return {s for s in map(_segment_of, recs) if s}
 
 
 def _segment_rank(r: VirusRecord) -> tuple[bool, int, str]:
@@ -249,7 +302,8 @@ def _isolate_segment_sets(
     Records group by (species, isolate): isolate names repeat across species
     (live, Mammarenavirus: 'Acar 3080' carries a Lassa S and a Mobala L), so
     the name alone concatenated two species. A group is a segment set only
-    with at least two distinct segment labels; within it, an unlabelled record
+    with at least two distinct segments (by normalised label, see
+    :func:`~repgenr.viral.ncbi_virus.normalise_segment`); within it, an unlabelled record
     stays a singleton and a segment submitted more than once (Lassa 'Josiah':
     three L and three S records) is kept once.
     """
@@ -263,14 +317,14 @@ def _isolate_segment_sets(
     groups: dict[_IsolateKey, list[VirusRecord]] = {}
     duplicates = 0
     for key, recs in by_key.items():
-        labelled = [r for r in recs if r.segment and r.segment.upper() != "ANONYMOUS"]
+        labelled = [r for r in recs if _segment_of(r)]
         if len(_segment_labels(recs)) < 2:
             singletons.extend(recs)
             continue
         singletons.extend(r for r in recs if r not in labelled)
         per_segment: dict[str, list[VirusRecord]] = {}
         for r in labelled:
-            per_segment.setdefault(r.segment, []).append(r)
+            per_segment.setdefault(_segment_of(r), []).append(r)
         kept = [min(rs, key=_segment_rank) for rs in per_segment.values()]
         duplicates += len(labelled) - len(kept)
         groups[key] = kept

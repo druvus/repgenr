@@ -10,6 +10,7 @@ outgroup; hepatovirus from NCBI Virus (complete genomes, ~370 records).
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -170,6 +171,46 @@ def test_vmetadata_ncbi_virus_complete_only(viral_cache: Path) -> None:
     assert Config.load(viral_cache).stages["vmetadata"].tool_versions.get("datasets")
 
 
+def test_mammarenavirus_species_come_from_the_lineage(
+    run_repgenr, mammarenavirus_cache: Path, copy_of
+) -> None:
+    """Junin (taxid 2169991) carries two organism names; strain-level names
+    such as 'Sabia virus' sit below the binomial. Each is one species."""
+    import json
+
+    from repgenr.core.contracts import SEGMENTS_TSV
+
+    wd = copy_of(mammarenavirus_cache)
+    records = json.loads((wd / "virus_download_wd" / "virus_records.json").read_text())
+    organisms = {r["organism"] for r in records}
+    species = {r["species"] for r in records}
+    assert len(species) < len(organisms)
+    junin = {r["species"] for r in records if r["taxid"] == "2169991"}
+    assert junin == {"Mammarenavirus-juninense"}
+    binomial = [
+        r for r in records if any(re.fullmatch(r"Mammarenavirus [a-z-]+", n) for n in r["lineage"])
+    ]
+    assert binomial and all(re.fullmatch(r"Mammarenavirus-[a-z-]+", r["species"]) for r in binomial)
+
+    run_repgenr(
+        "vgenome",
+        "-wd",
+        wd,
+        "-ts",
+        "Argentinian mammarenavirus",
+        "--group-segments",
+        "--no-outgroup",
+    )
+    ingroup, _ = _rows(wd)
+    assert ingroup and {r.species for r in ingroup} == {"Mammarenavirus-juninense"}
+    assert all(
+        n.startswith("Arenaviridae_Mammarenavirus_Mammarenavirus-juninense_")
+        for n in (r.filename for r in ingroup)
+    )
+    rows = [line.split("\t") for line in (wd / SEGMENTS_TSV).read_text().splitlines()[1:]]
+    assert rows and {row[2] for row in rows} <= {"S", "L"}
+
+
 def test_vmetadata_released_after_and_host_narrow_the_set(
     run_repgenr, viral_cache, tmp_path
 ) -> None:
@@ -213,6 +254,31 @@ def test_vmetadata_list_targets_reaches_bvbrc(run_repgenr, tmp_path: Path) -> No
 
 
 @pytest.mark.requires_binary("mashtree")
+def test_maguari_species_comes_from_ncbi_taxonomy(cacheense_cache: Path) -> None:
+    """The report lineage nests Maguari virus (taxid 11575) under
+    'Orthobunyavirus cacheense'; NCBI Taxonomy has it under
+    'Orthobunyavirus maguariense', and the record takes that species."""
+    import json
+
+    records = json.loads((cacheense_cache / "virus_download_wd" / "virus_records.json").read_text())
+    maguari = [r for r in records if r["taxid"] == "11575"]
+    assert maguari and {r["species"] for r in maguari} == {"Orthobunyavirus-maguariense"}
+    assert {r["species_source"] for r in maguari} == {"taxonomy"}
+    assert {r["species"] for r in records if r["taxid"] == "35304"} <= {"Orthobunyavirus-cacheense"}
+    params = Config.load(cacheense_cache).stages["vmetadata"].params
+    assert params["species_source"].get("taxonomy") == len(records)
+
+
+def test_hepatovirus_species_is_the_binomial(viral_cache: Path) -> None:
+    """NCBI keeps 'Hepatovirus A' below 'Hepatovirus ahepa'; the binomial is
+    the species, and all records of taxid 12092 share it."""
+    import json
+
+    records = json.loads((viral_cache / "virus_download_wd" / "virus_records.json").read_text())
+    assert {r["species"] for r in records if r["taxid"] == "12092"} == {"Hepatovirus-ahepa"}
+    assert "Hepatovirus-A" not in {r["species"] for r in records}
+
+
 def test_vgenome_selection_flags(run_repgenr, viral_cache: Path, copy_of) -> None:
     wd = copy_of(viral_cache)
 

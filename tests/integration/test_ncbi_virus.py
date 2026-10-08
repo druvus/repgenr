@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import zlib
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,8 @@ from repgenr.core.context import WorkdirContext
 from repgenr.core.contracts import read_selection
 from repgenr.viral import ncbi_virus
 from repgenr.viral.ncbi_virus import VirusRecord, parse_report, write_records
+
+_LOG = logging.getLogger("test")
 
 
 def _report_line(acc, family, genus, species, length, segment="ANONYMOUS"):
@@ -118,6 +122,7 @@ def test_vmetadata_ncbi_virus_path(workdir: Path, monkeypatch) -> None:
     dl = workdir / "virus_download_wd"
     assert (dl / "virus_records.json").exists()
     assert (dl / "metadata_base.tsv").exists()
+    assert ctx.config.stages["vmetadata"].params["species_source"] == {"": 2}
 
 
 def test_vgenome_records_path_canonical_names_and_selection(workdir: Path) -> None:
@@ -577,3 +582,169 @@ def test_run_without_outgroup_removes_an_earlier_outgroup(workdir: Path) -> None
     vgenome_run(ctx, VgenomeParams(target_species="lassa", length_all=True, no_outgroup=True))
     assert not (workdir / "outgroup_accession.txt").exists()
     assert not [p for p in ctx.outgroup_dir.iterdir() if not p.name.startswith(".")]
+
+
+# --- species from the lineage, normalised segments ----------------------------
+
+_ARENA = ["Viruses", "Arenaviridae", "Mammarenavirus"]
+
+
+def _arena_line(acc, organism, binomial, segment, length, isolate):
+    lineage = [*_ARENA, binomial] + ([organism] if organism != binomial else [])
+    return json.dumps(
+        {
+            "accession": acc,
+            "length": length,
+            "completeness": "COMPLETE",
+            "segment": segment,
+            "isolate": {"name": isolate},
+            "virus": {
+                "organismName": organism,
+                # A taxid per organism name, as in NCBI.
+                "taxId": zlib.crc32(organism.encode()),
+                "lineage": [{"name": n} for n in lineage],
+            },
+        }
+    )
+
+
+def _junin_and_sisters() -> list[VirusRecord]:
+    """Junin under two organism names, a Junin strain name, and two sister
+    species with five isolates each (enough to be outgroup candidates)."""
+    lines = [
+        _arena_line(
+            "J1.1", "Argentinian mammarenavirus", "Mammarenavirus juninense", "S", 3400, "a"
+        ),
+        _arena_line("J2.1", "Mammarenavirus juninense", "Mammarenavirus juninense", "S", 3410, "b"),
+        _arena_line("J3.1", "Junin virus XJ13", "Mammarenavirus juninense", "S", 3420, "c"),
+    ]
+    for i in range(5):
+        lines.append(
+            _arena_line(
+                f"M{i}.1", "Machupo virus", "Mammarenavirus machupoense", "S", 3450, f"m{i}"
+            )
+        )
+        lines.append(
+            _arena_line(
+                f"T{i}.1", "Tacaribe virus", "Mammarenavirus tacaribeense", "S", 3300, f"t{i}"
+            )
+        )
+    return parse_report(lines)
+
+
+def test_vgenome_names_genomes_by_the_lineage_species(workdir: Path) -> None:
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    ctx = _stage_records(workdir, _junin_and_sisters())
+    vgenome_run(
+        ctx,
+        VgenomeParams(target_species="Mammarenavirus juninense", length_all=True, no_outgroup=True),
+    )
+    names = sorted(p.name for p in ctx.genomes_dir.iterdir())
+    assert names == [
+        f"Arenaviridae_Mammarenavirus_Mammarenavirus-juninense_{a}.fasta"
+        for a in ("J1.1", "J2.1", "J3.1")
+    ]
+    rows = read_selection(workdir / "selection.tsv")
+    assert {r.species for r in rows} == {"Mammarenavirus-juninense"}
+
+
+def test_vgenome_target_species_accepts_an_organism_name(workdir: Path) -> None:
+    """An organism name selects its whole species, not only the records that
+    carry that name."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    ctx = _stage_records(workdir, _junin_and_sisters())
+    n = vgenome_run(
+        ctx,
+        VgenomeParams(
+            target_species="Argentinian mammarenavirus", length_all=True, no_outgroup=True
+        ),
+    )
+    assert n == 3
+
+
+def test_length_window_gives_one_vote_per_lineage_species() -> None:
+    """Three organism names of Junin were three species votes in the
+    median-of-medians window; they are one."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.viral.selection import _length_range_records
+
+    recs = [r for r in _junin_and_sisters() if r.accession.startswith("J")]
+    recs += [r for r in _junin_and_sisters() if r.accession == "M0.1"]
+    # Junin (median 3410) and Machupo (3450): midpoint 3430.
+    lo, hi = _length_range_records(recs, VgenomeParams(length_deviation=10), _LOG)
+    assert (lo, hi) == (int(3430 * 0.9), int(3430 * 1.1))
+
+
+def test_outgroup_candidates_exclude_strains_of_the_target_species(
+    workdir: Path, monkeypatch
+) -> None:
+    """A Junin strain name was a separate species and so an outgroup candidate."""
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+    from repgenr.viral import _outgroup
+
+    recs = _junin_and_sisters()
+    # Five records of a Junin strain name: enough to be a candidate group.
+    recs += parse_report(
+        [
+            _arena_line(
+                f"X{i}.1", "Junin virus XJ13", "Mammarenavirus juninense", "S", 3400, f"x{i}"
+            )
+            for i in range(5)
+        ]
+    )
+    ctx = _stage_records(workdir, recs)
+    staged: list[str] = []
+
+    def fake_matrix(builder, genome_files, genomesize, outgroup_wd, logger):
+        staged.extend(p.stem for p in genome_files)
+        return outgroup_wd / "absent.tsv"
+
+    monkeypatch.setattr(_outgroup, "preflight_outgroup_builder", lambda b: {"mashtree": "1.0"})
+    monkeypatch.setattr(_outgroup, "run_distance_matrix", fake_matrix)
+    vgenome_run(
+        ctx,
+        VgenomeParams(target_species="Mammarenavirus juninense", length_all=True),
+    )
+    candidates = {name[2:] for name in staged if name.startswith("O_")}
+    assert candidates and not any(acc.startswith(("J", "X")) for acc in candidates)
+    assert {acc[0] for acc in candidates} == {"M", "T"}
+
+
+def test_segments_tsv_keeps_the_submitted_label(workdir: Path) -> None:
+    from repgenr.core.contracts import SEGMENTS_TSV
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    recs = parse_report(
+        [
+            _arena_line("L.1", "Lassa virus", "Mammarenavirus lassaense", "L; large", 7200, "J"),
+            _arena_line("S.1", "Lassa virus", "Mammarenavirus lassaense", "small", 3400, "J"),
+        ]
+    )
+    ctx = _stage_records(workdir, recs)
+    vgenome_run(
+        ctx, VgenomeParams(target_genus="Mammarenavirus", group_segments=True, no_outgroup=True)
+    )
+    lines = (workdir / SEGMENTS_TSV).read_text().splitlines()
+    assert lines[0].split("\t") == ["isolate", "accession", "segment", "segment_label"]
+    assert sorted(line.split("\t")[2:] for line in lines[1:]) == [["L", "L; large"], ["S", "small"]]
+
+
+def test_vgenome_refuses_records_written_before_the_lineage(workdir: Path) -> None:
+    from repgenr.core.errors import WorkdirError
+    from repgenr.stages.vgenome import VgenomeParams
+    from repgenr.stages.vgenome import run as vgenome_run
+
+    ctx = _stage_records(workdir, _fake_records())
+    path = workdir / "virus_download_wd" / "virus_records.json"
+    rows = json.loads(path.read_text())
+    for row in rows:
+        row.pop("species_source")
+    path.write_text(json.dumps(rows))
+    with pytest.raises(WorkdirError, match="rerun|Rerun"):
+        vgenome_run(ctx, VgenomeParams(target_genus="lentivirus", no_outgroup=True))

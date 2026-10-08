@@ -156,3 +156,39 @@ def test_unlabelled_record_of_a_segmented_isolate_stays_single(tmp_path) -> None
     _out, rows, segments = _group_rows(tmp_path, recs)
     assert sorted(r.accession for r in rows) == ["U1", "iso-X"]
     assert segments == {"iso-X": ["L1", "S1"]}
+
+
+def test_segment_label_variants_count_as_one_segment(tmp_path) -> None:
+    """Live (Orthohantavirus): 'M', 'M; medium' and 'middle' are one segment,
+    so an isolate keeps one M record and its grouped genome has three segments."""
+    recs = [
+        _rec("S.1", "Hantaan", 1700, isolate="76-118", segment="S; small"),
+        _rec("M.1", "Hantaan", 3600, isolate="76-118", segment="M"),
+        _rec("M.2", "Hantaan", 3610, isolate="76-118", segment="M; medium"),
+        _rec("M.3", "Hantaan", 3500, isolate="76-118", segment="middle"),
+        _rec("L.1", "Hantaan", 6500, isolate="76-118", segment="large"),
+    ]
+    out, rows, segments = _group_rows(tmp_path, recs)
+    assert len(rows) == 1
+    assert segments == {"iso-76-118": ["L.1", "M.2", "S.1"]}
+    (genome,) = out.iterdir()
+    assert "(3 segments)" in genome.read_text()
+
+
+def test_numbered_rna_segments_are_not_merged(tmp_path) -> None:
+    recs = [
+        _rec("R1.1", "Tospo", 8900, isolate="X", segment="RNA 1"),
+        _rec("R2.1", "Tospo", 4800, isolate="X", segment="RNA 2"),
+        _rec("R3.1", "Tospo", 2900, isolate="X", segment="RNA 3"),
+    ]
+    _out, _rows, segments = _group_rows(tmp_path, recs)
+    assert segments == {"iso-X": ["R1.1", "R2.1", "R3.1"]}
+
+
+def test_unknown_segment_label_is_unlabelled(tmp_path) -> None:
+    recs = [
+        _rec("S1", "Phlebo", 1700, isolate="Y", segment="S"),
+        _rec("U1", "Phlebo", 6400, isolate="Y", segment="Unknown"),
+    ]
+    _out, rows, segments = _group_rows(tmp_path, recs)
+    assert segments == {} and len(rows) == 2

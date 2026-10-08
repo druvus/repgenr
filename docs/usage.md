@@ -395,17 +395,66 @@ outgroup is one record of the sister species rather than a grouped isolate.
 outgroup removes the outgroup an earlier run left in `outgroup/` and
 `outgroup_accession.txt`.
 
+On the NCBI Virus path the species of a record is the current species of
+its taxid in NCBI Taxonomy. After the download, `vmetadata` looks up every
+distinct taxid once with `datasets summary taxonomy taxon` and stores the
+species, genus and family in `virus_records.json`, so `vgenome` needs no
+network. NCBI organism names are often strain-level or earlier names
+(`Sabia virus` in `Mammarenavirus brazilense`, `Hantaan virus CGAa1011` in
+`Orthohantavirus hantanense`), and one species can carry several of them
+(Junin, taxid 2169991, as `Argentinian mammarenavirus` and `Mammarenavirus
+juninense`). The lineage in the NCBI Virus report is not a reliable
+substitute: it nests species that NCBI Taxonomy keeps as siblings (Maguari
+virus under `Orthobunyavirus cacheense` > `Orthobunyavirus maguariense`,
+while its species is `Orthobunyavirus maguariense`), and it can lack the
+current species altogether (Murutucu virus, species `Orthobunyavirus
+maritubaense`).
+
+When the lookup fails, or gives no species for a taxid, the species comes
+from the report lineage, and the log says so: the shallowest lineage name
+made of a genus (or the genus above a subgenus) and one lower-case epithet,
+such as `Mammarenavirus brazilense`. Earlier names below it that start with
+the genus (`Hepatovirus A` under `Hepatovirus ahepa`) are not taken, and all
+records of a taxid take the binomial found on most of them. A record without
+either keeps its organism name as the species. Each record's
+`species_source` (`taxonomy`, `lineage` or `organism`) says which rule
+applied, and the `vmetadata` record counts them. Organism names of the form
+`<Genus> sp.` (`Orthohantavirus sp.`) are a species in NCBI Taxonomy, so
+the unclassified records filed under one such name share one species token.
+
+The species sets the species token of the canonical filename, the
+`--target-species` match, the per-species medians of the length window and
+the grouping of outgroup candidates, so strains of the target species are
+not taken as sister species. A `--target-species` value also selects the
+species of every record whose organism name it is (`-ts "Argentinian
+mammarenavirus"` selects all of `Mammarenavirus juninense`), together with
+any species token it matches, and the log says so. The organism name stays
+in the `description` column of `virus_metadata_base.tsv` and in
+`--target-serotype` matching.
+
 `--group-segments` groups records that share a species and an isolate name and
-carry at least two distinct segment labels. Each isolate keeps one record per
+carry at least two distinct segments. Segment labels are free text in NCBI
+Virus and are compared after normalisation: the text after a `;` is dropped,
+words that only name the molecule or the word segment (`RNA`, `DNA`,
+`segment`, `genome`, `component`, `circular`) are skipped, the first
+remaining word is kept in upper case, and small, medium, middle and large become S, M, M and
+L. So `M`, `M; medium` and `middle` are one segment, `S RNA` is `S` and
+`DNA-A` is `A`, while `RNA 1` and `RNA 2` stay distinct. A label of
+`Unknown` counts as no label. Each isolate keeps one record per
 segment (complete before partial, then the longest, then the lowest
 accession), since NCBI Virus often holds several submissions of one segment;
 records without a segment label stay single genomes. A grouped isolate's
 genome carries a synthetic `iso-` token as its accession (with its first
 member accession appended when two isolate names would give the same token);
-`segments.tsv` records the member accessions behind it, and `tree2tax` lists
-them under the isolate's leaf in `genomes_map.tsv`. The species is the
-organism name of each record, so records NCBI files under an older or
-strain-level name of the same species are grouped separately.
+`segments.tsv` records the member accessions behind it with the normalised
+segment and the label as submitted, and `tree2tax` lists the members under
+the isolate's leaf in `genomes_map.tsv`.
+
+A workdir whose `vmetadata` ran before the species came from NCBI Taxonomy
+keeps its genomes and filenames while its stages skip. When `vgenome` reruns
+on it (new arguments or `--force`), it refuses the old records and asks for
+one `repgenr --force vmetadata` with the same arguments; that download
+renames the viral genomes, and `vgenome` and the later stages then rerun.
 
 `vmetadata` records the source and target of `virus_download_wd/download.fa`
 in `download.source`. The BV-BRC source reuses the group FASTA only for the
