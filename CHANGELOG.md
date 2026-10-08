@@ -7,11 +7,11 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- `list-tools --check` under a container backend (#PRNUM): each line names
+- `list-tools --check` under a container backend (#243): each line names
   where the tool runs, `[image <ref>]` or `[host]`, so a host version is not
   read as the image's. `--images` adds whether each image is present locally
   (`docker image inspect`, or the Singularity `.sif` cache; nothing is pulled).
-- Tool versions (#PRNUM): a stage that runs a tool in an image records the
+- Tool versions (#243): a stage that runs a tool in an image records the
   engine and its version beside the image reference (`docker: 29.5.3`), in
   `repgenr.yaml`, `repgenr versions` and the Nextflow `versions.yml`. The
   resume fingerprint does not include versions, so no stage reruns for this.
