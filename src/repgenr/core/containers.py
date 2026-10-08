@@ -20,6 +20,7 @@ import os
 import re
 import shlex
 import shutil
+import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -104,6 +105,55 @@ def get_config() -> ContainerConfig:
     return _CONFIG
 
 
+# Configurations whose engine answered: the check costs a round trip to the
+# daemon, and a stage preflights several adapters.
+_ENGINE_READY: set[tuple] = set()
+_ENGINE_TIMEOUT = 60
+
+
+def check_engine_ready(config: ContainerConfig | None = None) -> None:
+    """Raise :class:`MissingBinaryError` when the Docker daemon cannot be reached.
+
+    ``docker --version`` answers without a daemon, so a stopped Docker Desktop
+    passed the binary check and every tool then failed with the engine's error
+    hidden in the run log. ``docker info`` (also answered by podman) needs the
+    daemon. Singularity and Apptainer have no daemon and are not asked.
+    """
+    config = config or _CONFIG
+    if config.backend != DOCKER:
+        return
+    key = config.cache_key()
+    if key in _ENGINE_READY:
+        return
+    engine = config.engine_binary()
+    cmd = [engine, "info"]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_ENGINE_TIMEOUT,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise MissingBinaryError(
+            f"The {engine} daemon did not answer '{engine} info' within "
+            f"{_ENGINE_TIMEOUT} s. Start it (Docker Desktop on macOS) or run "
+            "without --container."
+        ) from exc
+    except OSError as exc:
+        raise MissingBinaryError(f"Could not run '{engine} info': {exc}") from exc
+    if proc.returncode != 0:
+        text = (proc.stderr or "") + (proc.stdout or "")
+        detail = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        raise MissingBinaryError(
+            f"The {engine} daemon is not reachable"
+            + (f" ({detail})" if detail else "")
+            + ". Start it (Docker Desktop on macOS) or run without --container."
+        )
+    _ENGINE_READY.add(key)
+
+
 def resolve_image(caps: ToolCapabilities, config: ContainerConfig | None = None) -> str | None:
     """Return the image URI for an adapter, or None to run natively.
 
@@ -157,8 +207,6 @@ def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:
         cmd += ["--conda-package", pkg]
     if config.platform:
         cmd += ["--platform", config.platform]
-    import subprocess
-
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired as exc:

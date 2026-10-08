@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from repgenr.core import containers
+from repgenr.core.errors import MissingBinaryError
 from repgenr.core.containers import (
     ContainerConfig,
     configure_container,
@@ -429,3 +430,54 @@ def test_containerized_failure_names_the_adapter_tool_not_the_engine(monkeypatch
     with pytest.raises(containers.ToolExecutionError) as ei:
         containers.run_tool(caps, ["spades.py", "-o", "x"], logger=_LOG)
     assert str(ei.value) == "spades.py failed (exit 3)"
+
+
+def _engine_env(monkeypatch, returncode: int, stderr: str = "") -> list[list[str]]:
+    import subprocess
+
+    from repgenr.core import binaries
+
+    calls: list[list[str]] = []
+
+    def run(argv, **kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, returncode, stdout="", stderr=stderr)
+
+    monkeypatch.setattr(containers.subprocess, "run", run)
+    monkeypatch.setattr(binaries.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args: "29.5.3")
+    containers._ENGINE_READY.clear()
+    return calls
+
+
+def test_preflight_reports_an_unreachable_docker_daemon(monkeypatch) -> None:
+    # `docker --version` answers without a daemon, so list-tools --check said
+    # "ok" and the stage failed later with exit 6 and the cause only in the log.
+    from repgenr.core.plugins import ToolCapabilities, preflight
+
+    calls = _engine_env(monkeypatch, 1, "failed to connect to the docker API at unix:///x.sock\n")
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    try:
+        containers.configure_container("docker")
+        with pytest.raises(MissingBinaryError, match="daemon is not reachable") as exc:
+            preflight(caps)
+        assert "failed to connect to the docker API" in str(exc.value)
+    finally:
+        containers.configure_container("none")
+    assert calls == [["docker", "info"]]
+
+
+def test_engine_readiness_is_checked_once_per_configuration(monkeypatch) -> None:
+    from repgenr.core.plugins import ToolCapabilities, preflight
+
+    calls = _engine_env(monkeypatch, 0)
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    try:
+        containers.configure_container("docker")
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
+        assert preflight(caps) == {"tool": "quay.io/x/tool:1"}
+        containers.configure_container("singularity")
+        preflight(caps)  # no daemon to ask
+    finally:
+        containers.configure_container("none")
+    assert calls == [["docker", "info"]]

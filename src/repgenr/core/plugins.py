@@ -184,16 +184,18 @@ def preflight(capabilities: ToolCapabilities) -> dict[str, str]:
     """Check the adapter's required binaries; return resolved versions.
 
     When a container backend is active and an image resolves for this tool, the
-    tool lives in the image (not on the host): check the engine binary instead
-    and record the image reference in place of host tool versions.
+    tool lives in the image (not on the host): check the engine binary, and
+    that the Docker daemon answers, instead, and record the image reference in
+    place of host tool versions.
     """
-    from .containers import get_config, resolve_image  # deferred: avoids import cycle
+    from .containers import check_engine_ready, get_config, resolve_image  # avoids a cycle
 
     config = get_config()
     if config.active:
         image = resolve_image(capabilities, config)
         if image:
             check_binaries((BinarySpec(config.engine_binary(), version_args=("--version",)),))
+            check_engine_ready(config)
             return {capabilities.name: image}
     return check_binaries(capabilities.required_binaries)
 

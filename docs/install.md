@@ -157,6 +157,11 @@ BioContainers are `linux/amd64`. On Apple Silicon pass
 
 #### Notes
 
+- Before a tool runs in an image, RepGenR checks that the engine binary is
+  on `PATH` and, for Docker, that `docker info` reaches the daemon. A stopped
+  Docker Desktop therefore exits 4 before the stage starts, and
+  `repgenr --container docker list-tools --check` reports it per tool. The
+  image itself is pulled on first use.
 - Docker runs as the host UID and GID so outputs are owned by you. The workdir
   and `TMPDIR` are bind-mounted at identical paths.
 - Symlinked inputs (a `genomes/` directory staged by `repgenr ingest`) are
