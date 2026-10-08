@@ -55,3 +55,53 @@ def test_versions_missing_workdir_exits_3(tmp_path: Path) -> None:
     assert result.exit_code == 3, result.output
     assert "repgenr.yaml" in result.output
     assert not out.exists()
+
+
+def _metadata_workdir(tmp_path: Path, **params) -> Path:
+    tmp_path.mkdir(exist_ok=True)
+    cfg = Config()
+    cfg.record_stage("metadata", tool=params.pop("tool"), params=params, completed="t")
+    cfg.save(tmp_path)
+    return tmp_path
+
+
+def test_versions_names_the_gtdb_release_of_the_table(tmp_path: Path) -> None:
+    wd = _metadata_workdir(
+        tmp_path, tool="gtdb-table", source="tsv", release="232.0", api_query_date=None
+    )
+    out = tmp_path / "frag.yml"
+    result = _runner.invoke(app, ["versions", "-wd", str(wd), "--versions-out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.read_text() == "    gtdb_release: 232.0\n"
+
+
+def test_versions_names_the_gtdb_api_query_date(tmp_path: Path) -> None:
+    """The API path recorded release: null and nothing else to date the taxonomy."""
+    wd = _metadata_workdir(
+        tmp_path,
+        tool="gtdb-api",
+        source="api",
+        release=None,
+        api_query_date="2026-10-08T07:30:12+00:00",
+    )
+    result = _runner.invoke(app, ["versions", "-wd", str(wd)])
+    assert result.exit_code == 0, result.output
+    assert "gtdb_api_query_date: 2026-10-08T07:30:12+00:00" in result.stdout
+    assert "gtdb_release" not in result.stdout
+
+
+def test_status_shows_the_gtdb_release_or_api_query_date(tmp_path: Path) -> None:
+    table = _metadata_workdir(
+        tmp_path / "t", tool="gtdb-table", source="tsv", release="232.0", api_query_date=None
+    )
+    api = _metadata_workdir(
+        tmp_path / "a",
+        tool="gtdb-api",
+        source="api",
+        release=None,
+        api_query_date="2026-10-08T07:30:12+00:00",
+    )
+    out_table = _runner.invoke(app, ["status", "-wd", str(table)]).output
+    out_api = _runner.invoke(app, ["status", "-wd", str(api)]).output
+    assert "metadata [gtdb-table]  t  (GTDB release 232.0)" in out_table
+    assert "metadata [gtdb-api]  t  (GTDB API queried 2026-10-08T07:30:12+00:00)" in out_api

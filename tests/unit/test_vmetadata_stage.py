@@ -103,6 +103,31 @@ def test_ncbi_virus_filters_forwarded(tmp_path, fake_datasets, monkeypatch) -> N
     assert record.params["released_after"] == "01/31/2024"
 
 
+def test_ncbi_virus_blocked_network_stops_before_datasets(
+    tmp_path, fake_datasets, monkeypatch
+) -> None:
+    """vmetadata exited 6 after 1550 s: three datasets attempts of about 8.5 minutes."""
+    import requests
+
+    import repgenr.core.plugins as plugins
+    from repgenr.core import http
+
+    class _Unreachable:
+        def get(self, url, **kw):
+            raise requests.ConnectionError("Network is unreachable")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(plugins, "check_binaries", lambda specs: {})
+    monkeypatch.setattr(http, "_probe_session", _Unreachable)
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    with pytest.raises(WorkdirError, match="api.ncbi.nlm.nih.gov") as info:
+        vmetadata.run(ctx, VmetadataParams(target="adenoviridae"))
+    assert info.value.exit_code == 3
+    assert fake_datasets == []
+
+
 def test_ncbi_virus_empty_package_raises(tmp_path, monkeypatch) -> None:
     def empty(caps, cmd, *, logger, **kw):
         cmd = [str(c) for c in cmd]

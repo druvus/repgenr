@@ -319,20 +319,48 @@ def test_ingest_refuses_empty_external_outgroup(tmp_path: Path, workdir: Path) -
 
 
 def test_ingest_warns_about_files_without_a_fasta_suffix(tmp_path: Path, workdir: Path) -> None:
-    """x.fna.gz and X.FASTA were skipped without a message."""
+    """X.FASTA and other files were skipped without a message."""
     src = _source(tmp_path, ["a.fasta", "b.FASTA", "README"])
-    (src / "c.fna.gz").write_bytes(b"")
+    (src / "c.fastq.gz").write_bytes(b"")
     ctx = WorkdirContext(workdir, create=True)
     assert run(ctx, IngestParams(genomes_dir=str(src))) == 1
     log = (workdir / "repgenr.log").read_text(encoding="utf-8")
     assert "WARNING Skipped 3 file(s)" in log
-    assert "README, b.FASTA, c.fna.gz" in log
+    assert "README, b.FASTA, c.fastq.gz" in log
+
+
+def test_ingest_accepts_gzipped_fna_and_fa(tmp_path: Path, workdir: Path) -> None:
+    """NCBI FTP delivers .fna.gz; .fna.gz and .fa.gz were skipped with a warning."""
+    import gzip
+
+    src = tmp_path / "src"
+    src.mkdir()
+    names = ["GCF_000008985.1_ASM898v1_genomic.fna.gz", "Fam_Gen_sp_GCA_000002.1.fa.gz"]
+    for name in names:
+        (src / name).write_bytes(gzip.compress(_SEQ.encode()))
+    ctx = WorkdirContext(workdir, create=True)
+
+    assert run(ctx, IngestParams(genomes_dir=str(src))) == 2
+
+    assert sorted(p.name for p in (workdir / "genomes").iterdir()) == sorted(names)
+    rows = {r.filename: r for r in read_selection(workdir / "selection.tsv")}
+    assert rows[names[0]].accession == "GCF_000008985.1"
+    assert rows[names[1]].accession == "GCA_000002.1"
+    assert rows[names[1]].genus == "Gen"
+    assert "Skipped" not in (workdir / "repgenr.log").read_text(encoding="utf-8")
+
+
+def test_ingest_refuses_one_accession_as_fna_and_fna_gz(tmp_path: Path, workdir: Path) -> None:
+    src = _source(tmp_path, ["x.fna", "x.fna.gz"])
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="x.fna"):
+        run(ctx, IngestParams(genomes_dir=str(src)))
 
 
 def test_ingest_selection_row_naming_an_unsupported_suffix(tmp_path: Path, workdir: Path) -> None:
-    src = _source(tmp_path, ["a.fasta", "b.fna.gz"])
+    src = _source(tmp_path, ["a.fasta", "b.fna.bz2"])
     sel = tmp_path / "sel.tsv"
-    write_selection(sel, [SelectionRow("B1", "F", "G", "s", False, "b.fna.gz")])
+    write_selection(sel, [SelectionRow("B1", "F", "G", "s", False, "b.fna.bz2")])
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="1 of them exist but lack a FASTA suffix"):
         run(ctx, IngestParams(genomes_dir=str(src), selection=str(sel)))

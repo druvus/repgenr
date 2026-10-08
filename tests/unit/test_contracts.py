@@ -6,6 +6,7 @@ from pathlib import Path
 
 from repgenr.core.contracts import (
     list_fasta,
+    parse_genome_filename,
     read_clusters,
     read_genome_status,
     strip_fasta_suffix,
@@ -35,6 +36,23 @@ def test_strip_fasta_suffix() -> None:
     assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta.gz") == "Fam_Gen_sp_GCA_1"
     assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fasta") == "Fam_Gen_sp_GCA_1"
     assert strip_fasta_suffix("noext") == "noext"
+
+
+def test_gzipped_fna_and_fa_are_genome_files(tmp_path: Path) -> None:
+    """NCBI FTP delivers .fna.gz; only .fasta.gz was recognised among gzip suffixes."""
+    for name in ("a.fna.gz", "b.fa.gz", "c.fasta.gz", "d.fastq.gz", "e.gz"):
+        (tmp_path / name).write_bytes(b"\x1f\x8b")
+    assert [p.name for p in list_fasta(tmp_path)] == ["a.fna.gz", "b.fa.gz", "c.fasta.gz"]
+    assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fna.gz") == "Fam_Gen_sp_GCA_1"
+    assert strip_fasta_suffix("Fam_Gen_sp_GCA_1.fa.gz") == "Fam_Gen_sp_GCA_1"
+    assert parse_genome_filename("Fam_Gen_sp_GCA_1.1.fa.gz") == ("Fam", "Gen", "sp", "GCA_1.1")
+    assert parse_genome_filename("GCF_000008985.1_ASM898v1_genomic.fna.gz") == (
+        "",
+        "",
+        "",
+        "GCF_000008985.1",
+    )
+    assert parse_genome_filename("MN908947.3.fna.gz") == ("", "", "", "MN908947.3")
 
 
 def test_clusters_round_trip(tmp_path: Path) -> None:

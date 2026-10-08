@@ -18,6 +18,7 @@ import logging
 import re
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -73,6 +74,43 @@ def session() -> requests.Session:
     s.mount("http://", adapter)
     s.headers.update({"User-Agent": "repgenr"})
     return s
+
+
+# The NCBI Datasets API host that the ``datasets`` CLI talks to. The CLI has
+# no connect timeout of its own: on a blocked network each attempt waited about
+# 8.5 minutes, three attempts in all, before the stage failed.
+NCBI_DATASETS_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/version"
+_PROBE_TIMEOUT: tuple[float, float] = (_CONNECT_TIMEOUT, 30)
+
+
+def _probe_session() -> requests.Session:
+    """A session without the retry policy, for the single reachability request.
+
+    ``trust_env`` is left on, so HTTPS_PROXY, HTTP_PROXY and NO_PROXY apply as
+    they do for :func:`session` and for the tools that use the same network.
+    """
+    return requests.Session()
+
+
+def require_reachable(url: str, *, what: str, timeout: Timeout = _PROBE_TIMEOUT) -> None:
+    """Raise :class:`WorkdirError` (exit 3) when the host of ``url`` cannot be reached.
+
+    One small GET request without retries, before handing the network to an external
+    tool that retries slowly on its own. Any HTTP answer, an error status
+    included, shows the host is reachable; only a failure to connect or to
+    receive an answer within ``timeout`` counts as unreachable.
+    """
+    host = urlsplit(url).hostname or url
+    s = _probe_session()
+    try:
+        s.get(url, timeout=timeout, allow_redirects=False)
+    except requests.RequestException as exc:
+        raise WorkdirError(
+            f"Cannot reach {host}, which {what} needs ({exc}). Check the network "
+            "connection and, behind a proxy, the HTTPS_PROXY and NO_PROXY settings."
+        ) from exc
+    finally:
+        s.close()
 
 
 def _get(url: str, *, params: dict | None, timeout: Timeout) -> requests.Response:

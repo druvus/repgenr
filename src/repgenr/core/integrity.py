@@ -32,8 +32,8 @@ def looks_like_fasta(path: Path) -> bool:
 
     Catches HTML error pages served with HTTP 200 and empty/absent files
     without parsing whole (potentially multi-GB) genomes. A gzip file (the
-    ``.fasta.gz`` genomes accepted under genomes/) is judged by its first
-    decompressed bytes.
+    ``.fasta.gz``, ``.fna.gz`` and ``.fa.gz`` genomes accepted under genomes/)
+    is judged by its first decompressed bytes.
     """
     try:
         with open(path, "rb") as fo:

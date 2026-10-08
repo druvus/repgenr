@@ -23,6 +23,7 @@ from ..core.binaries import BinarySpec
 from ..core.containers import run_tool_with_retries
 from ..core.contracts import atomic_path
 from ..core.errors import WorkdirError
+from ..core.http import NCBI_DATASETS_URL, require_reachable
 from ..core.plugins import ToolCapabilities
 from ..core.process import remove_tree
 
@@ -155,6 +156,7 @@ def fetch(
         cmd += ["--host", host]
     if released_after:
         cmd += ["--released-after", released_after]
+    require_reachable(NCBI_DATASETS_URL, what="NCBI datasets")
     runner(DATASETS_CAPS, cmd, logger=logger, log_prefix="datasets")
 
     process.unzip(zip_path, extract)
