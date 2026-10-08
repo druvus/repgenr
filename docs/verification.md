@@ -487,7 +487,7 @@ parser), so they also apply to commands other than the one named.
 | doctor | A genome file under `genomes/` not in `selection.tsv` was reported only as a changed input; it is now named | #234 |
 | doctor | Advice named the genome and metadata stages in ingest, vgenome and assemble workdirs; the integrity guards' refusal text reached the console unformatted; exFAT `._` companions counted as leftovers; an emptied `repgenr.yaml` beside outputs passed | #234 |
 | status | Every recorded stage showed `[done]` after an input changed or an output was deleted (a 3-leaf tree over 32 representatives gave "All stages complete"); such stages are now `[stale]` with the reason, from the checks `doctor` uses, and `Next:` points at the first stage that is not done | #234 |
-| status, phylo | `status` said "Next: repgenr phylo" with two representatives, which phylo refuses; it now adds a note. phylo's refusal advised a lower ANI threshold, which leaves fewer representatives; it now advises a higher one | #234 |
+| status, phylo | `status` said "Next: repgenr phylo" with two representatives, which phylo refuses; it now adds a note. phylo's refusal advised a lower ANI threshold, which leaves fewer representatives; it now names a higher `--secondary-ani` | #234 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.

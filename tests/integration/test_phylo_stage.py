@@ -628,8 +628,8 @@ def test_phylo_refuses_fewer_than_three_genomes(
         run(ctx, PhyloParams(treebuilder="faketree_genomes", no_outgroup=True))
     assert str(exc.value) == (
         f"A tree needs at least 3 genomes; {n} found after dereplication "
-        "(use --all-genomes, or dereplicate with a higher ANI threshold, which keeps "
-        "more representatives)."
+        "(use --all-genomes, or dereplicate with a higher --secondary-ani, which "
+        "keeps more representatives)."
     )
     assert exc.value.exit_code == 3
     assert calls == []

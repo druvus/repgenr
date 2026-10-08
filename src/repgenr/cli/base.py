@@ -445,6 +445,12 @@ def _deliverables_state(ctx: Any, stage_name: str, params: Any) -> list[tuple[st
     Files by (size, mtime_ns), directories by their flat stat digest, absent
     paths as None; compared before and after a refused run to tell a refusal
     that touched nothing from one that left partial outputs.
+
+    Limitation: the manifest is WAL-mode, and its writes stay in the -wal
+    file until the connection closes, so ``manifest.sqlite`` shows no change
+    in size or mtime here. A stage that wrote only the manifest and then
+    refused would therefore have its record restored. No current stage
+    does: each refuses before it writes, or also writes a file deliverable.
     """
     spec = STAGE_DELIVERABLES.get(stage_name)
     state: list[tuple[str, object]] = []

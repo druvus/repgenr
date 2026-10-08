@@ -486,9 +486,16 @@ Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
 `tree2tax.tsv` and `genomes_map.tsv` for `tree2tax`; a directory must not be
-empty). If one was deleted, the stage logs
+empty, and dotfiles such as `.DS_Store` or exFAT `._` files do not count).
+Each genome listed in `selection.tsv` is checked for the stage that wrote
+the genome set (`genome`, `ingest`, `vgenome`, `assemble`), and each
+representative listed in `derep/clusters.tsv` for `dereplicate`. If one was
+deleted, the stage logs
 `Stage 'X': deliverable <path> missing; re-running.` and runs again, so
-`--force` is not needed to rebuild it. For `glance` only
+`--force` is not needed to rebuild it; a genome deleted from `genomes/` is
+restored by the next run of that stage. To drop a genome on purpose, remove
+it from the source directory or from the `--selection` file and re-run the
+entry stage. For `glance` only
 `glance_clustering_dendrogram.pdf` is checked, since its plots are absent
 when no value falls within the plot bounds. `repgenr
 doctor -wd <wd>` verifies a workdir's outputs against its records (missing,
