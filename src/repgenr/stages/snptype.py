@@ -23,11 +23,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.context import WorkdirContext
-from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta
+from ..core.contracts import CLUSTERS_TSV, CORE_SNP_FASTA, atomic_path, list_fasta, record_name
 from ..core.errors import UserInputError, WorkdirError
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import scale_warning, warn_ignored_params, warn_unconsumed_extras
-from ..core.process import remove_tree
+from ..core.process import remove_tree, stage_plain_inputs
 from ..snptypers.base import SnpParams, SnpResult
 from ..snptypers.base import registry as snp_registry
 
@@ -123,14 +123,26 @@ def snptype_core(
         remove_tree(scratch)
     scratch.mkdir(parents=True, exist_ok=True)
 
+    # A typer that cannot read gzip types decompressed copies; they keep the
+    # record names, so the outputs name the genomes as the originals would.
+    inputs_dir = scratch / "inputs"
+    staged = stage_plain_inputs(
+        [*genomes, *([ref] if ref is not None else [])], typer.capabilities, inputs_dir, logger
+    )
+    typed = [staged[g] for g in genomes]
+    typed_ref = staged[ref] if ref is not None else None
+
     snp_params = SnpParams(
         threads=params.threads,
-        reference=ref,
+        reference=typed_ref,
         extra=dict(params.extra),
     )
     warn_ignored_params(typer.capabilities, snp_params, logger, family="SNP typer")
     logger.info("SNP typing %d genomes with %s", len(genomes), params.tool)
-    result = typer.call(genomes, ref, scratch, snp_params, logger)
+    try:
+        result = typer.call(typed, typed_ref, scratch, snp_params, logger)
+    finally:
+        remove_tree(inputs_dir)
 
     core = snp_dir / CORE_SNP_FASTA
     masked = False
@@ -273,6 +285,18 @@ def _reference_path(ctx, reference_name, genomes, logger: logging.Logger) -> Pat
             raise UserInputError(
                 f"--reference must be a genome file basename, not a path: {reference_name}"
             )
+        # The genome set being typed first: under --all-genomes a representative
+        # is in genomes/ too, and representatives/X beside genomes/X would be
+        # two inputs with one record name. A genome of the set with the same
+        # record name (X.fasta.gz for --reference X.fasta) is the reference too.
+        for genome in genomes:
+            if genome.name == reference_name:
+                return genome
+        wanted = record_name(reference_name)
+        for genome in genomes:
+            if record_name(genome) == wanted:
+                logger.info("Using %s as the reference %s", genome.name, reference_name)
+                return genome
         for base in (ctx.representatives_dir, ctx.genomes_dir):
             cand = base / reference_name
             if cand.exists():

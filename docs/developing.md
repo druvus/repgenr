@@ -186,11 +186,18 @@ capabilities = ToolCapabilities(
     conda=("bioconda::mytool",),              # Wave-resolved image when no explicit one
     accepted_extras=frozenset({"mode"}),      # extra keys the adapter actually reads
     ignored_params=frozenset({"primary_ani"}),  # standard params the tool has no use for
+    reads_gzip=True,                          # the tool reads gzipped FASTA itself
 )
 ```
 
 * `required_binaries` powers preflight (presence + minimum version) when
   running natively.
+* `reads_gzip` declares that the tool reads gzipped FASTA genomes. It is
+  False by default, and then `snptype` and `phylo` give an aligner, SNP typer
+  or genome-input tree builder decompressed copies of gzipped genomes
+  (`core.process.stage_plain_inputs`), named by `record_name`. Set it to True
+  only after checking the tool on a `.fasta.gz` genome; a tool that misreads
+  gzip may exit 0 with an empty result (SibeliaZ does).
 * `default_params` holds the adapter's own tunable defaults. The
   dereplication steps merge them under `params.extra`; the other stages pass
   the user's extras only, so read a default with

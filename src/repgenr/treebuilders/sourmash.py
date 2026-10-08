@@ -25,6 +25,7 @@ _NJ_MAX_GENOMES = 5000
 class SourmashBuilder(TreeBuilder):
     capabilities = ToolCapabilities(
         name="sourmash",
+        reads_gzip=True,
         container="quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0",
         conda=("bioconda::sourmash",),
         accepted_extras=frozenset({"ksize", "scaled"}),

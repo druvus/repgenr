@@ -163,3 +163,43 @@ def test_rerun_with_another_typer_drops_stale_optional_outputs(
     assert result.vcf is None and result.snp_distance_matrix is None
     for name in ("variants.vcf", "snp_distance_matrix.tsv", "full_alignment.fasta"):
         assert not (ctx.snp_dir / name).exists(), name
+
+
+class _PlainRefTyper(SnpTyper):
+    """A reference typer that cannot read gzip, as parsnp and snippy."""
+
+    capabilities = ToolCapabilities(name="plainreftyper")
+    requires_reference = True
+    seen: dict = {}
+
+    def preflight(self) -> dict[str, str]:
+        return {"plainreftyper": "1.0"}
+
+    def call(self, genomes, reference, out_dir, params, logger) -> SnpResult:  # noqa: ANN001
+        type(self).seen = {"genomes": list(genomes), "reference": reference}
+        core = out_dir / "core.fasta"
+        core.write_text("".join(f">{g.stem}\nACGT\n" for g in genomes))
+        return SnpResult(core_snp_fasta=core)
+
+
+def test_all_genomes_reference_that_is_also_a_representative(workdir: Path, genome_files) -> None:
+    """snptype --all-genomes --reference X, with X also in representatives/,
+    types X once: the reference is the genome from genomes/."""
+    registry._load()
+    registry.register("plainreftyper", _PlainRefTyper, replace=True)
+    try:
+        reps = workdir / "derep" / "representatives"
+        reps.mkdir(parents=True)
+        ref = genome_files[0]
+        (reps / ref.name).write_bytes(ref.read_bytes())
+        ctx = WorkdirContext(workdir, create=True)
+        run(
+            ctx,
+            SnptypeParams(tool="plainreftyper", all_genomes=True, reference=ref.name),
+        )
+    finally:
+        registry._classes.pop("plainreftyper", None)
+    seen = _PlainRefTyper.seen
+    assert seen["reference"] == ref
+    assert seen["genomes"].count(ref) == 1
+    assert ctx.snp_dir.joinpath(CORE_SNP_FASTA).read_text().count(">") == len(genome_files)

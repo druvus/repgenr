@@ -164,12 +164,21 @@ Only the files directly under `--genomes-dir` with a suffix `.fasta`, `.fa`,
 `.fna`, `.fas`, `.fasta.gz`, `.fna.gz` or `.fa.gz` are read, so the
 `.fna.gz` files of the NCBI FTP site can be ingested as they are; other files
 (`X.FASTA`, `x.fas.gz`) are listed in a warning and skipped. Compressed
-genomes are staged unchanged and later stages receive them compressed. The
-dereplicators (sourmash, skDER, galah; dRep through a decompressed copy), the
-`mashtree` and `sourmash` tree builders and the `ska2` typer read them. The
-`simple` and `parsnp` typers and the SibeliaZ aligner do not read gzip input
-and fail, so decompress the genomes before `ingest` when the tree is built
-from an alignment or from `simple` or `parsnp`.
+genomes are staged unchanged, and every tool accepts them. The dereplicators
+(sourmash, skDER, galah; dRep through a decompressed copy), cactus, the
+`mashtree` and `sourmash` tree builders and the `ska2` and `simple` typers
+read gzip themselves. progressiveMauve, SibeliaZ, `parsnp` and `snippy`
+cannot (they crashed or wrote an empty alignment before this was handled), so
+`snptype` and `phylo` give them a decompressed copy of each gzipped genome in
+the stage's scratch directory (`scratch/snptype/inputs/`,
+`scratch/phylo_snptype/inputs/` or `scratch/phylo_inputs/`) and remove the
+copies when the tool has finished. The scratch directory therefore needs
+room for the uncompressed genomes while the tool runs; the stage checks the
+free space first (about four times the gzip size) and stops when less than
+1 GB is free. A truncated or corrupt gzip genome stops the stage with exit 2
+naming the file. The copies keep the
+genome's record name, so alignments and trees are the same as for
+uncompressed files.
 Subdirectories are not searched (an NCBI Datasets download keeps each genome
 in its own directory, so collect the `.fna` files into one directory first). An empty or unreadable genome
 file (a dangling link included) stops `ingest` with exit 2 before anything is

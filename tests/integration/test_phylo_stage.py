@@ -844,7 +844,8 @@ def test_aligner_msa_named_by_path_stem_is_rebuilt(
     def stem_named(self, genomes, reference, out_dir, params, logger) -> AlignResult:
         out_dir.mkdir(parents=True, exist_ok=True)
         msa = out_dir / "msa.fasta"
-        msa.write_text("".join(f">{Path(g).stem}\nACGT\n" for g in genomes))
+        # The names Path.stem gave the gzipped inputs before record_name.
+        msa.write_text("".join(f">{record_name(g)}.fasta\nACGT\n" for g in genomes))
         return AlignResult(msa_fasta=msa)
 
     with monkeypatch.context() as m:
@@ -906,6 +907,45 @@ def test_reused_msa_is_checked_from_the_stamp_without_reading_it(
     monkeypatch.setattr(phylo_mod, "fasta_record_names", no_scan)
     run(ctx, PhyloParams(no_outgroup=True, bootstrap=20, **base))
     assert len(calls) == 1, "reused"
+
+
+def test_aligner_that_cannot_read_gzip_receives_plain_copies(
+    workdir: Path, fake_phylo_tools, monkeypatch
+) -> None:
+    """An aligner without reads_gzip gets decompressed copies from scratch;
+    the copies are removed after the alignment, and the tree keeps the names."""
+    import gzip
+
+    reps = workdir / "derep" / "representatives"
+    reps.mkdir(parents=True)
+    for i in range(1, 4):
+        with gzip.open(reps / f"Fam_gen_sp_GCA_00000{i}.fasta.gz", "wt") as fh:
+            fh.write(f">s{i}\nACGTACGT\n")
+    seen: list[tuple[str, bytes]] = []
+    original = _FakeAligner.align
+
+    def recording(self, genomes, reference, out_dir, params, logger):
+        seen.extend((str(g), Path(g).read_bytes()[:2]) for g in genomes)
+        assert reference in genomes
+        return original(self, genomes, reference, out_dir, params, logger)
+
+    monkeypatch.setattr(_FakeAligner, "align", recording)
+    ctx = WorkdirContext(workdir)
+    tree = run(
+        ctx,
+        PhyloParams(
+            no_outgroup=True,
+            treebuilder="faketree_msa",
+            msa_source="aligner",
+            aligner="fakealigner",
+        ),
+    )
+    assert len(seen) == 3
+    assert all(name.endswith(".fasta") and "phylo_inputs" in name for name, _ in seen)
+    assert all(head == b">s" for _, head in seen)
+    assert not (workdir / "scratch" / "phylo_inputs").exists()
+    assert "Fam_gen_sp_GCA_000001" in tree.read_text()
+    assert ".fasta" not in (workdir / "align" / "msa.fasta").read_text()
 
 
 # -- the stage harness: which failures leave an [interrupted] record ---------

@@ -30,6 +30,7 @@ from .base import SnpParams, SnpResult, SnpTyper
 class Ska2Typer(SnpTyper):
     capabilities = ToolCapabilities(
         name="ska2",
+        reads_gzip=True,
         container="quay.io/biocontainers/ska2:0.5.1--h4349ce8_0",
         conda=("bioconda::ska2",),
         required_binaries=(BinarySpec("ska", version_args=("--version",), min_version="0.3"),),

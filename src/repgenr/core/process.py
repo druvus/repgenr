@@ -11,6 +11,7 @@ file-of-filenames with :func:`write_fofn` and pass that path instead of a glob.
 
 from __future__ import annotations
 
+import gzip
 import logging
 import os
 import shutil
@@ -18,12 +19,18 @@ import signal
 import subprocess
 import threading
 import zipfile
+import zlib
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .errors import ToolExecutionError, WorkdirError
+from .contracts import atomic_path, record_name
+from .errors import ToolExecutionError, UserInputError, WorkdirError
+
+if TYPE_CHECKING:
+    from .plugins import ToolCapabilities
 
 _DEFAULT_TAIL = 50
 
@@ -556,3 +563,95 @@ def check_free_disk(path: str | os.PathLike[str], estimate: int, logger, *, what
             estimate / 1e9,
             what,
         )
+
+
+_GZIP_MAGIC = b"\x1f\x8b"
+
+
+def is_gzip(path: str | os.PathLike[str]) -> bool:
+    """True when ``path`` starts with the gzip magic bytes, whatever its name."""
+    with open(path, "rb") as fh:
+        return fh.read(2) == _GZIP_MAGIC
+
+
+def copy_plain_fasta(src: str | os.PathLike[str], dest: str | os.PathLike[str]) -> None:
+    """Copy ``src`` to ``dest`` uncompressed (gzip judged by magic bytes).
+
+    A truncated or corrupt gzip file is a UserInputError naming ``src``.
+    """
+    opener = gzip.open if is_gzip(src) else open
+    try:
+        with opener(src, "rb") as fi, open(dest, "wb") as fo:
+            shutil.copyfileobj(fi, fo, 1 << 20)
+    except (EOFError, gzip.BadGzipFile, zlib.error) as exc:
+        raise UserInputError(
+            f"Genome {src} is a truncated or corrupt gzip file ({exc}); "
+            "replace it with a complete copy."
+        ) from exc
+
+
+def stage_plain_inputs(
+    paths: Sequence[Path],
+    caps: ToolCapabilities,
+    dest_dir: Path,
+    logger: logging.Logger,
+) -> dict[Path, Path]:
+    """Map each input genome to a path the tool of ``caps`` can read.
+
+    A tool that reads gzip (``caps.reads_gzip``) gets every path unchanged.
+    Otherwise each gzipped input (by magic bytes, not by name) is decompressed
+    to ``dest_dir/<record name>.fasta``, written through a temporary sibling,
+    and plain inputs map to themselves. The copy keeps the record name, so
+    alignments and trees name the genome as they would the original. Two
+    inputs with one record name (``x.fasta`` and ``x.fasta.gz``) are refused
+    for every tool, since their records and tree leaves could not be told
+    apart. ``dest_dir`` is created only when a copy is written; the caller
+    removes it when the tool has finished.
+    """
+    unique = list(dict.fromkeys(paths))
+    by_name: dict[str, Path] = {}
+    for p in unique:
+        other = by_name.setdefault(record_name(p), p)
+        if other != p:
+            raise UserInputError(
+                f"Two input genomes share the record name '{record_name(p)}': {other} "
+                f"and {p}. Remove or rename one of them."
+            )
+    if caps.reads_gzip:
+        return {p: p for p in unique}
+    gzipped = [p for p in unique if is_gzip(p)]
+    if gzipped:
+        # Genome FASTA compresses about three- to fourfold; refuse before the
+        # first copy rather than fail part-way through.
+        check_free_disk(
+            _existing_parent(dest_dir),
+            4 * sum(p.stat().st_size for p in gzipped),
+            logger,
+            what=f"decompress {len(gzipped)} genome(s) for {caps.name}",
+        )
+    staged: dict[Path, Path] = {}
+    for p in unique:
+        if p not in gzipped:
+            staged[p] = p
+            continue
+        dest = dest_dir / f"{record_name(p)}.fasta"
+        with atomic_path(dest) as tmp:
+            copy_plain_fasta(p, tmp)
+        staged[p] = dest
+    copies = sum(1 for p, d in staged.items() if p != d)
+    if copies:
+        logger.info(
+            "%s does not read gzipped FASTA; decompressed %d genome(s) to %s",
+            caps.name,
+            copies,
+            dest_dir,
+        )
+    return staged
+
+
+def _existing_parent(path: Path) -> Path:
+    """``path`` or its nearest existing ancestor, for a free-space query."""
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            return candidate
+    return Path(".")

@@ -50,7 +50,7 @@ from ..core.errors import UserInputError, WorkdirError
 from ..core.inputs import file_digest, paths_stat_digest
 from ..core.integrity import check_genome_completeness, check_representatives_consistency
 from ..core.plugins import ToolCapabilities, auto_select, scale_warning, warn_ignored_params
-from ..core.process import remove_tree
+from ..core.process import remove_tree, stage_plain_inputs
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
 
@@ -147,6 +147,9 @@ _MSA_STAMP_VERSION = 3
 # Scratch subdirectory of the SNP typing pass; the snptype stage uses
 # scratch/snptype, and each stage clears its own at the start.
 _TYPING_SCRATCH = "phylo_snptype"
+# Scratch subdirectory for decompressed copies of gzipped genomes, given to an
+# aligner or genome-input tree builder that cannot read gzip; removed after use.
+_STAGED_INPUTS = "phylo_inputs"
 
 
 def _msa_artifact(dirs: PhyloDirs, params: PhyloParams) -> Path:
@@ -415,7 +418,15 @@ def build_tree(
             len(inputs),
         )
         _clear_previous_builder_files(dirs.tree_dir)
-        tree = builder.build(inputs, dirs.tree_dir, tree_params, logger)
+        # Both genome-input builders read gzip today; the rule is the same as
+        # for the aligners, so a new builder that does not is given copies.
+        inputs_dir = dirs.scratch_dir / _STAGED_INPUTS
+        remove_tree(inputs_dir)  # copies a killed run left behind
+        staged = stage_plain_inputs(inputs, builder.capabilities, inputs_dir, logger)
+        try:
+            tree = builder.build([staged[p] for p in inputs], dirs.tree_dir, tree_params, logger)
+        finally:
+            remove_tree(inputs_dir)
     else:
         if msa is not None:
             logger.info("Building tree from the alignment given on the command line: %s", msa)
@@ -875,13 +886,27 @@ def _build_msa(
         versions = aligner.preflight()
         reference = _resolve_reference(params.reference, genomes, outgroup_file, logger)
         _warn_divergence(params.aligner, inputs, logger)
+        # An aligner that cannot read gzip aligns decompressed copies, named by
+        # record name; the MSA key and stamp keep using the original paths.
+        inputs_dir = dirs.scratch_dir / _STAGED_INPUTS
+        remove_tree(inputs_dir)  # copies a killed run left behind
+        staged = stage_plain_inputs(inputs, aligner.capabilities, inputs_dir, logger)
         align_params = AlignParams(
             threads=params.threads,
-            reference=reference,
+            reference=staged[reference],
             extra=_adapter_extra(params.extra),
         )
         warn_ignored_params(aligner.capabilities, align_params, logger, family="Aligner")
-        result = aligner.align(inputs, reference, dirs.align_dir, align_params, logger)
+        try:
+            result = aligner.align(
+                [staged[p] for p in inputs],
+                staged[reference],
+                dirs.align_dir,
+                align_params,
+                logger,
+            )
+        finally:
+            remove_tree(inputs_dir)
         return result.msa_fasta, versions
 
     if params.msa_source == "snptype":

@@ -27,6 +27,8 @@ from .base import Aligner, AlignParams, AlignResult
 class CactusAligner(Aligner):
     capabilities = ToolCapabilities(
         name="cactus",
+        # cactus decompresses .gz inputs itself (verified on v2.9.3).
+        reads_gzip=True,
         container="quay.io/comparative-genomics-toolkit/cactus:v2.9.3",
         required_binaries=(
             # The pinned image is 2.9; 2.5 is the oldest Minigraph-Cactus the
