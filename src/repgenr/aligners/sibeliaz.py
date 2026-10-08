@@ -19,7 +19,7 @@ from ..core.containers import get_config, run_tool
 from ..core.contracts import MSA_FASTA, record_name
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities
-from ..core.process import warn_argv_bytes
+from ..core.process import is_gzip, warn_argv_bytes
 from .base import Aligner, AlignParams, AlignResult
 
 # SibeliaZ's bash wrapper uses GNU/Linux-only constructs in its alignment step
@@ -122,6 +122,16 @@ class SibeliazAligner(Aligner):
         # so an OOM-killed spoa (global alignment of a very large collinear block
         # in a memory-limited container) is silent and yields an empty MAF.
         if not any(line.startswith("s") for line in maf.read_text().splitlines()):
+            gzipped = [g for g in genomes if is_gzip(g)]
+            if gzipped:
+                # TwoPaCo aborts with "Can't read the input file" on gzip and
+                # the wrapper still exits 0, so the cause is not memory.
+                raise WorkdirError(
+                    f"SibeliaZ wrote an empty MAF at {maf}: it cannot read gzipped "
+                    f"FASTA, and {len(gzipped)} input(s) are gzipped (first: "
+                    f"{gzipped[0]}). The phylo stage gives it decompressed copies; "
+                    "when calling the aligner directly, pass plain FASTA."
+                )
             raise WorkdirError(
                 f"SibeliaZ wrote an empty MAF (no alignment rows) at {maf}. Its "
                 "blocks were found but the per-block spoa alignment produced "

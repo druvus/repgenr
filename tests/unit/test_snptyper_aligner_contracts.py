@@ -445,3 +445,102 @@ def test_cactus_names_msa_records_by_genome_stem(suffix, tmp_path, monkeypatch) 
     )
     assert _read_headers(result.msa_fasta) == set(seqs)
     assert not (tmp_path / "align" / "cactus_samples.fasta").exists()
+
+
+# --- gzipped genomes: tools that cannot read gzip get decompressed copies -----
+
+
+def _gz_genomes(tmp_path: Path) -> list[Path]:
+    import gzip
+
+    gdir = tmp_path / "gz_genomes"
+    gdir.mkdir()
+    out = []
+    for stem in _STEMS:
+        path = gdir / f"{stem}.fasta.gz"
+        with gzip.open(path, "wt", encoding="utf-8") as fh:
+            fh.write(f">{stem}\n{_SEQ[stem]}\n")
+        out.append(path)
+    return out
+
+
+def _gz_tokens(recorded: list[list[str]]) -> list[str]:
+    return [tok for cmd in recorded for tok in cmd if tok.endswith(".fasta.gz")]
+
+
+@pytest.mark.parametrize("tool", sorted(_SNP_PARAM_TOKENS))
+def test_snptype_core_gives_gzip_only_to_typers_that_read_it(
+    tool, recorded, tmp_path, monkeypatch
+) -> None:
+    if tool not in snp_registry.names():
+        pytest.skip(f"{tool} not registered")
+    from repgenr.stages.snptype import SnptypeParams, snptype_core
+
+    cls = snp_registry.get(tool)
+    monkeypatch.setattr(cls, "preflight", lambda self: {})
+    genomes = _gz_genomes(tmp_path)
+    scratch = tmp_path / "scratch"
+    result, _ = snptype_core(
+        genomes, genomes[0], tmp_path / "snp", scratch, SnptypeParams(tool=tool, threads=2), _LOG
+    )
+    assert _read_headers(tmp_path / "snp" / "core_snp.fasta") == set(_STEMS)
+    assert not (scratch / "inputs").exists(), "decompressed copies are removed after typing"
+    if tool == "ska2":
+        assert ".fasta.gz" in (scratch / "genomes.tsv").read_text(), "ska2 reads gzip"
+    elif cls.capabilities.reads_gzip:
+        assert _gz_tokens(recorded), f"{tool} reads gzip and gets the genomes as they are"
+    else:
+        assert _gz_tokens(recorded) == [], f"{tool} must not receive a gzipped genome"
+    if tool == "parsnp":
+        # The decompressed reference is still recognised as the reference.
+        staged = sorted(p.name for p in (scratch / "input_genomes").iterdir())
+        assert staged == [f"{stem}.fasta" for stem in _STEMS[1:]]
+
+
+@pytest.mark.parametrize("tool", sorted(_ALIGN_PARAM_TOKENS))
+def test_build_msa_gives_gzip_only_to_aligners_that_read_it(
+    tool, recorded, tmp_path, monkeypatch
+) -> None:
+    if tool not in align_registry.names():
+        pytest.skip(f"{tool} not registered")
+    from repgenr.stages.phylo import PhyloDirs, PhyloParams, _build_msa
+
+    cls = align_registry.get(tool)
+    monkeypatch.setattr(cls, "preflight", lambda self: {})
+    genomes = _gz_genomes(tmp_path)
+    dirs = PhyloDirs(
+        tree_dir=tmp_path / "tree",
+        align_dir=tmp_path / "align",
+        msa_dir=tmp_path / "tree" / "msa",
+        scratch_dir=tmp_path / "scratch",
+    )
+    params = PhyloParams(aligner=tool, threads=2, reference=genomes[0].name)
+    msa, _ = _build_msa(genomes, None, dirs, params, _LOG)
+    assert _read_headers(msa) == set(_STEMS)
+    assert not (dirs.scratch_dir / "phylo_inputs").exists()
+    if cls.capabilities.reads_gzip:
+        assert ".fasta.gz" in (dirs.align_dir / "seqfile.txt").read_text()
+    else:
+        assert _gz_tokens(recorded) == [], f"{tool} must not receive a gzipped genome"
+
+
+def test_sibeliaz_names_gzip_input_as_the_cause_of_an_empty_maf(tmp_path, monkeypatch) -> None:
+    """Given gzip, TwoPaCo cannot read the input and the MAF is empty; the
+    error names the gzipped input rather than suggesting an out-of-memory spoa."""
+    if "sibeliaz" not in align_registry.names():
+        pytest.skip("sibeliaz not registered")
+    import repgenr.aligners.sibeliaz as sib_mod
+    from repgenr.core.errors import WorkdirError
+
+    def empty_maf(caps, command, *, logger, **kwargs):
+        cmd = [str(part) for part in command]
+        _write(Path(_flag_value(cmd, "-o")) / "alignment.maf", "##maf version=1\n")
+        return 0
+
+    monkeypatch.setattr(sib_mod, "run_tool", empty_maf)
+    genomes = _gz_genomes(tmp_path)
+    with pytest.raises(WorkdirError, match="cannot read gzipped") as exc:
+        align_registry.create("sibeliaz").align(
+            genomes, genomes[0], tmp_path / "align", AlignParams(threads=2), _LOG
+        )
+    assert "OOM" not in str(exc.value)

@@ -613,6 +613,19 @@ All notable changes to RepGenR are documented here. The format follows
   Containers carry the labels `repgenr.pid` and `repgenr.host`, so those of a
   repgenr ended by SIGKILL can be found with
   `docker ps --filter label=repgenr.pid=<pid>`.
+- `phylo`, `snptype` (#PR): gzipped genomes, accepted by `ingest` since
+  #229, failed in the tools that cannot read gzip. progressiveMauve crashed
+  with signal 11, ParSNP and snippy exited with a parse error, and SibeliaZ
+  exited 0 with an empty MAF, which the adapter reported as spoa running out of
+  memory. Such a tool is now given decompressed copies of the gzipped genomes
+  in the stage's scratch directory, removed when it has finished. Adapters
+  declare `ToolCapabilities.reads_gzip` (True for cactus, `ska2`, `simple`,
+  and the `sourmash` and `mashtree` tree builders; False by default). The
+  alignment reuse key and the stage fingerprint use the original paths, so no
+  workdir reruns because of this. When SibeliaZ is called directly with gzip
+  input and writes an empty MAF, the error now names the gzipped input. Two
+  input genomes with one record name (`x.fasta` and `x.fna`) are refused with
+  exit 2 when a tool that cannot read gzip is used.
 - Version probing (#235): a version query that crashed with a Python
   traceback, or a number inside a longer token (`python3.12`, `GLIBC_2.17`),
   is no longer recorded as the tool's version. A broken cactus environment

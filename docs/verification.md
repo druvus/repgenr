@@ -512,6 +512,7 @@ parser), so they also apply to commands other than the one named.
 | install | install.md presented `environment.yml` as the Linux single-environment route, but a linux-64 dry-run does not solve (Gubbins needs Python 3.8 to 3.10; mashtree's BioPerl chain needs zlib older than 1.3, against harvesttools and medaka); the docs now say so | #235 |
 | doctor, status | `doctor` exited 1 for failures found and for an unexpected error alike, and neither command had machine-readable output; `doctor` now exits 7 for failures, and both accept `--json` | #242 |
 | status, doctor | An emptied `repgenr.yaml` was read as the bacterial chain ("Next: repgenr metadata"), and a record without a resume fingerprint (an older version, or restored by `derep-stock unpack`) was shown as done with no hint that its next invocation recomputes it; status now names the entry stages or follows the shared stages, and both commands note such a record | #245 |
+| snptype, phylo | Gzipped genomes, accepted by `ingest` since #229, failed in progressiveMauve (signal 11), ParSNP (UnicodeDecodeError), snippy (exit 2 and 25) and SibeliaZ (empty MAF, reported as spoa out of memory); these tools now receive decompressed copies in scratch (see [Gzipped genomes](#gzipped-genomes-in-the-aligners-and-typers-2026-10-08)) | #PR |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -546,6 +547,38 @@ they are recorded here and not fixed.
 | doctor | The first-bytes FASTA check reads every genome: 28 s for 1000 genomes on an exFAT USB volume (about 35 ms per file, not cached between runs); 8 to 16 threads gave 1.3 to 1.7 times. `status` reads no genome content and takes 0.4 s there. `doctor --quick` skips the check (#242). |
 | doctor | Opening the WAL-mode manifest lets SQLite create or touch `manifest.sqlite-shm` and `-wal`; no data changes. |
 | Environment | dRep 3.4.5 in the local environment fails in fastANI parsing (`read_csv` no longer accepts `delim_whitespace` in the installed pandas); ANImf (`--virus`) runs. The container pin is dRep 3.7.1. |
+
+## Gzipped genomes in the aligners and typers (2026-10-08)
+
+Each tool was given gzipped genomes from `pureclone_20` (three or four
+`.fasta.gz` files), with the uncompressed files as a control. Before the
+change:
+
+| Tool | Reads gzip | Evidence |
+|---|---|---|
+| progressiveMauve (pinned BioContainer) | no | signal 11, exit 11; plain control exit 0 |
+| SibeliaZ (native) | no | wrapper exits 0; TwoPaCo stops with "Can't read the input file"; the MAF has no alignment rows, and the adapter reported spoa running out of memory (exit 3) |
+| cactus v2.9.3 (Docker) | yes | HAL written in 125 s; cactus decompresses `.gz` inputs itself |
+| ParSNP 2.1.5 | no | UnicodeDecodeError for a gzipped reference and for gzipped queries |
+| snippy 4.6.0 (pinned BioContainer) | no | gzipped `--ref`: "Could not guess format", exit 2; gzipped `--ctgs`: BioPerl "not FASTA", exit 25 |
+| ska2 0.5.1 | yes | `ska build` keeps both samples |
+| sourmash tree builder | yes | leaves were `x.fasta` (named by `Path.stem`, fixed in #241) |
+| mashtree | yes | leaves are `x` |
+| simple typer | yes | minimap2 reads gzipped queries; the adapter decompresses the reference |
+
+After the change, the tools marked "no" are given decompressed copies by the
+stage. Live checks:
+
+| Check | Result |
+|---|---|
+| `test_gzip_inputs::test_sibeliaz_aligns_gzipped_genomes` (four synthetic 50 kb genomes, gzipped; `phylo-build --aligner sibeliaz`) | passed; MSA records and leaves without `.fasta`, `scratch/phylo_inputs/` removed. Without the change: the empty-MAF error |
+| `test_gzip_inputs::test_parsnp_types_gzipped_genomes` (same set; `--msa-source snptype --snptyper parsnp`) | passed. Without the change: UnicodeDecodeError, exit 6 |
+| `phylo-build --snptyper parsnp` on four gzipped `pureclone_20` genomes | exit 0 in 26 s; four leaves named without `.fasta`; the decompressed reference is left out of ParSNP's query directory |
+
+SibeliaZ on four `pureclone_20` genomes was stopped after 7 minutes with the
+gzipped and with the uncompressed files alike: the macOS wrapper's block
+alignment step waited in `xargs` with no `spoa` process and an almost empty
+MAF. The stall does not depend on gzip and is left open.
 
 ## Platform notes (macOS / Apple Silicon)
 

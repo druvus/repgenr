@@ -60,6 +60,10 @@ class ToolCapabilities:
     # ``bootstrap``...) the adapter never passes to its tool. The stage warns
     # when a user sets one of them to a non-default value.
     ignored_params: frozenset[str] = frozenset()
+    # The tool reads gzipped FASTA genomes itself. When False (the default, the
+    # safe side for a new adapter), the stages hand an aligner, SNP typer or
+    # genome-input tree builder decompressed copies (core.process.stage_plain_inputs).
+    reads_gzip: bool = False
 
 
 def warn_unconsumed_extras(
