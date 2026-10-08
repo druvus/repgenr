@@ -253,3 +253,42 @@ def test_tree2tax_reruns_when_genomes_map_deleted(tmp_path: Path, monkeypatch) -
         tmp_path / "genomes_map.tsv",
         "Wrote ",
     )
+
+
+def test_deliverable_directory_with_only_dotfiles_is_missing(tmp_path: Path) -> None:
+    # Finder leaves .DS_Store in a directory it showed; an emptied
+    # representatives/ holding only that must not let dereplicate skip.
+    from repgenr.core.context import WorkdirContext
+
+    ctx = WorkdirContext(tmp_path, create=True)
+    try:
+        ctx.genomes_dir.mkdir()
+        (ctx.genomes_dir / ".DS_Store").write_bytes(b"")
+        (ctx.genomes_dir / "._a.fasta").write_bytes(b"")
+        (tmp_path / "selection.tsv").write_text("x\n", encoding="utf-8")
+        (tmp_path / "manifest.sqlite").write_text("", encoding="utf-8")
+        params = types.SimpleNamespace(genomes_dir=str(tmp_path / "src"))
+        assert cli.missing_deliverables(ctx, "ingest", params) == [ctx.genomes_dir]
+    finally:
+        ctx.close()
+
+
+def test_dereplicate_deliverables_list_each_representative(tmp_path: Path) -> None:
+    # A representative deleted by hand reruns dereplicate; it used to skip
+    # while doctor asked for a rerun and phylo refused the directory.
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.contracts import write_clusters
+
+    ctx = WorkdirContext(tmp_path, create=True)
+    try:
+        ctx.representatives_dir.mkdir(parents=True)
+        write_clusters(ctx.derep_dir / "clusters.tsv", {"a.fasta": [], "b.fasta": ["c.fasta"]})
+        for name in ("genome_status.tsv", "cluster_summary.tsv"):
+            (ctx.derep_dir / name).write_text("x\n", encoding="utf-8")
+        (ctx.representatives_dir / "a.fasta").write_text(">a\nA\n", encoding="utf-8")
+        params = types.SimpleNamespace()
+        assert cli.missing_deliverables(ctx, "dereplicate", params) == [
+            ctx.representatives_dir / "b.fasta"
+        ]
+    finally:
+        ctx.close()

@@ -358,15 +358,15 @@ def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
         if not record.completed:
             continue
         params = SimpleNamespace(**record.params)
-        for path in missing_deliverables(ctx, name, params):
-            out.append(
-                Finding(
-                    "warn",
-                    name,
-                    f"deliverable {deliverable_label(workdir, path)} missing; "
-                    "the stage will re-run on its next invocation.",
-                )
-            )
+        labels = [deliverable_label(workdir, p) for p in missing_deliverables(ctx, name, params)]
+        if not labels:
+            continue
+        what = (
+            f"deliverable {labels[0]} missing"
+            if len(labels) == 1
+            else f"{len(labels)} deliverables missing ({_examples(labels)})"
+        )
+        out.append(Finding("warn", name, f"{what}; the stage will re-run on its next invocation."))
     return out
 
 
