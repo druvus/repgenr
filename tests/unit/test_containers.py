@@ -537,3 +537,52 @@ def test_an_unset_checkm_data_path_adds_nothing(monkeypatch) -> None:
         "img:1", ["dRep"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
     )
     assert not any(c.startswith("CHECKM_DATA_PATH") for c in cmd)
+
+
+def test_docker_containers_are_named_for_cleanup() -> None:
+    cmd = wrap_command(
+        "img:1", ["tool"], config=ContainerConfig(backend="docker"), cwd="/wd", logger=_LOG
+    )
+    name = cmd[cmd.index("--name") + 1]
+    assert name.startswith("repgenr-")
+    assert cmd.index("--name") < cmd.index("img:1")
+
+
+@pytest.mark.parametrize("interrupt", [SystemExit(143), KeyboardInterrupt()])
+def test_a_stopped_repgenr_stops_the_container_too(monkeypatch, interrupt) -> None:
+    # A tool that ignores the SIGTERM forwarded through --init kept its
+    # container running after repgenr exited; the engine is asked to stop it.
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    calls: list[list[str]] = []
+
+    def run(cmd, **kw):
+        raise interrupt
+
+    def engine(argv, **kw):
+        import subprocess
+
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(containers.process, "run", run)
+    monkeypatch.setattr(containers.subprocess, "run", engine)
+    with pytest.raises(type(interrupt)):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert len(calls) == 1
+    assert calls[0][:2] == ["docker", "stop"] and calls[0][-1].startswith("repgenr-")
+
+
+def test_a_tool_failure_does_not_stop_a_container(monkeypatch) -> None:
+    caps = ToolCapabilities(name="tool", container="quay.io/x/tool:1")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    calls: list[list[str]] = []
+
+    def run(cmd, **kw):
+        raise containers.ToolExecutionError(cmd, 2, output="bad")
+
+    monkeypatch.setattr(containers.process, "run", run)
+    monkeypatch.setattr(containers.subprocess, "run", lambda argv, **kw: calls.append(argv))
+    with pytest.raises(containers.ToolExecutionError):
+        containers.run_tool(caps, ["tool"], logger=_LOG)
+    assert calls == []

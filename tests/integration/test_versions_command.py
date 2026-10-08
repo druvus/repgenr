@@ -122,9 +122,7 @@ def test_a_tool_with_different_versions_per_stage_keeps_each(tmp_path: Path) -> 
     cfg = Config()
     image = "quay.io/biocontainers/sourmash:4.9.4--hdfd78af_0"
     cfg.record_stage("dereplicate", tool_versions={"sourmash": image}, completed="t")
-    cfg.record_stage(
-        "phylo", tool_versions={"sourmash": "4.9.4", "iqtree": "3.1.2"}, completed="t"
-    )
+    cfg.record_stage("phylo", tool_versions={"sourmash": "4.9.4", "iqtree": "3.1.2"}, completed="t")
     cfg.record_stage("glance", tool_versions={"iqtree": "3.1.2"}, completed="t")
     cfg.save(tmp_path)
     result = _runner.invoke(app, ["versions", "-wd", str(tmp_path)])

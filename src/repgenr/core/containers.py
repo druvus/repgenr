@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -383,6 +384,9 @@ def wrap_command(
         # the SIGTERM the client forwards when repgenr stops a tool ends it
         # (a tool running as process 1 ignores a signal it has no handler for).
         cmd = [config.engine_binary(), "run", "--rm", "--init", "--entrypoint", ""]
+        # A name lets repgenr stop the container when it is stopped itself
+        # (see _stop_container).
+        cmd += ["--name", f"repgenr-{os.getpid()}-{uuid.uuid4().hex[:12]}"]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
         # Run as an arbitrary host UID with no passwd entry, so HOME defaults to
         # "/" and is not writable. Point it at the mounted, writable workdir so
@@ -404,6 +408,30 @@ def wrap_command(
         cmd += ["--bind", str(m)]
     cmd += ["--pwd", workdir, source, *argv]
     return cmd
+
+
+def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
+    """Stop the named Docker container of an interrupted ``docker run``.
+
+    When repgenr is stopped it forwards SIGTERM to the docker client, which
+    passes it through --init to the tool. A tool that ignores SIGTERM kept its
+    container running after repgenr and the client had exited. ``docker stop``
+    sends SIGTERM and then SIGKILL after the same grace period repgenr uses.
+    Errors are ignored: the container may already be gone.
+    """
+    if config.backend != DOCKER or "--name" not in wrapped:
+        return
+    name = wrapped[list(wrapped).index("--name") + 1]
+    grace = int(process.STOP_GRACE_SECONDS)
+    try:
+        subprocess.run(
+            [config.engine_binary(), "stop", "--time", str(grace), name],
+            capture_output=True,
+            timeout=grace + 20,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 # `docker run` exits 125 when the engine itself fails (image not found, pull
@@ -490,6 +518,9 @@ def run_tool(
         )
     except ToolExecutionError as exc:
         raise _engine_failure(exc, image, caps, config) from exc
+    except (SystemExit, KeyboardInterrupt):
+        _stop_container(wrapped, config)
+        raise
 
 
 def run_chain(
@@ -556,6 +587,9 @@ def run_chain(
         )
     except ToolExecutionError as exc:
         raise _engine_failure(exc, image, caps, config) from exc
+    except (SystemExit, KeyboardInterrupt):
+        _stop_container(wrapped, config)
+        raise
 
 
 def run_tool_with_retries(
