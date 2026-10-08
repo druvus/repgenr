@@ -58,8 +58,13 @@ class DrepDereplicator(Dereplicator):
         out_dir: Path,
         threads: int,
         logger: logging.Logger,
+        *,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> CompareResult:
-        """All-vs-all Mash comparison via ``dRep compare`` (primary ANI only)."""
+        """All-vs-all Mash comparison via ``dRep compare`` (primary ANI only).
+
+        dRep sketches with Mash, so the sourmash ``sketches`` are not read.
+        """
         # Genome paths go through a fofn (dRep accepts a paths file for -g), so
         # a large set cannot overflow argv; declare the genome dirs for the
         # container backend since the paths are no longer argv tokens.

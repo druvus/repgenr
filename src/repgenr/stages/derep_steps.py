@@ -45,6 +45,7 @@ from ..core.contracts import (
 from ..core.errors import WorkdirError
 from ..core.plugins import warn_ignored_params, warn_unconsumed_extras
 from ..core.process import link_or_copy, remove_tree
+from ..core.sketches import adapter_sketches, directory_provider
 from ..core.versions import write_versions_fragment
 from ..dereplicators.base import (
     DerepParams,
@@ -154,6 +155,9 @@ class ChunkParams:
     # real file here (params.genomes), so any promotion is always resolvable.
     selection_tsv: Path | None = None
     keeper: str = "quality"  # quality | gtdb | tool
+    # A sketches/ directory (Nextflow SKETCH) for an adapter that compares
+    # sourmash sketches; matched to the genomes by record name.
+    sketches_dir: Path | None = None
 
 
 @dataclass
@@ -179,6 +183,7 @@ class MergeParams:
     # Search the secondary ANI of the merge pass to land near this many
     # representatives (0 = off).
     target_reps: int = 0
+    sketches_dir: Path | None = None
 
 
 def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResult:
@@ -208,6 +213,14 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         quality=_adapter_quality(params.selection_tsv, logger),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
+    derep_params.sketches = _step_sketches(
+        adapter,
+        derep_params.extra,
+        params.genomes,
+        params.sketches_dir,
+        logger,
+        "dereplicate-chunk",
+    )
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
     n50 = N50Lookup(sorted({g.parent for g in params.genomes}))
@@ -296,6 +309,9 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         },
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
+    derep_params.sketches = _step_sketches(
+        adapter, derep_params.extra, union, params.sketches_dir, logger, "dereplicate-merge"
+    )
     scratch = _fresh(params.out_dir / "scratch")
     if params.target_reps > 0:
         # The search re-runs the merge pass per step; the stateless step has
@@ -442,6 +458,24 @@ def _taxon_from_selection_or_names(
         _family, genus, species, _acc = parse_genome_filename(name)
         taxon_of[name] = species if level == "species" else genus
     return taxon_of
+
+
+def _step_sketches(
+    adapter: object,
+    extra: dict,
+    genomes: list[Path],
+    sketches_dir: Path | None,
+    logger: logging.Logger,
+    step: str,
+) -> dict[Path, Path] | None:
+    """Sketches from a staged sketches/ directory, for an adapter that reads them."""
+    if sketches_dir is None:
+        return None
+    if not sketches_dir.is_dir():
+        raise WorkdirError(f"{step}: --sketches-dir {sketches_dir} is not a directory.")
+    return adapter_sketches(
+        adapter, extra, genomes, directory_provider(sketches_dir, logger, step), logger, step
+    )
 
 
 def _load_chunk(chunk_dir: Path) -> DerepResult:

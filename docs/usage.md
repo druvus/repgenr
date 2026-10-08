@@ -121,10 +121,34 @@ removed). `repgenr --force sketch -wd $WD` writes every sketch again; sketches t
 were current are counted as `replaced (--force)`, apart from stale ones. It is
 recorded as a stage, so `status` lists it, and `status` shows `sketches: n/m`
 (genomes with a sketch, genomes present) on the line of the stage that wrote
-the genome set once `sketches/` exists. In this release the sketches are
-written but not yet read: a later release will make `dereplicate --tool
-sourmash`, `glance`, the sourmash tree builder of `phylo` and the sourmash
-classifier of `assemble` reuse them instead of sketching each genome again.
+the genome set once `sketches/` exists.
+
+The sourmash tools read these sketches instead of sketching the genomes again:
+`dereplicate --tool sourmash` (both the branchwater and the `sourmash compare`
+back-end), `glance --tool sourmash`, `phylo --treebuilder sourmash` (outgroup
+included) and the sourmash classifier of `assemble`. Each selects the
+signature at its k-mer size with `-k`, so `ksize` 21, 31 or 51 at `scaled`
+1000 is served from the sketches. Before comparing, the stage checks each
+genome's sketch against its record (the FASTA SHA-256 and the parameters),
+writes the missing and stale ones to `sketches/` and records them, and logs
+one line such as `dereplicate: sketches: 50 reused, 0 written`. The SHA-256
+of a genome is kept in `sketches/.digests.json` with the file's size and
+modification time and is computed again only when either changes, the same
+file metadata the resume fingerprint uses for genome directories; an edit
+that keeps both is not seen, and `repgenr --force sketch` hashes and sketches
+every genome again. The
+representatives under `derep/representatives/` are matched to their genomes
+by file name. The tool sketches into its own working directory, as before,
+when `--tool-arg ksize=` or `scaled=` asks for other parameters (the log
+names the reason), for a genome that is not part of the genome set (no
+manifest row), and when sourmash cannot write a sketch. `assemble` sketches each
+accepted assembly once, beside its contigs as
+`assemblies/<run>/contigs.sig.zip` (named by run accession, reused while the
+contigs are unchanged); the classifier gathers with that sketch, and the
+sketch step copies it to `sketches/` under the genome's record name once the
+genome is named. An assembly excused after classification (for example
+`qc_failed`) gets no sketch under `sketches/`. With `--no-sketch` the
+classifier sketches for itself.
 
 Or run the whole chain in one command (bacterial by default; `--viral` for the
 NCBI Virus path), then check progress at any time:
@@ -780,8 +804,11 @@ CheckM, and galah, which otherwise keeps the first listed genome of a cluster,
 receives the genomes by descending file size, so a complete genome rather than
 a fragment becomes the representative.
 
-`--tool sourmash` keeps its signatures in a sketch cache. `--target-reps`
-shares one cache across its search steps; `--tool-arg sketch_cache=DIR` sets a
+`--tool sourmash` reads the genome sketches of the working directory (see
+[Genome sketches](#genome-sketches)), so `--target-reps` compares the same
+sketches at each search step. Without them (other `ksize` or `scaled`, or
+genomes outside the set), it keeps its own signatures in a sketch cache.
+`--target-reps` shares one cache across its search steps; `--tool-arg sketch_cache=DIR` sets a
 directory that persists across runs. With the branchwater plugin, cache
 entries are matched by genome file name, size and modification time; without
 it, a per-genome signature is reused when it is not older than the genome
@@ -888,8 +915,10 @@ chooses the comparison tool:
   available, glance exits 4 and names the tools that can compare.
 - `drep` runs `dRep compare` (Mash, primary clustering only) and plots Mash
   ANI. The dendrogram is dRep's own.
-- `sourmash` sketches the genomes with the parameters `dereplicate --tool
-  sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts
+- `sourmash` compares the genomes with the parameters `dereplicate --tool
+  sourmash` uses (k=31, scaled=1000), reading the genome sketches of the
+  working directory and writing the missing ones first, runs `sourmash
+  compare`, and converts
   the values to the same ANI estimate the dereplication threshold applies
   to. The dendrogram is average-linkage clustering on 1 - ANI. The full N x N
   matrix is held in memory, so sets above 5000 genomes are refused.
@@ -1144,6 +1173,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
 | `--phylo_split_msa` | `false` | Run the alignment and the tree as separate tasks. |
+| `--sketch` | `false` | Bacterial mode: sketch the genomes and the outgroup with sourmash, publish `sketches/`, and stage them into the dereplication and tree tasks. |
 | `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). `--no-outgroup` is added when `phylo_args` contains it. |
 
 `--phylo_split_msa` splits the phylogeny into `PHYLO_MSA` and `PHYLO_TREE`.
@@ -1152,6 +1182,18 @@ another bootstrap re-runs only the tree, and the two halves take their own
 resource labels: the alignment is `process_high`, the tree `process_medium`.
 It applies to tree builders that consume an alignment; leave it off for
 mashtree or sourmash, which build from genomes.
+
+`--sketch` adds a `SKETCH` task on the bacterial path. It writes
+`sketches/<record name>.sig.zip` for every genome and the outgroup (k=21, 31
+and 51 at scaled=1000), publishes the directory under `--outdir`, and stages
+it into every `DEREP_CHUNK`, `DEREP_MERGE` and `PHYLO` (or `PHYLO_TREE`) task,
+which pass it to repgenr as `--sketches-dir`. A sourmash dereplicator or tree
+builder then reads the sketches instead of sketching; other tools ignore
+them. `SKETCH` calls sourmash itself, so the parameter is off by default and a
+run without sourmash is unaffected; the viral and reads paths do not stage
+sketches. In the stateless steps a sketch is matched to a genome by record
+name only, without the digest check of a working directory, which holds
+because `SKETCH` sketches the same genome files the steps receive.
 
 Parameters are validated against `nextflow/nextflow_schema.json` at launch.
 

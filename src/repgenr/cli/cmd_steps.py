@@ -33,6 +33,7 @@ from .base import (
     HELP_REMOVE_OUTGROUP,
     HELP_ROOT_NAME,
     HELP_SECONDARY_ANI,
+    HELP_SKETCHES_DIR,
     HELP_THREADS,
     HELP_VERSIONS_OUT,
     HELP_VIRUS,
@@ -110,6 +111,7 @@ def dereplicate_chunk_cmd(
         "quality (selection.tsv CheckM values and genome N50), gtdb (GTDB species "
         "representative first, then quality) or tool (adapter's own pick).",
     ),
+    sketches_dir: Path | None = typer.Option(None, "--sketches-dir", help=HELP_SKETCHES_DIR),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Dereplicate one chunk of genomes (scatter step; writes a chunk result dir)."""
@@ -145,6 +147,7 @@ def dereplicate_chunk_cmd(
                 selection_tsv=selection_tsv,
                 keeper=keeper,
                 versions_out=versions_out,
+                sketches_dir=sketches_dir,
             ),
             logger,
         )
@@ -182,6 +185,7 @@ def phylo_build_cmd(
     msa: Path | None = typer.Option(
         None, "--msa", help="Build the tree from this alignment instead of constructing one."
     ),
+    sketches_dir: Path | None = typer.Option(None, "--sketches-dir", help=HELP_SKETCHES_DIR),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Build a phylogeny from a genomes directory (stateless data-channel step).
@@ -234,6 +238,7 @@ def phylo_build_cmd(
                 versions_out=versions_out,
                 msa_only=msa_only,
                 msa=msa,
+                sketches_dir=sketches_dir,
             ),
             logger,
         )
@@ -350,6 +355,7 @@ def dereplicate_merge_cmd(
         help="Target representative count: search --secondary-ani of the merge pass "
         "to land near it (0 = off; re-runs the merge per search step).",
     ),
+    sketches_dir: Path | None = typer.Option(None, "--sketches-dir", help=HELP_SKETCHES_DIR),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Dereplicate the union of chunk representatives (gather step)."""
@@ -393,6 +399,7 @@ def dereplicate_merge_cmd(
                 reduce=reduce,
                 target_reps=target_reps,
                 versions_out=versions_out,
+                sketches_dir=sketches_dir,
             ),
             logger,
         )

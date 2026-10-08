@@ -607,6 +607,16 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.derep_keeper
         live: tests/live/test_steps.py::test_chunk_keeper_quality_from_selection_tsv
+      --sketches-dir:
+        param: ChunkParams.sketches_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: --sketches-dir sketches when params.sketch stages sketches/'
+        live: 'n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch'
       --versions-out:
         param: ChunkParams.versions_out
         value: '{alt_file}'
@@ -788,6 +798,16 @@ commands:
         nextflow: params.derep_target_reps
         live: tests/live/test_steps.py::test_merge_reduce_and_target_reps
         observable: the merge searches the secondary ANI and lands near the count
+      --sketches-dir:
+        param: MergeParams.sketches_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: --sketches-dir sketches when params.sketch stages sketches/'
+        live: 'n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch'
       --versions-out:
         param: MergeParams.versions_out
         value: '{alt_file}'
@@ -1619,6 +1639,16 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: task.cpus
         live: tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup
+      --sketches-dir:
+        param: PhyloBuildParams.sketches_dir
+        value: '{alt_dir}'
+        validated: stage
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: --sketches-dir sketches when params.sketch stages sketches/'
+        live: 'n/a: unit tests test_sketch_consumers.py; Nextflow stub test with params.sketch'
       --versions-out:
         param: PhyloBuildParams.versions_out
         value: '{alt_file}'

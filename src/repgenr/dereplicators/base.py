@@ -36,6 +36,11 @@ class DerepParams:
     manifest or selection.tsv, for genomes that carry both values; adapters
     that can use genome quality read it (dRep's ``--genomeInfo``, galah's
     input order) and the others ignore it.
+    ``sketches`` maps genome path to its sourmash signature file
+    (``sketches/<record name>.sig.zip``: k=21, 31 and 51 at scaled=1000, each
+    signature named by the genome's record name). The stage fills it only for
+    an adapter whose :meth:`Dereplicator.sketch_request` asks for parameters
+    those files hold; the adapter sketches any genome left out.
     """
 
     primary_ani: float = 0.90
@@ -44,6 +49,7 @@ class DerepParams:
     threads: int = 16
     extra: dict = field(default_factory=dict)
     quality: dict[str, tuple[float, float]] = field(default_factory=dict)
+    sketches: Mapping[Path, Path] | None = None
 
 
 @dataclass
@@ -181,17 +187,30 @@ class Dereplicator(ABC):
         """Confirm required binaries are present; return resolved versions."""
         return preflight(self.capabilities)
 
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int] | None:
+        """The (ksize, scaled) of the sourmash sketches this adapter compares at.
+
+        None (the default) means the adapter reads no genome sketches. An
+        adapter that returns a pair receives ``DerepParams.sketches`` (and the
+        ``sketches`` argument of :meth:`compare`) when the workdir sketches
+        hold that k-mer size at that scaled value.
+        """
+        return None
+
     def compare(
         self,
         genomes: Sequence[Path],
         out_dir: Path,
         threads: int,
         logger: logging.Logger,
+        *,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> CompareResult:
         """Optional capability: all-vs-all comparison for ``repgenr glance``.
 
         Adapters that can produce a pairwise similarity table override this;
-        the default signals the capability is absent.
+        the default signals the capability is absent. ``sketches`` is passed
+        only to an adapter whose :meth:`sketch_request` returns a pair.
         """
         raise NotImplementedError(
             f"Dereplicator '{self.capabilities.name}' does not support glance "

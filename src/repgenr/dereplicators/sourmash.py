@@ -26,6 +26,13 @@ Two back-ends compute the pairwise similarities, picked automatically:
 ``compare`` (used by ``repgenr glance``) always takes the dense path, since it
 reports every genome pair; it converts to ANI the same way, so the glance plots
 use the scale of the dereplication threshold.
+
+Both back-ends and ``compare`` read the workdir genome sketches when the stage
+passes them (``DerepParams.sketches``, the ``sketches`` argument of
+``compare``): the signature at the requested k-mer size is selected from each
+``.sig.zip`` with ``-k``, and only the genomes without such a file are sketched
+here. Signatures of the workdir sketches are named by the genome's record
+name; those sketched here by the file name (dense) or ``Path.stem`` (sparse).
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ..core.containers import run_tool
+from ..core.contracts import record_name
 from ..core.errors import MissingBinaryError, ToolExecutionError, WorkdirError
 from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.process import write_fofn
@@ -75,6 +83,13 @@ class SourmashDereplicator(Dereplicator):
         supports_native_scaling=True,
     )
 
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int]:
+        defaults = self.capabilities.default_params
+        return (
+            parse_extra_int(extra, "ksize", defaults["ksize"]),
+            parse_extra_int(extra, "scaled", defaults["scaled"]),
+        )
+
     def dereplicate(
         self,
         genomes: Sequence[Path],
@@ -94,11 +109,20 @@ class SourmashDereplicator(Dereplicator):
         # reuses it instead of re-sketching the same genomes.
         cache = params.extra.get("sketch_cache")
         sketch_cache = Path(cache) if cache else None
+        sketches = params.sketches
 
         if _branchwater_available(self.capabilities, logger):
             try:
                 clusters, status = self._sparse_dereplicate(
-                    genomes, out_dir, ksize, scaled, threshold, params, logger, sketch_cache
+                    genomes,
+                    out_dir,
+                    ksize,
+                    scaled,
+                    threshold,
+                    params,
+                    logger,
+                    sketch_cache,
+                    sketches,
                 )
             except (ToolExecutionError, WorkdirError) as exc:
                 # Availability was pre-probed, so this is a genuine tool failure
@@ -113,11 +137,27 @@ class SourmashDereplicator(Dereplicator):
                     exc,
                 )
                 clusters, status = self._dense_dereplicate(
-                    genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache, params.threads
+                    genomes,
+                    out_dir,
+                    ksize,
+                    scaled,
+                    threshold,
+                    logger,
+                    sketch_cache,
+                    params.threads,
+                    sketches,
                 )
         else:
             clusters, status = self._dense_dereplicate(
-                genomes, out_dir, ksize, scaled, threshold, logger, sketch_cache, params.threads
+                genomes,
+                out_dir,
+                ksize,
+                scaled,
+                threshold,
+                logger,
+                sketch_cache,
+                params.threads,
+                sketches,
             )
 
         rep_paths = [p for p in genomes if p.name in clusters]
@@ -137,6 +177,7 @@ class SourmashDereplicator(Dereplicator):
         logger: logging.Logger,
         sketch_cache: Path | None = None,
         threads: int = 1,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Stock sourmash sketch + N x N compare (no plugin needed)."""
         labels, ani, name_by_label = self._dense_ani_matrix(
@@ -147,6 +188,7 @@ class SourmashDereplicator(Dereplicator):
             logger,
             sketch_cache,
             threads,
+            sketches=sketches,
             too_large_hint="Install the branchwater plugin "
             "(pip install sourmash_plugin_branchwater) for the sparse path, or use a "
             "tool that scales better at this size (e.g. --tool skder).",
@@ -159,6 +201,8 @@ class SourmashDereplicator(Dereplicator):
         out_dir: Path,
         threads: int,
         logger: logging.Logger,
+        *,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> CompareResult:
         """All-vs-all ANI estimates for ``repgenr glance`` (dense compare).
 
@@ -178,6 +222,7 @@ class SourmashDereplicator(Dereplicator):
             logger,
             None,
             threads,
+            sketches=sketches,
             too_large_hint="glance plots every genome pair and needs the full matrix; "
             "compare a subset of the genomes instead.",
         )
@@ -200,30 +245,88 @@ class SourmashDereplicator(Dereplicator):
         threads: int,
         *,
         too_large_hint: str,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> tuple[list[str], npt.NDArray[np.float64], dict[str, str]]:
-        """Sketch (reusing cached signatures) and compare all genomes.
+        """Sketch (reusing given or cached signatures) and compare all genomes.
 
-        Returns the column labels, the N x N ANI-estimate matrix and the map
-        from label to genome basename.
+        Returns the column labels and the N x N ANI-estimate matrix, both in
+        genome file name order (``sourmash compare`` does not keep its input
+        order, and the greedy pick breaks ties by position), and the map from
+        label to genome basename.
         """
         if len(genomes) > _DENSE_MAX_GENOMES:
             raise WorkdirError(
                 f"sourmash dense compare needs an N x N matrix for {len(genomes)} genomes "
                 f"(~{len(genomes) ** 2 * 8 / 1e9:.1f} GB). {too_large_hint}"
             )
-        sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
-        sig_dir.mkdir(parents=True, exist_ok=True)
+        given = {g: Path(sketches[g]) for g in genomes if sketches and g in sketches}
+        rest = [g for g in genomes if g not in given]
+        sig_by_genome: dict[Path, Path] = dict(given)
+        if rest:
+            sig_dir = sketch_cache if sketch_cache is not None else (out_dir / "signatures")
+            sig_by_genome.update(
+                self._sketch_dense(rest, sig_dir, out_dir, ksize, scaled, logger, len(given))
+            )
 
+        matrix_csv = out_dir / "compare.csv"
+        sig_files = [sig_by_genome[g] for g in sorted(genomes, key=lambda g: g.name)]
+        # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
+        compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
+        run_tool(
+            self.capabilities,
+            [
+                "sourmash",
+                "compare",
+                "-k",
+                str(ksize),
+                "--csv",
+                matrix_csv,
+                "--from-file",
+                compare_fofn,
+                "--processes",
+                str(threads),
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            # The given sketches live outside out_dir; their paths are inside the fofn.
+            extra_mounts=sorted({os.path.dirname(os.path.abspath(p)) for p in given.values()}),
+        )
+
+        # Convert the Jaccard matrix to ANI estimates so the threshold applies
+        # on the same scale as skder/galah (raw Jaccard at k=31 is ~0.8 for a
+        # 99.6 pct ANI pair). Converting here, rather than via ``compare
+        # --ani``, keeps identical-content pairs at 1.0 even for tiny sketches,
+        # where sourmash's estimator refuses and reports 0.
+        labels, sim = _read_compare_csv(matrix_csv)
+        name_by_label = _match_labels_to_genomes(labels, genomes)
+        order = sorted(range(len(labels)), key=lambda i: (name_by_label[labels[i]], i))
+        labels = [labels[i] for i in order]
+        sim = np.asarray(sim, dtype=float)[np.ix_(order, order)]
+        ani = _jaccard_to_ani_matrix(sim, ksize)
+        return labels, ani, name_by_label
+
+    def _sketch_dense(
+        self,
+        genomes: Sequence[Path],
+        sig_dir: Path,
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        logger: logging.Logger,
+        n_given: int,
+    ) -> dict[Path, Path]:
+        """Signature file per genome in ``sig_dir``, sketching those not cached there."""
+        sig_dir.mkdir(parents=True, exist_ok=True)
         # Reuse is decided per genome, never by counting files: the cache dir may
         # be shared with other chunks (disjoint genome sets), so only this call's
         # genomes may be sketched, matched, and compared.
         sig_by_genome = _find_signatures(sig_dir, genomes)
         missing = [g for g in genomes if g not in sig_by_genome]
         if missing:
-            if len(missing) < len(genomes):
+            if len(missing) < len(genomes) + n_given:
                 logger.info(
-                    "Reusing %d cached sourmash signatures, sketching %d",
-                    len(genomes) - len(missing),
+                    "Reusing %d sourmash signatures, sketching %d",
+                    len(genomes) + n_given - len(missing),
                     len(missing),
                 )
             fofn = write_fofn(missing, out_dir / "genomes.fofn")
@@ -260,37 +363,7 @@ class SourmashDereplicator(Dereplicator):
                 + ", ".join(unsketched[:5])
                 + ("..." if len(unsketched) > 5 else "")
             )
-        matrix_csv = out_dir / "compare.csv"
-        sig_files = sorted(sig_by_genome[g] for g in genomes)
-        # Pass signatures via --from-file, never on argv (ARG_MAX at scale).
-        compare_fofn = write_fofn(sig_files, out_dir / "signatures.fofn")
-        run_tool(
-            self.capabilities,
-            [
-                "sourmash",
-                "compare",
-                "-k",
-                str(ksize),
-                "--csv",
-                matrix_csv,
-                "--from-file",
-                compare_fofn,
-                "--processes",
-                str(threads),
-            ],
-            logger=logger,
-            log_prefix="sourmash",
-        )
-
-        # Convert the Jaccard matrix to ANI estimates so the threshold applies
-        # on the same scale as skder/galah (raw Jaccard at k=31 is ~0.8 for a
-        # 99.6 pct ANI pair). Converting here, rather than via ``compare
-        # --ani``, keeps identical-content pairs at 1.0 even for tiny sketches,
-        # where sourmash's estimator refuses and reports 0.
-        labels, sim = _read_compare_csv(matrix_csv)
-        ani = _jaccard_to_ani_matrix(np.asarray(sim, dtype=float), ksize)
-        name_by_label = _match_labels_to_genomes(labels, genomes)
-        return labels, ani, name_by_label
+        return sig_by_genome
 
     def _sparse_dereplicate(
         self,
@@ -302,6 +375,7 @@ class SourmashDereplicator(Dereplicator):
         params: DerepParams,
         logger: logging.Logger,
         sketch_cache: Path | None = None,
+        sketches: Mapping[Path, Path] | None = None,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Branchwater manysketch + pairwise: emit only above-threshold edges.
 
@@ -312,8 +386,79 @@ class SourmashDereplicator(Dereplicator):
         superset of the wanted edges; the parser then keeps pairs whose
         containment-derived ANI is >= ``threshold``, matching the dense
         ``compare --ani`` graph.
+
+        Genomes with a given sketch are not sketched: ``pairwise`` reads a
+        path list of their ``.sig.zip`` files (plus the zip of the others) and
+        selects the signatures at ``ksize`` with ``-k``.
         """
         threads = str(params.threads)
+        given = {g: Path(sketches[g]) for g in genomes if sketches and g in sketches}
+        rest = [g for g in genomes if g not in given]
+        collections: list[Path] = []
+        if rest:
+            collections.append(
+                self._sparse_sketch(rest, out_dir, ksize, scaled, threads, logger, sketch_cache)
+            )
+        mounts: list[str] = []
+        if given:
+            if rest:
+                logger.info(
+                    "Reusing %d genome sketches, sketching %d with sourmash",
+                    len(given),
+                    len(rest),
+                )
+            source = write_fofn(
+                [*(given[g] for g in sorted(given, key=lambda g: g.name)), *collections],
+                out_dir / "signatures.txt",
+            )
+            mounts = sorted({os.path.dirname(os.path.abspath(p)) for p in given.values()})
+        else:
+            source = collections[0]
+
+        pairwise_csv = out_dir / "pairwise.csv"
+        run_tool(
+            self.capabilities,
+            [
+                "sourmash",
+                "scripts",
+                "pairwise",
+                source,
+                "-o",
+                pairwise_csv,
+                "-t",
+                f"{threshold**ksize:g}",
+                "-k",
+                str(ksize),
+                "-c",
+                threads,
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            extra_mounts=mounts,
+        )
+
+        # The workdir sketches name their signature by record name; the
+        # manysketch CSV below names it by Path.stem.
+        label_of = {g: record_name(g) if g in given else g.stem for g in genomes}
+        name_by_label = {label_of[g]: g.name for g in genomes}
+        # Iterate in genome-basename order so the greedy tie-break (which member of
+        # a mutually-similar group becomes the representative) matches the dense
+        # ``compare`` path, which orders its matrix by genome file name.
+        labels = [label_of[g] for g in sorted(genomes, key=lambda g: g.name)]
+        neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels), ksize)
+        return _sparse_greedy_cluster(labels, neighbors, name_by_label)
+
+    def _sparse_sketch(
+        self,
+        genomes: Sequence[Path],
+        out_dir: Path,
+        ksize: int,
+        scaled: int,
+        threads: str,
+        logger: logging.Logger,
+        sketch_cache: Path | None,
+    ) -> Path:
+        """A zip of the signatures of ``genomes`` (manysketch, or the shared cache)."""
         if sketch_cache is not None:
             # The cache dir may be shared with other chunks (disjoint genome
             # sets), so the zip is keyed by the genome set + sketch params: a
@@ -373,35 +518,7 @@ class SourmashDereplicator(Dereplicator):
             os.replace(tmp_zip, sigs_zip)
             if sketch_cache is not None:
                 _write_zip_index(sigs_zip, genomes, ksize, scaled)
-
-        pairwise_csv = out_dir / "pairwise.csv"
-        run_tool(
-            self.capabilities,
-            [
-                "sourmash",
-                "scripts",
-                "pairwise",
-                sigs_zip,
-                "-o",
-                pairwise_csv,
-                "-t",
-                f"{threshold**ksize:g}",
-                "-k",
-                str(ksize),
-                "-c",
-                threads,
-            ],
-            logger=logger,
-            log_prefix="sourmash",
-        )
-
-        name_by_label = {g.stem: g.name for g in genomes}
-        # Iterate in genome-basename order so the greedy tie-break (which member of
-        # a mutually-similar group becomes the representative) matches the dense
-        # ``compare`` path, whose label order is the sorted signature-file glob.
-        labels = [g.stem for g in sorted(genomes, key=lambda g: g.name)]
-        neighbors = _parse_pairwise_csv(pairwise_csv, threshold, set(labels), ksize)
-        return _sparse_greedy_cluster(labels, neighbors, name_by_label)
+        return sigs_zip
 
     def _collect_from_cache(
         self,
@@ -745,16 +862,20 @@ def _read_compare_csv(path: Path) -> tuple[list[str], npt.NDArray[np.float64]]:
 def _match_labels_to_genomes(labels: Sequence[str], genomes: Sequence[Path]) -> dict[str, str]:
     """Map a sourmash column label to a genome basename.
 
-    sourmash labels are signature names (often the file path or basename). Match
-    by checking which genome basename the label ends with / contains.
+    sourmash labels are signature names: the file path for a signature
+    sketched here, the record name for a workdir sketch. Match by genome
+    basename, then record name, then stem.
     """
     out: dict[str, str] = {}
     by_name = {g.name: g.name for g in genomes}
+    by_record = {record_name(g): g.name for g in genomes}
     stems = {g.stem: g.name for g in genomes}
     for label in labels:
         base = Path(label).name
         if base in by_name:
             out[label] = base
+        elif label in by_record:  # a workdir sketch, named by record name
+            out[label] = by_record[label]
         elif Path(label).stem in stems:
             out[label] = stems[Path(label).stem]
         else:

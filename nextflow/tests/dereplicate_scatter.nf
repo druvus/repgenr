@@ -26,7 +26,7 @@ workflow {
         .collect()
         .map { files -> tuple(meta, files) }
 
-    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])), channel.value(tuple(meta, [])))
 
     DEREPLICATE_SCATTER.out.reps
         .map { _meta, dir -> dir }

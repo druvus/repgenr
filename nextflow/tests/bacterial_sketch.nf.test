@@ -1,0 +1,73 @@
+nextflow_pipeline {
+
+    name "BACTERIAL_DATAFLOW with params.sketch (stub)"
+    script "../tests/bacterial_dataflow.nf"
+    tag "stub"
+    options "-stub"
+    config "./sketch_debug.config"
+
+    test("params.sketch publishes sketches/ and stages it into the derep and tree tasks") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+                phylo_args = '--treebuilder sourmash'
+                sketch = true
+            }
+        }
+        then {
+            assert workflow.success
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains('SKETCH (francisella)') }
+            // One sketch per genome and one for the outgroup, under the record name.
+            def sketches = new File("$outputDir/sketches").list().findAll { n -> !n.startsWith('.') }
+            assert sketches.size() >= 2
+            assert sketches.every { n -> n.endsWith('.sig.zip') }
+            assert sketches.any { n -> n.contains('_GCF_') || n.contains('_GCA_') }
+            // Every chunk, the merge and the tree task saw the staged directory.
+            def staged = workflow.stdout.count { line -> line.contains('sketches: staged') }
+            def chunks = names.count { n -> n.contains('DEREP_CHUNK') }
+            assert staged == chunks + 2
+            assert !workflow.stdout.any { line -> line.contains('sketches: none') }
+            assert path("$outputDir/pipeline_info/software_versions.yml").text.contains("SKETCH")
+        }
+    }
+
+    test("without params.sketch nothing is sketched or staged") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+            }
+        }
+        then {
+            assert workflow.success
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert !names.any { n -> n.contains('SKETCH') }
+            assert !new File("$outputDir/sketches").exists()
+            assert !workflow.stdout.any { line -> line.contains('sketches: staged') }
+        }
+    }
+
+    test("params.sketch with phylo_split_msa stages the sketches into PHYLO_TREE") {
+        when {
+            params {
+                outdir = "$outputDir"
+                derep_process_size = 2
+                derep_tool = 'sourmash'
+                phylo_split_msa = true
+                phylo_args = '--msa-source snptype --snptyper simple --treebuilder fasttree'
+                sketch = true
+            }
+        }
+        then {
+            assert workflow.success
+            def names = workflow.trace.succeeded().collect { t -> t.name }
+            assert names.any { n -> n.contains('PHYLO_TREE (francisella)') }
+            def chunks = names.count { n -> n.contains('DEREP_CHUNK') }
+            assert workflow.stdout.count { line -> line.contains('sketches: staged') } == chunks + 2
+        }
+    }
+}

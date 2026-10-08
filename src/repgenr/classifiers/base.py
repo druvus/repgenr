@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +28,11 @@ class ClassifyParams:
     # concurrency to the thread count alone.
     memory_gb: float | None = None
     extra: dict = field(default_factory=dict)
+    # Genome path -> a sourmash signature file of that genome with the
+    # parameters of the workdir sketches (k=21, 31, 51; scaled=1000), its
+    # signatures named by the genome's record name. Given only to a
+    # classifier whose sketch_request() asks for parameters it holds.
+    sketches: Mapping[Path, Path] | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,14 @@ class Classifier(ABC):
 
     def preflight(self) -> dict[str, str]:
         return preflight(self.capabilities)
+
+    def sketch_request(self, extra: Mapping[str, object]) -> tuple[int, int] | None:
+        """The (ksize, scaled) of the query sketches this classifier uses.
+
+        None (the default) means it reads no genome sketches; one that
+        returns a pair receives ``ClassifyParams.sketches``.
+        """
+        return None
 
     @abstractmethod
     def classify(

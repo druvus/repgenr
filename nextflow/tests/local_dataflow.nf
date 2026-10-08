@@ -26,11 +26,11 @@ workflow {
         .collect()
         .map { files -> tuple(meta, files) }
 
-    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])))
+    DEREPLICATE_SCATTER(ch_genomes, channel.value(tuple(meta, [])), channel.value(tuple(meta, [])))
 
     def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
         .map { m, dir -> tuple(m, dir, [], file(params.empty_accession)) }
-    PHYLO(ch_phylo_in)
+    PHYLO(ch_phylo_in, [])
     TREE2TAX(PHYLO.out.tree.join(ch_phylo_in, by: 0))
 
     def ch_versions = DEREPLICATE_SCATTER.out.versions

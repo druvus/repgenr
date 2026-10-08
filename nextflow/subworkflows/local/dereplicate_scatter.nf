@@ -18,6 +18,7 @@ workflow DEREPLICATE_SCATTER {
     take:
     ch_genomes    // channel: tuple(meta, [genome FASTA paths])
     ch_selection  // channel: tuple(meta, selection.tsv) or tuple(meta, [])
+    ch_sketches   // channel: tuple(meta, sketches/ directory) or tuple(meta, [])
 
     main:
     def ch_versions = channel.empty()
@@ -36,8 +37,12 @@ workflow DEREPLICATE_SCATTER {
     // The selection file is an auxiliary input shared by every chunk task, so
     // it is passed as a bare value channel (nf-core reference-file style).
     def ch_selection_file = ch_selection.map { _meta, sel -> sel }.first()
+    // The genome sketches (SKETCH, params.sketch) likewise: one directory
+    // staged into every chunk and the merge; a sourmash dereplicator reads
+    // it, the other tools ignore it.
+    def ch_sketches_dir = ch_sketches.map { _meta, dir -> dir }.first()
 
-    DEREP_CHUNK(ch_chunks, ch_selection_file)
+    DEREP_CHUNK(ch_chunks, ch_selection_file, ch_sketches_dir)
     ch_versions = ch_versions.mix(DEREP_CHUNK.out.versions.first())
 
     // Gather every chunk directory under one merge meta per run.
@@ -45,7 +50,7 @@ workflow DEREPLICATE_SCATTER {
         .map { meta, dir -> tuple([id: "${meta.run.id}.merged", mode: meta.mode, run: meta.run], dir) }
         .groupTuple()
 
-    DEREP_MERGE(ch_merge_in, ch_selection_file)
+    DEREP_MERGE(ch_merge_in, ch_selection_file, ch_sketches_dir)
     ch_versions = ch_versions.mix(DEREP_MERGE.out.versions)
 
     emit:

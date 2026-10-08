@@ -3,7 +3,8 @@
 // Data-channel module: every chunk result directory produced by DEREP_CHUNK is
 // staged in, and the merged representative set is emitted as a typed output.
 // Wraps `repgenr dereplicate-merge`. Tool flags arrive as task.ext.args from
-// conf/modules.config; publishing is configured there too.
+// conf/modules.config; publishing is configured there too. A staged sketches/
+// directory is passed as --sketches-dir, as in DEREP_CHUNK.
 
 process DEREP_MERGE {
     label 'process_high'
@@ -12,6 +13,7 @@ process DEREP_MERGE {
     input:
     tuple val(meta), path(chunks, stageAs: 'chunks/*')
     path selection, stageAs: 'selection.tsv'
+    path sketches, stageAs: 'sketches'
 
     output:
     tuple val(meta), path("${task.ext.prefix ?: meta.id}"), emit: reps
@@ -40,12 +42,14 @@ process DEREP_MERGE {
     # quality-aware keeper is skipped rather than passed a missing file.
     sel=""
     [ -e selection.tsv ] && sel="--selection-tsv selection.tsv"
+    sk=""
+    [ -d sketches ] && sk="--sketches-dir sketches"
 
     repgenr ${opts} dereplicate-merge \\
         \$chunk_args \\
         --out ${prefix} \\
         ${args} ${args2} \\
-        \$sel \\
+        \$sel \$sk \\
         --threads ${task.cpus} \\
         --versions-out tool_versions.yml
 
@@ -59,6 +63,7 @@ process DEREP_MERGE {
     """
     echo "ext.args: ${args}"
     echo "ext.args2: ${args2}"
+    if [ -d sketches ]; then echo "sketches: staged"; else echo "sketches: none"; fi
     mkdir -p ${prefix}/representatives
     printf 'representative\\tmember\\n' > ${prefix}/clusters.tsv
     printf 'genome\\tstatus\\n' > ${prefix}/genome_status.tsv

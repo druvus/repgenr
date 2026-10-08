@@ -26,7 +26,9 @@ workflow VIRAL_DATAFLOW {
     // vmetadata writes no selection.tsv and viral genomes carry no CheckM
     // quality, so the keeper input is an empty list under the run meta.
     def ch_no_selection = ch_meta.map { meta -> tuple(meta, []) }
-    DEREPLICATE_SCATTER(ch_genomes, ch_no_selection)
+    // Genome sketches are not staged on the viral path (params.sketch is
+    // bacterial only); the sourmash tools sketch for themselves.
+    DEREPLICATE_SCATTER(ch_genomes, ch_no_selection, ch_no_selection)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     def ch_outgroup = ch_genomes
@@ -49,12 +51,12 @@ workflow VIRAL_DATAFLOW {
     if (params.phylo_split_msa) {
         PHYLO_MSA(ch_phylo_in)
         ch_versions = ch_versions.mix(PHYLO_MSA.out.versions)
-        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0))
+        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0), [])
         ch_versions = ch_versions.mix(PHYLO_TREE.out.versions)
         ch_tree = PHYLO_TREE.out.tree
     }
     else {
-        PHYLO(ch_phylo_in)
+        PHYLO(ch_phylo_in, [])
         ch_versions = ch_versions.mix(PHYLO.out.versions)
         ch_tree = PHYLO.out.tree
     }

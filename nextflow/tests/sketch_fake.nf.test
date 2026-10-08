@@ -1,0 +1,69 @@
+nextflow_process {
+
+    name "SKETCH script with a fake sourmash"
+    script "../modules/local/dataflow/sketch.nf"
+    process "SKETCH"
+    config "./sketch_fake.config"
+
+    test("sketches names with spaces and passes quoted user arguments whole") {
+        when {
+            params {
+                fakebin = "${projectDir}/nextflow/tests/fakebin"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    [ file("${projectDir}/nextflow/tests/data/sketch_names/Fam g s_GCA_000005.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/sketch_names/Fam_g_s_GCA_000006.1.fna.gz"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000002.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000003.1.fasta") ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            with(process.out.sketches.get(0)) {
+                def dir = new File(get(1).toString())
+                def names = dir.list().sort()
+                // No partial file is left; every genome has its sketch.
+                assert names == [
+                    'Fam g s_GCA_000005.1.sig.zip',
+                    'Fam_g_s_GCA_000001.1.sig.zip',
+                    'Fam_g_s_GCA_000002.1.sig.zip',
+                    'Fam_g_s_GCA_000003.1.sig.zip',
+                    'Fam_g_s_GCA_000006.1.sig.zip',
+                ]
+                def lines = new File(dir, 'Fam g s_GCA_000005.1.sig.zip').readLines()
+                assert lines[0] == 'name:Fam g s_GCA_000005.1'
+                assert lines[1] == 'input:genomes/Fam g s_GCA_000005.1.fasta'
+                assert lines.contains('arg:k=21,k=31,k=51,scaled=1000')
+                assert lines.contains('arg:--license')
+                assert lines.contains('arg:CC0')
+            }
+            assert path(process.out.versions.get(0)).text.contains('sourmash: "4.9.4"')
+        }
+    }
+
+    test("a failed sourmash call fails the task") {
+        when {
+            params {
+                fakebin = "${projectDir}/nextflow/tests/fakebin"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    [ file("${projectDir}/nextflow/tests/data/sketch_names/Fam_g_s_FAIL_000007.1.fasta"),
+                      file("${projectDir}/nextflow/tests/data/genomes/Fam_g_s_GCA_000001.1.fasta") ]
+                )
+                """
+            }
+        }
+        then {
+            assert process.failed
+        }
+    }
+}

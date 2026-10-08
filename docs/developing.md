@@ -143,7 +143,8 @@ specification in `core/sourmash.py` (`SOURMASH_TOOL`,
 `sourmash_capabilities(...)`), so the container image, conda spec and binary
 check live in one place; the Nextflow `SKETCH` module
 (`nextflow/modules/local/dataflow/sketch.nf`) names the same image, which a
-unit test checks.
+unit test checks. The consumers that read the sketches are listed under
+"Optional capability hooks" below (`sketch_request`).
 
 ## Adding a tool
 
@@ -190,6 +191,20 @@ default deliberately:
   `TreeBuilder.distance_matrix(...)` (pairwise matrix for the viral outgroup
   step). Tools without an override are cleanly rejected when a user selects
   them for those features.
+* Genome sketches: a `Dereplicator`, `TreeBuilder` or `Classifier` that
+  compares sourmash sketches overrides `sketch_request(extra)` to return the
+  `(ksize, scaled)` it compares at (the default returns None: no sketches).
+  When the working-directory sketches hold those parameters, the stage passes
+  genome path -> `.sig.zip` in `DerepParams.sketches` (and the `sketches`
+  keyword of `compare`), `TreeParams.sketches` or `ClassifyParams.sketches`;
+  the adapter selects its k-mer size with `-k` and sketches any genome left
+  out of the mapping itself. Each signature is named by the genome's
+  `record_name`. The stages resolve the mapping through
+  `core.sketches.adapter_sketches` with a provider: `workdir_provider` (writes
+  missing and stale sketches into `sketches/` and records them) in the
+  workdir stages, `directory_provider` (match by record name, no digest) in
+  the stateless steps given `--sketches-dir`. The adapters stay unaware of
+  the working directory.
 
 #### ToolCapabilities
 

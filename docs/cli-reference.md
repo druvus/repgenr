@@ -507,6 +507,7 @@ Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (selection.tsv CheckM values and genome N50), gtdb (GTDB species representative first, then quality) or tool (adapter's own pick). |
+| `--sketches-dir` |  | A sketches/ directory of <record name>.sig.zip files (k=21, 31, 51; scaled=1000) made from these genomes. A sourmash tool reads them instead of sketching; other tools ignore it. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### dereplicate-merge
@@ -529,6 +530,7 @@ Dereplicate the union of chunk representatives (gather step).
 | `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (selection.tsv CheckM values and genome N50), gtdb (GTDB species representative first, then quality) or tool (adapter's own pick). |
 | `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
 | `--target-reps` | `0` | Target representative count: search --secondary-ani of the merge pass to land near it (0 = off; re-runs the merge per search step). |
+| `--sketches-dir` |  | A sketches/ directory of <record name>.sig.zip files (k=21, 31, 51; scaled=1000) made from these genomes. A sourmash tool reads them instead of sketching; other tools ignore it. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### phylo-build
@@ -555,6 +557,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--mask` | `none` | Recombination masking of the SNP alignment: none, gubbins. Needs --msa-source snptype. |
 | `--msa-only` | off | Build the alignment and stop, writing msa.fasta (for a separate tree step). |
 | `--msa` |  | Build the tree from this alignment instead of constructing one. |
+| `--sketches-dir` |  | A sketches/ directory of <record name>.sig.zip files (k=21, 31, 51; scaled=1000) made from these genomes. A sourmash tool reads them instead of sketching; other tools ignore it. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### tree2tax-relations

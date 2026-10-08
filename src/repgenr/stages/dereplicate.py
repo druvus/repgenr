@@ -37,6 +37,7 @@ from ..core.plugins import (
 )
 from ..core.process import link_or_copy, remove_tree
 from ..core.resources import usable_cpus
+from ..core.sketches import adapter_sketches, workdir_provider
 from ..dereplicators.base import (
     DerepParams,
     DerepResult,
@@ -167,6 +168,16 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         quality=run_quality(manifest_quality, [g.name for g in genomes], logger, source="manifest"),
     )
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
+    # An adapter that compares sourmash sketches reads those of the workdir;
+    # missing and stale ones are written to sketches/ first.
+    derep_params.sketches = adapter_sketches(
+        adapter,
+        extra,
+        genomes,
+        workdir_provider(ctx, logger, params.threads, "dereplicate"),
+        logger,
+        "dereplicate",
+    )
 
     scratch = ctx.scratch_dir / "dereplicate"
     if scratch.exists():

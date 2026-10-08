@@ -23,7 +23,13 @@ workflow READS_DATAFLOW {
     ACQUIRE_READS(ch_meta)
     ch_versions = ch_versions.mix(ACQUIRE_READS.out.versions)
 
-    DEREPLICATE_SCATTER(ACQUIRE_READS.out.genomes, ACQUIRE_READS.out.selection)
+    // Genome sketches are not staged on the reads path (params.sketch is
+    // bacterial only); the sourmash tools sketch for themselves.
+    DEREPLICATE_SCATTER(
+        ACQUIRE_READS.out.genomes,
+        ACQUIRE_READS.out.selection,
+        ACQUIRE_READS.out.genomes.map { meta, _files -> tuple(meta, []) }
+    )
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
@@ -34,12 +40,12 @@ workflow READS_DATAFLOW {
     if (params.phylo_split_msa) {
         PHYLO_MSA(ch_phylo_in)
         ch_versions = ch_versions.mix(PHYLO_MSA.out.versions)
-        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0))
+        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0), [])
         ch_versions = ch_versions.mix(PHYLO_TREE.out.versions)
         ch_tree = PHYLO_TREE.out.tree
     }
     else {
-        PHYLO(ch_phylo_in)
+        PHYLO(ch_phylo_in, [])
         ch_versions = ch_versions.mix(PHYLO.out.versions)
         ch_tree = PHYLO.out.tree
     }

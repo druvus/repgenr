@@ -64,6 +64,13 @@
                     "help_text": "The alignment then survives a change of tree builder or bootstrap, and the two halves request their own resources. Only for tree builders that consume an alignment; leave it off for mashtree or sourmash.",
                     "fa_icon": "fas fa-code-branch"
                 },
+                "sketch": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Sketch the genomes with sourmash and give the sketches to the dereplication and tree tasks.",
+                    "help_text": "Bacterial path only. Writes sketches/<record name>.sig.zip (k=21, 31 and 51 at scaled=1000) for every genome and the outgroup, publishes the directory, and stages it into the dereplication and tree tasks. A sourmash dereplicator or tree builder then reads the sketches instead of sketching; other tools ignore them. Needs sourmash.",
+                    "fa_icon": "fas fa-fingerprint"
+                },
                 "tree2tax_args": {
                     "type": "string",
                     "default": "",

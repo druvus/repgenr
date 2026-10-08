@@ -2,12 +2,19 @@
 //   ACQUIRE (metadata -> genome) -> DEREPLICATE_SCATTER -> PHYLO -> TREE2TAX
 //   (PHYLO is PHYLO_MSA + PHYLO_TREE when params.phylo_split_msa is set)
 //
+// With params.sketch, SKETCH writes a sourmash sketch of every genome and of
+// the outgroup (published as sketches/), and the directory is staged into the
+// dereplication and tree tasks; a sourmash dereplicator or tree builder reads
+// it instead of sketching. SKETCH calls sourmash itself, so it is off by
+// default and a run without sourmash is unaffected.
+//
 // Genomes, representatives, the tree and the taxonomy flow between processes as
 // staged channel files; there is no shared working directory. This is the
 // data-channel replacement for the legacy done-signal BACTERIAL subworkflow.
 
 include { ACQUIRE             } from './acquire'
 include { DEREPLICATE_SCATTER } from './dereplicate_scatter'
+include { SKETCH              } from '../../modules/local/dataflow/sketch'
 include { PHYLO               } from '../../modules/local/dataflow/phylo'
 include { PHYLO_MSA           } from '../../modules/local/dataflow/phylo_msa'
 include { PHYLO_TREE          } from '../../modules/local/dataflow/phylo_tree'
@@ -23,7 +30,20 @@ workflow BACTERIAL_DATAFLOW {
     ACQUIRE(ch_meta)
     ch_versions = ch_versions.mix(ACQUIRE.out.versions)
 
-    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection)
+    def ch_sketches = ACQUIRE.out.genomes.map { meta, _files -> tuple(meta, []) }
+    if (params.sketch) {
+        SKETCH(
+            ACQUIRE.out.genomes
+                .join(ACQUIRE.out.outgroup, by: 0)
+                .map { meta, files, outgroup -> tuple(meta, files + outgroup) }
+        )
+        ch_versions = ch_versions.mix(SKETCH.out.versions)
+        ch_sketches = SKETCH.out.sketches
+    }
+    // One directory (or nothing) for the tree tasks, as for the dereplication.
+    def ch_sketches_dir = ch_sketches.map { _meta, dir -> dir }.first()
+
+    DEREPLICATE_SCATTER(ACQUIRE.out.genomes, ACQUIRE.out.selection, ch_sketches)
     ch_versions = ch_versions.mix(DEREPLICATE_SCATTER.out.versions)
 
     def ch_phylo_in = DEREPLICATE_SCATTER.out.reps
@@ -36,12 +56,12 @@ workflow BACTERIAL_DATAFLOW {
     if (params.phylo_split_msa) {
         PHYLO_MSA(ch_phylo_in)
         ch_versions = ch_versions.mix(PHYLO_MSA.out.versions)
-        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0))
+        PHYLO_TREE(ch_phylo_in.join(PHYLO_MSA.out.msa, by: 0), ch_sketches_dir)
         ch_versions = ch_versions.mix(PHYLO_TREE.out.versions)
         ch_tree = PHYLO_TREE.out.tree
     }
     else {
-        PHYLO(ch_phylo_in)
+        PHYLO(ch_phylo_in, ch_sketches_dir)
         ch_versions = ch_versions.mix(PHYLO.out.versions)
         ch_tree = PHYLO.out.tree
     }

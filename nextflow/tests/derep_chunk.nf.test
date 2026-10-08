@@ -18,6 +18,7 @@ nextflow_process {
                     ]
                 )
                 input[1] = []
+                input[2] = []
                 """
             }
         }
@@ -48,6 +49,7 @@ nextflow_process {
                     ]
                 )
                 input[1] = file("${projectDir}/nextflow/tests/data/selection.tsv")
+                input[2] = []
                 """
             }
         }

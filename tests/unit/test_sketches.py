@@ -81,7 +81,8 @@ def test_writes_every_missing_sketch_and_records_it(tmp_path, fake_sourmash) -> 
     assert summary.as_dict() == {
         "present": 0, "written": 4, "replaced": 0, "forced": 0, "copied": 0, "removed": 0,
     }  # fmt: skip
-    names = {p.name for p in (ctx.workdir / "sketches").iterdir()}
+    # The hidden digest cache (.digests.json) is not a sketch.
+    names = {p.name for p in (ctx.workdir / "sketches").iterdir() if not p.name.startswith(".")}
     assert names == {
         "Fam_Gen_sp_GCA_000000.1.sig.zip",
         "Fam_Gen_sp_GCA_000001.1.sig.zip",
@@ -185,7 +186,10 @@ def test_a_partial_file_of_a_killed_run_is_not_a_sketch(tmp_path, fake_sourmash)
     (directory / ".Fam_Gen_sp_GCA_000000.1.partial.sig.zip").write_text("half")
     assert sketch_status(ctx).missing == ["Fam_Gen_sp_GCA_000000.1"]
     assert _sketch_all(ctx).written == 1
-    assert [p.name for p in directory.iterdir()] == ["Fam_Gen_sp_GCA_000000.1.sig.zip"]
+    assert sorted(p.name for p in directory.iterdir()) == [
+        sketches.DIGESTS_JSON,
+        "Fam_Gen_sp_GCA_000000.1.sig.zip",
+    ]
 
 
 def test_concurrent_sketches_are_bounded_by_threads(tmp_path, fake_sourmash) -> None:

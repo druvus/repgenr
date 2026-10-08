@@ -27,7 +27,9 @@ import json
 import logging
 import os
 import sqlite3
-from collections.abc import Collection, Mapping, Sequence
+import tempfile
+import threading
+from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +64,10 @@ SKETCHES_DIR = "sketches"
 SKETCH_SUFFIX = ".sig.zip"
 # Sketch records of outgroup genomes that have no manifest row.
 OUTGROUP_JSON = "outgroup.json"
+# FASTA digests by (size, mtime_ns), so a consumer does not hash an unchanged
+# genome again (see resolve_sketches). Hidden: not a sketch, and removed with
+# the directory when the last sketch goes.
+DIGESTS_JSON = ".digests.json"
 # sourmash picks the output format from the file name, so the temporary file
 # keeps the .sig.zip suffix; the leading dot hides it from every listing.
 _PARTIAL = ".partial"
@@ -93,10 +99,16 @@ class SketchTarget:
 
 @dataclass(frozen=True)
 class SketchSource:
-    """A sketch another working directory holds, reusable when its record matches."""
+    """A sketch made elsewhere, reusable when its record matches the genome.
+
+    ``name`` is the name its signatures carry when that differs from the
+    genome's record name (the assemble stage sketches an assembly under its
+    run accession before the genome is named); the copy is then renamed.
+    """
 
     sketch: Path
     record: SketchRecord
+    name: str | None = None
 
 
 @dataclass
@@ -253,8 +265,24 @@ def _is_current(rec: SketchRecord | None, rel: str, digest: str, out: Path) -> b
 
 
 def _partial(out: Path) -> Path:
+    """A unique hidden temporary name beside ``out`` (``.<name>.partial.<random>.sig.zip``).
+
+    Unique per call, so two processes writing the same sketch never share a
+    temporary file; each renames its own into place. The name is reserved by
+    mkstemp and the empty file removed again, because sourmash and a hard
+    link both need to create the file themselves.
+    """
     stem = out.name[: -len(SKETCH_SUFFIX)]
-    return out.with_name(f".{stem}{_PARTIAL}{SKETCH_SUFFIX}")
+    fd, name = tempfile.mkstemp(dir=out.parent, prefix=f".{stem}{_PARTIAL}.", suffix=SKETCH_SUFFIX)
+    os.close(fd)
+    tmp = Path(name)
+    tmp.unlink()
+    return tmp
+
+
+def _is_partial(name: str) -> bool:
+    # The unique form, and the fixed .<name>.partial.sig.zip of earlier releases.
+    return name.startswith(".") and _PARTIAL in name and name.endswith(SKETCH_SUFFIX)
 
 
 def _clear_partials(directory: Path) -> None:
@@ -262,7 +290,7 @@ def _clear_partials(directory: Path) -> None:
     if not directory.is_dir():
         return
     for entry in directory.iterdir():
-        if entry.name.startswith(".") and entry.name.endswith(_PARTIAL + SKETCH_SUFFIX):
+        if _is_partial(entry.name):
             entry.unlink(missing_ok=True)
 
 
@@ -271,13 +299,19 @@ def sketch_command(genome: Path, name: str, out: Path) -> list[str | os.PathLike
     return ["sourmash", "sketch", "dna", "-p", SKETCH_PARAMS, "--name", name, "-o", out, genome]
 
 
-def _sketch_one(target: SketchTarget, out: Path, logger: logging.Logger) -> None:
+def sketch_file(genome: Path, name: str, out: Path, logger: logging.Logger) -> None:
+    """Sketch one FASTA with the contract parameters into ``out``, atomically."""
+    _sketch_one(SketchTarget(genome, None), out, logger, name=name)
+
+
+def _sketch_one(
+    target: SketchTarget, out: Path, logger: logging.Logger, *, name: str | None = None
+) -> None:
     tmp = _partial(out)
-    tmp.unlink(missing_ok=True)
     try:
         run_tool(
             SOURMASH_TOOL,
-            sketch_command(target.path, target.name, tmp),
+            sketch_command(target.path, name or target.name, tmp),
             logger=logger,
             log_prefix="sourmash",
             # A linked genome (ingest) lives elsewhere; its directory must be
@@ -292,11 +326,22 @@ def _sketch_one(target: SketchTarget, out: Path, logger: logging.Logger) -> None
         raise
 
 
-def _copy_one(source: Path, out: Path) -> None:
+def _copy_one(source: Path, out: Path, logger: logging.Logger, rename: str | None = None) -> None:
     tmp = _partial(out)
-    tmp.unlink(missing_ok=True)
     try:
-        process.link_or_copy(source, tmp)
+        if rename is None:
+            process.link_or_copy(source, tmp)
+        else:
+            # The signatures carry another name; a rename rewrites only the
+            # zip, it does not read the genome again.
+            run_tool(
+                SOURMASH_TOOL,
+                ["sourmash", "sig", "rename", source, rename, "-o", tmp],
+                logger=logger,
+                log_prefix="sourmash",
+            )
+            if not tmp.is_file():
+                raise WorkdirError(f"sourmash wrote no renamed sketch for {rename}")
         os.replace(tmp, out)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -311,6 +356,7 @@ def sketch_genomes(
     *,
     force: bool = False,
     reuse: Mapping[str, SketchSource] | None = None,
+    digests: _DigestCache | None = None,
 ) -> SketchSummary:
     """Sketch the genomes whose sketch is missing or stale, ``threads`` at a time.
 
@@ -330,11 +376,14 @@ def sketch_genomes(
     outgroup_records = _read_outgroup_json(directory)
     reuse = reuse or {}
     summary = SketchSummary()
+    # Unchanged genomes (size, mtime) are not hashed again; --force hashes all.
+    # A caller that hashed already passes its cache (``digests``) and saves it.
+    cache = digests if digests is not None else _DigestCache(directory / DIGESTS_JSON)
 
     def work(target: SketchTarget) -> tuple[SketchTarget, str, SketchRecord]:
         out = sketch_path(ctx, target.path)
         rel = _relative(ctx, out)
-        digest = file_digest(target.path)
+        digest = cache.digest(target.path, refresh=force)
         fresh = SketchRecord(rel, SKETCH_PARAMS, digest)
         current = _is_current(records.get(_record_key(target)), rel, digest, out)
         if current and not force:
@@ -347,7 +396,9 @@ def sketch_genomes(
             and source.record.digest == digest
             and source.sketch.is_file()
         ):
-            _copy_one(source.sketch, out)
+            # A sketch named otherwise is renamed to the genome's record name.
+            rename = target.name if source.name not in (None, target.name) else None
+            _copy_one(source.sketch, out, logger, rename)
             return target, ACTION_COPIED, fresh
         _sketch_one(target, out, logger)
         if current:
@@ -390,9 +441,20 @@ def sketch_genomes(
         pool.shutdown(wait=True, cancel_futures=True)
         raise
     pool.shutdown(wait=True)
+    if digests is None:
+        _save_cache(
+            cache, [*(t.path for t in sketch_targets(ctx)), *(t.path for t in genomes)], logger
+        )
     if failures:
         raise failures[0]
     return summary
+
+
+def _save_cache(cache: _DigestCache, keep: Collection[Path], logger: logging.Logger) -> None:
+    try:
+        cache.save(keep)
+    except OSError as exc:  # a cache, not a deliverable: the next run hashes again
+        logger.debug("Digest cache not written: %s", exc)
 
 
 def remove_stale(ctx: WorkdirContext, logger: logging.Logger | None = None) -> int:
@@ -617,3 +679,274 @@ def sources_from_workdir(workdir: Path) -> dict[str, SketchSource]:
         if name.endswith(SKETCH_SUFFIX):
             out[name[: -len(SKETCH_SUFFIX)]] = SketchSource(sketch, rec)
     return out
+
+
+# --- consumers: dereplicate, glance, phylo and the classifier -------------------
+
+# A source of genome sketches for a consumer: given genome FASTAs, the
+# signature file of each genome it can supply (the others are left out).
+SketchProvider = Callable[[Sequence[Path]], dict[Path, Path]]
+
+
+def contract_mismatch(ksize: int, scaled: int) -> str | None:
+    """Why sketches of the contract cannot serve (ksize, scaled); None when they can.
+
+    The contract holds k=21, 31 and 51 at scaled=1000, so a consumer asking for
+    any of those k-mer sizes at scaled=1000 selects its signature with ``-k``.
+    """
+    if scaled != SCALED:
+        return f"scaled={scaled} differs from the scaled={SCALED} of the genome sketches"
+    if ksize not in KSIZES:
+        sizes = ", ".join(str(k) for k in KSIZES)
+        return f"k={ksize} is not one of the sketched k-mer sizes ({sizes})"
+    return None
+
+
+def adapter_sketches(
+    adapter: object,
+    extra: Mapping[str, object],
+    genomes: Sequence[Path],
+    provider: SketchProvider | None,
+    logger: logging.Logger,
+    consumer: str,
+) -> dict[Path, Path] | None:
+    """The genome sketches to give ``adapter``, or None when it sketches itself.
+
+    An adapter reads sketches when it defines ``sketch_request(extra)`` and
+    that returns the (ksize, scaled) it compares at. When those parameters are
+    not in the contract (:func:`contract_mismatch`), or there is no provider,
+    the adapter sketches into its own work directory as before; the reason is
+    logged. Genomes the provider cannot supply are sketched by the adapter.
+    """
+    request = getattr(adapter, "sketch_request", None)
+    if request is None or provider is None:
+        return None
+    wanted = request(extra)
+    if wanted is None:
+        return None
+    ksize, scaled = wanted
+    reason = contract_mismatch(ksize, scaled)
+    if reason is not None:
+        logger.info(
+            "%s: genome sketches not used (%s); the tool sketches the genomes itself.",
+            consumer,
+            reason,
+        )
+        return None
+    return provider(genomes) or None
+
+
+def resolve_sketches(
+    ctx: WorkdirContext,
+    genomes: Sequence[Path],
+    logger: logging.Logger,
+    threads: int,
+    *,
+    consumer: str,
+) -> dict[Path, Path]:
+    """Genome -> its sketch under ``sketches/``, sketching what is missing or stale.
+
+    ``genomes`` are matched to the genome set of the workdir by file name, so
+    the representatives under ``derep/representatives/`` find the records of
+    their genomes. A sketch is reused when its record names the current
+    parameters and the sha256 of the given FASTA (taken from
+    ``sketches/.digests.json`` while the file's size and mtime are those it
+    was hashed at, see :class:`_DigestCache`); the others are written
+    through :func:`sketch_genomes` and recorded, so a consumer fills the
+    sketches of the workdir as a side effect. Without sourmash, or when
+    sketching fails, only the reusable sketches are returned. A genome that is
+    not part of the set (no manifest row, not under ``outgroup/``) is left out;
+    the consumer sketches it.
+    """
+    all_targets = sketch_targets(ctx)
+    known = {t.path.name: t for t in all_targets}
+    known_paths = [t.path for t in all_targets]
+    targets: list[SketchTarget] = []
+    for genome in genomes:
+        hit = known.get(genome.name)
+        if hit is not None:
+            targets.append(SketchTarget(genome, hit.accession))
+    if not targets:
+        return {}
+    records = _recorded(ctx)
+    cache = _DigestCache(sketches_dir(ctx.workdir) / DIGESTS_JSON)
+    workers = max(1, min(threads, len(targets)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        digests = dict(zip(targets, pool.map(lambda t: cache.digest(t.path), targets), strict=True))
+
+    def current(target: SketchTarget, recs: Mapping[str, SketchRecord]) -> bool:
+        out = sketch_path(ctx, target.path)
+        rel = _relative(ctx, out)
+        return _is_current(recs.get(_record_key(target)), rel, digests[target], out)
+
+    reused = [t for t in targets if current(t, records)]
+    reused_set = set(reused)
+    todo = [t for t in targets if t not in reused_set]
+    written: list[SketchTarget] = []
+    if todo:
+        if tool_available(SOURMASH_TOOL):
+            try:
+                sketch_genomes(ctx, todo, threads, logger, digests=cache)
+            except (ToolExecutionError, WorkdirError, OSError) as exc:
+                if process.stop_requested.is_set():
+                    raise
+                logger.warning(
+                    "%s: writing genome sketches stopped (%s); the tool sketches the rest itself.",
+                    consumer,
+                    exc,
+                )
+            fresh = _recorded(ctx)
+            written = [t for t in todo if current(t, fresh)]
+        else:
+            logger.info(
+                "%s: sourmash not available here to write the %d missing genome sketch(es).",
+                consumer,
+                len(todo),
+            )
+    if (ctx.workdir / SKETCHES_DIR).is_dir():
+        _save_cache(cache, [*known_paths, *(t.path for t in targets)], logger)
+    left = len(genomes) - len(reused) - len(written)
+    logger.info(
+        "%s: sketches: %d reused, %d written%s",
+        consumer,
+        len(reused),
+        len(written),
+        f", {left} sketched by the tool" if left else "",
+    )
+    return {t.path: sketch_path(ctx, t.path) for t in [*reused, *written]}
+
+
+class _DigestCache:
+    """sha256 of genome FASTAs, reused while a file's size and mtime_ns are unchanged.
+
+    The resume fingerprint judges genome directories by the same file
+    metadata; an edit that keeps both the size and the modification time is
+    therefore not seen (``repgenr --force sketch`` writes every sketch again).
+    Keys are resolved paths, so a representative linked to its genome shares
+    the entry. On save only the files of the current genome set (and those
+    just hashed) are kept.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self.entries: dict[str, tuple[int, int, str]] = {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, list) and len(value) == 3:
+                    try:
+                        self.entries[str(key)] = (int(value[0]), int(value[1]), str(value[2]))
+                    except (TypeError, ValueError):
+                        continue
+
+    def digest(self, genome: Path, *, refresh: bool = False) -> str:
+        """The FASTA sha256; ``refresh`` hashes the file whatever the cache holds."""
+        key = str(genome.resolve())
+        try:
+            st = genome.stat()
+        except OSError:
+            return file_digest(genome)
+        with self._lock:
+            hit = self.entries.get(key)
+        if not refresh and hit is not None and hit[:2] == (st.st_size, st.st_mtime_ns):
+            return hit[2]
+        value = file_digest(genome)
+        with self._lock:
+            self.entries[key] = (st.st_size, st.st_mtime_ns, value)
+        return value
+
+    def save(self, keep: Collection[Path]) -> None:
+        """Write the entries of the files in ``keep`` (genomes of the set) that exist.
+
+        The temporary file has a unique name, so two processes saving at
+        once each replace the cache with a whole file.
+        """
+        wanted = {str(p.resolve()) for p in keep}
+        kept = {
+            k: list(v) for k, v in sorted(self.entries.items()) if k in wanted and Path(k).is_file()
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(
+            dir=self.path.parent, prefix=f"{self.path.name}.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fo:
+                json.dump(kept, fo, sort_keys=True)
+                fo.write("\n")
+            os.replace(name, self.path)
+        except BaseException:
+            Path(name).unlink(missing_ok=True)
+            raise
+
+
+def workdir_provider(
+    ctx: WorkdirContext, logger: logging.Logger, threads: int, consumer: str
+) -> SketchProvider:
+    """A provider over the sketches of a workdir (:func:`resolve_sketches`)."""
+
+    def provide(genomes: Sequence[Path]) -> dict[Path, Path]:
+        return resolve_sketches(ctx, genomes, logger, threads, consumer=consumer)
+
+    return provide
+
+
+def directory_provider(directory: Path, logger: logging.Logger, consumer: str) -> SketchProvider:
+    """A provider over a ``sketches/`` directory without a manifest (Nextflow steps).
+
+    A sketch is matched to a genome by record name only; no digest is checked,
+    so the directory must have been sketched from the same genome files (the
+    pipeline's SKETCH process sketches the genomes it then hands on).
+    """
+
+    def provide(genomes: Sequence[Path]) -> dict[Path, Path]:
+        out: dict[Path, Path] = {}
+        for genome in genomes:
+            sketch = directory / (record_name(genome) + SKETCH_SUFFIX)
+            if sketch.is_file():
+                out[genome] = sketch
+        left = len(genomes) - len(out)
+        logger.info(
+            "%s: sketches: %d reused from %s%s",
+            consumer,
+            len(out),
+            directory,
+            f", {left} sketched by the tool" if left else "",
+        )
+        return out
+
+    return provide
+
+
+def sketch_beside(genome: Path, name: str, out: Path, logger: logging.Logger) -> SketchRecord:
+    """Sketch ``genome`` into ``out`` (signatures named ``name``) unless it is current.
+
+    A stamp ``<out>.json`` records the FASTA sha256 and the parameters; while
+    both match, the file is reused. The assemble stage keeps such a sketch
+    beside each assembly, gathers with it, and later copies it into
+    ``sketches/`` under the genome's record name. Returns the record of the
+    sketch (``file`` None: it is not a workdir sketch).
+    """
+    stamp = out.with_name(out.name + ".json")
+    digest = file_digest(genome)
+    try:
+        stored = json.loads(stamp.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        stored = None
+    if (
+        isinstance(stored, dict)
+        and stored.get("params") == SKETCH_PARAMS
+        and stored.get("digest") == digest
+        and stored.get("name") == name
+        and out.is_file()
+    ):
+        return SketchRecord(None, SKETCH_PARAMS, digest)
+    stamp.unlink(missing_ok=True)
+    sketch_file(genome, name, out, logger)
+    with atomic_replace(stamp) as fo:
+        json.dump({"params": SKETCH_PARAMS, "digest": digest, "name": name}, fo, sort_keys=True)
+        fo.write("\n")
+    return SketchRecord(None, SKETCH_PARAMS, digest)
