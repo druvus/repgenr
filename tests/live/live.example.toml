@@ -4,11 +4,11 @@
 # Where network fixtures cache their downloads and where junit output goes.
 cache_dir = "/Volumes/sekvens2/repgenr/live-cache"
 
-# Directories appended to PATH for every repgenr subprocess, keyed by the
-# tool they provide. Run pytest in the core environment (envs/core.yml); its
-# tools need no entry. The satellites (envs/*.yml) come after core on PATH, so
-# they supply only what core lacks and mashtree's samtools 0.1.19 cannot
-# shadow core's samtools and bcftools.
+# Tool directories, keyed by the tool they provide. Run pytest in the core
+# environment (envs/core.yml); its tools need no entry. A key that names a
+# repgenr tool goes to REPGENR_BIN_DIRS (--bin-dir), so that directory comes
+# first on PATH for that tool only; any other key (nextflow) is appended to
+# PATH. A satellite therefore never shadows core's samtools and bcftools.
 [bin_dirs]
 gubbins = "~/miniforge3/envs/repgenr-gubbins/bin"
 mashtree = "~/miniforge3/envs/repgenr-mashtree/bin"

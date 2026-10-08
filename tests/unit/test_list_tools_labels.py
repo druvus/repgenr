@@ -58,7 +58,7 @@ def only_two_tools(monkeypatch):
     import repgenr.dereplicators.base as derep_base
 
     monkeypatch.setattr(derep_base, "registry", reg)
-    monkeypatch.setattr(binaries.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(binaries.shutil, "which", lambda name, path=None: f"/usr/bin/{name}")
     monkeypatch.setattr(
         binaries,
         "_query_version",
@@ -122,7 +122,9 @@ def test_images_reports_whether_each_image_is_present(only_two_tools, monkeypatc
 
 def test_a_missing_host_tool_is_labelled_host(only_two_tools, monkeypatch) -> None:
     monkeypatch.setattr(
-        binaries.shutil, "which", lambda name: None if name == "hosttool" else f"/usr/bin/{name}"
+        binaries.shutil,
+        "which",
+        lambda name, path=None: None if name == "hosttool" else f"/usr/bin/{name}",
     )
     result = CliRunner().invoke(app, [*_DOCKER, "list-tools", "--check", "--strict"])
     assert result.exit_code == 4, result.output

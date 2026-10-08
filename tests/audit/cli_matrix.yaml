@@ -98,6 +98,18 @@ global_flags:
     - docs/audit/cli-matrix.md
     nextflow: params.repgenr_opts
     live: tests/live/test_container_runs.py::test_native_result_is_not_reused_by_a_container_run
+  --bin-dir:
+    param: 'n/a: per-tool host directories in core.bindirs, also read from REPGENR_BIN_DIRS (comma-separated, parsed by repgenr); unit test test_the_cli_option_and_variable_configure_the_directories'
+    value: gubbins={dir}
+    validated: callback
+    invalid: nosuchtool=/tmp
+    docs:
+    - docs/usage.md
+    - docs/install.md
+    - docs/cli-reference.md
+    - docs/audit/cli-matrix.md
+    nextflow: params.repgenr_opts
+    live: 'n/a: the live suite passes its [bin_dirs] through REPGENR_BIN_DIRS (tests/live/conftest.py)'
   --force:
     aliases:
     - -f

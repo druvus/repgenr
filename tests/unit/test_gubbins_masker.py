@@ -27,7 +27,7 @@ def test_gubbins_argv(tmp_path: Path, monkeypatch) -> None:
         Path(out_prefix).write_text(">a\nA\n", encoding="utf-8")
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGT\n", encoding="utf-8")
     masker = mod.GubbinsMasker()
@@ -50,7 +50,7 @@ def test_extras_select_gubbins_tree_builders(tmp_path: Path, monkeypatch) -> Non
         )
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: False)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: False)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGT\n", encoding="utf-8")
     params = MaskParams(
@@ -74,21 +74,23 @@ def test_extras_select_gubbins_tree_builders(tmp_path: Path, monkeypatch) -> Non
 def test_resolve_tree_builder_falls_back_without_threaded_raxml(monkeypatch, caplog) -> None:
     """Gubbins exits when asked for threads without a PTHREADS RAxML build."""
     logger = logging.getLogger("t")
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: False)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: False)
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: "/bin/x" if name == "iqtree2" else None)
+    monkeypatch.setattr(
+        mod.shutil, "which", lambda name, path=None: "/bin/x" if name == "iqtree2" else None
+    )
     with caplog.at_level(logging.WARNING):
         assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == ("iqtree", 8)
     assert "iqtree" in caplog.text
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+    monkeypatch.setattr(mod.shutil, "which", lambda name, path=None: None)
     assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == (None, 1)
 
     # One thread, a container run, or an explicit choice never trigger it.
     assert mod.resolve_tree_builder(None, 1, logger, on_host=True) == (None, 1)
     assert mod.resolve_tree_builder(None, 8, logger, on_host=False) == (None, 8)
     assert mod.resolve_tree_builder("raxmlng", 8, logger, on_host=True) == ("raxmlng", 8)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     assert mod.resolve_tree_builder(None, 8, logger, on_host=True) == (None, 8)
 
 
@@ -184,7 +186,7 @@ def test_divergent_alignment_warns_before_gubbins_runs(tmp_path: Path, monkeypat
         )
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
     with caplog.at_level(logging.WARNING):
@@ -200,7 +202,7 @@ def test_gubbins_failure_reports_the_divergence(tmp_path: Path, monkeypatch) -> 
         raise ToolExecutionError(["run_gubbins.py"], 1, "Bus error")
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTACGT\n>b\nTGCATGCA\n", encoding="utf-8")
     with pytest.raises(ToolExecutionError) as ei:
@@ -229,7 +231,7 @@ def test_gubbins_keeps_taxa_that_are_mostly_n(tmp_path: Path, monkeypatch) -> No
     """The simple typer writes N where a genome does not align; Gubbins must keep it."""
     calls: list[list[str]] = []
     monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c"}, calls))
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNN\n", encoding="utf-8")
     mod.GubbinsMasker().mask(full, tmp_path / "gub", MaskParams(), logging.getLogger("t"))
@@ -254,7 +256,7 @@ def test_taxa_a_user_filter_would_leave_out_are_refused(
 
     calls: list[list[str]] = []
     monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c", "og"}, calls))
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNN\n>og\nGGGGG\n", encoding="utf-8")
     params = MaskParams(exclude=exclude, extra={"gubbins_args": gubbins_args})
@@ -268,7 +270,7 @@ def test_taxa_a_user_filter_would_leave_out_are_refused(
 def test_a_user_filter_that_keeps_every_taxon_runs(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr(mod, "run_tool", _fake_gubbins_keeping({"a", "b", "c"}, calls))
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGTA\n>b\nATTTA\n>c\nANNNA\n", encoding="utf-8")
     params = MaskParams(extra={"gubbins_args": "--filter-percentage 80"})
@@ -299,7 +301,7 @@ def test_gubbins_threads_are_capped_at_the_available_cpus(
         Path(out_prefix).write_text(">a\nA\n", encoding="utf-8")
 
     monkeypatch.setattr(mod, "run_tool", fake_run_tool)
-    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda: True)
+    monkeypatch.setattr(mod, "multithreaded_raxml_available", lambda path=None: True)
     monkeypatch.setattr(mod, "available_cpus", lambda caps: 11)
     full = tmp_path / "full.fasta"
     full.write_text(">a\nACGT\n", encoding="utf-8")

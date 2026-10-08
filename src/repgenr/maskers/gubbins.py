@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from ..core.binaries import BinarySpec
+from ..core.bindirs import tool_path
 from ..core.containers import available_cpus, run_tool, runs_on_host
 from ..core.errors import ToolExecutionError, UserInputError, WorkdirError
 from ..core.plugins import ToolCapabilities
@@ -133,25 +134,31 @@ MULTITHREADED_RAXML = (
 IQTREE_BINARIES = ("iqtree2", "iqtree")
 
 
-def multithreaded_raxml_available() -> bool:
-    return any(shutil.which(name) for name in MULTITHREADED_RAXML)
+def multithreaded_raxml_available(path: str | None = None) -> bool:
+    return any(shutil.which(name, path=path) for name in MULTITHREADED_RAXML)
 
 
 def resolve_tree_builder(
-    requested: str | None, threads: int, logger: logging.Logger, *, on_host: bool
+    requested: str | None,
+    threads: int,
+    logger: logging.Logger,
+    *,
+    on_host: bool,
+    path: str | None = None,
 ) -> tuple[str | None, int]:
     """Pick the Gubbins tree builder and thread count that can actually run.
 
     A requested builder is passed through unchanged. Otherwise Gubbins' own
     default (RAxML) stands unless the run is native, multi-threaded and the
     host has no multi-threaded RAxML build: then IQ-TREE is used when present,
-    else Gubbins runs single-threaded. Both fallbacks are logged.
+    else Gubbins runs single-threaded. Both fallbacks are logged. ``path`` is
+    the PATH Gubbins runs with (its ``--bin-dir`` first), None for PATH.
     """
     if requested:
         return requested, threads
-    if threads <= 1 or not on_host or multithreaded_raxml_available():
+    if threads <= 1 or not on_host or multithreaded_raxml_available(path):
         return None, threads
-    if any(shutil.which(name) for name in IQTREE_BINARIES):
+    if any(shutil.which(name, path=path) for name in IQTREE_BINARIES):
         logger.warning(
             "No multi-threaded RAxML build (%s) on PATH; Gubbins would exit with "
             "--threads %d. Using --tree-builder iqtree instead (set "
@@ -262,6 +269,7 @@ class GubbinsMasker(Masker):
             threads,
             logger,
             on_host=runs_on_host(self.capabilities),
+            path=tool_path(self.capabilities.name),
         )
         scan_records = read_fasta(gubbins_input) if excluded else records
         fraction, length = variable_fraction(scan_records)

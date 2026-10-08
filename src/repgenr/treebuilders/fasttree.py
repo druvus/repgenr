@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -39,12 +38,13 @@ class FasttreeBuilder(TreeBuilder):
         tree = out_dir / "tree.nwk"
         # Only consult the host PATH when running natively; inside a container
         # the image's canonical lowercase name applies regardless of host state.
+        from ..core.bindirs import host_which
         from ..core.containers import get_config
 
         if get_config().active:
             binary = "fasttree"
         else:
-            binary = "FastTree" if shutil.which("FastTree") else "fasttree"
+            binary = "FastTree" if host_which("FastTree", self.capabilities.name) else "fasttree"
         cmd: list = [binary, "-nt", "-gtr"]
         if params.bootstrap > 0:
             # FastTree's SH-like local supports are computed from `-boot N`

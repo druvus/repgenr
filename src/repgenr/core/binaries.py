@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -74,8 +75,11 @@ def version_timeout(seconds: float) -> Iterator[None]:
         _timeout_override.reset(token)
 
 
-def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
+def _ask(argv: list[str], timeout: float, path: str | None = None) -> tuple[int, str] | None:
     """Run a version query; return its exit status and combined output.
+
+    ``path`` (a per-tool PATH, see core.bindirs) is also the query's PATH, so
+    a wrapper script answers with the helpers of its own environment.
 
     The query runs in its own session, so on timeout the whole process group
     is stopped: a shell wrapper's helper that holds the output pipe open
@@ -92,6 +96,7 @@ def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
             stdin=subprocess.DEVNULL,
             text=True,
             start_new_session=True,
+            env={**os.environ, "PATH": path} if path is not None else None,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -127,9 +132,12 @@ def _ask(argv: list[str], timeout: float) -> tuple[int, str] | None:
 
 
 def _query_version(
-    name: str, version_args: tuple[str, ...], timeout: float | None = None
+    name: str,
+    version_args: tuple[str, ...],
+    timeout: float | None = None,
+    path: str | None = None,
 ) -> str | None:
-    answer = _ask([name, *version_args], VERSION_TIMEOUT if timeout is None else timeout)
+    answer = _ask([name, *version_args], VERSION_TIMEOUT if timeout is None else timeout, path)
     if answer is None:
         return None
     returncode, blob = answer
@@ -189,13 +197,15 @@ def _metadata_version(name: str, path: str | None = None) -> str | None:
 
 
 def check_binaries(
-    specs: tuple[BinarySpec, ...], *, timeout: float | None = None
+    specs: tuple[BinarySpec, ...], *, timeout: float | None = None, path: str | None = None
 ) -> dict[str, str]:
     """Confirm all ``specs`` are present (and new enough). Return name -> version.
 
     Each version query may take ``timeout`` seconds; None means the value set
     by :func:`version_timeout`, or :data:`VERSION_TIMEOUT`. A query that does
     not answer in time is stopped and logged, and its version is unknown.
+    ``path`` replaces PATH for the lookup and the version query (a tool given
+    its own directory with ``--bin-dir``); None uses PATH.
     Raises :class:`MissingBinaryError` listing every missing or too-old binary.
     """
     if timeout is None:
@@ -205,12 +215,15 @@ def check_binaries(
     problems: list[str] = []
 
     for spec in specs:
-        found = shutil.which(spec.name)
+        found = shutil.which(spec.name, path=path)
         if found is None:
             problems.append(f"{spec.name}: not found on PATH")
             continue
 
-        reported = _query_version(spec.name, spec.version_args, timeout=timeout)
+        if path is None:
+            reported = _query_version(spec.name, spec.version_args, timeout=timeout)
+        else:
+            reported = _query_version(found, spec.version_args, timeout=timeout, path=path)
         if _parse_version(reported or "") is None:
             # No version number from the tool itself: the conda package
             # record, when there is one, still names the installed version.

@@ -92,7 +92,7 @@ def fake_datasets(monkeypatch):
 def test_ncbi_virus_end_to_end(tmp_path, fake_datasets, monkeypatch) -> None:
     import repgenr.core.plugins as plugins
 
-    monkeypatch.setattr(plugins, "check_binaries", lambda specs: {})
+    monkeypatch.setattr(plugins, "check_binaries", lambda specs, path=None: {})
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     count = vmetadata.run(ctx, VmetadataParams(target="adenoviridae"))
     assert count == 2
@@ -116,7 +116,7 @@ def test_ncbi_virus_end_to_end(tmp_path, fake_datasets, monkeypatch) -> None:
 def test_ncbi_virus_filters_forwarded(tmp_path, fake_datasets, monkeypatch) -> None:
     import repgenr.core.plugins as plugins
 
-    monkeypatch.setattr(plugins, "check_binaries", lambda specs: {})
+    monkeypatch.setattr(plugins, "check_binaries", lambda specs, path=None: {})
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     params = VmetadataParams(
         target="adenoviridae", complete_only=True, host="homo sapiens", released_after="01/31/2024"
@@ -147,7 +147,7 @@ def test_ncbi_virus_blocked_network_stops_before_datasets(
         def close(self) -> None:
             pass
 
-    monkeypatch.setattr(plugins, "check_binaries", lambda specs: {})
+    monkeypatch.setattr(plugins, "check_binaries", lambda specs, path=None: {})
     monkeypatch.setattr(http, "_probe_session", _Unreachable)
     ctx = WorkdirContext(tmp_path / "wd", create=True)
     with pytest.raises(WorkdirError, match="api.ncbi.nlm.nih.gov") as info:

@@ -30,6 +30,9 @@ class StageRecord:
     completed: str | None = None  # ISO timestamp, set by caller
     fingerprint: str | None = None  # hash of the stage invocation, for resume
     inputs: dict[str, str] = field(default_factory=dict)  # input path -> digest
+    # Tool -> directory put first on PATH for it (--bin-dir), for the tools
+    # that used one. Provenance only: not part of the fingerprint.
+    bin_dirs: dict[str, str] = field(default_factory=dict)
 
     @property
     def interrupted(self) -> bool:
@@ -45,7 +48,7 @@ class StageRecord:
         return not self.completed
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "tool": self.tool,
             "params": self.params,
             "tool_versions": self.tool_versions,
@@ -53,6 +56,9 @@ class StageRecord:
             "fingerprint": self.fingerprint,
             "inputs": self.inputs,
         }
+        if self.bin_dirs:
+            data["bin_dirs"] = self.bin_dirs
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> StageRecord:
@@ -63,6 +69,7 @@ class StageRecord:
             completed=data.get("completed"),
             fingerprint=data.get("fingerprint"),
             inputs=dict(data.get("inputs") or {}),
+            bin_dirs=dict(data.get("bin_dirs") or {}),
         )
 
 
