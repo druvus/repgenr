@@ -286,6 +286,14 @@ def _resolve_outgroup(
 
     candidate = Path(flag).expanduser()
     if candidate.is_file():
+        # phylo, tree2tax and doctor resolve the outgroup among the FASTA
+        # files under outgroup/ only; a file staged under another name would
+        # leave the tree unrooted.
+        if not candidate.name.endswith(FASTA_SUFFIXES):
+            raise UserInputError(
+                f"--outgroup {flag} has no FASTA suffix; name it with one of "
+                f"{', '.join(FASTA_SUFFIXES)}."
+            )
         # A path to a genome under --genomes-dir is that genome's row, so its
         # selection accession is kept rather than one parsed from the filename.
         resolved = candidate.resolve()

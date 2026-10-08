@@ -22,7 +22,7 @@ from repgenr.core.contracts import (
     read_selection,
     write_reads,
 )
-from repgenr.core.errors import WorkdirError
+from repgenr.core.errors import UserInputError, WorkdirError
 from repgenr.stages import assemble as stage
 from repgenr.stages.assemble import AssembleParams, planned_layout, run
 from repgenr.stages.assemble_qc import CHECKM2_CACHE
@@ -292,6 +292,25 @@ def test_auto_assembles_a_one_file_paired_run_as_single_end(workdir, tmp_path, f
 
 
 # --- every run excused -----------------------------------------------------------------
+
+
+def test_an_outgroup_without_a_fasta_suffix_is_refused_before_assembly(
+    workdir, tmp_path, fakes, monkeypatch
+) -> None:
+    from repgenr.stages.assemble import precheck
+
+    _checkm2(monkeypatch, {"SRR1.fasta": (60.0, 1.0)})
+    og = tmp_path / "Fam_Gen_sp_GCF_000009.1.txt"
+    og.write_text(">og\nACGT\n", encoding="utf-8")
+    db = _db(tmp_path / "checkm2.dmnd")
+    ctx = _prepare(workdir, [read_row(tmp_path, "SRR1")])
+    params = AssembleParams(assembler="fakeasm", checkm2_db=db, outgroup=str(og))
+    for call in (precheck, run):
+        with pytest.raises(UserInputError, match="no FASTA suffix") as info:
+            call(ctx, params)
+        assert info.value.exit_code == 2
+    assert FakeAssembler.calls == []
+    assert not ctx.outgroup_dir.exists()
 
 
 def test_a_total_failure_clears_the_previous_genome_set(

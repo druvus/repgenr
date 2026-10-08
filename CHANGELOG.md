@@ -211,7 +211,6 @@ All notable changes to RepGenR are documented here. The format follows
   of running on the earlier genomes. A set written by another stage, or kept
   because every run failed to download, stays and the error names it; a first
   call writes no empty set. Finished runs under `assemblies/` stay (#230).
-- `dereplicate --tool galah` (#239): without manifest quality for every genome,
 - `dereplicate --tool galah` (#233): without manifest quality for every genome,
   galah receives the genomes by descending file size instead of by name. galah
   keeps the first listed genome of a cluster when it has no quality, so a
@@ -523,6 +522,10 @@ All notable changes to RepGenR are documented here. The format follows
 - `phylo`, `tree2tax` and `doctor` (#239): the outgroup is resolved among the
   genome FASTA files under `outgroup/` only; a partial `GCF_x.fasta.tmp` could
   win the substring match before.
+- `ingest --outgroup` and `assemble --outgroup` (#239): a file whose name has
+  no FASTA suffix is refused with exit 2 naming the accepted suffixes, before
+  anything is staged or assembled; phylo, tree2tax and doctor would ignore it
+  under `outgroup/` and the tree would stay unrooted.
 - Resume (#239): `genomes/` or `derep/representatives/` holding only a
   non-FASTA file such as `x.fasta.tmp` counts as a missing deliverable, so the
   stage that writes it re-runs instead of being skipped.

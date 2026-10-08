@@ -32,6 +32,7 @@ from ..core.context import WorkdirContext
 from ..core.contracts import (
     ASSEMBLY_STATS_TSV,
     EXCUSED_RUNS_TSV,
+    FASTA_SUFFIXES,
     READS_TSV,
     SELECTION_TSV,
     AssemblyStatsRow,
@@ -143,6 +144,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     rows = read_reads(reads_path)
     if not rows:
         raise WorkdirError(f"{READS_TSV} lists no runs.")
+    _check_outgroup_file(params.outgroup)
 
     assemblies = ctx.workdir / "assemblies"
     scratch = ctx.scratch_dir / "assemble"
@@ -899,9 +901,29 @@ def classifier_for(classifier: str, gtdb_sketch: str | None) -> str | None:
     return classifier
 
 
+def _check_outgroup_file(outgroup: str | None) -> None:
+    """Refuse an --outgroup that is not a FASTA file, before any assembly.
+
+    phylo, tree2tax and doctor resolve the outgroup among the FASTA files under
+    outgroup/ only, so a file staged under another name would leave the tree
+    unrooted.
+    """
+    if outgroup is None:
+        return
+    source = Path(outgroup).expanduser()
+    if not source.is_file():
+        raise UserInputError(f"--outgroup {outgroup} is not a file.")
+    if not source.name.endswith(FASTA_SUFFIXES):
+        raise UserInputError(
+            f"--outgroup {outgroup} has no FASTA suffix; name it with one of "
+            f"{', '.join(FASTA_SUFFIXES)}."
+        )
+
+
 def precheck(ctx: WorkdirContext, params: AssembleParams) -> None:
     """Refuse a wrong database path or a missing QC tool before the harness marks
     a finished record incomplete (registered in the CLI's stage prechecks)."""
+    _check_outgroup_file(params.outgroup)
     check_quality_inputs(
         checkm2_db=params.checkm2_db or checkm2_db_from_env(),
         classifier=classifier_for(params.classifier, params.gtdb_sketch),
@@ -1320,9 +1342,8 @@ def _stage_outgroup(
             remove_tree(ctx.outgroup_dir)
         acc_file.unlink(missing_ok=True)
         return None
+    _check_outgroup_file(outgroup)
     source = Path(outgroup).expanduser()
-    if not source.is_file():
-        raise UserInputError(f"--outgroup {outgroup} is not a file.")
     family, genus, species, accession = _parse(source.name)
     if ctx.outgroup_dir.exists():
         remove_tree(ctx.outgroup_dir)

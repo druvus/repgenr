@@ -153,6 +153,22 @@ def test_ingest_outgroup_flag_accepts_external_fasta_path(tmp_path: Path, workdi
     assert (workdir / "outgroup_accession.txt").read_text().strip() == "X1"
 
 
+def test_ingest_refuses_an_external_outgroup_without_a_fasta_suffix(
+    tmp_path: Path, workdir: Path
+) -> None:
+    # phylo resolves the outgroup among FASTA files only; a .txt outgroup
+    # would be staged and then ignored, leaving the tree unrooted.
+    src = _source(tmp_path, ["a.fasta"])
+    external = tmp_path / "Out_grp_sp_X1.txt"
+    external.write_text(_SEQ)
+    ctx = WorkdirContext(workdir, create=True)
+    with pytest.raises(UserInputError, match="no FASTA suffix") as info:
+        run(ctx, IngestParams(genomes_dir=str(src), outgroup=str(external)))
+    assert info.value.exit_code == 2
+    assert ".fasta.gz" in str(info.value)
+    assert not ctx.outgroup_dir.exists()
+
+
 def test_ingest_unknown_outgroup_is_an_error(tmp_path: Path, workdir: Path) -> None:
     src = _source(tmp_path, ["a.fasta"])
     ctx = WorkdirContext(workdir, create=True)
