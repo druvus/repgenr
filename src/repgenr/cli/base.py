@@ -780,13 +780,16 @@ def main(
         env = os.environ.get("REPGENR_LOG_LEVEL")
         level = getattr(logging, env.upper(), logging.INFO) if env else logging.INFO
     _RUN_STATE["log_level"] = level
-    configure_container(
-        backend=container,
-        engine=container_engine,
-        platform=platform,
-        cache_dir=container_cache,
-        wave_enabled=wave,
-    )
+    try:
+        configure_container(
+            backend=container,
+            engine=container_engine,
+            platform=platform,
+            cache_dir=container_cache,
+            wave_enabled=wave,
+        )
+    except UserInputError as exc:
+        raise typer.BadParameter(str(exc), param_hint="'--container'") from exc
     _warn_ineffective_container_options(container, container_engine, container_cache, platform, wave)
 
 
