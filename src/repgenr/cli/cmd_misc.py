@@ -50,7 +50,11 @@ def versions(
         raise typer.Exit(code=err.exit_code)
     from ..stages.metadata import gtdb_provenance
 
-    cfg = Config.load(workdir)
+    try:
+        cfg = Config.load(workdir)
+    except WorkdirError as exc:
+        typer.echo(f"ERROR {exc}", err=True)
+        raise typer.Exit(code=exc.exit_code) from exc
     merged: dict[str, str] = {}
     for record in cfg.stages.values():
         merged.update(record.tool_versions)
@@ -82,10 +86,14 @@ def status(
 ) -> None:
     """Show which pipeline stages have completed in a working directory.
 
-    A -wd that does not exist exits 3; an existing directory without
-    repgenr.yaml prints which entry stage to run first and exits 0.
+    A completed stage is listed as stale when one of its inputs changed or
+    one of its outputs is missing since it finished (it re-runs on its next
+    invocation), and as interrupted when it did not finish. A -wd that does
+    not exist exits 3; an existing directory without repgenr.yaml prints
+    which entry stage to run first and exits 0.
     """
     from ..core.config import CONFIG_FILENAME, Config
+    from ..core.errors import WorkdirError
 
     require_existing_workdir(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
@@ -96,7 +104,11 @@ def status(
         )
         raise typer.Exit()
 
-    cfg = Config.load(workdir)
+    try:
+        cfg = Config.load(workdir)
+    except WorkdirError as exc:
+        typer.echo(f"ERROR {exc}", err=True)
+        raise typer.Exit(code=exc.exit_code) from exc
     recorded = cfg.stages
     chain: tuple[str, ...]
     if "reads" in recorded and "metadata" not in recorded:
@@ -108,30 +120,44 @@ def status(
     else:
         lineage, chain = "bacterial", PIPELINE_BACTERIAL
 
+    from ..core.doctor import stale_stages
+
+    try:
+        stale = stale_stages(workdir, cfg)
+        unchecked = None
+    except Exception as exc:  # a damaged artifact must not stop the report
+        stale, unchecked = {}, str(exc)
+
     typer.echo(f"RepGenR workdir: {workdir}")
     typer.echo(f"Pipeline: {lineage}\n")
 
     next_stage: str | None = None
     for stage in chain:
         rec = recorded.get(stage)
-        if rec is not None and rec.completed:
-            tool = f" [{rec.tool}]" if rec.tool else ""
-            note = _gtdb_note(rec.params) if stage == "metadata" else ""
+        tool = f" [{rec.tool}]" if rec is not None and rec.tool else ""
+        finished = rec is not None and not rec.interrupted
+        note = (
+            _gtdb_note(rec.params) if rec is not None and finished and stage == "metadata" else ""
+        )
+        if rec is not None and not rec.interrupted and stage not in stale:
             typer.echo(f"  [done]    {stage}{tool}  {rec.completed}{note}")
-        elif rec is not None and (rec.params or rec.tool):
-            # A record without a completed stamp but with provenance: the stage
-            # started a (re-)run and failed or was killed; outputs may be partial.
+            continue
+        if rec is not None and not rec.interrupted:
+            # Completed, but an input changed or an output is missing since:
+            # the stage re-runs on its next invocation.
+            typer.echo(f"  [stale]   {stage}{tool}  {rec.completed}{note}  ({stale[stage]})")
+        elif rec is not None:
+            # The stage started a (re-)run and failed or was killed; outputs
+            # may be partial.
             typer.echo(
                 f"  [interrupted] {stage}  "
                 "(did not finish; outputs may be partial; see repgenr.log)"
             )
-            if next_stage is None:
-                next_stage = stage
         else:
             marker = "next" if next_stage is None else "    "
             typer.echo(f"  [{marker}] {stage}")
-            if next_stage is None:
-                next_stage = stage
+        if next_stage is None:
+            next_stage = stage
 
     extras = [s for s in recorded if s not in chain]
     if extras:
@@ -139,15 +165,43 @@ def status(
         for stage in extras:
             rec = recorded[stage]
             tool = f" [{rec.tool}]" if rec.tool else ""
-            when = rec.completed or (
-                "[interrupted] (did not finish; outputs may be partial; see repgenr.log)"
-            )
+            if rec.interrupted:
+                when = "[interrupted] (did not finish; outputs may be partial; see repgenr.log)"
+            elif stage in stale:
+                when = f"{rec.completed}  [stale] ({stale[stage]})"
+            else:
+                when = rec.completed or ""
             typer.echo(f"    {stage}{tool}  {when}")
 
+    if unchecked is not None:
+        typer.echo(f"\nStale stages were not checked ({unchecked}); run repgenr doctor.")
     if next_stage is None:
         typer.echo("\nAll stages complete. Deliverables: tree2tax.tsv, genomes_map.tsv.")
     else:
         typer.echo(f"\nNext: repgenr {next_stage} -wd {workdir} ...")
+        hint = _next_stage_note(workdir, next_stage, recorded)
+        if hint:
+            typer.echo(hint)
+
+
+def _next_stage_note(workdir: Path, stage: str, recorded: dict[str, Any]) -> str | None:
+    """A known refusal of the suggested stage, said before the user runs it."""
+    if stage != "phylo" or "dereplicate" not in recorded:
+        return None
+    from ..core.contracts import list_fasta
+    from ..stages.phylo import MIN_TREE_GENOMES
+
+    phylo = recorded.get("phylo")
+    if phylo is not None and phylo.params.get("all_genomes"):
+        return None
+    count = len(list_fasta(workdir / "derep" / "representatives"))
+    if count >= MIN_TREE_GENOMES:
+        return None
+    return (
+        f"Note: derep/representatives holds {count} genome(s) and a tree needs at least "
+        f"{MIN_TREE_GENOMES}; run phylo with --all-genomes, or dereplicate again with a "
+        "higher --secondary-ani."
+    )
 
 
 @app.command(rich_help_panel=PANEL_ENV)
@@ -156,12 +210,14 @@ def doctor(
 ) -> None:
     """Verify a workdir's outputs against its records (read-only health check).
 
-    `status` reports what repgenr.yaml claims; `doctor` checks the claims
-    against the filesystem and the manifest: interrupted stages, missing or
-    corrupt genomes, manifest drift, representative/cluster mismatches,
-    truncated or missing deliverables, and stages whose inputs changed since
-    completion.
-    Exits 1 when any failure is found and 3 when the workdir does not exist.
+    `status` lists each stage as done, stale or interrupted; `doctor` also
+    checks the outputs themselves: missing, corrupt or untracked genomes,
+    dangling links, manifest drift, representative/cluster mismatches,
+    truncated tree and tree2tax tables, missing deliverables, stages whose
+    inputs changed since completion, and leftover temp files.
+    Exits 0 when only warnings are found (a stale stage re-runs on its next
+    invocation), 1 when any failure is found, and 3 when the workdir does
+    not exist.
     """
     from ..core.doctor import diagnose
 

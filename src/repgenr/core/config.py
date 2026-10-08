@@ -14,6 +14,8 @@ from typing import Any
 
 import yaml
 
+from .errors import WorkdirError
+
 CONFIG_FILENAME = "repgenr.yaml"
 SCHEMA_VERSION = 1
 
@@ -28,6 +30,19 @@ class StageRecord:
     completed: str | None = None  # ISO timestamp, set by caller
     fingerprint: str | None = None  # hash of the stage invocation, for resume
     inputs: dict[str, str] = field(default_factory=dict)  # input path -> digest
+
+    @property
+    def interrupted(self) -> bool:
+        """True for a record without a completion stamp.
+
+        The stage harness writes a record before a stage runs (a provisional
+        one on a first run, or the last finished one with its stamp cleared
+        on a re-run) and the stage stamps it when it finishes, so a record
+        without a stamp is a run that failed or was killed. ``status`` and
+        ``doctor`` both use this test, so they never disagree; a stage with
+        no parameters (``cluster_summary``) has an empty record and counts.
+        """
+        return not self.completed
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -66,17 +81,27 @@ class Config:
             from .. import __version__
 
             return cls(repgenr_version=__version__)
-        with open(path, encoding="utf-8") as fo:
-            data = yaml.safe_load(fo) or {}
-        stages = {
-            name: StageRecord.from_dict(rec or {})
-            for name, rec in (data.get("stages") or {}).items()
-        }
-        return cls(
-            schema_version=data.get("schema_version", SCHEMA_VERSION),
-            repgenr_version=data.get("repgenr_version", ""),
-            stages=stages,
-        )
+        try:
+            with open(path, encoding="utf-8") as fo:
+                data = yaml.safe_load(fo) or {}
+            stages = {
+                name: StageRecord.from_dict(rec or {})
+                for name, rec in (data.get("stages") or {}).items()
+            }
+            return cls(
+                schema_version=data.get("schema_version", SCHEMA_VERSION),
+                repgenr_version=data.get("repgenr_version", ""),
+                stages=stages,
+            )
+        except (yaml.YAMLError, AttributeError, TypeError, ValueError, UnicodeDecodeError) as exc:
+            # A hand-edited or damaged record would otherwise surface as a raw
+            # traceback from every command that reads it, status and doctor
+            # included.
+            reason = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+            raise WorkdirError(
+                f"{path} is not a readable RepGenR record ({reason}). Restore it from a "
+                "backup, or move it aside and re-run the stages (each re-runs once)."
+            ) from exc
 
     def save(self, workdir: str | os.PathLike[str]) -> Path:
         path = Path(workdir) / CONFIG_FILENAME

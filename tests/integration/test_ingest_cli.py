@@ -66,10 +66,11 @@ def test_ingest_cli_rejects_missing_source(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-def test_status_reports_local_chain_after_ingest(tmp_path: Path) -> None:
+def test_status_reports_local_chain_after_ingest(tmp_path: Path, write_deliverables) -> None:
     cfg = Config()
     cfg.record_stage("ingest", completed="2026-01-01T00:00:00")
     cfg.save(tmp_path)
+    write_deliverables(tmp_path)
 
     result = _runner.invoke(app, ["status", "-wd", str(tmp_path)])
 
@@ -209,3 +210,17 @@ def test_refused_first_ingest_leaves_no_record_or_manifest(tmp_path: Path) -> No
     assert refused.exit_code == 2
     assert not (wd / "manifest.sqlite").exists()
     assert "ingest" not in Config.load(wd).stages
+
+
+def test_genome_deleted_after_ingest_reruns_ingest(tmp_path: Path, monkeypatch) -> None:
+    # doctor asks for a rerun when a selected genome is gone and dereplicate
+    # refuses the incomplete set; the rerun used to skip because genomes/ was
+    # not empty, so neither advice could be followed without --force.
+    src = _source(tmp_path, ["Fam_Gen_sp1_GCA_000001.1.fasta", "Fam_Gen_sp2_GCA_000002.1.fasta"])
+    wd = tmp_path / "wd"
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    assert _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)]).exit_code == 0
+    (wd / "genomes" / "Fam_Gen_sp2_GCA_000002.1.fasta").unlink()
+    result = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(src)])
+    assert result.exit_code == 0, result.output
+    assert (wd / "genomes" / "Fam_Gen_sp2_GCA_000002.1.fasta").exists()

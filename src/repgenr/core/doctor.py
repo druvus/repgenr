@@ -7,7 +7,9 @@ deliverables, unresolvable outgroups, leftover temp files, and stages whose
 recorded input digests no longer match reality or whose declared deliverables
 are missing (they will re-run).
 
-Strictly read-only: no file, log, or manifest is created in the workdir.
+Read-only: no output, log or record is written in the workdir. Opening the
+WAL-mode manifest lets SQLite create or update its ``-shm``/``-wal``
+companion files, which hold no data of their own.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from .contracts import (
     read_clusters,
     read_selection,
 )
+from .errors import WorkdirError
 from .inputs import file_digest, inputs_digest, manifest_digest_for_stage
 from .integrity import (
     check_genome_completeness,
@@ -41,7 +44,12 @@ from .integrity import (
 )
 from .manifest import MANIFEST_FILENAME, Manifest
 
+# The integrity guards log their refusal text as a warning when told to
+# continue; doctor reports the same condition as a finding, so their log
+# lines are dropped instead of reaching the console unformatted.
 _LOG = logging.getLogger(__name__)
+_LOG.addHandler(logging.NullHandler())
+_LOG.propagate = False
 _MAX_LISTED = 3  # examples shown per finding
 
 
@@ -59,7 +67,10 @@ def diagnose(workdir: Path) -> list[Finding]:
         return [Finding("warn", "config", f"No RepGenR run found at {workdir}.")]
 
     findings: list[Finding] = []
-    config = Config.load(workdir)
+    try:
+        config = Config.load(workdir)
+    except WorkdirError as exc:
+        return [Finding("fail", "config", str(exc))]
     checks = (
         _check_stage_records,
         _check_genomes,
@@ -95,12 +106,31 @@ def _examples(names: list[str]) -> str:
     return shown + more
 
 
+def _genome_set_stages(config: Config) -> tuple[str, str]:
+    """(stage that wrote selection.tsv, stage that placed genomes/) for advice."""
+    for name in ("ingest", "vgenome", "assemble"):
+        if name in config.stages:
+            return name, name
+    return "metadata", "genome"
+
+
 def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
     out: list[Finding] = []
+    if not config.stages and any(
+        (workdir / name).exists() for name in ("genomes", SELECTION_TSV, "derep", "tree")
+    ):
+        out.append(
+            Finding(
+                "warn",
+                "config",
+                f"{CONFIG_FILENAME} records no stage, but the workdir holds outputs; the "
+                "record was emptied or replaced, and every stage will re-run.",
+            )
+        )
     for name, record in config.stages.items():
-        if record.completed:
+        if not record.interrupted:
             out.append(Finding("ok", name, f"completed {record.completed}"))
-        elif record.params or record.tool:
+        else:
             out.append(
                 Finding(
                     "fail",
@@ -114,6 +144,7 @@ def _check_stage_records(workdir: Path, config: Config) -> list[Finding]:
 
 def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
     genomes_dir = workdir / "genomes"
+    writer = _genome_set_stages(config)[1]
     out: list[Finding] = []
     shortfall = check_genome_completeness(genomes_dir, workdir, logger=_LOG, allow_incomplete=True)
     if shortfall:
@@ -122,7 +153,7 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "genomes",
                 f"{len(shortfall)} selected genome(s) missing from {genomes_dir} "
-                f"(e.g. {_examples(shortfall)}); re-run the genome stage.",
+                f"(e.g. {_examples(shortfall)}); re-run {writer}.",
             )
         )
     entries = list_fasta(genomes_dir)
@@ -145,7 +176,18 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "genomes",
                 f"{len(bad)} file(s) under {genomes_dir} are not FASTA "
-                f"(e.g. {_examples(bad)}); delete them and re-run the genome stage.",
+                f"(e.g. {_examples(bad)}); delete them and re-run {writer}.",
+            )
+        )
+    untracked = _untracked_genomes(workdir, entries)
+    if untracked:
+        out.append(
+            Finding(
+                "warn",
+                "genomes",
+                f"{len(untracked)} file(s) under {genomes_dir} are not in {SELECTION_TSV} "
+                f"(e.g. {_examples(untracked)}); dereplicate would include them. Remove "
+                f"them, or re-run {_genome_set_stages(config)[0]} to select them.",
             )
         )
     if not shortfall and not bad and not dangling and genomes_dir.exists():
@@ -153,6 +195,15 @@ def _check_genomes(workdir: Path, config: Config) -> list[Finding]:
             Finding("ok", "genomes", f"{len(list_fasta(genomes_dir))} genome file(s) look sound")
         )
     return out
+
+
+def _untracked_genomes(workdir: Path, entries: list[Path]) -> list[str]:
+    """Genome files under genomes/ that selection.tsv does not list."""
+    selection = workdir / SELECTION_TSV
+    if not selection.exists():
+        return []
+    selected = {row.filename for row in read_selection(selection)}
+    return sorted(p.name for p in entries if p.name not in selected)
 
 
 def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
@@ -168,6 +219,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
         manifest.close()
     extra = sorted(recorded - selected)
     missing = sorted(selected - recorded)
+    writer = _genome_set_stages(config)[0]
     out: list[Finding] = []
     if extra:
         out.append(
@@ -175,7 +227,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "manifest",
                 f"manifest holds {len(extra)} genome(s) not in selection.tsv "
-                f"(e.g. {_examples(extra)}); re-run the metadata stage to reconcile.",
+                f"(e.g. {_examples(extra)}); re-run {writer} to reconcile.",
             )
         )
     if missing:
@@ -184,7 +236,7 @@ def _check_manifest_drift(workdir: Path, config: Config) -> list[Finding]:
                 "fail",
                 "manifest",
                 f"manifest is missing {len(missing)} selected genome(s) "
-                f"(e.g. {_examples(missing)}); re-run the metadata stage.",
+                f"(e.g. {_examples(missing)}); re-run {writer}.",
             )
         )
     if not extra and not missing:
@@ -314,8 +366,20 @@ def _check_phylo_stamp_in_snp(workdir: Path, config: Config) -> list[Finding]:
 def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
     t2t = workdir / TREE2TAX_TSV
     gmap = workdir / GENOMES_MAP_TSV
+    if t2t.exists() and gmap.exists():
+        problem = _tree2tax_tables_problem(t2t, gmap)
+        if problem:
+            return [
+                Finding(
+                    "fail",
+                    "tree2tax",
+                    f"{problem}; the files were truncated or edited -- re-run "
+                    "repgenr --force tree2tax.",
+                )
+            ]
+        return [Finding("ok", "tree2tax", "deliverable pair present and consistent")]
     if t2t.exists() == gmap.exists():
-        return [Finding("ok", "tree2tax", "deliverable pair present")] if t2t.exists() else []
+        return []
     missing = GENOMES_MAP_TSV if t2t.exists() else TREE2TAX_TSV
     return [
         Finding(
@@ -325,6 +389,35 @@ def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
             "exists; the tree2tax stage likely crashed mid-write -- re-run it.",
         )
     ]
+
+
+def _tree2tax_tables_problem(t2t: Path, gmap: Path) -> str | None:
+    """Why tree2tax.tsv and genomes_map.tsv do not describe the same leaves.
+
+    tree2tax.tsv holds a ``child``/``parent`` header and one edge per row;
+    its leaves are the children that are never a parent. genomes_map.tsv
+    maps every leaf to itself (and members to their leaf), so the two leaf
+    sets must be equal.
+    """
+    lines = t2t.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split("\t") != ["child", "parent"]:
+        return f"{TREE2TAX_TSV} lacks its child/parent header"
+    edges = [line.split("\t") for line in lines[1:] if line]
+    if not edges or any(len(edge) != 2 for edge in edges):
+        return f"{TREE2TAX_TSV} holds no edges, or a row without two columns"
+    parents = {parent for _, parent in edges}
+    leaves = {child for child, _ in edges if child not in parents}
+    rows = [line.split("\t") for line in gmap.read_text(encoding="utf-8").splitlines() if line]
+    if not rows or any(len(row) != 2 for row in rows):
+        return f"{GENOMES_MAP_TSV} is empty, or holds a row without two columns"
+    mapped = {leaf for _, leaf in rows}
+    if leaves != mapped:
+        diff = sorted(leaves ^ mapped)
+        return (
+            f"{TREE2TAX_TSV} and {GENOMES_MAP_TSV} name different leaves "
+            f"({len(diff)} in one only, e.g. {_examples(diff)})"
+        )
+    return None
 
 
 def _layout(workdir: Path) -> SimpleNamespace:
@@ -340,8 +433,14 @@ def _layout(workdir: Path) -> SimpleNamespace:
     )
 
 
-def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
-    """Completed stages whose declared deliverables are missing (they will re-run).
+# Records exempt from the staleness checks: a derep-stock record logs the
+# last pack or unpack, whose inputs are the live derep outputs; a later
+# dereplicate changes them by design, and the stored run is unaffected.
+_STALENESS_EXEMPT = frozenset({"derep_stock"})
+
+
+def _missing_by_stage(workdir: Path, config: Config) -> dict[str, list[str]]:
+    """Completed stage -> its declared deliverables that are missing.
 
     Uses the same table (STAGE_DELIVERABLES) and the same workdir-relative
     names as the resume check in the stage harness.
@@ -349,31 +448,25 @@ def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
     from ..cli.base import deliverable_label, missing_deliverables  # deferred: core<-cli
 
     ctx = _layout(workdir)
-    out: list[Finding] = []
+    out: dict[str, list[str]] = {}
     for name, record in config.stages.items():
-        if not record.completed:
+        if record.interrupted:
             continue
         params = SimpleNamespace(**record.params)
-        for path in missing_deliverables(ctx, name, params):
-            out.append(
-                Finding(
-                    "warn",
-                    name,
-                    f"deliverable {deliverable_label(workdir, path)} missing; "
-                    "the stage will re-run on its next invocation.",
-                )
-            )
+        labels = [deliverable_label(workdir, p) for p in missing_deliverables(ctx, name, params)]
+        if labels:
+            out[name] = labels
     return out
 
 
-def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
-    """Completed stages whose recorded input digests no longer match reality."""
+def _changed_by_stage(workdir: Path, config: Config) -> dict[str, list[str]]:
+    """Completed stage -> its recorded inputs whose digest no longer matches."""
     from ..cli.base import _MANIFEST_INPUT_STAGES, STAGE_INPUTS  # deferred: core<-cli
 
     ctx = _layout(workdir)
-    out: list[Finding] = []
+    out: dict[str, list[str]] = {}
     for name, record in config.stages.items():
-        if not record.completed or not record.inputs:
+        if record.interrupted or not record.inputs or name in _STALENESS_EXEMPT:
             continue
         spec = STAGE_INPUTS.get(name)
         if spec is None:
@@ -392,15 +485,49 @@ def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
             key for key in {*record.inputs, *digests} if record.inputs.get(key) != digests.get(key)
         )
         if changed:
-            out.append(
-                Finding(
-                    "warn",
-                    name,
-                    f"input(s) changed since completion ({_examples(changed)}); "
-                    "the stage will re-run on its next invocation.",
-                )
-            )
+            out[name] = changed
     return out
+
+
+def stale_stages(workdir: Path, config: Config) -> dict[str, str]:
+    """Completed stages that will re-run on their next invocation, with why.
+
+    A recorded input changed since completion, or a declared deliverable is
+    missing. ``status`` shows these as stale and ``doctor`` warns about them,
+    from the same two checks, so the commands agree.
+    """
+    reasons: dict[str, list[str]] = {}
+    for name, keys in _changed_by_stage(workdir, config).items():
+        reasons.setdefault(name, []).append(f"input changed: {_examples(keys)}")
+    for name, labels in _missing_by_stage(workdir, config).items():
+        reasons.setdefault(name, []).append(f"missing: {_examples(labels)}")
+    return {name: "; ".join(parts) for name, parts in reasons.items()}
+
+
+def _check_deliverables(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose declared deliverables are missing (they will re-run)."""
+    out: list[Finding] = []
+    for name, labels in _missing_by_stage(workdir, config).items():
+        what = (
+            f"deliverable {labels[0]} missing"
+            if len(labels) == 1
+            else f"{len(labels)} deliverables missing ({_examples(labels)})"
+        )
+        out.append(Finding("warn", name, f"{what}; the stage will re-run on its next invocation."))
+    return out
+
+
+def _check_stale_inputs(workdir: Path, config: Config) -> list[Finding]:
+    """Completed stages whose recorded input digests no longer match reality."""
+    return [
+        Finding(
+            "warn",
+            name,
+            f"input(s) changed since completion ({_examples(changed)}); "
+            "the stage will re-run on its next invocation.",
+        )
+        for name, changed in _changed_by_stage(workdir, config).items()
+    ]
 
 
 def _check_leftovers(workdir: Path, config: Config) -> list[Finding]:
@@ -408,7 +535,9 @@ def _check_leftovers(workdir: Path, config: Config) -> list[Finding]:
         str(p.relative_to(workdir))
         for pattern in ("*.tmp", "*.part")
         for p in workdir.rglob(pattern)
-        if "scratch" not in p.parts
+        # exFAT keeps a ._ AppleDouble companion beside each file; it is not
+        # a second leftover.
+        if "scratch" not in p.parts and not p.name.startswith("._")
     )
     if not leftovers:
         return []

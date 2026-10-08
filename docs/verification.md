@@ -482,6 +482,16 @@ parser), so they also apply to commands other than the one named.
 | assemble, genome-qc | Concurrent sourmash gathers were bounded by the threads only (about 0.6 GB each); they are also bounded by `--memory-gb`, and the log names the number chosen | #230 |
 | assemble | A short-read run labelled PAIRED with one FASTQ file was downloaded and then excused by `--assembler shovill`; it is planned as single-end and excused as `unsupported_layout` before the download | #230 |
 | assemble | When every run was excused the stage exited 3, but `genomes/` and `selection.tsv` of the previous call remained and `dereplicate` ran on them without a warning; a set an earlier `assemble` call wrote is now emptied when at least one run was judged, and `dereplicate` exits 3; a set from another stage, or one kept because every download failed, stays | #230 |
+| status, doctor, versions | A malformed `repgenr.yaml` (unparsable, a list, params that are not a mapping) gave a raw traceback with exit 1 from every command; `doctor` now reports a config failure and the others exit 3 | #234 |
+| doctor | A `cluster_summary` run killed on its first attempt was listed as interrupted by `status` but passed `doctor`; both now treat any record without a completion stamp as interrupted | #234 |
+| ingest, dereplicate | A genome deleted from an ingest workdir, or a representative deleted from `derep/representatives/`, made `doctor` ask for a rerun and `dereplicate` or `phylo` refuse, but the rerun skipped; each selected genome and each representative is now a deliverable | #234 |
+| dereplicate | `representatives/` emptied but holding Finder's `.DS_Store` counted as present, so `dereplicate` skipped; dotfiles no longer count | #234 |
+| all stages | A tool missing at preflight (exit 4) left a first run `[interrupted]`, and any refusal of a re-run left the finished record `[interrupted]` with its outputs intact (`phylo --treebuilder raxmlng` without progressiveMauve); a refusal that changed no deliverable now leaves the record as it was | #234 |
+| doctor | An emptied `tree2tax.tsv` or truncated `genomes_map.tsv` passed; the header and the leaf sets of both tables are now checked | #234 |
+| doctor | A genome file under `genomes/` not in `selection.tsv` was reported only as a changed input; it is now named | #234 |
+| doctor | Advice named the genome and metadata stages in ingest, vgenome and assemble workdirs; the integrity guards' refusal text reached the console unformatted; exFAT `._` companions counted as leftovers; an emptied `repgenr.yaml` beside outputs passed | #234 |
+| status | Every recorded stage showed `[done]` after an input changed or an output was deleted (a 3-leaf tree over 32 representatives gave "All stages complete"); such stages are now `[stale]` with the reason, from the checks `doctor` uses, and `Next:` points at the first stage that is not done | #234 |
+| status, phylo | `status` said "Next: repgenr phylo" with two representatives, which phylo refuses; it now adds a note. phylo's refusal advised a lower ANI threshold, which leaves fewer representatives; it now names a higher `--secondary-ani` | #234 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -491,7 +501,6 @@ they are recorded here and not fixed.
 | Phylogeny | cactus renames its samples ('.' to '_'), while `tree2tax` resolves the outgroup leaf by file stem, so with a versioned accession such as `GCF_000001.1` the outgroup never matched a leaf. tree2tax warned and left the tree unrooted, and later exited 3 naming the outgroup; since the second audit pass the cactus adapter renames the alignment records back to genome stems and phylo restores renamed leaves. |
 | Phylogeny | ParSNP's internal RAxML step refuses fewer than four genomes, so `--snptyper parsnp` exits 6 on a three-genome set; the three-genome check in `phylo` does not cover this. |
 | SNP typing | The `simple` typer fills sequence a genome lacks with the reference base. A copy of a genome with 500 kb removed differed from that genome at 20539 sites on the 50-genome set. Masking uncovered positions with N, and comparing sites only where both genomes have a base, would change a documented behaviour and the SNP counts, so it is left as a proposal; usage.md states the limitation. |
-| Exit codes | A missing tool found by the preflight (exit 4, for example `snptype --mask gubbins` without Gubbins) leaves the stage shown as `[interrupted]` in `status`, although nothing ran; the harness keeps the provisional record for exit 4 and 6 alike. |
 | Environment | ParSNP reads every file in its input directory, so the AppleDouble `._*.fasta` files macOS writes on exFAT volumes break it; stage the genomes on an APFS disk. |
 | Exit codes | When every assembly fails, `assemble` and `reads-gather` exit 3 and not 6; this is documented behaviour in the exit-code table of docs/usage.md, with the reasons in `excused_runs.tsv`. |
 | assemble | A missing CheckM2 result is kept with a warning and not excused; this is documented behaviour in docs/usage.md, since a run CheckM2 could not score is not evidence of a poor assembly. |
@@ -506,7 +515,6 @@ they are recorded here and not fixed.
 | Resume | The skip message says "use --force to re-run", but `--force` is a global option and must come before the command (`repgenr --force glance ...`); `repgenr glance --force` exits 2 with "No such option". |
 | derep-stock | A stored run keeps links to the representative files, but unpack restores by name from `genomes/`; a genome replaced under the same name since the pack is restored in its current form. |
 | Environment | `status` and `doctor` on a long-running workdir (`francisella_all`) were not exercised, because that workdir was not on the audit machine. |
-| ingest | `status` shows `dereplicate` as done after the genome set changed; only `doctor` and the next run detect the stale input. |
 | ingest | Any name with four or more `_`-separated tokens is read as Family_genus_species_ACCESSION (`sample_1_run_A.fasta` gives accession `A`); documented, with `--selection` as the remedy. |
 | Resume | `metadata --metadata-path`, `reads --accession-file` and `assemble --outgroup` record relative paths as given, as ingest did before this audit. |
 | vgenome | On the NCBI Virus path the species is the record's organism name, which is often a strain or an older name (Orthohantavirus: `Hantaanvirus-CGAa1011`; Mammarenavirus: `Argentinian mammarenavirus` and `Mammarenavirus juninense` under one taxid). One species then splits into several species tokens, which affects `--target-species`, the median-of-medians window and the outgroup candidates. A lineage-derived binomial is proposed in the deep-audit report. |
@@ -514,6 +522,10 @@ they are recorded here and not fixed.
 | dereplicate | On `mixed_1000_clustered` (20 truth clusters) skder, galah, sourmash sparse and sourmash dense all recover the truth partition at the defaults (adjusted Rand index 1.0); sparse and dense pick different representatives within clusters, as choosing-tools.md states. |
 | dereplicate | Without manifest quality, galah picks a 40 percent fragment as the representative of its cluster (input order), and sourmash keeps the fragment as its own cluster (k-mer similarity counts the missing part). `--keeper quality` with manifest quality corrects the first. |
 | dereplicate | `--target-reps` with `--process-size` re-sketches the union of chunk representatives at each search step, since the union changes with the threshold; on 50 genomes the search took 87 s against 22 s unchunked. |
+| doctor | `doctor` exits 1 for failures found and also for an unexpected error, so a script cannot tell them apart by exit code; there is no machine-readable output (`--json`). |
+| doctor | The first-bytes FASTA check reads every genome: 28 s for 1000 genomes on an exFAT USB volume (about 35 ms per file, not cached between runs); 8 to 16 threads gave 1.3 to 1.7 times. `status` reads no genome content and takes 0.4 s there. |
+| status, doctor | A record from a version without resume fingerprints, or a `dereplicate` record restored by `derep-stock unpack`, is shown as done although the next invocation recomputes it. Marking it stale would send the user to re-run a restored dereplication. |
+| doctor | Opening the WAL-mode manifest lets SQLite create or touch `manifest.sqlite-shm` and `-wal`; no data changes. |
 | Environment | dRep 3.4.5 in the local environment fails in fastANI parsing (`read_csv` no longer accepts `delim_whitespace` in the installed pandas); ANImf (`--virus`) runs. The container pin is dRep 3.7.1. |
 
 ## Platform notes (macOS / Apple Silicon)

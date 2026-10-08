@@ -48,12 +48,13 @@ def test_reads_command_rejects_an_unknown_platform(monkeypatch, tmp_path: Path) 
     assert "--platform" in result.output + str(result.exception or "")
 
 
-def test_status_reports_the_reads_chain(tmp_path: Path) -> None:
+def test_status_reports_the_reads_chain(tmp_path: Path, write_deliverables) -> None:
     wd = tmp_path / "wd"
     wd.mkdir()
     cfg = Config()
     cfg.record_stage("reads", params={"taxid": "263"}, completed="t")
     cfg.save(wd)
+    write_deliverables(wd)
     result = _runner.invoke(app, ["status", "-wd", str(wd)])
     assert result.exit_code == 0, result.output
     assert "Pipeline: reads" in result.output

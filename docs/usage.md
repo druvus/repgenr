@@ -475,23 +475,37 @@ parameter, switch `--container`, or pass `--force` to re-run explicitly.
 as an unknown option. A stage writes its record without a completion stamp before it starts, so one
 that failed or crashed mid-run is listed as `[interrupted]` by `status`,
 reported as a failure by `doctor`, and always re-runs; a successful run
-stamps the record. A failure in parameter validation writes no record, and
-neither does a stage that refuses its input (exit 2 or 3) without changing
-any of its main outputs, for example `phylo` with fewer than three genomes.
-A failed external tool (exit 4 or 6) always leaves the record.
+stamps the record. A failure in parameter validation writes no record. A
+stage that refuses (exit 2 or 3, or 4 for a tool missing at its preflight)
+without changing any of its main outputs leaves the record as it was: none
+on a first run, and the last finished one on a re-run, since its outputs are
+untouched. Examples are `phylo` with fewer than three genomes and
+`snptype --mask gubbins` without Gubbins. A failed external tool (exit 6),
+or a refusal after a main output changed, leaves the record interrupted.
 Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
 `tree2tax.tsv` and `genomes_map.tsv` for `tree2tax`; a directory must not be
-empty). If one was deleted, the stage logs
+empty, and dotfiles such as `.DS_Store` or exFAT `._` files do not count).
+Each genome listed in `selection.tsv` is checked for the stage that wrote
+the genome set (`genome`, `ingest`, `vgenome`, `assemble`), and each
+representative listed in `derep/clusters.tsv` for `dereplicate`. If one was
+deleted, the stage logs
 `Stage 'X': deliverable <path> missing; re-running.` and runs again, so
-`--force` is not needed to rebuild it. For `glance` only
+`--force` is not needed to rebuild it; a genome deleted from `genomes/` is
+restored by the next run of that stage. To drop a genome on purpose, remove
+it from the source directory or from the `--selection` file and re-run the
+entry stage. For `glance` only
 `glance_clustering_dendrogram.pdf` is checked, since its plots are absent
 when no value falls within the plot bounds. `repgenr
-doctor -wd <wd>` verifies a workdir's outputs against its records (missing or
-corrupt genomes, manifest drift, truncated deliverables, interrupted stages)
-and exits non-zero on failures; it lists a missing deliverable under the same
-path as a warning, since the stage will re-run.
+doctor -wd <wd>` verifies a workdir's outputs against its records (missing,
+corrupt or untracked genomes, manifest drift, truncated deliverables,
+interrupted stages). It exits 1 on failures and 0 when it finds only
+warnings; a missing deliverable or a changed input is a warning under the
+same path, since the stage will re-run. `status` reads the same tables and
+lists such a stage as `[stale]`, so the two commands agree on what re-runs.
+A malformed `repgenr.yaml` is reported by both: `doctor` as a failure,
+`status` and every stage with exit 3.
 
 Two limitations, both covered by `--force`: input directories are digested from
 file metadata (name, size, mtime), so an in-place edit that preserves size and
@@ -1085,7 +1099,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   (a data-channel step has no log and always prints the tail).
   `repgenr status -wd <WD>` shows what completed and what is next; a stage
   that failed is listed as `[interrupted]` and its outputs may be partial
-  until it is re-run.
+  until it is re-run. A finished stage is listed as `[stale]` when one of its
+  inputs changed or one of its outputs is missing since it finished; it
+  re-runs on its next invocation.
 - **GTDB download fails.** Check `--release` (e.g. `232.0`) and `--gtdb-version`
   (`bac120`/`ar53`); transient HTTP errors are retried automatically. A host
   that does not accept a connection within 15 s counts as unreachable, so a

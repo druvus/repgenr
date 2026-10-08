@@ -333,7 +333,7 @@ def test_run_forwards_the_flags_it_has_builders_for(dispatched, tmp_path) -> Non
     assert (t2t.node_basename, t2t.root_name, t2t.remove_outgroup) == ("n", "TOP", True)
 
 
-def test_local_run_matches_manual_ingest(dispatched, tmp_path) -> None:
+def test_local_run_matches_manual_ingest(dispatched, tmp_path, monkeypatch) -> None:
     from repgenr.cli import cmd_ingest
 
     genomes = tmp_path / "genomes"
@@ -364,7 +364,7 @@ def test_local_run_matches_manual_ingest(dispatched, tmp_path) -> None:
     def fake_run(stage, workdir, build, *, create=False):
         dispatched.append((stage, build()))
 
-    cmd_ingest._run = fake_run  # the fixture patches the other command modules
+    monkeypatch.setattr(cmd_ingest, "_run", fake_run)  # the fixture patches the others
     result = _runner.invoke(
         app,
         ["ingest", "-wd", wd, "--genomes-dir", str(genomes), "--outgroup", "GCF_1", "--copy"],

@@ -19,7 +19,12 @@ import yaml
 
 from repgenr.cli import base as cli
 from repgenr.core.config import CONFIG_FILENAME
-from repgenr.core.errors import ToolExecutionError, UserInputError
+from repgenr.core.errors import (
+    MissingBinaryError,
+    ToolExecutionError,
+    UserInputError,
+    WorkdirError,
+)
 
 
 @dataclass
@@ -277,3 +282,68 @@ def _raising(exc: Exception):
         raise exc
 
     return run
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [UserInputError("refused"), WorkdirError("too few"), MissingBinaryError("tool missing")],
+)
+def test_refused_rerun_keeps_the_finished_record(tmp_path: Path, monkeypatch, exc) -> None:
+    # A re-run refused before it touched any deliverable (a tool missing at
+    # preflight, exit 4; too few genomes, exit 3) used to leave the finished
+    # record as interrupted although its outputs were intact.
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(
+        cli.STAGE_DELIVERABLES, "crashtest", lambda ctx, p: [ctx.workdir / "out.txt"]
+    )
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    cli._run("crashtest", tmp_path, lambda: _P(), create=True)
+    (tmp_path / "out.txt").write_text("result\n", encoding="utf-8")
+    finished = _record_from_disk(tmp_path)
+    assert finished["completed"]
+
+    fake = types.ModuleType("repgenr.stages.crashtest")
+    fake.run = _raising(exc)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "repgenr.stages.crashtest", fake)
+    with pytest.raises(typer.Exit) as raised:
+        cli._run("crashtest", tmp_path, lambda: _P(a=2), create=True)
+    assert raised.value.exit_code == exc.exit_code
+    assert _record_from_disk(tmp_path) == finished
+
+
+def test_refusal_that_changed_a_deliverable_stays_interrupted(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(
+        cli.STAGE_DELIVERABLES, "crashtest", lambda ctx, p: [ctx.workdir / "out.txt"]
+    )
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    cli._run("crashtest", tmp_path, lambda: _P(), create=True)
+    (tmp_path / "out.txt").write_text("result\n", encoding="utf-8")
+
+    def run(ctx, params):  # noqa: ANN001
+        (ctx.workdir / "out.txt").write_text("partial, longer\n", encoding="utf-8")
+        raise WorkdirError("refused after writing")
+
+    fake = types.ModuleType("repgenr.stages.crashtest")
+    fake.run = run  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "repgenr.stages.crashtest", fake)
+    with pytest.raises(typer.Exit):
+        cli._run("crashtest", tmp_path, lambda: _P(a=2), create=True)
+    assert _record_from_disk(tmp_path)["completed"] is None
+
+
+def test_tool_missing_on_a_first_run_leaves_no_record(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    monkeypatch.setitem(
+        cli.STAGE_DELIVERABLES, "crashtest", lambda ctx, p: [ctx.workdir / "out.txt"]
+    )
+    fake = types.ModuleType("repgenr.stages.crashtest")
+    fake.run = _raising(MissingBinaryError("gubbins: not found on PATH"))  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "repgenr.stages.crashtest", fake)
+    with pytest.raises(typer.Exit) as raised:
+        cli._run("crashtest", tmp_path, lambda: _P(), create=True)
+    assert raised.value.exit_code == 4
+    data = yaml.safe_load((tmp_path / CONFIG_FILENAME).read_text(encoding="utf-8")) or {}
+    assert "crashtest" not in (data.get("stages") or {})

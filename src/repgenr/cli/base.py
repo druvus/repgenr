@@ -33,9 +33,16 @@ from ..core.contracts import (
     SELECTION_TSV,
     TREE2TAX_TSV,
     TREE_NWK,
+    read_clusters,
 )
-from ..core.errors import RepGenRError, ToolExecutionError, UserInputError, WorkdirError
-from ..core.inputs import inputs_digest, manifest_digest_for_stage
+from ..core.errors import (
+    MissingBinaryError,
+    RepGenRError,
+    ToolExecutionError,
+    UserInputError,
+    WorkdirError,
+)
+from ..core.inputs import dir_stat_digest, inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
 from ..core.manifest import MANIFEST_FILENAME
 
@@ -314,35 +321,68 @@ def _derep_stock_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
     return []
 
 
-def _genome_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
-    """The genome directory and manifest, plus every file the selection promises.
+def _selected_genome_files(ctx: WorkdirContext) -> list[Path]:
+    """Every genome file ``selection.tsv`` promises, outgroup included.
 
-    One genome or the outgroup deleted by hand then reruns the stage (which
-    fetches only what is absent) instead of being skipped because genomes/ is
-    not empty. Accessions NCBI returned nothing for are excused.
+    Listed as deliverables of the stage that wrote the genome set, so one
+    genome or the outgroup deleted by hand reruns that stage (which restores
+    only what is absent) instead of being skipped because genomes/ is not
+    empty. Accessions recorded as unavailable are excused.
     """
     from ..core.contracts import read_selection
     from ..core.integrity import excused_accessions
 
-    paths = [ctx.genomes_dir, ctx.workdir / MANIFEST_FILENAME]
     selection = ctx.workdir / SELECTION_TSV
     if not selection.is_file():
-        return paths
+        return []
     try:
         rows = read_selection(selection)
     except (OSError, ValueError, RepGenRError):
-        return paths  # the stage itself reports an unreadable selection
+        return []  # the stage itself reports an unreadable selection
     excused = excused_accessions(ctx.workdir)
-    for row in rows:
-        if row.accession in excused:
-            continue
-        paths.append((ctx.outgroup_dir if row.is_outgroup else ctx.genomes_dir) / row.filename)
-    return paths
+    return [
+        (ctx.outgroup_dir if row.is_outgroup else ctx.genomes_dir) / row.filename
+        for row in rows
+        if row.accession not in excused
+    ]
+
+
+def _genome_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
+    """The genome directory and manifest, plus every file the selection promises."""
+    return [ctx.genomes_dir, ctx.workdir / MANIFEST_FILENAME, *_selected_genome_files(ctx)]
 
 
 def _genome_set_deliverables(ctx: WorkdirContext) -> list[Path]:
     """What every entry path that writes a genome set leaves in the workdir."""
-    return [ctx.genomes_dir, ctx.workdir / SELECTION_TSV, ctx.workdir / MANIFEST_FILENAME]
+    return [
+        ctx.genomes_dir,
+        ctx.workdir / SELECTION_TSV,
+        ctx.workdir / MANIFEST_FILENAME,
+        *_selected_genome_files(ctx),
+    ]
+
+
+def _dereplicate_deliverables(ctx: WorkdirContext, params: Any) -> list[Path]:
+    """The four derep tables and directories, plus each listed representative.
+
+    A representative deleted by hand reruns the stage instead of leaving
+    phylo to refuse a representatives/ directory out of step with
+    clusters.tsv. All four outputs are listed: doctor fails on a missing
+    genome_status.tsv and asks for a rerun, which must then not be skipped.
+    """
+    paths = [
+        ctx.derep_dir / CLUSTERS_TSV,
+        ctx.derep_dir / GENOME_STATUS_TSV,
+        ctx.derep_dir / CLUSTER_SUMMARY_TSV,
+        ctx.representatives_dir,
+    ]
+    clusters = ctx.derep_dir / CLUSTERS_TSV
+    if clusters.is_file():
+        try:
+            paths += [ctx.representatives_dir / name for name in read_clusters(clusters)]
+        except (OSError, ValueError, RepGenRError):
+            pass  # an unreadable table: the stage reruns on its own terms
+    return paths
 
 
 # What each stage writes that downstream stages or the user rely on: stage ->
@@ -361,14 +401,7 @@ STAGE_DELIVERABLES: dict[str, Any] = {
     # genome reads selection.tsv and the manifest; it writes the genome files.
     "genome": _genome_deliverables,
     "vgenome": lambda ctx, p: _genome_set_deliverables(ctx),
-    # All four outputs: doctor fails on a missing genome_status.tsv and asks
-    # for a rerun, which must then not be skipped.
-    "dereplicate": lambda ctx, p: [
-        ctx.derep_dir / CLUSTERS_TSV,
-        ctx.derep_dir / GENOME_STATUS_TSV,
-        ctx.derep_dir / CLUSTER_SUMMARY_TSV,
-        ctx.representatives_dir,
-    ],
+    "dereplicate": _dereplicate_deliverables,
     "snptype": lambda ctx, p: [ctx.snp_dir / CORE_SNP_FASTA],
     "phylo": lambda ctx, p: [ctx.tree_dir / TREE_NWK],
     "tree2tax": lambda ctx, p: [ctx.workdir / TREE2TAX_TSV, ctx.workdir / GENOMES_MAP_TSV],
@@ -387,9 +420,14 @@ STAGE_DELIVERABLES: dict[str, Any] = {
 }
 
 
+_LOGGED_MISSING = 5  # missing deliverables named one per line before a count
+
+
 def _deliverable_present(path: Path) -> bool:
     if path.is_dir():
-        return any(path.iterdir())
+        # Dotfiles do not count: Finder leaves .DS_Store in a directory it
+        # showed, and exFAT keeps ._ AppleDouble companions.
+        return any(not entry.name.startswith(".") for entry in path.iterdir())
     return path.exists()
 
 
@@ -399,6 +437,32 @@ def missing_deliverables(ctx: Any, stage_name: str, params: Any) -> list[Path]:
     if spec is None:
         return []
     return [path for path in spec(ctx, params) if not _deliverable_present(path)]
+
+
+def _deliverables_state(ctx: Any, stage_name: str, params: Any) -> list[tuple[str, object]]:
+    """A cheap snapshot of a stage's deliverables: one stat per file.
+
+    Files by (size, mtime_ns), directories by their flat stat digest, absent
+    paths as None; compared before and after a refused run to tell a refusal
+    that touched nothing from one that left partial outputs.
+
+    Limitation: the manifest is WAL-mode, and its writes stay in the -wal
+    file until the connection closes, so ``manifest.sqlite`` shows no change
+    in size or mtime here. A stage that wrote only the manifest and then
+    refused would therefore have its record restored. No current stage
+    does: each refuses before it writes, or also writes a file deliverable.
+    """
+    spec = STAGE_DELIVERABLES.get(stage_name)
+    state: list[tuple[str, object]] = []
+    for path in spec(ctx, params) if spec is not None else []:
+        if path.is_dir():
+            state.append((str(path), dir_stat_digest(path)))
+        elif path.exists():
+            st = path.stat()
+            state.append((str(path), (st.st_size, st.st_mtime_ns)))
+        else:
+            state.append((str(path), None))
+    return state
 
 
 def deliverable_label(workdir: Path, path: Path) -> str:
@@ -858,11 +922,19 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
                 return
             # The fingerprint excludes outputs, so check them separately: a
             # deliverable deleted by hand must be rebuilt, not skipped.
-            for path in missing:
+            # Per-file deliverables (genomes, representatives) can number in
+            # the thousands; name a few.
+            for path in missing[:_LOGGED_MISSING]:
                 logger.info(
                     "Stage '%s': deliverable %s missing; re-running.",
                     stage_name,
                     deliverable_label(ctx.workdir, path),
+                )
+            if len(missing) > _LOGGED_MISSING:
+                logger.info(
+                    "Stage '%s': %d more deliverable(s) missing.",
+                    stage_name,
+                    len(missing) - _LOGGED_MISSING,
                 )
         # A key present on one side only means the stage now reads a different
         # set of inputs (a flag such as --include-dereplicated, or an outgroup
@@ -892,6 +964,9 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     precheck = _STAGE_PRECHECKS.get(stage_name)
     if precheck is not None:
         precheck(ctx, params)
+    finished = (
+        (prior.completed, prior.fingerprint) if prior is not None and prior.completed else None
+    )
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage
         # must not leave a completed-looking record over partial outputs.
@@ -913,23 +988,30 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     # The incomplete record now on file (provisional, dirtied, or left by an
     # earlier failure). A stage writes a new record object when it finishes.
     pending = ctx.config.stages.get(stage_name)
-    missing_before = (
-        set(missing_deliverables(ctx, stage_name, params)) if provisional is not None else set()
+    before = (
+        _deliverables_state(ctx, stage_name, params)
+        if provisional is not None or finished is not None
+        else None
     )
     module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
     try:
         module.run(ctx, params)
-    except (UserInputError, WorkdirError):
-        # A clean refusal that changed none of the stage's deliverables (for
-        # example phylo with too few genomes) did not start: drop the
-        # provisional record so `status` does not report it as interrupted.
-        # A tool failure (exit 4/6) or a crash keeps the record.
+    except (UserInputError, WorkdirError, MissingBinaryError):
+        # A refusal that left every deliverable as it was (phylo with too few
+        # genomes, a tool missing at preflight) did not start: put the record
+        # back as it was, so `status` and `doctor` do not report a stage that
+        # never ran as interrupted -- no record on a first run, the last
+        # finished one (whose outputs are untouched) on a re-run. A tool
+        # failure (exit 6) or a crash keeps the incomplete record.
         if (
-            provisional is not None
-            and ctx.config.stages.get(stage_name) is provisional
-            and set(missing_deliverables(ctx, stage_name, params)) == missing_before
+            before is not None
+            and ctx.config.stages.get(stage_name) is pending
+            and _deliverables_state(ctx, stage_name, params) == before
         ):
-            del ctx.config.stages[stage_name]
+            if provisional is not None:
+                del ctx.config.stages[stage_name]
+            elif pending is not None and finished is not None:
+                pending.completed, pending.fingerprint = finished
             ctx.save_config()
         raise
     if pending is not None and ctx.config.stages.get(stage_name) is pending:

@@ -7,6 +7,19 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `status` (#234): a finished stage whose recorded input changed, or whose
+  declared output is missing, since it finished is listed as `[stale]` with
+  the reason; it re-runs on its next invocation. `Next:` names the first
+  stage that is not done (stale, interrupted or not run), and when that is
+  `phylo` with fewer than three representatives a note says phylo will refuse
+  and names `--all-genomes` and `--secondary-ani`. status and doctor use the
+  same checks (`core.doctor.stale_stages`), so they agree; derep-stock
+  records are exempt, since a later dereplicate changes their inputs by design.
+- `doctor` (#234): checks that `tree2tax.tsv` has its header and names the
+  same leaves as `genomes_map.tsv`, warns about genome files under `genomes/`
+  that `selection.tsv` does not list, and warns when `repgenr.yaml` records
+  no stage beside existing outputs. Its help states the exit codes: 0 with
+  only warnings, 1 on failures, 3 for a missing workdir.
 - `ingest` (#229): genome files ending in `.fna.gz` (the NCBI FTP default) and
   `.fa.gz` are accepted beside `.fasta.gz` (one suffix list in
   `core.contracts.FASTA_SUFFIXES`), and were previously skipped with a
@@ -442,6 +455,27 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- Resume (#234): a stage that refuses (exit 2, 3, or 4 for a tool missing at
+  preflight) without changing any declared output leaves its record as it
+  was: none on a first run, the last finished one on a re-run. It was left
+  `[interrupted]`, so status pointed at it and doctor failed although the
+  outputs were those of the finished run.
+- Resume (#234): each genome `selection.tsv` lists is a deliverable of the
+  stage that wrote the genome set (ingest, assemble, vgenome, as genome
+  already did), and each representative in `clusters.tsv` is a deliverable of
+  dereplicate. A genome deleted from `genomes/` is restored by the next
+  `ingest` run, and a deleted representative by the next `dereplicate`; both
+  were skipped while doctor asked for a rerun. A deliverable directory holding
+  only dotfiles (`.DS_Store`, exFAT `._` files) counts as empty.
+- A malformed `repgenr.yaml` (unparsable, a list, a field of the wrong type)
+  ends `status`, `versions` and every stage with exit 3 naming the file, and
+  is a `doctor` failure; it gave a traceback with exit 1 (#234).
+- `doctor` (#234): an interrupted record without parameters
+  (`cluster_summary`) is a failure, as `status` showed it; advice names the
+  stage that wrote the genome set; the integrity guards' text no longer
+  reaches the console; exFAT `._` files are not counted as leftovers.
+- `phylo` (#234): the refusal for fewer than three representatives named a
+  lower ANI threshold, which leaves fewer; it now names `--secondary-ani`.
 - `metadata` (#224): under `--limit` the automatic outgroup could be a target
   genome the cap left out; it now lies outside the target taxon. The API path
   keeps GTDB suffixes (`Bacillus_A`) and lowers a capitalised epithet. A
