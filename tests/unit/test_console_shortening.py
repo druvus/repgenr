@@ -198,3 +198,91 @@ def test_unpack_missing_members_are_capped_on_console(tmp_path, capsys) -> None:
     err = capsys.readouterr().err
     assert "and 35 more" in err and "genome_0039.fasta" not in err
     assert ", ".join(missing) in log_file.read_text()
+
+
+def _skder_argv(n: int = 50) -> list[str]:
+    genomes = [
+        f"/Volumes/data/run/wd/genomes/Benchfam_Benchgen_g{i:06d}_GCF{i:07d}.1.fasta"
+        for i in range(n)
+    ]
+    return ["skder", "-g", *genomes, "-o", "/var/folders/x/T/repgenr_skder_ab/skder_out"] + [
+        "-i", "99", "-f", "50", "-c", "11", "-d", "greedy",
+    ]  # fmt: skip
+
+
+def test_a_long_prefix_keeps_the_tool_name_and_first_option(tmp_path, capsys) -> None:
+    # progressiveMauve logs with "progressivemauve:<stem>"; the room left in
+    # 120 columns would be a few characters. The console keeps argv[0] and the
+    # first option, and the prefix is capped.
+    logger, _ = _run_logger(tmp_path)
+    stem = "Benchfam_Benchgen_g000000_GCF9000000.1_against_reference_genome"
+    process.log_command(logger, _skder_argv(), f"[progressivemauve:{stem}] ")
+    line = capsys.readouterr().err.rstrip("\n")
+    assert "$ skder -g " in line
+    assert "[progressivemauve:" in line and stem not in line
+    assert line.endswith("(full text in repgenr.log)")
+
+
+def test_shorten_command_has_a_floor_for_argv0_and_the_first_option() -> None:
+    short = process.shorten_command(_skder_argv(), limit=3)
+    assert short.startswith("skder -g")
+
+
+def _fake_engine(tmp_path: Path) -> Path:
+    engine = tmp_path / "engine" / "fake-engine"
+    engine.parent.mkdir()
+    engine.write_text("#!/bin/sh\nexit 0\n")
+    engine.chmod(engine.stat().st_mode | stat.S_IXUSR)
+    return engine
+
+
+@pytest.mark.parametrize(
+    ("backend", "image"),
+    [
+        ("docker", "quay.io/biocontainers/skder:1.3.8--pyhdfd78af_0"),
+        ("singularity", "/Volumes/cache/images/skder_1.3.8--pyhdfd78af_0.sif"),
+    ],
+)
+def test_container_command_shows_the_tool_argv_not_the_engine_preamble(
+    tmp_path, capsys, monkeypatch, backend, image
+) -> None:
+    from repgenr.core import containers
+    from repgenr.core.plugins import ToolCapabilities
+
+    engine = _fake_engine(tmp_path)
+    config = containers.ContainerConfig(backend=backend, engine=str(engine))
+    monkeypatch.setattr(containers, "_CONFIG", config)
+    logger, log_file = _run_logger(tmp_path)
+    caps = ToolCapabilities(name="skder", container=image)
+    containers.run_tool(caps, _skder_argv(), logger=logger, log_prefix="skder")
+    for handler in logger.handlers:
+        handler.flush()
+    line = next(ln for ln in capsys.readouterr().err.splitlines() if "$ " in ln)
+    assert len(line) <= _COMMAND_LINE_COLUMNS, line
+    assert "[skder] $ skder -g " in line
+    assert "(49 paths)" in line
+    assert "--label" not in line and "--bind" not in line and str(engine) not in line
+    assert line.count("(") == line.count(")")
+    log_text = log_file.read_text()
+    assert str(engine) in log_text and " ".join(_skder_argv()) in log_text
+
+
+def test_option_value_keeps_its_name_when_other_paths_become_dots() -> None:
+    inputs = [f"/data/set/sample_{i:03d}_with_a_long_name.fasta" for i in range(10)]
+    cmd = ["snippy", "--reference", "/data/refs/ref.fasta", "-c", "4", *inputs]
+    cmd += ["-z", "0", "/data/extra/one.bed"]
+    short = process.shorten_command(cmd, limit=55)
+    assert short == "snippy --reference ref.fasta -c 4 (10 paths) -z 0 ..."
+
+
+def test_final_cut_lands_on_a_token_boundary() -> None:
+    inputs = [f"/d/s{i}.fa" for i in range(49)]
+    cmd = ["tool", "-x", "/r/ref.fa", *inputs, "--alpha", "1", "--beta", "2", "--gamma", "3"]
+    whole = "tool -x ... (49 paths) --alpha 1 --beta 2 --gamma 3"
+    assert process.shorten_command(cmd, limit=len(whole)) == whole
+    for limit in range(8, len(whole)):
+        short = process.shorten_command(cmd, limit=limit)
+        body = short.removesuffix(" ...")
+        assert short.endswith(" ..."), short
+        assert whole.startswith(body + " "), short  # whole tokens only
+        assert body.count("(") == body.count(")"), short

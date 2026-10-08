@@ -279,9 +279,16 @@ def _default_timeout() -> float | None:
 # Console budget for a tool command line with no prefix; the run log keeps the
 # full line. log_command subtracts the prefix so the whole line fits.
 CONSOLE_COMMAND_CHARS = console_room("INFO") - len("$ ")
+# The console form never gets less room than this, so a long prefix cannot
+# reduce it to nothing; such a line runs past CONSOLE_COLUMNS instead.
+_MIN_COMMAND_ROOM = 40
+# Longest adapter prefix shown on the console, brackets included.
+_MAX_CONSOLE_PREFIX = 28
 # A run of at least this many consecutive path arguments is counted, not listed.
 _MIN_PATH_RUN = 3
 _OPTION = re.compile(r"-{1,2}[A-Za-z]")
+
+_Segment = tuple[str, str | list[str]]
 
 
 def _path_like(arg: str) -> bool:
@@ -293,14 +300,13 @@ def _abbreviate(arg: str) -> str:
     return f".../{name}" if name and name != arg else arg
 
 
-def _segments(parts: list[str]) -> list[tuple[str, str | list[str]]]:
-    """Split argv into ("word", text), ("path", text) and ("run", paths).
+def _segments(parts: Sequence[str]) -> list[_Segment]:
+    """Split argv into ("word", text), ("value", path), ("path", text) and ("run", paths).
 
     A path directly after an option (``--reference /r/ref.fasta``) is that
-    option's value and stays a single path; a run is three or more
-    consecutive paths after it.
+    option's value; a run is three or more consecutive other paths.
     """
-    segments: list[tuple[str, str | list[str]]] = []
+    segments: list[_Segment] = []
     i = 0
     while i < len(parts):
         arg = parts[i]
@@ -309,78 +315,118 @@ def _segments(parts: list[str]) -> list[tuple[str, str | list[str]]]:
             i += 1
             continue
         if i > 0 and _OPTION.match(parts[i - 1]):
-            segments.append(("path", arg))
+            segments.append(("value", arg))
             i += 1
             continue
         j = i
         while j < len(parts) and _path_like(parts[j]):
             j += 1
         if j - i >= _MIN_PATH_RUN:
-            segments.append(("run", parts[i:j]))
+            segments.append(("run", list(parts[i:j])))
         else:
             segments.extend(("path", p) for p in parts[i:j])
         i = j
     return segments
 
 
-def _render(segments: list[tuple[str, str | list[str]]], level: int) -> str:
-    """One console form of ``segments``; a higher level is shorter.
+def _render_tokens(segments: list[_Segment], level: int) -> list[str]:
+    """One console form of ``segments`` as tokens; a higher level is shorter.
 
     1: a run is its first path and a count; 2: paths are cut to their last
-    component; 3: a run is only its count; 4: a single path is "...".
+    component; 3: a run is only its count; 4: a path that is not an option
+    value is "...", an option value its last component; 5: every path is "...".
     """
     out: list[str] = []
     for kind, value in segments:
         if kind == "word":
             out.append(str(value))
-        elif kind == "path":
-            path = str(value)
-            out.append("..." if level >= 4 else _abbreviate(path) if level >= 2 else path)
-        else:
+        elif kind == "run":
             paths = list(value)
             first = _abbreviate(paths[0]) if level >= 2 else paths[0]
             count = f"({len(paths)} paths)"
             out.append(count if level >= 3 else f"{first} ... {count}")
-    return " ".join(out)
+        else:
+            path = str(value)
+            if level >= 5 or (level >= 4 and kind == "path"):
+                out.append("...")
+            elif level >= 4:
+                out.append(Path(path).name or path)
+            elif level >= 2:
+                out.append(_abbreviate(path))
+            else:
+                out.append(path)
+    return out
+
+
+def _head_size(segments: list[_Segment]) -> int:
+    """Leading tokens always shown: the program and the token after it."""
+    if len(segments) > 1 and segments[1][0] == "word":
+        return 2
+    return min(len(segments), 1)
 
 
 def shorten_command(
     command: Sequence[str | os.PathLike[str]], limit: int = CONSOLE_COMMAND_CHARS
 ) -> str:
-    """A console form of ``command`` at most ``limit`` characters long.
+    """A console form of ``command``, at most ``limit`` characters where possible.
 
     A command that fits is returned as it is. Otherwise it is shortened in
     steps until it fits: a run of input paths becomes its first path and a
     count, paths are cut to their last component, a run becomes only its
-    count, and other paths become "...". Options and their non-path values
-    are kept; a line still too long is cut at ``limit`` with "...".
+    count, other paths become "..." (an option's value keeps its last
+    component), and then option values too. A line still too long ends at
+    the last whole token that fits, followed by "...". The program and the
+    token after it are always kept, even past ``limit``.
     """
     parts = [str(p) for p in command]
     full = " ".join(parts)
     if len(full) <= limit:
         return full
     segments = _segments(parts)
-    short = full
-    for level in range(1, 5):
-        short = _render(segments, level)
-        if len(short) <= limit:
-            return short
-    return short[: max(limit - 4, 0)].rstrip() + " ..."
+    tokens: list[str] = []
+    for level in range(1, 6):
+        tokens = _render_tokens(segments, level)
+        if len(" ".join(tokens)) <= limit:
+            return " ".join(tokens)
+    keep = _head_size(segments)
+    while len(tokens) > keep and len(" ".join([*tokens, "..."])) > limit:
+        tokens.pop()
+    return " ".join([*tokens, "..."])
+
+
+def _console_prefix(prefix: str) -> str:
+    if len(prefix) <= _MAX_CONSOLE_PREFIX:
+        return prefix
+    if prefix.startswith("[") and prefix.rstrip().endswith("]"):
+        return prefix[: _MAX_CONSOLE_PREFIX - 6] + "...] "
+    return prefix[: _MAX_CONSOLE_PREFIX - 4] + "... "
 
 
 def log_command(
-    logger: logging.Logger, command: Sequence[str | os.PathLike[str]], prefix: str = ""
+    logger: logging.Logger,
+    command: Sequence[str | os.PathLike[str]],
+    prefix: str = "",
+    *,
+    console_command: Sequence[str | os.PathLike[str]] | None = None,
 ) -> None:
     """Log a tool command line at INFO: in full in the run log, shortened on the console.
 
     The console form is sized so that the whole line, timestamp, level and
-    run-log pointer included, fits ``core.logging.CONSOLE_COLUMNS``.
+    run-log pointer included, fits ``core.logging.CONSOLE_COLUMNS``; a long
+    prefix is capped, and the form keeps at least the program and its first
+    option. ``console_command`` is what the console shortens instead of
+    ``command``: a container run passes the tool's own argv, without the
+    engine preamble.
     """
     full = " ".join(str(p) for p in command)
-    room = console_room("INFO") - len(prefix) - len("$ ")
-    short = shorten_command(command, limit=room)
-    extra = console_extra(f"{prefix}$ {short}") if short != full else None
-    logger.info("%s$ %s", prefix, full, extra=extra)
+    shown = command if console_command is None else console_command
+    console_prefix = _console_prefix(prefix)
+    room = max(console_room("INFO") - len(console_prefix) - len("$ "), _MIN_COMMAND_ROOM)
+    short = shorten_command(shown, limit=room)
+    if short == full and console_prefix == prefix:
+        logger.info("%s$ %s", prefix, full)
+        return
+    logger.info("%s$ %s", prefix, full, extra=console_extra(f"{console_prefix}$ {short}"))
 
 
 def run(
@@ -393,11 +439,13 @@ def run(
     stdout_path: str | os.PathLike[str] | None = None,
     log_prefix: str | None = None,
     timeout: float | None = None,
+    console_command: Sequence[str | os.PathLike[str]] | None = None,
 ) -> int:
     """Run ``command`` (an argument vector) without a shell.
 
     The command line is logged at INFO (in full in the run log, shortened on the
-    console; see :func:`log_command`); the tool's own output is line-streamed
+    console; see :func:`log_command`, whose ``console_command`` this passes
+    on); the tool's own output is line-streamed
     at DEBUG (progress bars and per-file chatter would otherwise dominate the
     log), and the last lines are kept for the error message on failure. A line
     a tool redraws in place with carriage returns is logged once, in its final
@@ -420,7 +468,7 @@ def run(
     prefix = f"[{log_prefix}] " if log_prefix else ""
     if stop_requested.is_set():
         raise ToolExecutionError(cmd, -signal.SIGTERM, output=NOT_STARTED, tool=log_prefix)
-    log_command(logger, cmd, prefix)
+    log_command(logger, cmd, prefix, console_command=console_command)
 
     full_env = {**os.environ, **env} if env else None
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)

@@ -1261,7 +1261,9 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   is shown as its first path and a count, then other paths by their last
   component, then the run as its count alone and other paths as `...`. A path
   that directly follows an option (`--reference ref.fasta`) is that option's
-  value and is not counted with the inputs. Long lists of genome names show
+  value and is not counted with the inputs. Under `--container` the console
+  shows the tool's own command; the engine options (mounts, labels, user) are
+  in the run log. Long lists of genome names show
   the first five and a count. The full text of such a line, and the tool's own
   output, are in `repgenr.log`.
   `repgenr status -wd <WD>` shows what completed and what is next; a stage
