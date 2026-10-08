@@ -509,6 +509,7 @@ parser), so they also apply to commands other than the one named.
 | assemble | Under a container backend racon's minimap2 image was not recorded | #235 |
 | all stages | Under `--container docker`, a tool that ignores the SIGTERM forwarded through `--init` kept its container running after repgenr was stopped (seen with busybox); containers are now named and stopped with `docker stop` when the run is interrupted | #235 |
 | snptype | `--mask gubbins` passed the default 16 threads to Gubbins, whose IQ-TREE tree builder refuses more threads than cores (11 on the audit machine); the masker now caps them at the CPUs where Gubbins runs | #235 |
+| install | install.md presented `environment.yml` as the Linux single-environment route, but a linux-64 dry-run does not solve (Gubbins needs Python 3.8 to 3.10; mashtree's BioPerl chain needs zlib older than 1.3, against harvesttools and medaka); the docs now say so | #235 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
