@@ -517,6 +517,8 @@ parser), so they also apply to commands other than the one named.
 | dereplicate | The auto-select warning about a broken plugin was printed twice per run (precheck and run) | #235 |
 | global options | `--container bogus` ended in a traceback with exit 1; it now exits 2. `--platform`, `--wave`, `--container-engine` and `--container-cache` were silently ignored without `--container` (and the cache by Docker); each is named in a warning. The help called `--container-cache` the Wave cache, which is not stored there | #235 |
 | assemble | Under a container backend racon's minimap2 image was not recorded | #235 |
+| all stages | Under `--container docker`, a tool that ignores the SIGTERM forwarded through `--init` kept its container running after repgenr was stopped (seen with busybox); containers are now named and stopped with `docker stop` when the run is interrupted | #235 |
+| snptype | `--mask gubbins` passed the default 16 threads to Gubbins, whose IQ-TREE tree builder refuses more threads than cores (11 on the audit machine); the masker now caps them at the CPUs where Gubbins runs | #235 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
