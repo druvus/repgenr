@@ -188,8 +188,9 @@ def lookup_taxonomy(
     cacheense' > 'Orthobunyavirus maguariense', while its current species is
     'Orthobunyavirus maguariense'), so the classification is preferred over
     the lineage. The lookup runs once, without retries, right after the
-    package download; a failure is logged and returns an empty mapping, and
-    the caller then uses the lineage rule. ``runner`` is injectable for tests.
+    package download, whose reachability check (``require_reachable``) covers
+    the same host; a failure is logged and returns an empty mapping, and the
+    caller then uses the lineage rule. ``runner`` is injectable for tests.
     """
     ids = sorted({t for t in taxids if t})
     if not ids:
