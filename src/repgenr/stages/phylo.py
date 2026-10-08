@@ -687,7 +687,8 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
         genomes,
         "in the genome set"
         if params.all_genomes
-        else "after dereplication (use --all-genomes or a lower ANI threshold)",
+        else "after dereplication (use --all-genomes, or dereplicate with a higher ANI "
+        "threshold, which keeps more representatives)",
     )
 
     outgroup_file, outgroup_leaf = _resolve_outgroup(ctx, params.no_outgroup, logger)
