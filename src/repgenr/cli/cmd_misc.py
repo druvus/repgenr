@@ -401,6 +401,13 @@ def list_tools(
         help="With --check, exit 4 when an adapter is missing or errored and 5 when "
         "a plugin is broken, after the full listing.",
     ),
+    images: bool = typer.Option(
+        False,
+        "--images",
+        help="With --check under a container backend, also report whether each "
+        "tool's image is present locally (docker image inspect or the Singularity "
+        ".sif cache; nothing is pulled).",
+    ),
 ) -> None:
     """List the available pluggable tools in each family.
 
@@ -409,7 +416,9 @@ def list_tools(
     The last line names the dereplicators that glance can run.
     With --check, every adapter's required binaries are looked up (version
     floors included) and reported per tool, so an environment can be
-    verified before a run without a working directory. --check alone
+    verified before a run without a working directory. Under a container
+    backend each line names where the tool runs: '[image <ref>]' or
+    '[host]'; --images adds whether the image is present locally. --check alone
     always exits 0, since a host that has only some families installed is
     normal; --check --strict exits 4 when any adapter is missing or errored,
     or 5 when any plugin failed to load, so a script can verify an
@@ -420,6 +429,15 @@ def list_tools(
 
     if strict and not check:
         raise typer.BadParameter("--strict needs --check.", param_hint="--strict")
+    if images and not check:
+        raise typer.BadParameter("--images needs --check.", param_hint="--images")
+    from ..core.containers import get_config
+
+    if images and not get_config().active:
+        raise typer.BadParameter(
+            "--images needs a container backend (--container docker or singularity).",
+            param_hint="--images",
+        )
     # A plugin that fails to load warns through the repgenr logger; give the
     # line the standard timestamp and level.
     configure_logging(None, level=min(_RUN_STATE["log_level"], logging.WARNING))
@@ -448,7 +466,7 @@ def list_tools(
         if not check:
             continue
         for name in reg.names():
-            state, text = _preflight_summary(reg, name)
+            state, text = _preflight_summary(reg, name, images=images)
             statuses.add(state)
             typer.echo(f"  {name}: {text}")
     from ..dereplicators.base import compare_supporters
@@ -470,11 +488,13 @@ def _one_line(exc: Exception) -> str:
     return "; ".join(part.strip() for part in text.splitlines() if part.strip())
 
 
-def _preflight_summary(reg, name: str) -> tuple[str, str]:
+def _preflight_summary(reg, name: str, *, images: bool = False) -> tuple[str, str]:
     """Status and one line per adapter for `list-tools --check`.
 
     The status is one of ok, missing, error and broken; the line is ok with
-    versions, or why not.
+    versions, or why not. Under a container backend the line names where the
+    tool runs, '[image <ref>]' or '[host]', and with ``images`` whether the
+    image is present locally.
     """
     from ..core.errors import MissingBinaryError, RepGenRError
 
@@ -483,10 +503,41 @@ def _preflight_summary(reg, name: str) -> tuple[str, str]:
     try:
         versions = reg.create(name).preflight()
     except MissingBinaryError as exc:
-        return "missing", f"missing ({_one_line(exc)})"
+        return "missing", f"missing{_where(reg, name, images)[0]} ({_one_line(exc)})"
     except RepGenRError as exc:
-        return "error", f"error ({_one_line(exc)})"
+        return "error", f"error{_where(reg, name, images)[0]} ({_one_line(exc)})"
     except Exception as exc:  # a third-party adapter must not end the listing
-        return "error", f"error ({type(exc).__name__}: {_one_line(exc)})"
+        reason = f"{type(exc).__name__}: {_one_line(exc)}"
+        return "error", f"error{_where(reg, name, images)[0]} ({reason})"
+    label, image = _where(reg, name, images)
+    if image is not None and versions.get(name) == image:
+        # The label names the image; the versions keep the engine.
+        versions = {k: v for k, v in versions.items() if k != name}
     shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
-    return "ok", f"ok ({shown})"
+    return "ok", f"ok{label} ({shown})"
+
+
+def _where(reg, name: str, images: bool) -> tuple[str, str | None]:
+    """Where a tool runs under a container backend: the label and the image.
+
+    The label is ' [image <ref>]' (with ', present' or ', not pulled' when
+    ``images``) or ' [host]'; without a backend it is empty.
+    """
+    from ..core.containers import get_config, image_present, resolve_image
+    from ..core.plugins import _capabilities_of
+
+    config = get_config()
+    caps = _capabilities_of(reg, name)
+    if not config.active or caps is None:
+        return "", None
+    try:
+        image = resolve_image(caps, config)
+    except Exception:  # a failed Wave build is already in the line's reason
+        return "", None
+    if image is None:
+        return " [host]", None
+    if not images:
+        return f" [image {image}]", image
+    present = image_present(image, config)
+    state = {True: "present", False: "not pulled", None: "presence unknown"}[present]
+    return f" [image {image}, {state}]", image
