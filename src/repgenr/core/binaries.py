@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 
 from .errors import MissingBinaryError
 
-_VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+# A version is not part of a longer token: "python3.12" in an interpreter path
+# or "GLIBC_2.17" in a loader error is not the tool's version. A leading "v"
+# ("dRep v3.4.5", "hal2maf v2.2") is allowed.
+_VERSION_RE = re.compile(r"(?<![0-9A-UW-Za-uw-z_./])(\d+)\.(\d+)(?:\.(\d+))?")
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,10 @@ def _query_version(name: str, version_args: tuple[str, ...]) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     blob = (proc.stdout or "") + (proc.stderr or "")
+    # A tool that crashed while answering (a Python traceback, exit != 0) has
+    # not reported a version; numbers in its traceback are file paths.
+    if proc.returncode != 0 and "Traceback (most recent call last)" in blob:
+        return None
     parsed = _parse_version(blob)
     if parsed:
         return ".".join(map(str, parsed))
