@@ -174,9 +174,12 @@ BioContainers are `linux/amd64`. On Apple Silicon pass
   a container backend each line of `list-tools --check` names where the tool
   runs: `[image <ref>]` for a tool with a pinned (or `--wave`) image and
   `[host]` for one that runs from `PATH`, so a host version is not mistaken
-  for the image's. The image itself is pulled on first use; `--images` adds
-  whether it is present locally (`present` or `not pulled`, from
-  `docker image inspect` or the Singularity `.sif` cache; nothing is pulled).
+  for the image's. The image itself is pulled on first use; `--images` adds,
+  for each tool that passed the check, whether its images are present locally
+  (`present` or `not pulled`, from `docker image inspect` or the Singularity
+  `.sif` cache; nothing is pulled). An adapter's secondary images, such as
+  racon's minimap2 image, are listed too. `presence unknown` means the engine
+  did not say the image is absent, for example because the daemon is down.
 - A stage that ran a tool in an image records the image reference as that
   tool's version and the engine with its version (`docker: 29.5.3`) beside it,
   in `repgenr.yaml` and in `repgenr versions`.

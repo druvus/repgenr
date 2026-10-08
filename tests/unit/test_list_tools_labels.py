@@ -69,7 +69,8 @@ def only_two_tools(monkeypatch):
         inspected.append(list(argv))
         # `docker info` answers; only imagetool's image is present locally.
         code = 0 if argv[1] == "info" or argv[-1] == "quay.io/x/imagetool:1" else 1
-        return subprocess.CompletedProcess(argv, code, stdout="", stderr="")
+        err = "" if code == 0 else f"Error: No such image: {argv[-1]}\n"
+        return subprocess.CompletedProcess(argv, code, stdout="", stderr=err)
 
     monkeypatch.setattr(containers.subprocess, "run", run)
     yield inspected
@@ -164,3 +165,54 @@ def test_image_present_reads_the_singularity_cache(tmp_path) -> None:
     no_cache = containers.ContainerConfig(backend="singularity")
     assert containers.image_present("quay.io/x/y:1", no_cache) is None
     assert containers.image_present("quay.io/x/y:1", containers.ContainerConfig()) is None
+
+
+def test_images_reports_an_adapters_secondary_images(only_two_tools, monkeypatch) -> None:
+    # racon records minimap2's own image beside its own; both are reported.
+    def with_helper(self):
+        versions = preflight(self.capabilities)
+        versions["helper"] = "quay.io/x/helper:3"
+        return versions
+
+    monkeypatch.setattr(_ImageTool, "preflight", with_helper)
+    result = CliRunner().invoke(app, [*_DOCKER, "list-tools", "--check", "--images"])
+    assert result.exit_code == 0, result.output
+    assert _lines(result.output)["imagetool"] == (
+        "ok [image quay.io/x/imagetool:1, present; helper image quay.io/x/helper:3, "
+        "not pulled] (docker 29.5.3)"
+    )
+
+
+def test_images_skips_the_presence_query_for_a_missing_tool(only_two_tools, monkeypatch) -> None:
+    from repgenr.core.errors import MissingBinaryError
+
+    def missing(self):
+        raise MissingBinaryError("imagetool: not available")
+
+    monkeypatch.setattr(_ImageTool, "preflight", missing)
+    result = CliRunner().invoke(app, [*_DOCKER, "list-tools", "--check", "--images"])
+    assert _lines(result.output)["imagetool"] == (
+        "missing [image quay.io/x/imagetool:1] (imagetool: not available)"
+    )
+    assert not any(argv[1:3] == ["image", "inspect"] for argv in only_two_tools)
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        ("Error: No such image: quay.io/x/y:1\n", False),
+        ("Error: quay.io/x/y:1: image not known\n", False),
+        ("Cannot connect to the Docker daemon at unix:///var/run/docker.sock.\n", None),
+        ("", None),
+    ],
+)
+def test_image_present_is_unknown_unless_the_engine_says_absent(
+    monkeypatch, stderr, expected
+) -> None:
+    # With the daemon down every image read "not pulled".
+    def run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout="", stderr=stderr)
+
+    monkeypatch.setattr(containers.subprocess, "run", run)
+    config = containers.ContainerConfig(backend="docker")
+    assert containers.image_present("quay.io/x/y:1", config) is expected

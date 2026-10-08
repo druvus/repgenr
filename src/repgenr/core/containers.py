@@ -241,6 +241,9 @@ def runs_on_host(caps: ToolCapabilities) -> bool:
 
 
 _IMAGE_INSPECT_TIMEOUT = 30
+# How docker ("No such image") and podman ("image not known") report an image
+# that is not in the local store.
+_IMAGE_ABSENT_PHRASES = ("no such image", "image not known")
 
 
 def image_present(image: str, config: ContainerConfig | None = None) -> bool | None:
@@ -250,7 +253,8 @@ def image_present(image: str, config: ContainerConfig | None = None) -> bool | N
     nor contacts a registry. For Singularity the image is present when it is
     a local ``.sif`` file or its cached ``<cache_dir>/<name>.sif`` exists.
     None means the answer is not known: no cache directory for Singularity,
-    or the engine could not be asked.
+    or the engine could not be asked or did not say the image is absent
+    (a daemon that is down).
     """
     config = config or _CONFIG
     if config.backend == SINGULARITY:
@@ -271,7 +275,14 @@ def image_present(image: str, config: ContainerConfig | None = None) -> bool | N
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    return proc.returncode == 0
+    if proc.returncode == 0:
+        return True
+    # Only an answer that the image is absent means "not pulled"; a daemon that
+    # is down or refuses the request says nothing about the image.
+    text = ((proc.stderr or "") + (proc.stdout or "")).lower()
+    if any(phrase in text for phrase in _IMAGE_ABSENT_PHRASES):
+        return False
+    return None
 
 
 def _wave_image(conda_spec: tuple[str, ...], config: ContainerConfig) -> str:

@@ -586,7 +586,9 @@ def list_tools(
     floors included) and reported per tool, so an environment can be
     verified before a run without a working directory. Under a container
     backend each line names where the tool runs: '[image <ref>]' or
-    '[host]'; --images adds whether the image is present locally. --check alone
+    '[host]'; --images adds, for each tool that passed, whether its images
+    (secondary ones such as racon's minimap2 included) are present
+    locally. --check alone
     always exits 0, since a host that has only some families installed is
     normal; --check --strict exits 4 when any adapter is missing or errored,
     or 5 when any plugin failed to load, so a script can verify an
@@ -661,8 +663,9 @@ def _preflight_summary(reg, name: str, *, images: bool = False) -> tuple[str, st
 
     The status is one of ok, missing, error and broken; the line is ok with
     versions, or why not. Under a container backend the line names where the
-    tool runs, '[image <ref>]' or '[host]', and with ``images`` whether the
-    image is present locally.
+    tool runs, '[image <ref>]' or '[host]'. With ``images``, an ok line also
+    says whether each image the adapter recorded is present locally, its
+    secondary images (racon's minimap2) included.
     """
     from ..core.errors import MissingBinaryError, RepGenRError
 
@@ -671,27 +674,46 @@ def _preflight_summary(reg, name: str, *, images: bool = False) -> tuple[str, st
     try:
         versions = reg.create(name).preflight()
     except MissingBinaryError as exc:
-        return "missing", f"missing{_where(reg, name, images)[0]} ({_one_line(exc)})"
+        return "missing", f"missing{_where(reg, name)[0]} ({_one_line(exc)})"
     except RepGenRError as exc:
-        return "error", f"error{_where(reg, name, images)[0]} ({_one_line(exc)})"
+        return "error", f"error{_where(reg, name)[0]} ({_one_line(exc)})"
     except Exception as exc:  # a third-party adapter must not end the listing
         reason = f"{type(exc).__name__}: {_one_line(exc)}"
-        return "error", f"error{_where(reg, name, images)[0]} ({reason})"
-    label, image = _where(reg, name, images)
-    if image is not None and versions.get(name) == image:
+        return "error", f"error{_where(reg, name)[0]} ({reason})"
+    label, image = _where(reg, name)
+    shown = dict(versions)
+    if image is not None and shown.get(name) == image:
         # The label names the image; the versions keep the engine.
-        versions = {k: v for k, v in versions.items() if k != name}
-    shown = ", ".join(f"{k} {v}" for k, v in sorted(versions.items())) or "no binaries declared"
-    return "ok", f"ok{label} ({shown})"
+        del shown[name]
+        if images:
+            parts = [f"image {image}, {_presence(image)}"]
+            for tool, ref in sorted(shown.items()):
+                if _looks_like_image(ref):
+                    parts.append(f"{tool} image {ref}, {_presence(ref)}")
+                    del shown[tool]
+            label = f" [{'; '.join(parts)}]"
+    text = ", ".join(f"{k} {v}" for k, v in sorted(shown.items())) or "no binaries declared"
+    return "ok", f"ok{label} ({text})"
 
 
-def _where(reg, name: str, images: bool) -> tuple[str, str | None]:
+def _looks_like_image(value: str) -> bool:
+    """A recorded version that is an image reference (a registry path or a .sif)."""
+    return "/" in value or value.endswith(".sif")
+
+
+def _presence(image: str) -> str:
+    from ..core.containers import get_config, image_present
+
+    present = image_present(image, get_config())
+    return {True: "present", False: "not pulled", None: "presence unknown"}[present]
+
+
+def _where(reg, name: str) -> tuple[str, str | None]:
     """Where a tool runs under a container backend: the label and the image.
 
-    The label is ' [image <ref>]' (with ', present' or ', not pulled' when
-    ``images``) or ' [host]'; without a backend it is empty.
+    The label is ' [image <ref>]' or ' [host]'; without a backend it is empty.
     """
-    from ..core.containers import get_config, image_present, resolve_image
+    from ..core.containers import get_config, resolve_image
     from ..core.plugins import _capabilities_of
 
     config = get_config()
@@ -704,8 +726,4 @@ def _where(reg, name: str, images: bool) -> tuple[str, str | None]:
         return "", None
     if image is None:
         return " [host]", None
-    if not images:
-        return f" [image {image}]", image
-    present = image_present(image, config)
-    state = {True: "present", False: "not pulled", None: "presence unknown"}[present]
-    return f" [image {image}, {state}]", image
+    return f" [image {image}]", image
