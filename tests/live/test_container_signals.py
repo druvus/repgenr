@@ -90,4 +90,4 @@ def test_worker_containers_are_stopped_with_repgenr(tmp_path: Path, signals: int
             proc.communicate()
         left = _labelled(proc.pid)
         if left:
-            subprocess.run(["docker", "stop", "--time", "0", *left], capture_output=True)
+            subprocess.run(["docker", "stop", "-t", "0", *left], capture_output=True)

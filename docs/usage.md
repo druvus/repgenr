@@ -1236,6 +1236,7 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   host does not answer) stops the lookup at the first batch with exit 3.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
+  Under `--container docker` the tool's container is stopped as well.
 - **Stopping a run.** Each external tool runs in its own process group,
   together with the helpers it starts (for example IQ-TREE under
   `run_gubbins.py`). On SIGTERM (`kill`, a scheduler), SIGHUP (the terminal
@@ -1254,18 +1255,18 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   `--container docker`, the container runs with `--init`, so the SIGTERM
   the `docker run` client forwards ends the tool in the container. Each
   container is named `repgenr-<repgenr pid>-<hex>`, and when repgenr is
-  stopped it also runs `docker stop --time 0` on the container of the tool
+  stopped it also runs `docker stop -t 0` on the container of the tool
   it was running, so a tool that ignores SIGTERM does not keep running.
   This also applies to containers started from parallel worker threads,
-  which delay the exit by about a second each. A second signal ends repgenr
-  at once and starts one `docker stop --time 0` for all its running
+  which delays the exit by about a second (the stops run concurrently). A second signal ends repgenr
+  at once and starts one `docker stop -t 0` for all its running
   containers, which completes after repgenr has exited. Each container
   carries the labels `repgenr.pid=<repgenr pid>` and
   `repgenr.host=<host name>`. SIGKILL to repgenr leaves its containers
   running; stop them by label:
 
   ```bash
-  docker ps -q --filter label=repgenr.pid=<repgenr pid> | xargs docker stop
+  docker ps -q --filter label=repgenr.pid=<repgenr pid> | xargs -r docker stop
   ```
 - **Exit codes.** A script can tell the failure classes apart without
   reading the log:

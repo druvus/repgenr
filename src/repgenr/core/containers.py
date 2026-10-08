@@ -444,7 +444,7 @@ def wrap_command(
         # Labels find the containers of a repgenr that was killed with SIGKILL,
         # which no handler sees (a label filter matches exactly, a name
         # filter matches substrings):
-        #   docker ps -q --filter label=repgenr.pid=<pid> | xargs docker stop
+        #   docker ps -q --filter label=repgenr.pid=<pid> | xargs -r docker stop
         cmd += ["--label", f"repgenr.pid={os.getpid()}"]
         cmd += ["--label", f"repgenr.host={socket.gethostname()}"]
         cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
@@ -476,7 +476,7 @@ def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
     When repgenr is stopped it forwards SIGTERM to the docker client, which
     passes it through --init to the tool. A tool that ignores SIGTERM kept its
     container running after repgenr and the client had exited. The forwarded
-    SIGTERM was the tool's notice, so ``docker stop --time 0`` kills it at
+    SIGTERM was the tool's notice, so ``docker stop -t 0`` kills it at
     once: a scheduler that sends SIGKILL a few seconds after SIGTERM must not
     find the container still waiting out a second grace period.
     Errors are ignored: the container may already be gone.
@@ -490,7 +490,7 @@ def _stop_container(wrapped: Sequence[str], config: ContainerConfig) -> None:
         return
     try:
         subprocess.run(
-            [config.engine_binary(), "stop", "--time", "0", name],
+            [config.engine_binary(), "stop", "-t", "0", name],
             capture_output=True,
             timeout=20,
             stdin=subprocess.DEVNULL,
@@ -528,7 +528,7 @@ def _unregister_container(name: str | None) -> None:
 
 
 def _stop_live_containers() -> None:
-    """Start one detached ``docker stop --time 0`` for every live container.
+    """Start one detached ``docker stop -t 0`` for every live container.
 
     Runs from the termination handler on a second signal, just before repgenr
     exits: it starts the client in its own session and does not wait, so the
@@ -541,7 +541,7 @@ def _stop_live_containers() -> None:
     for engine, names in by_engine.items():
         try:
             subprocess.Popen(
-                [engine, "stop", "--time", "0", *names],
+                [engine, "stop", "-t", "0", *names],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -557,15 +557,19 @@ process.register_final_stop_hook(_stop_live_containers)
 def _stop_after_failure(
     exc: ToolExecutionError, wrapped: Sequence[str], config: ContainerConfig
 ) -> None:
-    """Stop the container of a ``docker run`` that failed while repgenr stops.
+    """Stop the container of a ``docker run`` whose client was killed.
 
-    On a pool thread the termination handler does not interrupt the wait: the
-    escalation timer kills the docker client, process.run raises
-    ToolExecutionError rather than SystemExit, and a container whose tool
-    ignores SIGTERM would keep running. A tool that was never started has no
-    container to stop.
+    The client is killed while repgenr stops, and on a timeout (the ``timeout``
+    argument or REPGENR_SUBPROCESS_TIMEOUT). Killing the client does not stop
+    the container, so a tool that ignores the forwarded SIGTERM, or never got
+    it, would keep running. On a pool thread the termination handler does not
+    interrupt the wait: the escalation timer kills the client and process.run
+    raises ToolExecutionError rather than SystemExit. A tool that was never
+    started has no container to stop.
     """
-    if process.stop_requested.is_set() and exc.output != process.NOT_STARTED:
+    if exc.timeout is not None or (
+        process.stop_requested.is_set() and exc.output != process.NOT_STARTED
+    ):
         _stop_container(wrapped, config)
 
 

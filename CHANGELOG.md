@@ -533,7 +533,8 @@ All notable changes to RepGenR are documented here. The format follows
   parallel worker thread is now stopped when repgenr receives a termination
   signal, also when its tool ignores SIGTERM; previously only the container of
   the main thread was stopped. A second signal starts one detached
-  `docker stop --time 0` for every running container before repgenr exits.
+  `docker stop -t 0` for every running container before repgenr exits. A
+  container whose client is killed on a timeout is stopped as well.
   Containers carry the labels `repgenr.pid` and `repgenr.host`, so those of a
   repgenr ended by SIGKILL can be found with
   `docker ps --filter label=repgenr.pid=<pid>`.
