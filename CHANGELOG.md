@@ -223,6 +223,7 @@ All notable changes to RepGenR are documented here. The format follows
   `dereplicate`. The thread count is not a result parameter, so finished
   stages do not rerun.
 - Record names (#PR): every aligner, SNP typer and tree builder names a
+- Record names (#241): every aligner, SNP typer and tree builder names a
   genome by `core.contracts.record_name`, its file name without the FASTA
   suffix and `.gz`. progressiveMauve, SibeliaZ, cactus and the sourmash tree
   builder used `Path.stem`, so a gzipped genome `x.fasta.gz` was the record
