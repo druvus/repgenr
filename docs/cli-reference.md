@@ -235,7 +235,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--assembler` | `auto` | Assembler: auto, flye, shovill, skesa. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
 | `--jobs` |  | Runs assembled concurrently, threads split across them (default 2, or 1 when a long-read run is pending). |
-| `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM. |
+| `--memory-gb` | `16` | Memory hint per assembly, in GB, for tools that cap RAM; also the budget that caps concurrent classifier gathers (about 0.6 GB each). |
 | `--min-contig-length` | `500` | Drop contigs shorter than this many bases. |
 | `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
 | `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
@@ -558,6 +558,7 @@ Score (CheckM2) and classify a batch of assemblies (stateless data-channel step)
 | `--assemblies` | required | Directory of assemble-run output dirs, one per run. |
 | `-o`, `--out` | required | Output dir for quality.tsv and classification.tsv. |
 | `-t`, `--threads` | `16` | Threads for the external tool. |
+| `--memory-gb` | `16` | Memory budget in GB; caps concurrent classifier gathers at about 0.6 GB each. |
 | `--checkm2-db` |  | CheckM2 DIAMOND database; enables quality scoring (or set CHECKM2DB). |
 | `--classifier` | `auto` | Classifier: none, auto, sourmash. |
 | `--gtdb-sketch` |  | GTDB sourmash sketch database (.sig.zip); enables classification (or set REPGENR_GTDB_SKETCH). |

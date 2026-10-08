@@ -14,6 +14,18 @@ from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
+# Peak resident memory of one gather against the GTDB rs226 representatives
+# sketch (k=31): about 0.6 GB, measured natively and in the container.
+GATHER_GB = 0.6
+
+
+def gather_workers(n_genomes: int, threads: int, memory_gb: float | None) -> int:
+    """Concurrent gathers: bounded by the genomes, the threads and the memory budget."""
+    workers = max(1, min(threads, n_genomes))
+    if memory_gb is not None:
+        workers = min(workers, max(1, int(memory_gb / GATHER_GB + 1e-9)))
+    return workers
+
 
 class SourmashClassifier(Classifier):
     capabilities = ToolCapabilities(
@@ -94,7 +106,16 @@ class SourmashClassifier(Classifier):
             run_chain(self.capabilities, steps, logger=logger, extra_mounts=mounts)
             return gather_csv
 
-        workers = max(1, min(params.threads, len(genomes)))
+        workers = gather_workers(len(genomes), params.threads, params.memory_gb)
+        logger.info(
+            "sourmash: %d gathers, %d at a time (threads %d, memory budget %s at about "
+            "%.1f GB per gather)",
+            len(genomes),
+            workers,
+            params.threads,
+            "none" if params.memory_gb is None else f"{params.memory_gb:g} GB",
+            GATHER_GB,
+        )
         gathers = parallel_map(gather, genomes, workers, logger=logger)
         # A gather with no match writes only a header; tax genome still lists it.
         base = out_dir / "tax"

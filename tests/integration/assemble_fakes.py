@@ -25,6 +25,7 @@ class FakeAssembler(Assembler):
     capabilities = ToolCapabilities(name="fakeasm")
     read_types = frozenset({"ILLUMINA", "OXFORD_NANOPORE"})
     calls: list[str] = []
+    layouts_seen: dict[str, str] = {}
     fail_runs: frozenset[str] = frozenset()
 
     def preflight(self) -> dict[str, str]:
@@ -32,6 +33,7 @@ class FakeAssembler(Assembler):
 
     def assemble(self, reads, out_dir, params, logger) -> AssemblyResult:  # noqa: ANN001
         type(self).calls.append(reads.run_accession)
+        type(self).layouts_seen[reads.run_accession] = reads.layout
         if reads.run_accession in type(self).fail_runs:
             raise ToolExecutionError(["fakeasm"], 1, "boom")
         assert all(f.exists() for f in reads.files)
@@ -45,6 +47,7 @@ def register_fake_assembler():
     asm_registry._load()
     asm_registry.register("fakeasm", FakeAssembler, replace=True)
     FakeAssembler.calls = []
+    FakeAssembler.layouts_seen = {}
     FakeAssembler.fail_runs = frozenset()
 
 
@@ -57,11 +60,13 @@ class FakeClassifier(Classifier):
 
     capabilities = ToolCapabilities(name="fakecls")
     lineages: dict[str, str] = {}
+    last_params = None
 
     def preflight(self) -> dict[str, str]:
         return {"fakecls": "1.0"}
 
     def classify(self, genomes, out_dir, params, logger):  # noqa: ANN001
+        type(self).last_params = params
         return {
             g.name: Classification(
                 taxonomy=type(self).lineages[g.name],
@@ -78,16 +83,22 @@ def register_fake_classifier():
     cls_registry._load()
     cls_registry.register("fakecls", FakeClassifier, replace=True)
     FakeClassifier.lineages = {}
+    FakeClassifier.last_params = None
 
 
 def unregister_fake_classifier():
     cls_registry._classes.pop("fakecls", None)
 
 
-def fake_checkm2(quality: dict[str, tuple[float, float]]):
-    """A ``run_checkm2`` stand-in keyed by the genome file name."""
+def fake_checkm2(quality: dict[str, tuple[float, float]], calls: list | None = None):
+    """A ``run_checkm2`` stand-in keyed by the genome file name.
+
+    ``calls``, when given, collects the genome file names of each call.
+    """
 
     def run_checkm2(genomes, out_dir, *, db, threads, logger):
+        if calls is not None:
+            calls.append(sorted(g.name for g in genomes))
         return {g.name: quality[g.name] for g in genomes if g.name in quality}
 
     return run_checkm2

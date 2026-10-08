@@ -133,6 +133,8 @@ class GenomeQcParams:
     assemblies_dir: Path
     out_dir: Path
     threads: int = 16
+    # Memory budget in GB; bounds the classifier's concurrent gathers.
+    memory_gb: int = 16
     checkm2_db: str | None = None
     classifier: str = "auto"
     gtdb_sketch: str | None = None
@@ -188,6 +190,7 @@ def genome_qc(params: GenomeQcParams, logger: logging.Logger) -> int:
         scratch=scratch,
         versions=versions,
         logger=logger,
+        memory_gb=params.memory_gb,
     )
     if quality is not None:
         write_quality(out / QUALITY_TSV, quality)

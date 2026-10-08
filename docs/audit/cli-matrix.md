@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 302 flags (302 with a live test or an n/a reason, 0 pending).
+28 commands, 303 flags (303 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -488,6 +488,7 @@ dispatch: `step:repgenr.stages.assemble_steps.genome_qc`
 | `--assemblies` |  | GenomeQcParams.assemblies_dir | stage | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--out` | -o | GenomeQcParams.out_dir | none | module: fixed by the process script | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--threads` | -t | GenomeQcParams.threads | range | module: task.cpus | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--memory-gb` |  | GenomeQcParams.memory_gb | range | module: task.memory | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--checkm2-db` |  | GenomeQcParams.checkm2_db | none | params.checkm2_db | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--classifier` |  | GenomeQcParams.classifier | choice | n/a: sourmash when params.gtdb_sketch is set | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--gtdb-sketch` |  | GenomeQcParams.gtdb_sketch | none | params.gtdb_sketch | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |

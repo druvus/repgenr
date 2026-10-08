@@ -24,6 +24,9 @@ process GENOME_QC {
     script:
     def args = task.ext.args ?: ''
     def opts = task.ext.repgenr_opts ?: ''
+    // The classifier's memory budget; without a memory directive the CLI
+    // default applies.
+    def memory_arg = task.memory ? "--memory-gb ${Math.max(1L, task.memory.toGiga())}" : ''
     """
     # Forward tool exit codes (OOM kill -> 137) so errorStrategy can retry.
     export REPGENR_PROPAGATE_TOOL_EXIT=1
@@ -33,6 +36,7 @@ process GENOME_QC {
         --out qc \\
         ${args} \\
         --threads ${task.cpus} \\
+        ${memory_arg} \\
         --versions-out tool_versions.yml
 
     repgenr_versions_fragment "${task.process}" tool_versions.yml

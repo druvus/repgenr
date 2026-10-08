@@ -9,6 +9,8 @@ or ``CHECKM2DB`` (CheckM2's own variable).
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import logging
 import os
 import shutil
@@ -16,6 +18,7 @@ from pathlib import Path
 
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
+from ..core.contracts import atomic_replace
 from ..core.errors import WorkdirError
 from ..core.plugins import ToolCapabilities, preflight
 
@@ -28,6 +31,9 @@ CHECKM2_CAPS = ToolCapabilities(
 CHECKM2_DB_ENV = "CHECKM2DB"
 # One predict call per batch: the DIAMOND database is loaded once per call.
 _BATCH = 500
+# Per-run store of the scores, beside the run's done marker, so a change of
+# only the quality gate reapplies them instead of running CheckM2 again.
+CHECKM2_CACHE = "checkm2.json"
 
 
 def checkm2_db_from_env() -> str | None:
@@ -93,3 +99,54 @@ def parse_checkm2_report(path: Path) -> dict[str, tuple[float, float]]:
         for rec in csv.DictReader(fo, delimiter="\t"):
             out[rec["Name"]] = (float(rec["Completeness"]), float(rec["Contamination"]))
     return out
+
+
+# --- stored scores ----------------------------------------------------------------
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fo:
+        for block in iter(lambda: fo.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def quality_cache_key(contigs: Path, db: str | Path, version: str) -> dict[str, object]:
+    """What a stored score depends on: the contigs, the database and the CheckM2 version.
+
+    The database is identified by its resolved path, size and modification
+    time (whole seconds), so a database replaced in place by another release
+    also invalidates the stored scores; copying the same file anew does too,
+    which costs one CheckM2 pass and no wrong result.
+    """
+    db_path = Path(db).expanduser().resolve()
+    try:
+        stat = db_path.stat()
+        db_size, db_mtime = stat.st_size, int(stat.st_mtime)
+    except OSError:
+        db_size, db_mtime = -1, -1
+    return {
+        "contigs_sha256": _sha256(contigs),
+        "db": str(db_path),
+        "db_size": db_size,
+        "db_mtime": db_mtime,
+        "checkm2": version,
+    }
+
+
+def load_cached_quality(path: Path, key: dict[str, object]) -> tuple[float, float] | None:
+    """The stored (completeness, contamination) when ``path`` holds one for ``key``."""
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        if stored.get("key") != key:
+            return None
+        return float(stored["completeness"]), float(stored["contamination"])
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def store_cached_quality(path: Path, key: dict[str, object], quality: tuple[float, float]) -> None:
+    payload = {"key": key, "completeness": quality[0], "contamination": quality[1]}
+    with atomic_replace(path) as fo:
+        fo.write(json.dumps(payload, indent=1))

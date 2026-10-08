@@ -20,6 +20,24 @@ All notable changes to RepGenR are documented here. The format follows
   after the metadata line, and `versions` prints `gtdb_release` or
   `gtdb_api_query_date`, so the Nextflow `versions.yml` of the metadata step
   carries it too.
+- `assemble` stores each run's CheckM2 scores in `assemblies/<run>/checkm2.json`,
+  keyed by the contigs' SHA-256, the database's resolved path, size and
+  modification time, and the CheckM2 version (or image). `--force` does not
+  bypass them; deleting the file scores the run again. A call that changes only `--min-completeness` or
+  `--max-contamination` applies the stored scores instead of running CheckM2
+  again (about 5 minutes for two genomes under emulation). The first CheckM2
+  pass after upgrading stores the scores; no stage reruns because of this
+  change. `genome-qc` stores nothing, since Nextflow stages its inputs (#230).
+- `assembly_stats.tsv` flags a genome `genus_renamed` when the GTDB genus
+  differs from the submitted one but the family and the species epithet agree
+  (NCBI Mycoplasmopsis arginini, GTDB Metamycoplasma arginini). The submitted
+  name stays, the genome is not excused, a warning is logged, and the stage
+  record counts these as `n_genus_renamed` apart from `n_disagree`. A shared
+  epithet in another family stays `classifier_disagrees` (#230).
+- `genome-qc --memory-gb` (default 16; the Nextflow module passes the task
+  memory). With `assemble --memory-gb`, it bounds the number of concurrent
+  sourmash gathers at about 0.6 GB each, as well as the thread count; the log
+  names the number chosen (#230).
 - `glance --tool sourmash`: sourmash is a second comparison backend for
   `glance`. It sketches every genome with the parameters `dereplicate --tool
   sourmash` uses (k=31, scaled=1000), runs `sourmash compare`, and converts the
@@ -165,6 +183,21 @@ All notable changes to RepGenR are documented here. The format follows
   `REPGENR_SKIP_NET_PROBE=1` skips the check.
 - `versions --versions-out` writes a date-like value (the GTDB API query
   date) double-quoted, so a YAML 1.1 loader keeps it as a string.
+- `assemble` plans a short-read run that ENA labels PAIRED but lists with one
+  FASTQ file as single-end. `--assembler shovill` now excuses such a run as
+  `unsupported_layout` before downloading it, rather than after; `auto` still
+  assembles it with SKESA. An explicit assembler that takes a run's platform
+  but not its layout gives the reason `unsupported_layout` in place of
+  `unsupported_platform` (#230).
+- When every run is excused and at least one was judged (rejected by the
+  assembler, polisher or quality gate), `assemble` (without `--append`) no
+  longer leaves a genome set an earlier `assemble` call wrote in place: after a
+  warning, `genomes/` is emptied, `selection.tsv` keeps only its header, the
+  manifest lists no genomes, and `assembly_stats.tsv` and that call's outgroup
+  are removed. The stage still exits 3, and `dereplicate` then exits 3 instead
+  of running on the earlier genomes. A set written by another stage, or kept
+  because every run failed to download, stays and the error names it; a first
+  call writes no empty set. Finished runs under `assemblies/` stay (#230).
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.
