@@ -404,3 +404,44 @@ def test_nothing_to_download_needs_no_network(ctx, monkeypatch) -> None:
     monkeypatch.setattr(http, "_probe_session", _Unreachable)
     assert genome.run(ctx, GenomeParams()) == 2
     assert calls == []
+
+
+def test_rehydrate_hosts_from_fetch_txt_are_probed_before_rehydrate(ctx, monkeypatch) -> None:
+    """Rehydrate fetches from the URLs in fetch.txt; their host is checked first."""
+    import requests
+
+    from repgenr.core import http
+
+    calls = _fake_run_cmd(monkeypatch)
+    real_fake = genome._run_cmd
+
+    def with_fetch_txt(cmd, **kw):
+        result = real_fake(cmd, **kw)
+        cmd = [str(c) for c in cmd]
+        if "--dehydrated" in cmd:
+            zip_path = Path(cmd[cmd.index("--filename") + 1])
+            with zipfile.ZipFile(zip_path, "a") as zf:
+                zf.writestr(
+                    "ncbi_dataset/fetch.txt",
+                    "https://files.example.org/a/x.fna\t10\tdata/x.fna\n"
+                    "https://files.example.org/a/y.fna\t10\tdata/y.fna\n",
+                )
+        return result
+
+    monkeypatch.setattr(genome, "_run_cmd", with_fetch_txt)
+    probed: list[str] = []
+
+    class _Session:
+        def get(self, url, **kw):
+            probed.append(url)
+            if "files.example.org" in url:
+                raise requests.ConnectionError("refused")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(http, "_probe_session", _Session)
+    with pytest.raises(WorkdirError, match="files.example.org"):
+        genome.run(ctx, GenomeParams())
+    assert probed == [http.NCBI_DATASETS_URL, "https://files.example.org/"]
+    assert not [c for c in calls if c[:2] == ["datasets", "rehydrate"]]

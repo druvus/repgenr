@@ -157,9 +157,15 @@ All notable changes to RepGenR are documented here. The format follows
 - `genome`, `vmetadata` (#PR): before the first `datasets` call, one request
 - `genome`, `vmetadata` (#229): before the first `datasets` call, one request
   with the 15 s connect timeout checks that `api.ncbi.nlm.nih.gov` answers,
-  using the proxy settings from the environment. On a blocked network the
-  stage now exits 3 at once naming the host; before, `datasets` made three
-  attempts of about 8.5 minutes each and the stage exited 6.
+  using the proxy settings from the environment; `genome` also checks the
+  hosts in each package's `fetch.txt` before `datasets rehydrate`. On a
+  blocked network the stage now exits 3 at once naming the host; before,
+  `datasets` made three attempts of about 8.5 minutes each and the stage
+  exited 6. Only a failed connection or connect timeout counts as
+  unreachable; an HTTP error status, a read timeout or a TLS error does not.
+  `REPGENR_SKIP_NET_PROBE=1` skips the check.
+- `versions --versions-out` writes a date-like value (the GTDB API query
+  date) double-quoted, so a YAML 1.1 loader keeps it as a string.
 - `metadata` (#224): requests through RepGenR's HTTP client (GTDB, also NCBI
   Entrez and ENA) use a 15 s connect timeout and a 120 s read timeout, so a
   blocked network exits 3 after about two minutes instead of eight.

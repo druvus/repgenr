@@ -1059,13 +1059,21 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   `metadata --outgroup-accession`.
 - **NCBI datasets on a blocked network.** Before the first `datasets` call,
   `genome` and `vmetadata` (NCBI Virus source) send one request to
-  `api.ncbi.nlm.nih.gov` with the 15 s connect timeout. When it gets no
-  answer, the stage exits 3 at once and names the host, instead of waiting
-  through three `datasets` attempts of several minutes each. The request uses
-  the proxy settings in `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`, as the GTDB
-  and Entrez requests and `datasets` itself do. A failure later, inside
-  `datasets`, still exits 6. `vgenome` works from the `vmetadata` download and
-  makes no network request.
+  `api.ncbi.nlm.nih.gov` with the 15 s connect timeout. Before each
+  `datasets rehydrate`, `genome` sends one request to every host named in
+  the package's `fetch.txt` (with datasets 18.x that is again
+  `api.ncbi.nlm.nih.gov`). When a host cannot be connected to, the stage
+  exits 3 at once and names it, instead of waiting through three `datasets`
+  attempts of several minutes each. The request uses the proxy settings in
+  `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY`, as the GTDB and Entrez
+  requests and `datasets` itself do. Only a failed connection or a connect
+  timeout counts as unreachable. An HTTP error status, a read timeout and a
+  TLS error count as reachable. A TLS error can mean only that Python's
+  certificate bundle lacks a proxy's certificate authority that the system
+  store holds, which `datasets` uses; `REQUESTS_CA_BUNDLE` points Python at
+  another bundle. `REPGENR_SKIP_NET_PROBE=1` skips the check. A failure
+  later, inside `datasets`, still exits 6. `vgenome` works from the
+  `vmetadata` download and makes no network request.
 - **NCBI Entrez throttling (viral BV-BRC path).** Set `NCBI_API_KEY` (and
   optionally `NCBI_EMAIL`) to raise the request-rate limit. An HTTP error
   is retried per batch of taxids; a connection error (no network, or the

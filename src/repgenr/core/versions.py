@@ -14,7 +14,18 @@ provenance even though the data-channel path keeps no shared ``repgenr.yaml``.
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
+
+# A value a YAML 1.1 loader would not keep as a string: a date or timestamp
+# (the GTDB API query date) or one holding ': '. Such values are written
+# double-quoted; tool versions such as 1.4.6 stay plain.
+_NEEDS_QUOTES = re.compile(r"^\d{4}-\d{2}-\d{2}|: |^[\s'\"{\[&*!|>%@`#]")
+
+
+def _scalar(value: str) -> str:
+    return json.dumps(value) if _NEEDS_QUOTES.search(value) else value
 
 
 def write_versions_fragment(path: str | Path, versions: dict[str, str]) -> None:
@@ -22,7 +33,7 @@ def write_versions_fragment(path: str | Path, versions: dict[str, str]) -> None:
 
     An empty mapping writes an empty file (the module still records repgenr).
     """
-    lines = [f"    {tool}: {ver}" for tool, ver in sorted(versions.items())]
+    lines = [f"    {tool}: {_scalar(str(ver))}" for tool, ver in sorted(versions.items())]
     text = "\n".join(lines) + "\n" if lines else ""
     # The steps write this before their output directory exists (a Nextflow
     # task writes it into the task cwd, a manual run often into -o).

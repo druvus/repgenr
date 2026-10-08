@@ -13,6 +13,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ..core import process
 from ..core.binaries import BinarySpec
@@ -257,6 +258,11 @@ def _download_one_batch(
         acc_file.unlink(missing_ok=True)
         return list(batch)
     process.unzip(zip_path, extract)
+    # Rehydrate fetches the files from the URLs in the package's fetch.txt;
+    # their hosts depend on the datasets version (api.ncbi.nlm.nih.gov for
+    # 18.x), so the hosts named there are probed, not a fixed one.
+    for url in _fetch_hosts(extract):
+        require_reachable(url, what="datasets rehydrate")
     _run_cmd(
         ["datasets", "rehydrate", "--directory", extract],
         n_items=len(batch),
@@ -312,6 +318,20 @@ def _download_one_batch(
         acc_file.unlink(missing_ok=True)
         shutil.rmtree(extract, ignore_errors=True)
     return missing
+
+
+def _fetch_hosts(extract: Path) -> list[str]:
+    """One URL per distinct host in a dehydrated package's ``fetch.txt``."""
+    fetch = extract / "ncbi_dataset" / "fetch.txt"
+    if not fetch.is_file():
+        return []
+    by_host: dict[str, str] = {}
+    for line in fetch.read_text(encoding="utf-8", errors="replace").splitlines():
+        url = line.split("\t", 1)[0].strip()
+        parts = urlsplit(url)
+        if parts.scheme in ("http", "https") and parts.hostname:
+            by_host.setdefault(parts.hostname, f"{parts.scheme}://{parts.hostname}/")
+    return [by_host[h] for h in sorted(by_host)]
 
 
 def _package_checksums(extract: Path) -> dict[str, str]:

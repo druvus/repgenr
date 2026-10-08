@@ -88,6 +88,15 @@ def test_versions_names_the_gtdb_api_query_date(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "gtdb_api_query_date: 2026-10-08T07:30:12+00:00" in result.stdout
     assert "gtdb_release" not in result.stdout
+    # Quoted in the fragment, so a YAML 1.1 loader keeps the string and does
+    # not turn it into a timestamp.
+    out = tmp_path / "frag.yml"
+    _runner.invoke(app, ["versions", "-wd", str(wd), "--versions-out", str(out)])
+    assert out.read_text() == '    gtdb_api_query_date: "2026-10-08T07:30:12+00:00"\n'
+    import yaml
+
+    loaded = yaml.safe_load(out.read_text())
+    assert loaded == {"gtdb_api_query_date": "2026-10-08T07:30:12+00:00"}
 
 
 def test_status_shows_the_gtdb_release_or_api_query_date(tmp_path: Path) -> None:

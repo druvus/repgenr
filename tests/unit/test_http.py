@@ -223,6 +223,58 @@ class _ProbeSession:
         pass
 
 
+def _status_response(status: int) -> requests.Response:
+    resp = requests.Response()
+    resp.status_code = status
+    resp.url = http.NCBI_DATASETS_URL
+    return resp
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_an_error_status_counts_as_reachable(monkeypatch, status: int) -> None:
+    """A server that answers, even with 4xx/5xx, is reachable; datasets handles the rest."""
+
+    class _Answers(_ProbeSession):
+        def get(self, url, **kw):
+            super().get(url, **kw)
+            return _status_response(status)
+
+    probe = _Answers()
+    monkeypatch.setattr(http, "_probe_session", lambda: probe)
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert len(probe.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        # requests trusts its own CA bundle, datasets (Go) the system store: a
+        # proxy CA in the system store alone fails here but not in datasets.
+        requests.exceptions.SSLError("certificate verify failed"),
+        requests.ReadTimeout("read timed out"),
+    ],
+)
+def test_tls_errors_and_read_timeouts_count_as_reachable(monkeypatch, exc) -> None:
+    monkeypatch.setattr(http, "_probe_session", lambda: _ProbeSession(exc))
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+
+
+def test_an_unreachable_proxy_is_unreachable(monkeypatch) -> None:
+    exc = requests.exceptions.ProxyError("Unable to connect to proxy")
+    monkeypatch.setattr(http, "_probe_session", lambda: _ProbeSession(exc))
+    with pytest.raises(WorkdirError, match="REQUESTS_CA_BUNDLE") as info:
+        http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert http.SKIP_PROBE_ENV in str(info.value)
+
+
+def test_the_probe_can_be_switched_off(monkeypatch) -> None:
+    probe = _ProbeSession(requests.ConnectionError("refused"))
+    monkeypatch.setattr(http, "_probe_session", lambda: probe)
+    monkeypatch.setenv(http.SKIP_PROBE_ENV, "1")
+    http.require_reachable(http.NCBI_DATASETS_URL, what="NCBI datasets")
+    assert probe.calls == []
+
+
 def test_require_reachable_passes_when_the_host_answers(monkeypatch) -> None:
     probe = _ProbeSession()
     monkeypatch.setattr(http, "_probe_session", lambda: probe)
