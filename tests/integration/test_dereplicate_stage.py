@@ -567,3 +567,126 @@ def test_every_chunk_and_the_merge_get_the_same_quality_source(
     else:
         # the first chunk is fully scored, yet no call gets quality
         assert all(q == {} for q in seen)
+
+
+def _seed_gtdb(ctx: WorkdirContext, genome_files, reps: set[int]) -> None:
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+
+    for i, g in enumerate(genome_files):
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(g.name),
+                filename=g.name,
+                completeness=99.0 if i == 0 else 90.0,
+                contamination=0.1 if i == 0 else 2.0,
+                gtdb_representative=i in reps,
+            )
+        )
+
+
+def test_keeper_gtdb_keeps_the_gtdb_representative(workdir: Path, genome_files, fake_tool) -> None:
+    ctx = WorkdirContext(workdir, create=True)
+    _seed_gtdb(ctx, genome_files, {2})
+    result = run(ctx, DereplicateParams(tool="fake", keeper="gtdb"))
+    assert [r.name for r in result.representatives] == [genome_files[2].name]
+    params = ctx.config.stages["dereplicate"].params
+    assert params["keeper"] == "gtdb"
+    assert params["keeper_effective"] == "gtdb"
+    assert params["keeper_swaps"] == 1
+    (summary,) = read_cluster_summary(ctx.derep_dir / CLUSTER_SUMMARY_TSV)
+    assert summary.rep_is_gtdb_representative is True
+    by_acc = {g.filename: g for g in ctx.manifest.all_genomes()}
+    assert by_acc[genome_files[2].name].derep_status == STATUS_REPRESENTATIVE
+
+
+def test_keeper_gtdb_without_flags_warns_and_uses_quality(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    import logging
+
+    ctx = WorkdirContext(workdir, create=True)
+    _seed_gtdb(ctx, genome_files, set())
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        result = run(ctx, DereplicateParams(tool="fake", keeper="gtdb"))
+    assert [r.name for r in result.representatives] == [genome_files[0].name]
+    assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("GTDB species representative" in m for m in warnings), warnings
+
+
+def test_cluster_summary_command_regenerates_the_gtdb_column(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    from repgenr.stages import cluster_summary
+
+    ctx = WorkdirContext(workdir, create=True)
+    _seed_gtdb(ctx, genome_files, {2})
+    run(ctx, DereplicateParams(tool="fake", keeper="gtdb"))
+    path = ctx.derep_dir / CLUSTER_SUMMARY_TSV
+    before = path.read_bytes()
+    cluster_summary.run(ctx, cluster_summary.ClusterSummaryParams())
+    assert path.read_bytes() == before
+
+
+def test_keeper_gtdb_ignores_a_flagged_genome_outside_genomes_dir(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    """The outgroup is usually a GTDB representative; a flag on a genome that
+    is not being dereplicated must not make the record claim the GTDB rule."""
+    import logging
+
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = WorkdirContext(workdir, create=True)
+    _seed_gtdb(ctx, genome_files, set())
+    ctx.manifest.upsert(
+        GenomeRecord(
+            accession="GCA_000099.1",
+            filename="Francisellaceae_francisella_other_GCA_000099.1.fasta",
+            is_outgroup=True,
+            completeness=99.0,
+            contamination=0.0,
+            gtdb_representative=True,
+        )
+    )
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        run(ctx, DereplicateParams(tool="fake", keeper="gtdb"))
+    assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("GTDB species representative" in m for m in warnings), warnings
+
+
+class _FailFirstDereplicator(_FakeDereplicator):
+    """Rejects the first genome on QC and clusters the rest under the second."""
+
+    capabilities = ToolCapabilities(name="failfirst", supports_native_scaling=True)
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:
+        from repgenr.dereplicators.base import STATUS_FAIL_QC
+
+        genomes = list(genomes)
+        result = super().dereplicate(genomes[1:], out_dir, params, logger)
+        result.genome_status[genomes[0].name] = STATUS_FAIL_QC
+        return result
+
+
+def test_keeper_gtdb_ignores_a_flagged_genome_that_failed_qc(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    import logging
+
+    registry.register("failfirst", _FailFirstDereplicator, replace=True)
+    try:
+        ctx = WorkdirContext(workdir, create=True)
+        _seed_gtdb(ctx, genome_files, {0})
+        ctx.logger.addHandler(caplog.handler)
+        with caplog.at_level(logging.WARNING):
+            run(ctx, DereplicateParams(tool="failfirst", keeper="gtdb"))
+    finally:
+        registry._classes.pop("failfirst", None)
+    assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "quality"
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("GTDB species representative" in m for m in warnings), warnings

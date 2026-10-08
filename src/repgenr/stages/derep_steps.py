@@ -54,7 +54,12 @@ from ..dereplicators.base import (
     run_quality,
 )
 from .cluster_summary import Taxonomy, summarise_clusters
-from .derep_keeper import N50Lookup, N50Of, rescore_representatives
+from .derep_keeper import (
+    N50Lookup,
+    N50Of,
+    prefer_gtdb_representatives,
+    rescore_representatives,
+)
 from .dereplicate import (
     DereplicateParams,
     _compose_two_stage,
@@ -96,6 +101,34 @@ def _maybe_write_versions(path: Path | None, versions: dict[str, str]) -> None:
         write_versions_fragment(path, versions)
 
 
+def _gtdb_from_selection(selection_tsv: Path | None) -> set[str]:
+    """Filenames selection.tsv flags as GTDB species representatives.
+
+    The outgroup row is left out: it is usually a GTDB representative itself
+    but is never dereplicated.
+    """
+    if selection_tsv is None:
+        return set()
+    return {
+        r.filename
+        for r in read_selection(selection_tsv)
+        if r.gtdb_representative and not r.is_outgroup
+    }
+
+
+def _warn_no_gtdb_flags(
+    flagged: set[str], selection_tsv: Path, step: str, logger: logging.Logger
+) -> None:
+    if not flagged:
+        logger.warning(
+            "%s: %s flags no GTDB species representative, so --keeper gtdb falls "
+            "back to the quality rule. Only GTDB selections from the metadata "
+            "stage carry the gtdb_representative column.",
+            step,
+            selection_tsv,
+        )
+
+
 def _quality_from_selection(selection_tsv: Path) -> dict[str, tuple[float, float]]:
     """filename -> (completeness, contamination) for rows carrying both values."""
     return {
@@ -120,7 +153,7 @@ class ChunkParams:
     # keeper below. Unlike at the merge step, every genome in the chunk has a
     # real file here (params.genomes), so any promotion is always resolvable.
     selection_tsv: Path | None = None
-    keeper: str = "quality"  # quality | tool
+    keeper: str = "quality"  # quality | gtdb | tool
 
 
 @dataclass
@@ -138,7 +171,7 @@ class MergeParams:
     # keeper below; without it (or with keeper="tool") the adapter's own
     # merge-level pick stands, as before.
     selection_tsv: Path | None = None
-    keeper: str = "quality"  # quality | tool
+    keeper: str = "quality"  # quality | gtdb | tool
     # Taxonomy-aware reduction after the merge (none | species | genus). The
     # taxonomy comes from selection.tsv when given, else from the canonical
     # genome filenames.
@@ -187,6 +220,17 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
                 "dereplicate-chunk: quality-aware keeper changed %d representative(s)",
                 keeper_swaps,
             )
+    elif params.keeper == "gtdb" and params.selection_tsv is not None:
+        flagged = _gtdb_from_selection(params.selection_tsv)
+        _warn_no_gtdb_flags(flagged, params.selection_tsv, "dereplicate-chunk", logger)
+        result, keeper_swaps = prefer_gtdb_representatives(
+            result,
+            flagged,
+            _quality_from_selection(params.selection_tsv),
+            logger,
+            n50,
+        )
+        logger.info("dereplicate-chunk: GTDB keeper changed %d representative(s)", keeper_swaps)
     elif params.keeper == "tool" and params.selection_tsv is not None:
         logger.info(
             "dereplicate-chunk: --selection-tsv given but --keeper is 'tool'; "
@@ -203,6 +247,7 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         summary_quality,
         _summary_taxonomy(params.selection_tsv),
         n50,
+        _gtdb_from_selection(params.selection_tsv),
     )
     # The merge step receives only the representatives' files, so record the
     # N50 of the scored members it may still compare. In a cluster with two or
@@ -289,6 +334,24 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
                 "dereplicate-merge: quality-aware keeper changed %d representative(s)",
                 keeper_swaps,
             )
+    elif params.keeper == "gtdb" and params.selection_tsv is not None:
+        # As for the quality rule: only stage-1 representatives have a file
+        # at this step, so only they may be promoted.
+        resolvable = {rep.name for r in stage1 for rep in r.representatives}
+        flagged = _gtdb_from_selection(params.selection_tsv)
+        _warn_no_gtdb_flags(flagged, params.selection_tsv, "dereplicate-merge", logger)
+        final, keeper_swaps = prefer_gtdb_representatives(
+            final,
+            flagged & resolvable,
+            {
+                name: qual
+                for name, qual in _quality_from_selection(params.selection_tsv).items()
+                if name in resolvable
+            },
+            logger,
+            n50,
+        )
+        logger.info("dereplicate-merge: GTDB keeper changed %d representative(s)", keeper_swaps)
     elif params.keeper == "tool" and params.selection_tsv is not None:
         logger.info(
             "dereplicate-merge: --selection-tsv given but --keeper is 'tool'; "
@@ -318,6 +381,11 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
                 params.selection_tsv, resolvable, params.reduce
             ),
             n50=n50,
+            prefer=(
+                _gtdb_from_selection(params.selection_tsv) & resolvable
+                if params.keeper == "gtdb"
+                else set()
+            ),
         )
         logger.info(
             "dereplicate-merge: --reduce %s collapsed %d representatives to %d",
@@ -345,6 +413,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         _summary_quality(params.selection_tsv),
         _summary_taxonomy(params.selection_tsv),
         n50,
+        _gtdb_from_selection(params.selection_tsv),
     )
     _write_n50(params.out_dir / GENOME_N50_TSV, n50.computed())
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
@@ -409,6 +478,7 @@ def _write_step_contract(
     quality: Mapping[str, tuple[float, float]],
     taxonomy: Taxonomy | None = None,
     n50: N50Of | None = None,
+    gtdb_representatives: set[str] | None = None,
 ) -> None:
     """Write representatives/, clusters.tsv, genome_status.tsv and
     cluster_summary.tsv under ``out_dir``."""
@@ -430,7 +500,14 @@ def _write_step_contract(
     write_clusters(out_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(out_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
-        out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality, taxonomy, n50)
+        out_dir / CLUSTER_SUMMARY_TSV,
+        summarise_clusters(
+            result.clusters,
+            quality,
+            taxonomy,
+            n50,
+            gtdb_representatives=gtdb_representatives or set(),
+        ),
     )
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -19,16 +20,16 @@ from typing import Any
 from .errors import WorkdirError
 
 MANIFEST_FILENAME = "manifest.sqlite"
-SCHEMA_VERSION = 2  # bump + add a migration step when the table layout changes
+SCHEMA_VERSION = 3  # bump + add a migration step when the table layout changes
 BUSY_TIMEOUT_MS = 30000  # wait up to 30s for a competing writer before erroring
 
 _UPSERT_SQL = """
     INSERT INTO genomes (accession, filename, source, family, genus,
                          species, is_outgroup, derep_status, representative,
-                         completeness, contamination)
+                         completeness, contamination, gtdb_representative)
     VALUES (:accession, :filename, :source, :family, :genus,
             :species, :is_outgroup, :derep_status, :representative,
-            :completeness, :contamination)
+            :completeness, :contamination, :gtdb_representative)
     ON CONFLICT(accession) DO UPDATE SET
         filename=excluded.filename,
         source=excluded.source,
@@ -39,7 +40,8 @@ _UPSERT_SQL = """
         derep_status=excluded.derep_status,
         representative=excluded.representative,
         completeness=excluded.completeness,
-        contamination=excluded.contamination
+        contamination=excluded.contamination,
+        gtdb_representative=excluded.gtdb_representative
 """
 
 _SET_DEREP_SQL = "UPDATE genomes SET derep_status=?, representative=? WHERE accession=?"
@@ -56,7 +58,8 @@ CREATE TABLE IF NOT EXISTS genomes (
     derep_status TEXT,                 -- representative | contained | fail_qc | NULL
     representative TEXT,                -- accession of the representative, if contained
     completeness REAL,                 -- CheckM completeness percentage, if known
-    contamination REAL                 -- CheckM contamination percentage, if known
+    contamination REAL,                -- CheckM contamination percentage, if known
+    gtdb_representative INTEGER DEFAULT 0  -- 1 for a GTDB species representative
 );
 CREATE INDEX IF NOT EXISTS idx_genomes_species ON genomes(species);
 CREATE INDEX IF NOT EXISTS idx_genomes_derep ON genomes(derep_status);
@@ -76,6 +79,7 @@ class GenomeRecord:
     representative: str | None = None
     completeness: float | None = None
     contamination: float | None = None
+    gtdb_representative: bool = False
 
 
 def record_from_selection(row: Any, source: str) -> GenomeRecord:
@@ -95,6 +99,7 @@ def record_from_selection(row: Any, source: str) -> GenomeRecord:
         is_outgroup=row.is_outgroup,
         completeness=row.completeness,
         contamination=row.contamination,
+        gtdb_representative=bool(getattr(row, "gtdb_representative", False)),
     )
 
 
@@ -143,16 +148,16 @@ class Manifest:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
+        # Concurrent writers (parallel stages, two invocations on one workdir)
+        # wait for the lock instead of failing immediately with "database is
+        # locked". Set before the journal mode below, which needs the lock too.
+        self._conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         # WAL + synchronous=NORMAL: commits no longer pay a full fsync each, which
         # is the dominant cost for many small writes. The manifest is a workdir
         # artifact (regenerable from the stages), so the NORMAL durability
         # trade-off -- a power loss can lose only the last transaction -- is fine.
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        _enable_wal(self._conn)
         self._conn.execute("PRAGMA synchronous=NORMAL")
-        # Concurrent writers (parallel stages, two invocations on one workdir)
-        # wait for the lock instead of failing immediately with "database is
-        # locked".
-        self._conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
         self._conn.executescript(_SCHEMA)
         self._migrate()
         self._conn.commit()
@@ -177,16 +182,32 @@ class Manifest:
         Existing pre-versioning databases report user_version=0; their layout
         already matches v1, so they are adopted as v1. Future schema changes add
         a numbered migration step and bump SCHEMA_VERSION.
+
+        Several processes can open one old manifest at once (Nextflow scatter,
+        two invocations on one workdir). The steps run under ``BEGIN
+        IMMEDIATE``, which takes the write lock before the version and the
+        columns are read, so a second process waits and then finds the
+        migration done instead of adding a column twice.
         """
-        version = self._check_version()
-        # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
-        if version < 2:
-            cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
-            for col in ("completeness", "contamination"):
-                if col not in cols:
-                    self._conn.execute(f"ALTER TABLE genomes ADD COLUMN {col} REAL")
-            version = 2
-        self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        if self._check_version() >= SCHEMA_VERSION:
+            return
+        self._conn.commit()  # BEGIN fails inside an open implicit transaction
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            version = self._check_version()
+            # (no v0->v1 data change: the CREATE IF NOT EXISTS schema is v1)
+            if version < 2:
+                for col in ("completeness", "contamination"):
+                    _add_column(self._conn, col, "REAL")
+            if version < 3:
+                # v3 adds the GTDB species-representative flag. Rows of an
+                # older database read 0 until the metadata stage runs again.
+                _add_column(self._conn, "gtdb_representative", "INTEGER DEFAULT 0")
+            self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
 
     @classmethod
     def open(cls, workdir: str | os.PathLike[str]) -> Manifest:
@@ -321,6 +342,57 @@ class Manifest:
         )
         return {r["filename"]: (float(r["completeness"]), float(r["contamination"])) for r in rows}
 
+    def gtdb_representatives(self) -> set[str]:
+        """Filenames of the genomes flagged as GTDB species representatives.
+
+        A pre-v3 manifest opened read-only lacks the column; it holds no flag.
+        """
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(genomes)")}
+        if "gtdb_representative" not in cols:
+            return set()
+        rows = self._conn.execute(
+            "SELECT filename FROM genomes WHERE gtdb_representative=1 AND filename IS NOT NULL"
+        )
+        return {r["filename"] for r in rows}
+
+
+def _enable_wal(conn: sqlite3.Connection) -> None:
+    """Switch the database to WAL, retrying while another connection holds it.
+
+    A file already in WAL mode (every manifest RepGenR wrote) needs no lock
+    for this. A rollback-journal file (a copied or hand-made manifest) needs an
+    exclusive lock, and SQLite reports "database is locked" at once rather
+    than calling the busy handler when other connections hold a shared lock,
+    so the switch is retried for up to ``BUSY_TIMEOUT_MS``.
+    """
+    deadline = time.monotonic() + BUSY_TIMEOUT_MS / 1000
+    delay = 0.01
+    while True:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc) or time.monotonic() >= deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.5)
+
+
+def _add_column(conn: sqlite3.Connection, name: str, decl: str) -> None:
+    """Add a column to ``genomes`` unless it is there already.
+
+    The columns are read inside the caller's write transaction; a duplicate
+    reported by SQLite (another writer added it first) also counts as done.
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(genomes)")}
+    if name in cols:
+        return
+    try:
+        conn.execute(f"ALTER TABLE genomes ADD COLUMN {name} {decl}")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column name" not in str(exc):
+            raise
+
 
 def _record_params(record: GenomeRecord) -> dict:
     return {
@@ -335,6 +407,7 @@ def _record_params(record: GenomeRecord) -> dict:
         "representative": record.representative,
         "completeness": record.completeness,
         "contamination": record.contamination,
+        "gtdb_representative": int(record.gtdb_representative),
     }
 
 
@@ -352,4 +425,7 @@ def _row_to_record(row: sqlite3.Row) -> GenomeRecord:
         representative=row["representative"],
         completeness=row["completeness"] if "completeness" in keys else None,
         contamination=row["contamination"] if "contamination" in keys else None,
+        gtdb_representative=bool(row["gtdb_representative"])
+        if "gtdb_representative" in keys
+        else False,
     )

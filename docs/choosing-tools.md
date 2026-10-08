@@ -116,7 +116,10 @@ Guidance:
   filename, so skDER, sourmash and galah end with the same keepers when they
   form the same clusters. An unscored representative is replaced only by a
   high-quality genome (completeness above 90, contamination below 5).
-  `--keeper tool` keeps the adapter's choice.
+  `--keeper tool` keeps the adapter's choice. `--keeper gtdb` keeps a GTDB
+  species representative when the cluster holds one and applies the quality
+  rule otherwise, so that the representatives coincide with GTDB's where the
+  clustering allows; it needs a GTDB selection from `metadata`.
 - On the synthetic set `clonal_50_clustered` (groups of 20, 15 and 15 genomes,
   within-group ANI about 0.995 or higher, between-group about 0.96 or lower),
   `sourmash`, `galah` and `skder` at the defaults formed the same three
@@ -236,7 +239,7 @@ Notes:
 | Best for | One machine, up to about a thousand genomes (measured). | Scatter-gather dereplication above a few thousand genomes (a design recommendation, not a measurement), HPC, cloud. |
 | Parallelism | Threads within a stage. | Tasks per chunk and per assembled run. |
 | Resume | Per stage, from parameter and input fingerprints. `--force` overrides. | Nextflow's `-resume` and task cache. |
-| Representative choice | `--keeper quality\|tool` | `--derep_keeper quality\|tool` |
+| Representative choice | `--keeper quality\|gtdb\|tool` | `--derep_keeper quality\|gtdb\|tool` |
 | Options | Forwards the stage options it shares a name with. | `--metadata_args`, `--phylo_args` and the other `*_args` strings, plus typed `--derep_*` parameters. |
 | Inspection | `status` and `doctor` are available. | Not available. They are CLI commands that read a working directory. |
 

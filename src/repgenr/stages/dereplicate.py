@@ -10,7 +10,7 @@ manifest derep status is updated.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,12 +44,13 @@ from ..dereplicators.base import (
     registry,
     run_quality,
 )
-from .cluster_summary import summarise_clusters, taxonomy_lookup
+from .cluster_summary import gtdb_lookup, summarise_clusters, taxonomy_lookup
 from .derep_keeper import (
     N50Lookup,
     N50Of,
     choose_keeper,
     log_unpromoted,
+    prefer_gtdb_representatives,
     rescore_representatives,
 )
 
@@ -81,8 +82,10 @@ class DereplicateParams:
     # Proceed on a partial genome set with a warning instead of refusing.
     allow_incomplete: bool = False
     # Per-cluster representative choice: re-pick by manifest CheckM quality
-    # (completeness - 5 x contamination), or "tool" to keep the adapter's own pick.
-    keeper: str = "quality"  # quality | tool
+    # (completeness - 5 x contamination), "gtdb" to keep a GTDB species
+    # representative first (quality after it), or "tool" to keep the
+    # adapter's own pick.
+    keeper: str = "quality"  # quality | gtdb | tool
 
 
 def precheck(ctx: WorkdirContext, params: DereplicateParams) -> None:
@@ -179,9 +182,28 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     keeper_swaps = 0
     quality: dict[str, tuple[float, float]] = {}
+    gtdb: set[str] = set()
     # N50 per genome for the keeper score and the summary, each genome read once.
     n50 = N50Lookup([ctx.genomes_dir])
-    if params.keeper == "quality":
+    if params.keeper == "gtdb":
+        # Only the clustered genomes count: the outgroup (usually a GTDB
+        # representative itself), genomes no longer under genomes/ and genomes
+        # rejected on QC re-pick nothing and must not make the record claim a
+        # rule applied.
+        names = {n for rep, members in result.clusters.items() for n in (rep, *members)}
+        quality = {n: q for n, q in manifest_quality.items() if n in names}
+        gtdb = gtdb_lookup(ctx) & names
+        if not gtdb:
+            logger.warning(
+                "No clustered genome is flagged as a GTDB species "
+                "representative in the manifest, so "
+                "--keeper gtdb falls back to %s. Only GTDB selections from the "
+                "metadata stage carry the flag; a workdir selected by an older "
+                "RepGenR needs `repgenr metadata --force` to record it.",
+                "the quality rule" if quality else "the tool's own representatives",
+            )
+        result, keeper_swaps = prefer_gtdb_representatives(result, gtdb, quality, logger, n50)
+    elif params.keeper == "quality":
         # Only the genomes being dereplicated count: manifest rows for the
         # outgroup or for genomes no longer under genomes/ re-pick nothing, and
         # must not make the record claim the quality rule applied.
@@ -197,7 +219,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
                 "--checkm2-db scores assemblies, and ingest --selection reads the "
                 "completeness and contamination columns."
             )
-    keeper_effective = "quality" if quality else "tool"
+    keeper_effective = "gtdb" if gtdb else "quality" if quality else "tool"
 
     if params.reduce != "none":
         before = len(result.representatives)
@@ -209,6 +231,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
             logger,
             taxon_of=_taxon_lookup(ctx, params.reduce),
             n50=n50,
+            prefer=gtdb,
         )
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
@@ -552,6 +575,7 @@ def _reduce_by_taxonomy(
     *,
     taxon_of: Mapping[str, str],
     n50: N50Of | None = None,
+    prefer: Collection[str] = (),
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
@@ -565,6 +589,8 @@ def _reduce_by_taxonomy(
     (keeper="tool", or no quality data) to use the largest-cluster rule
     alone. The others
     -- plus their cluster members -- become contained under the keeper.
+    A representative named in ``prefer`` (the GTDB species representatives
+    under ``--keeper gtdb``) wins over the others before any of these rules.
     Representatives whose taxon is unknown/empty are kept as-is (each its own
     group), so reduction never silently drops an un-annotated genome.
     """
@@ -590,12 +616,15 @@ def _reduce_by_taxonomy(
     left_to_size: list[str] = []
     for members in groups.values():
         # keeper: the largest existing cluster, then lexical name; the quality
-        # rule may then replace it, as within a cluster.
-        keeper = max(members, key=lambda n: (len(result.clusters.get(n, [])), n))
+        # rule may then replace it, as within a cluster. Preferred genomes
+        # (GTDB species representatives under --keeper gtdb), when the group
+        # holds any, are the only candidates.
+        pool = [n for n in members if n in prefer] or members
+        keeper = max(pool, key=lambda n: (len(result.clusters.get(n, [])), n))
         if quality:
             by_size = keeper
-            keeper = choose_keeper(by_size, members, quality, n50)
-            if keeper == by_size and by_size not in quality and any(m in quality for m in members):
+            keeper = choose_keeper(by_size, pool, quality, n50)
+            if keeper == by_size and by_size not in quality and any(m in quality for m in pool):
                 left_to_size.append(by_size)
         new_reps.append(rep_by_name[keeper])
         status[keeper] = STATUS_REPRESENTATIVE
@@ -676,7 +705,13 @@ def _write_contract(
     write_genome_status(ctx.derep_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
         ctx.derep_dir / CLUSTER_SUMMARY_TSV,
-        summarise_clusters(result.clusters, quality, taxonomy_lookup(ctx), n50),
+        summarise_clusters(
+            result.clusters,
+            quality,
+            taxonomy_lookup(ctx),
+            n50,
+            gtdb_representatives=gtdb_lookup(ctx),
+        ),
     )
 
 

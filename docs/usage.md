@@ -158,7 +158,9 @@ Without `--selection`, accession and taxonomy come from the filename:
 Two genomes with one accession (for example `x.fasta` and `x.fna`, or two
 four-token names that end alike) stop `ingest` with exit 2; give them
 distinct accessions with `--selection`. The `is_outgroup` column of a
-selection takes `1`/`0` (also `true`/`false`, `yes`/`no`).
+selection takes `1`/`0` (also `true`/`false`, `yes`/`no`), and so does the
+optional `gtdb_representative` column, which `--keeper gtdb` reads; without
+that column no genome is a GTDB representative.
 
 Only the files directly under `--genomes-dir` with a suffix `.fasta`, `.fa`,
 `.fna`, `.fas`, `.fasta.gz`, `.fna.gz` or `.fa.gz` are read, so the
@@ -654,6 +656,33 @@ The keeper rule changed in this release (N50 term, high-quality condition,
 tie order). Existing workdirs keep their representatives until dereplicate is
 rerun with `--force`, since the resume fingerprint does not include the rule.
 
+`--keeper gtdb` keeps the GTDB species representatives. The metadata stage
+records which selected genomes GTDB marks as the representative of their
+species (`gtdb_genome_representative` equal to the accession in the table,
+`gtdbIsRep` in the API), in the `gtdb_representative` column of
+`selection.tsv` and in the manifest. Within each cluster the keeper is then a
+GTDB representative when the cluster holds one; a cluster without one is
+treated as under `--keeper quality`, and keeps the tool's pick when no member
+is scored. A cluster can hold several GTDB representatives when the ANI
+threshold joins GTDB species (GTDB delimits species at about 95% ANI, so a
+`--secondary-ani` below that can do so). One representative per cluster is
+kept, chosen among them by the quality rule (score, tie order and the
+high-quality condition for an unscored representative as above), and a
+warning names the others, which stay contained; raise `--secondary-ani` to
+keep them apart. With `--reduce`, a
+GTDB representative is also preferred when representatives of one taxon are
+merged. `repgenr.yaml` records `keeper_effective: gtdb` when the manifest
+flags at least one genome, and otherwise `quality` or `tool` with a warning.
+Only GTDB selections carry the flag: `ingest` (unless its `--selection` has
+the column), `reads`/`assemble` and the viral path leave it at 0, so
+`--keeper gtdb` acts there as `--keeper quality`. A workdir selected by an
+earlier RepGenR has no flag recorded; `repgenr metadata --force` with the same
+options records it. `genome` then runs again because `selection.tsv`
+changed, and downloads nothing already present; `dereplicate` runs again
+because the manifest now flags genomes. A manifest from an earlier version is
+upgraded in place (schema version 3) when a stage opens it, and an earlier
+RepGenR then refuses to open it.
+
 The same manifest values also reach the dereplicator, whichever keeper rule is
 chosen (the Nextflow chunk and merge steps read them from `selection.tsv`),
 when every genome of the run has both values. dRep receives them as
@@ -1024,7 +1053,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
-| `--derep_keeper` | `quality` | Representative choice in the chunk and merge steps: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
+| `--derep_keeper` | `quality` | Representative choice in the chunk and merge steps: `quality` (CheckM scores from `selection.tsv`), `gtdb` (a GTDB species representative from `selection.tsv` first, then quality) or `tool`. |
 | `--derep_reduce` | `none` | Collapse the merged representatives to one per `species` or `genus` (`dereplicate-merge --reduce`). |
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
