@@ -166,7 +166,7 @@ All notable changes to RepGenR are documented here. The format follows
   marked as interrupted. Before, the interpreter ended at once and left the
   tool running (seen with FastTree). A pool of parallel tasks
   (`parallel_map`) now cancels its queued items when one task fails.
-- (#PRNUM) Every external tool starts in its own session and process group,
+- (#231) Every external tool starts in its own session and process group,
   and SIGTERM, SIGHUP, Ctrl-C (SIGINT) and a failure inside repgenr stop the
   whole group: SIGTERM first, SIGKILL after 5 s for what is left. Helpers a
   tool starts are now stopped with it (RAxML or IQ-TREE under
