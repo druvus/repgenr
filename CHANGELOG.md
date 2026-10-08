@@ -237,8 +237,12 @@ All notable changes to RepGenR are documented here. The format follows
   representative is the default keeper of a taxon) and to `best_member` in
   `cluster_summary.tsv`, which gains `rep_n50` and `best_score` after
   `n_genomes`. `dereplicate-chunk` writes `genome_n50.tsv` for the merge step.
-  On 30 GTDB r232 *F. tularensis* genomes, a 29-contig draft at 100/0.00 no
-  longer replaces closed genomes at 100/0.03. Representatives of an existing
+  On 30 GTDB r232 *F. tularensis* genomes the keeper of the largest cluster
+  was the 29-contig GCF_016603775.1 (100/0.00) for skDER, sourmash and galah;
+  it is now the two-contig GCF_001880245.1 (100/0.01, N50 1.89 Mb, score
+  103.09), ahead of the closed GCF_000833375.1 and GCF_000014645.1 (100/0.03,
+  102.99). The N50 is read only where two or more scored genomes are
+  compared, and for scored representatives in the summary. Representatives of an existing
   workdir change only when dereplicate is rerun with `--force`; the resume
   fingerprint is unchanged. `cluster-summary` and `derep-stock unpack` write
   the new columns.

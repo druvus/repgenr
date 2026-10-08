@@ -178,3 +178,19 @@ def test_taxonomy_lookup_reads_the_manifest(tmp_path: Path) -> None:
     }
     # No manifest at all: the filenames supply the species.
     assert taxonomy_lookup(WorkdirContext(tmp_path / "none")) == {}
+
+
+def test_summary_reads_no_n50_for_unscored_or_single_scored_clusters() -> None:
+    """rep_n50 is filled only for a scored keeper; an unscored cluster and a
+    cluster without a second scored genome to compare read nothing else."""
+    asked: list[str] = []
+
+    def n50(name: str) -> int | None:
+        asked.append(name)
+        return 1000
+
+    rows = summarise_clusters({REP: [M1, M2], SOLO: []}, {SOLO: (99.0, 0.0)}, None, n50)
+    by_rep = {r.representative: r for r in rows}
+    assert by_rep[REP].rep_n50 is None
+    assert by_rep[SOLO].rep_n50 == 1000
+    assert set(asked) == {SOLO}

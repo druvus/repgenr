@@ -161,3 +161,39 @@ def test_fail_qc_genome_survives_rescore_untouched() -> None:
     assert swaps == 1
     assert out.genome_status["bad.fasta"] == STATUS_FAIL_QC
     check_result_complete(out, ["rep.fasta", "solo.fasta", "m1.fasta", "m2.fasta", "bad.fasta"])
+
+
+def test_a_single_competitor_reads_no_n50() -> None:
+    """Scored singletons and clusters with one scored genome compare nothing,
+    so no genome file is read."""
+
+    def no_read(name: str) -> int | None:
+        raise AssertionError(f"N50 read for {name}")
+
+    assert choose_keeper("a", [], {"a": (99.0, 0.0)}, no_read) == "a"
+    assert choose_keeper("a", ["b"], {"a": (99.0, 0.0)}, no_read) == "a"
+    assert choose_keeper("a", ["b"], {"b": (99.0, 0.0)}, no_read) == "b"
+    out, swaps = rescore_representatives(_result(), {"solo.fasta": (99.0, 0.0)}, _LOG, no_read)
+    assert swaps == 0
+
+
+def test_genome_n50_handles_crlf_missing_final_newline_and_leading_text(tmp_path: Path) -> None:
+    crlf = tmp_path / "crlf.fasta"
+    crlf.write_bytes(b">a desc\r\nAAAA\r\nAAAA\r\n>b\r\nCC")
+    assert genome_n50(crlf) == 8  # lengths 8 and 2
+    lead = tmp_path / "lead.fasta"
+    lead.write_bytes(b"; comment\n>a\nACGTACGT\n>empty\n>c\nAC\n")
+    assert genome_n50(lead) == 8
+
+
+def test_genome_n50_refuses_a_truncated_gzip(tmp_path: Path) -> None:
+    import gzip
+
+    import pytest
+
+    from repgenr.core.errors import UserInputError
+
+    path = tmp_path / "g.fasta.gz"
+    path.write_bytes(gzip.compress(b">a\n" + b"ACGT" * 1000)[:-20])
+    with pytest.raises(UserInputError, match="truncated or corrupt"):
+        genome_n50(path)

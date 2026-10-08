@@ -450,3 +450,33 @@ def test_unpack_with_a_malformed_record_falls_back_and_warns(
     assert record.tool == "skder"
     assert record.tool_versions == {"skder": "1.0"}
     assert "Ignoring unreadable" in capsys.readouterr().err
+
+
+def test_unpack_warns_about_scored_genomes_without_a_file(workdir: Path, caplog) -> None:
+    # A genome file removed since the pack has no N50: the rebuilt summary
+    # scores it without the N50 term, and unpack names it.
+    import logging
+
+    from repgenr.core.contracts import read_cluster_summary
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = _setup_contract(workdir)
+    ctx.logger.addHandler(caplog.handler)
+    ctx.manifest.replace_genomes(
+        [
+            GenomeRecord(
+                accession=f"GCA_00000{i}.1", filename=name, completeness=99.0, contamination=0.0
+            )
+            for i, name in enumerate(_GENOMES, start=1)
+        ]
+    )
+    derep_stock_run(ctx, DerepStockParams(action="pack", name="run1"))
+    (ctx.genomes_dir / _GENOMES[2]).unlink()  # the contained member of _REPS[0]
+    with caplog.at_level(logging.WARNING):
+        derep_stock_run(ctx, DerepStockParams(action="unpack", name="run1"))
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any(_GENOMES[2] in m and "N50" in m for m in warnings), warnings
+    rows = {
+        r.representative: r for r in read_cluster_summary(ctx.derep_dir / "cluster_summary.tsv")
+    }
+    assert rows[_REPS[0]].rep_n50 == 4

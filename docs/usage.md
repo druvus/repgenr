@@ -711,7 +711,10 @@ name is replaced, with a warning. `--action unpack` restores a stored run,
 refreshes the manifest and re-stamps the `dereplicate` record so that the
 next `dereplicate`, also inside `repgenr run`, recomputes. Unpack rebuilds
 `cluster_summary.tsv` from the restored clusters and the current manifest
-quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack replaces
+quality, and removes a live `genome_status.tsv` the stored run lacks. The N50
+of a scored genome whose file is no longer in `genomes/` cannot be read, so
+its keeper score in the summary has no N50 term and `rep_n50` is blank; unpack
+and `cluster-summary` name such genomes in a warning. Unpack replaces
 `derep/representatives/` as a whole, so other files placed there are
 removed, and it takes the representatives by name from `genomes/`. The
 re-stamped record takes the tool, parameters and tool versions from the

@@ -106,9 +106,9 @@ no row.
 | `species` | Those species, comma-separated: the keeper's first, then by number of genomes and name. At most five are listed, followed by `+N more`; `n_species` gives the full count. An epithet shared by two genera is written with its genus, for example `Escherichia coli`. |
 | `rep_completeness`, `rep_contamination` | CheckM values of the keeper from the manifest; blank when unknown. |
 | `member_max_completeness`, `member_min_contamination` | Best values among the scored members; blank when no member is scored. |
-| `best_member` | The genome the quality keeper chooses in the cluster (score `completeness - 5 x contamination + 0.5 x log10(N50)`, ties and the high-quality condition as in usage.md, "Representative selection"). Equals `representative` under `--keeper quality`; blank when nothing in the cluster is scored. |
+| `best_member` | The genome the quality keeper chooses in the cluster (score `completeness - 5 x contamination + 0.5 x log10(N50)`, ties and the high-quality condition as in usage.md, "Representative selection"). Usually equals `representative` under `--keeper quality`, except where `--reduce` or the Nextflow chunk and merge steps compare only representatives; blank when nothing in the cluster is scored. |
 | `n_genomes` | Genomes in the cluster, the keeper included (`n_members` + 1). It follows `best_member`, so the positions of the earlier columns are unchanged. |
-| `rep_n50` | N50 of the keeper in bases, read from its FASTA; blank when the file is not found. |
+| `rep_n50` | N50 of the keeper in bases, read from its FASTA. Filled only when the keeper has completeness and contamination, so an unscored representative is not read; blank otherwise or when the file is not found. |
 | `best_score` | Keeper score of `best_member`, four decimals; blank when `best_member` is blank. |
 
 The species columns come from the manifest taxonomy (`selection.tsv` in the

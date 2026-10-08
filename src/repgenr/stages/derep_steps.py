@@ -204,10 +204,14 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
         _summary_taxonomy(params.selection_tsv),
         n50,
     )
-    # Every scored genome of the chunk: the merge step may compare any of them.
-    for name in (g.name for g in params.genomes):
-        if name in summary_quality:
-            n50(name)
+    # The merge step receives only the representatives' files, so record the
+    # N50 of the scored members it may still compare. In a cluster with two or
+    # more scored genomes the keeper has read them already (cached); only a
+    # scored member under an unscored representative is read here.
+    for members in result.clusters.values():
+        for name in members:
+            if name in summary_quality:
+                n50(name)
     _write_n50(params.out_dir / GENOME_N50_TSV, n50.computed())
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(

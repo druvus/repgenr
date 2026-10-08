@@ -64,30 +64,36 @@ def is_high_quality(completeness: float, contamination: float) -> bool:
 
 
 def genome_n50(path: Path) -> int:
-    """N50 of the sequences in a (possibly gzipped) FASTA file, in one pass."""
-    lengths: list[int] = []
-    current = -1
+    """N50 of the sequences in a (possibly gzipped) FASTA file.
+
+    The file is read once as bytes; sequence lengths are the bytes between
+    header lines less the line breaks, so nothing is decoded.
+    """
     try:
-        fo = (
-            gzip.open(path, "rt", encoding="utf-8", errors="replace")
-            if is_gzip(path)
-            else open(path, encoding="utf-8", errors="replace")
-        )
-        with fo:
-            for line in fo:
-                if line.startswith(">"):
-                    if current >= 0:
-                        lengths.append(current)
-                    current = 0
-                elif current >= 0:
-                    current += len(line.strip())
+        if is_gzip(path):
+            with gzip.open(path, "rb") as gz:
+                data = gz.read()
+        else:
+            data = path.read_bytes()
     except (EOFError, gzip.BadGzipFile, zlib.error) as exc:
         raise UserInputError(
             f"Genome {path} is a truncated or corrupt gzip file ({exc}); "
             "replace it with a complete copy."
         ) from exc
-    if current >= 0:
-        lengths.append(current)
+    lengths: list[int] = []
+    # Records start at ">" at the start of the file or of a line.
+    records = data.split(b"\n>")
+    if records and records[0].startswith(b">"):
+        records[0] = records[0][1:]
+    elif records:
+        records = records[1:]  # text before the first header is not a sequence
+    for record in records:
+        newline = record.find(b"\n")
+        if newline < 0:
+            lengths.append(0)
+            continue
+        body = record[newline + 1 :]
+        lengths.append(len(body) - body.count(b"\n") - body.count(b"\r") - body.count(b" "))
     lengths.sort(reverse=True)
     half = sum(lengths) / 2
     running = 0
@@ -123,9 +129,26 @@ class N50Lookup:
                 return genome_n50(path)
         return None
 
+    def missing(self) -> list[str]:
+        """Genomes asked for whose file was found in no directory."""
+        return sorted(name for name, n50 in self._cache.items() if n50 is None)
+
     def computed(self) -> dict[str, int]:
         """The N50 values known so far (genomes that were found)."""
         return {name: n50 for name, n50 in self._cache.items() if n50 is not None}
+
+
+def warn_missing_n50(lookup: N50Lookup, logger: logging.Logger) -> None:
+    """WARNING naming the scored genomes whose file was not found: their keeper
+    score and ``rep_n50`` carry no N50 term."""
+    missing = lookup.missing()
+    if missing:
+        logger.warning(
+            "No genome file for %d scored genome(s), so their keeper score has no "
+            "N50 term and rep_n50 is blank: %s",
+            len(missing),
+            log_names(missing),
+        )
 
 
 def _no_n50(_name: str) -> int | None:
@@ -166,6 +189,9 @@ def choose_keeper(
         scored = [n for n in scored if is_high_quality(*quality[n])]
     if not scored:
         return incumbent
+    if len(scored) == 1:
+        # Nothing to compare: no N50 is read.
+        return scored[0]
     return min(scored, key=lambda n: rank_key(n, quality, n50_of))
 
 

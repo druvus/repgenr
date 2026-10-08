@@ -28,7 +28,7 @@ from ..core.contracts import (
     write_cluster_summary,
 )
 from ..core.errors import WorkdirError
-from .derep_keeper import N50Lookup, N50Of, best_score, choose_keeper
+from .derep_keeper import N50Lookup, N50Of, best_score, choose_keeper, warn_missing_n50
 
 Quality = Mapping[str, tuple[float, float]]
 # filename -> (genus, species) as recorded in the manifest or selection.tsv.
@@ -136,7 +136,9 @@ def _summarise(
         member_max_completeness=max((q[0] for _, q in scored), default=None),
         member_min_contamination=min((q[1] for _, q in scored), default=None),
         best_member=best_member,
-        rep_n50=None if n50 is None else n50(rep),
+        # Only a scored keeper has a score the N50 belongs to; unscored
+        # representatives are not read.
+        rep_n50=None if n50 is None or rep_q is None else n50(rep),
         best_score=_rounded(best_score(best_member, quality, n50) if best_member else None),
     )
 
@@ -169,7 +171,9 @@ def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     quality = quality_lookup(ctx)
     if not quality:
         logger.info("No assembly quality in the manifest; quality columns are left blank")
-    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx), N50Lookup([ctx.genomes_dir]))
+    n50 = N50Lookup([ctx.genomes_dir])
+    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx), n50)
+    warn_missing_n50(n50, logger)
     out = ctx.derep_dir / CLUSTER_SUMMARY_TSV
     write_cluster_summary(out, rows)
     ctx.config.record_stage(
