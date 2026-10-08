@@ -251,7 +251,7 @@ All notable changes to RepGenR are documented here. The format follows
   sketch_cache=DIR` is sketched again. The sketch CSV and picklist are
   csv-quoted, so a genome name containing a comma is one field.
 - `snptype --tool simple` and `phylo --msa-source snptype --snptyper simple`
-  (#PR): reference positions that none of a genome's primary or supplementary
+  (#232): reference positions that none of a genome's primary or supplementary
   minimap2 alignments covers are N in that genome's consensus, instead of the
   reference base. A core-SNP column is variable only when at least two of A,
   C, G and T occur in it, non-ACGT characters are written as N, and the SNP
