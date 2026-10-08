@@ -38,7 +38,7 @@ All notable changes to RepGenR are documented here. The format follows
   (about 30 s per 1000 genomes on an exFAT disk); links, missing and untracked
   genomes are still checked, and the genome line says the content was not
   read.
-- Global `--bin-dir TOOL=DIR` (#PR), repeatable, and `REPGENR_BIN_DIRS`
+- Global `--bin-dir TOOL=DIR` (#247), repeatable, and `REPGENR_BIN_DIRS`
   (`tool=dir,tool=dir`): DIR comes first on `PATH` for that tool only, at
   preflight (lookup and version query) and in every host subprocess it runs,
   so a satellite environment's tool uses its own helpers and never shadows
