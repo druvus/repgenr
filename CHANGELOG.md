@@ -28,7 +28,6 @@ All notable changes to RepGenR are documented here. The format follows
   `bin` directory; it was recorded as `unknown`. A stage that recorded
   `unknown` is not rerun for this, since versions are not part of the resume
   fingerprint.
-- `status --json` and `doctor --json` (#PRNUM): one versioned JSON object on
 - `status --json` and `doctor --json` (#242): one versioned JSON object on
   stdout (`repgenr.status/1`, `repgenr.doctor/1`) in place of the text report,
   so scripts and workflow wrappers need not parse wording; exit codes are
@@ -229,8 +228,6 @@ All notable changes to RepGenR are documented here. The format follows
 - `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
-- `doctor` (#PRNUM): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
-- `status` (#PRNUM): a `repgenr.yaml` that records no stage is no longer read
 - `status` (#245): a `repgenr.yaml` that records no stage is no longer read
   as the bacterial chain ("Next: repgenr metadata"); `status` names the entry
   stages, and suggests `doctor` when the workdir holds outputs. A record with
@@ -255,7 +252,6 @@ All notable changes to RepGenR are documented here. The format follows
   that caps Gubbins threads and to the automatic `--num-processes` of
   `dereplicate`. The thread count is not a result parameter, so finished
   stages do not rerun.
-- Record names (#PR): every aligner, SNP typer and tree builder names a
 - Record names (#241): every aligner, SNP typer and tree builder names a
   genome by `core.contracts.record_name`, its file name without the FASTA
   suffix and `.gz`. progressiveMauve, SibeliaZ, cactus and the sourmash tree
@@ -673,7 +669,6 @@ All notable changes to RepGenR are documented here. The format follows
   as two records named X). A truncated or corrupt gzip genome stops with exit
   2 naming the file, and free disk space is checked before the copies are
   written.
-- Version queries (#PRNUM): a binary that does not answer its version flag
 - Version queries (#246): a binary that does not answer its version flag
   is stopped after `VERSION_TIMEOUT` (30 s; 8 s under `list-tools --check`)
   together with the helpers it started, which run in its own process group,
