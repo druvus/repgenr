@@ -28,7 +28,7 @@ from ..core.contracts import (
     write_cluster_summary,
 )
 from ..core.errors import WorkdirError
-from .derep_keeper import quality_score
+from .derep_keeper import N50Lookup, N50Of, best_score, choose_keeper
 
 Quality = Mapping[str, tuple[float, float]]
 # filename -> (genus, species) as recorded in the manifest or selection.tsv.
@@ -44,15 +44,20 @@ class ClusterSummaryParams:
 
 
 def summarise_clusters(
-    clusters: Mapping[str, list[str]], quality: Quality, taxonomy: Taxonomy | None = None
+    clusters: Mapping[str, list[str]],
+    quality: Quality,
+    taxonomy: Taxonomy | None = None,
+    n50: N50Of | None = None,
 ) -> list[ClusterSummaryRow]:
     """Build the summary rows, largest cluster first, then by representative name.
 
     ``taxonomy`` gives the species of each genome; a genome it lacks (or
-    holds without a species) falls back to its canonical filename.
+    holds without a species) falls back to its canonical filename. ``n50``
+    gives each genome's N50 for ``rep_n50`` and the keeper score; without it
+    those columns use no N50.
     """
     taxonomy = taxonomy or {}
-    rows = [_summarise(rep, members, quality, taxonomy) for rep, members in clusters.items()]
+    rows = [_summarise(rep, members, quality, taxonomy, n50) for rep, members in clusters.items()]
     rows.sort(key=lambda r: (-r.n_members, r.representative))
     return rows
 
@@ -105,7 +110,11 @@ def _species_column(rep: str, others: list[str], taxonomy: Taxonomy) -> tuple[in
 
 
 def _summarise(
-    rep: str, members: list[str], quality: Quality, taxonomy: Taxonomy
+    rep: str,
+    members: list[str],
+    quality: Quality,
+    taxonomy: Taxonomy,
+    n50: N50Of | None,
 ) -> ClusterSummaryRow:
     others = [m for m in members if m != rep]
     n_species, species = _species_column(rep, others, taxonomy)
@@ -113,11 +122,9 @@ def _summarise(
     rep_q = quality.get(rep)
     scored = [(m, quality[m]) for m in others if m in quality]
     best_member = ""
-    candidates = [(rep, rep_q)] if rep_q is not None else []
-    candidates.extend(scored)
-    if candidates:
-        # ``max`` keeps the first of equal scores, so a tie leaves the keeper.
-        best_member = max(candidates, key=lambda c: quality_score(*c[1]))[0]
+    if rep_q is not None or scored:
+        # The keeper rule itself, so the column agrees with --keeper quality.
+        best_member = choose_keeper(rep, others, quality, n50)
 
     return ClusterSummaryRow(
         representative=rep,
@@ -129,7 +136,14 @@ def _summarise(
         member_max_completeness=max((q[0] for _, q in scored), default=None),
         member_min_contamination=min((q[1] for _, q in scored), default=None),
         best_member=best_member,
+        rep_n50=None if n50 is None else n50(rep),
+        best_score=_rounded(best_score(best_member, quality, n50) if best_member else None),
     )
+
+
+def _rounded(value: float | None) -> float | None:
+    """Four decimals: the score as written, so the file reads back equal."""
+    return None if value is None else round(value, 4)
 
 
 def taxonomy_lookup(ctx: WorkdirContext) -> dict[str, tuple[str, str]]:
@@ -155,7 +169,7 @@ def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     quality = quality_lookup(ctx)
     if not quality:
         logger.info("No assembly quality in the manifest; quality columns are left blank")
-    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx))
+    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx), N50Lookup([ctx.genomes_dir]))
     out = ctx.derep_dir / CLUSTER_SUMMARY_TSV
     write_cluster_summary(out, rows)
     ctx.config.record_stage(

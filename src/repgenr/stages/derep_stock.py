@@ -302,11 +302,14 @@ def _unpack(ctx: WorkdirContext, run_path: Path) -> None:
     # the live manifest, as `cluster-summary` writes it. The stored copy stays
     # in the store as the pack-time view.
     from .cluster_summary import summarise_clusters, taxonomy_lookup
+    from .derep_keeper import N50Lookup
     from .dereplicate import quality_lookup
 
     write_cluster_summary(
         ctx.derep_dir / CLUSTER_SUMMARY_TSV,
-        summarise_clusters(clusters, quality_lookup(ctx), taxonomy_lookup(ctx)),
+        summarise_clusters(
+            clusters, quality_lookup(ctx), taxonomy_lookup(ctx), N50Lookup([ctx.genomes_dir])
+        ),
     )
     tool, params, versions = carried if carried else (None, {}, None)
     ctx.config.record_stage(

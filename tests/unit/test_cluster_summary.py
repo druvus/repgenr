@@ -78,6 +78,8 @@ def test_summary_round_trip(tmp_path: Path) -> None:
         "member_min_contamination",
         "best_member",
         "n_genomes",
+        "rep_n50",
+        "best_score",
     ]
     assert read_cluster_summary(path) == rows
 
@@ -121,7 +123,8 @@ def test_summary_n_genomes_counts_the_keeper(tmp_path: Path) -> None:
     path = tmp_path / "cluster_summary.tsv"
     write_cluster_summary(path, rows)
     header, first = (line.split("\t") for line in path.read_text().splitlines()[:2])
-    assert header[-1] == "n_genomes" and first[-1] == "3"
+    assert first[header.index("n_genomes")] == "3"
+    assert header.index("n_genomes") == 9  # earlier column positions unchanged
 
 
 def test_summary_species_list_is_capped_most_frequent_first() -> None:

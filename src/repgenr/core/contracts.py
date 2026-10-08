@@ -439,9 +439,10 @@ class ClusterSummaryRow:
     the representative's first, capped at five names plus "+N more".
     Quality columns are ``None`` when the manifest carried no CheckM values;
     the ``member_*`` extremes span scored members only. ``best_member`` is the
-    highest-scoring genome in the cluster (representative included) and equals
-    ``representative`` when the keeper is already the best; it is empty when no
-    genome in the cluster is scored.
+    genome the quality keeper chooses (``derep_keeper.choose_keeper``) and
+    equals ``representative`` when the keeper is already that genome; it is
+    empty when no genome in the cluster is scored. ``best_score`` is its
+    keeper score and ``rep_n50`` the representative's N50.
     """
 
     representative: str
@@ -453,6 +454,8 @@ class ClusterSummaryRow:
     member_max_completeness: float | None = None
     member_min_contamination: float | None = None
     best_member: str = ""
+    rep_n50: int | None = None
+    best_score: float | None = None
 
     @property
     def n_genomes(self) -> int:
@@ -472,6 +475,8 @@ _CLUSTER_SUMMARY_COLUMNS = (
     "best_member",
     # Appended last so the positions of the earlier columns stay unchanged.
     "n_genomes",
+    "rep_n50",
+    "best_score",
 )
 
 
@@ -492,6 +497,8 @@ def write_cluster_summary(path: Path, rows: list[ClusterSummaryRow]) -> None:
                     _fmt_opt(r.member_min_contamination),
                     r.best_member,
                     r.n_genomes,
+                    "" if r.rep_n50 is None else r.rep_n50,
+                    _fmt_opt(r.best_score),
                 ]
             )
 
@@ -516,6 +523,8 @@ def read_cluster_summary(path: Path) -> list[ClusterSummaryRow]:
                     member_max_completeness=_opt_float(rec.get("member_max_completeness")),
                     member_min_contamination=_opt_float(rec.get("member_min_contamination")),
                     best_member=rec.get("best_member", ""),
+                    rep_n50=int(rec["rep_n50"]) if rec.get("rep_n50") else None,
+                    best_score=_opt_float(rec.get("best_score")),
                 )
             )
     return rows

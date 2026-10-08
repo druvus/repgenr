@@ -45,6 +45,13 @@ from ..dereplicators.base import (
     run_quality,
 )
 from .cluster_summary import summarise_clusters, taxonomy_lookup
+from .derep_keeper import (
+    N50Lookup,
+    N50Of,
+    choose_keeper,
+    log_unpromoted,
+    rescore_representatives,
+)
 
 
 @dataclass
@@ -172,16 +179,16 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
 
     keeper_swaps = 0
     quality: dict[str, tuple[float, float]] = {}
+    # N50 per genome for the keeper score and the summary, each genome read once.
+    n50 = N50Lookup([ctx.genomes_dir])
     if params.keeper == "quality":
-        from .derep_keeper import rescore_representatives
-
         # Only the genomes being dereplicated count: manifest rows for the
         # outgroup or for genomes no longer under genomes/ re-pick nothing, and
         # must not make the record claim the quality rule applied.
         names = {g.name for g in genomes}
         quality = {n: q for n, q in manifest_quality.items() if n in names}
         if quality:
-            result, keeper_swaps = rescore_representatives(result, quality, logger)
+            result, keeper_swaps = rescore_representatives(result, quality, logger, n50)
         else:
             logger.warning(
                 "No assembly quality in the manifest for the genomes under genomes/, "
@@ -196,7 +203,12 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
         before = len(result.representatives)
         # Reuse the quality lookup above instead of re-querying the manifest.
         result = _reduce_by_taxonomy(
-            result, params.reduce, quality, logger, taxon_of=_taxon_lookup(ctx, params.reduce)
+            result,
+            params.reduce,
+            quality,
+            logger,
+            taxon_of=_taxon_lookup(ctx, params.reduce),
+            n50=n50,
         )
         logger.info(
             "Taxonomy reduction (one per %s): %d -> %d representatives",
@@ -208,7 +220,7 @@ def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     check_result_complete(result, [g.name for g in genomes])
     # The summary reports quality whichever keeper rule was used, so a
     # --keeper tool run still shows where a member outscores the keeper.
-    _write_contract(ctx, result, manifest_quality)
+    _write_contract(ctx, result, manifest_quality, n50)
     _update_manifest(ctx, result)
 
     ctx.config.record_stage(
@@ -539,28 +551,24 @@ def _reduce_by_taxonomy(
     logger,
     *,
     taxon_of: Mapping[str, str],
+    n50: N50Of | None = None,
 ) -> DerepResult:
     """Collapse the ANI representatives to one per taxon (species|genus).
 
     ``taxon_of`` maps a genome filename to its taxon at ``level`` (the workdir
     stage reads it from the manifest, the merge step from selection.tsv or the
     filenames). Representatives sharing a taxon are merged into a single keeper.
-    When ``quality`` is non-empty, the keeper is chosen by manifest assembly
-    quality first (:func:`~.derep_keeper.quality_score`) -- the caller's own
-    manifest lookup, reused here instead of querying the manifest a second
-    time -- falling back to the largest existing cluster and then lexical
-    order for unscored/tied candidates; pass ``{}`` (keeper="tool", or no
-    manifest quality data) to use the largest-cluster rule alone. The others
+    The representative of the largest cluster (then the lexically last name)
+    is the default keeper. When ``quality`` is non-empty the quality keeper
+    rule (:func:`~.derep_keeper.choose_keeper`, with ``n50`` for the N50
+    term) re-picks among the group, exactly as within a cluster; pass ``{}``
+    (keeper="tool", or no quality data) to use the largest-cluster rule
+    alone. The others
     -- plus their cluster members -- become contained under the keeper.
     Representatives whose taxon is unknown/empty are kept as-is (each its own
     group), so reduction never silently drops an un-annotated genome.
     """
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
-    from .derep_keeper import quality_score
-
-    def _score_or_min(name: str) -> float:
-        q = quality.get(name)
-        return float("-inf") if q is None else quality_score(*q)
 
     # group rep filename -> taxon key; unknown taxon -> unique per-rep key (kept)
     groups: dict[str, list[str]] = {}
@@ -579,10 +587,16 @@ def _reduce_by_taxonomy(
         genome: state for genome, state in result.genome_status.items() if state == STATUS_FAIL_QC
     }
 
+    left_to_size: list[str] = []
     for members in groups.values():
-        # keeper: best quality score (when known), then largest existing
-        # cluster, then lexical name (deterministic).
-        keeper = max(members, key=lambda n: (_score_or_min(n), len(result.clusters.get(n, [])), n))
+        # keeper: the largest existing cluster, then lexical name; the quality
+        # rule may then replace it, as within a cluster.
+        keeper = max(members, key=lambda n: (len(result.clusters.get(n, [])), n))
+        if quality:
+            by_size = keeper
+            keeper = choose_keeper(by_size, members, quality, n50)
+            if keeper == by_size and by_size not in quality and any(m in quality for m in members):
+                left_to_size.append(by_size)
         new_reps.append(rep_by_name[keeper])
         status[keeper] = STATUS_REPRESENTATIVE
         contained: list[str] = []
@@ -595,6 +609,7 @@ def _reduce_by_taxonomy(
                 status[g] = STATUS_CONTAINED
         new_clusters[keeper] = contained
 
+    log_unpromoted(left_to_size, logger, what="taxon group(s)")
     return DerepResult(
         representatives=sorted(new_reps),
         clusters=new_clusters,
@@ -631,7 +646,10 @@ def quality_lookup(ctx: WorkdirContext) -> dict[str, tuple[float, float]]:
 
 
 def _write_contract(
-    ctx: WorkdirContext, result: DerepResult, quality: Mapping[str, tuple[float, float]]
+    ctx: WorkdirContext,
+    result: DerepResult,
+    quality: Mapping[str, tuple[float, float]],
+    n50: N50Of | None = None,
 ) -> None:
     rep_dir = ctx.representatives_dir
     if rep_dir.exists():
@@ -658,7 +676,7 @@ def _write_contract(
     write_genome_status(ctx.derep_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
         ctx.derep_dir / CLUSTER_SUMMARY_TSV,
-        summarise_clusters(result.clusters, quality, taxonomy_lookup(ctx)),
+        summarise_clusters(result.clusters, quality, taxonomy_lookup(ctx), n50),
     )
 
 

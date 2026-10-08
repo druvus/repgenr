@@ -107,7 +107,7 @@ def dereplicate_chunk_cmd(
         "quality",
         "--keeper",
         help="Representative choice when --selection-tsv is given: "
-        "quality (selection.tsv completeness minus 5 x contamination) "
+        "quality (selection.tsv CheckM values and genome N50) "
         "or tool (adapter's own pick).",
     ),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
@@ -335,7 +335,7 @@ def dereplicate_merge_cmd(
         "quality",
         "--keeper",
         help="Representative choice when --selection-tsv is given: "
-        "quality (selection.tsv completeness minus 5 x contamination) "
+        "quality (selection.tsv CheckM values and genome N50) "
         "or tool (adapter's own pick).",
     ),
     reduce: str = typer.Option(

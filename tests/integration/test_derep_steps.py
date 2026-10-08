@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -563,8 +564,8 @@ def test_merge_reduce_keeper_tool_ignores_selection_quality(tmp_path: Path, regi
     """--keeper tool: the --reduce keeper is the largest cluster, as in the stage.
 
     The merge step used to rank the representatives by selection.tsv quality
-    whatever --keeper said, so a scored fragment displaced an unscored genome
-    that stood for more of the set.
+    whatever --keeper said, so a scored genome displaced an unscored one that
+    stood for more of the set.
     """
     register_tool(registry, "keepall", _KeepAll)
     register_tool(registry, "anidep", _AniDep)
@@ -585,7 +586,9 @@ def test_merge_reduce_keeper_tool_ignores_selection_quality(tmp_path: Path, regi
     )
     selection = tmp_path / "selection.tsv"
     rows = [SelectionRow(acc, "Fam", g, "aaa-sp1", False, fn) for acc, fn, g, _s in _TAXA[:3]]
-    rows[2].completeness, rows[2].contamination = 40.0, 0.0  # only the singleton is scored
+    # Only the singleton is scored, and high quality, so the quality rule
+    # would promote it over the unscored larger cluster.
+    rows[2].completeness, rows[2].contamination = 95.0, 1.0
     write_selection(selection, rows)
 
     def merged(keeper: str) -> list[str]:
@@ -604,6 +607,58 @@ def test_merge_reduce_keeper_tool_ignores_selection_quality(tmp_path: Path, regi
 
     assert merged("tool") == [_TAXA[0][1]]
     assert merged("quality") == [_TAXA[2][1]]
+
+
+def test_merge_summary_scores_chunk_members_with_the_chunk_n50(
+    tmp_path: Path, register_tool
+) -> None:
+    """The merge step receives only chunk representatives; the N50 of the other
+    scored genomes comes from the chunk's genome_n50.tsv."""
+    from repgenr.core.contracts import read_cluster_summary
+    from repgenr.stages.derep_steps import GENOME_N50_TSV
+
+    register_tool(registry, "anidep", _AniDep)
+    register_tool(registry, "keepall", _KeepAll)
+    gdir = tmp_path / "genomes"
+    gdir.mkdir()
+    first, second = (gdir / _TAXA[0][1], gdir / _TAXA[1][1])
+    first.write_text(">a\n" + "A" * 10 + "\n>b\n" + "C" * 10 + "\n")  # N50 10
+    second.write_text(">a\n" + "A" * 1000 + "\n")  # N50 1000
+    selection = tmp_path / "selection.tsv"
+    rows = [SelectionRow(acc, "Fam", g, s, False, fn) for acc, fn, g, s in _TAXA[:2]]
+    for row in rows:
+        row.completeness, row.contamination = 99.0, 0.0
+    write_selection(selection, rows)
+    dereplicate_chunk(
+        ChunkParams(
+            tool="anidep",
+            genomes=[first, second],
+            out_dir=tmp_path / "c0",
+            secondary_ani=0.5,
+            selection_tsv=selection,
+            keeper="tool",
+        ),
+        _LOG,
+    )
+    assert (tmp_path / "c0" / GENOME_N50_TSV).read_text().splitlines()[1:] == [
+        f"{first.name}\t10",
+        f"{second.name}\t1000",
+    ]
+    shutil.rmtree(gdir)  # the merge must not need the member's file
+    dereplicate_merge(
+        MergeParams(
+            tool="keepall",
+            chunk_dirs=[tmp_path / "c0"],
+            out_dir=tmp_path / "m",
+            selection_tsv=selection,
+            keeper="tool",
+        ),
+        _LOG,
+    )
+    (row,) = read_cluster_summary(tmp_path / "m" / CLUSTER_SUMMARY_TSV)
+    assert (row.representative, row.rep_n50) == (first.name, 10)
+    assert row.best_member == second.name
+    assert row.best_score == 100.5  # 99 + 0.5 x log10(1000)
 
 
 def test_merge_reduce_genus_falls_back_to_filename_taxonomy(tmp_path: Path, register_tool) -> None:
