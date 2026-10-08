@@ -161,6 +161,23 @@ def test_leftover_temp_files_are_a_warning(tmp_path: Path) -> None:
     assert any(f.level == "warn" and "tree.nwk.part" in f.message for f in findings)
 
 
+def test_phylo_stamp_left_in_snp_is_a_warning(tmp_path: Path) -> None:
+    """Before tree/msa/, phylo's typing pass wrote snp/ and its stamp there;
+    the tables in snp/ may then be phylo's, not the snptype stage's."""
+    wd = _base_workdir(tmp_path)
+    (wd / "snp").mkdir()
+    (wd / "snp" / "msa_source.json").write_text("{}", encoding="utf-8")
+    warned = [f for f in diagnose(wd) if f.level == "warn" and f.area == "snptype"]
+    assert len(warned) == 1 and "snp/msa_source.json" in warned[0].message
+
+
+def test_phylo_stamp_under_tree_msa_is_not_a_warning(tmp_path: Path) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "tree" / "msa").mkdir(parents=True)
+    (wd / "tree" / "msa" / "msa_source.json").write_text("{}", encoding="utf-8")
+    assert not [f for f in diagnose(wd) if f.area == "snptype"]
+
+
 def test_changed_inputs_are_a_warning(tmp_path: Path) -> None:
     """A completed stage whose recorded input digests no longer match reality
     is stale (it will re-run) -- doctor should say so."""

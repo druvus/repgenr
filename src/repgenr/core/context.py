@@ -14,6 +14,7 @@ from functools import cached_property
 from pathlib import Path
 
 from .config import Config
+from .contracts import PHYLO_MSA_DIR
 from .logging import configure_logging
 from .manifest import Manifest
 
@@ -64,6 +65,11 @@ class WorkdirContext:
     @property
     def tree_dir(self) -> Path:
         return self.workdir / "tree"
+
+    @property
+    def phylo_msa_dir(self) -> Path:
+        """Where phylo's own SNP typing pass writes (snp/ is the snptype stage's)."""
+        return self.tree_dir / PHYLO_MSA_DIR
 
     @property
     def scratch_dir(self) -> Path:

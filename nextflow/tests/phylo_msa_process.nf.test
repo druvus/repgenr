@@ -29,7 +29,7 @@ nextflow_process {
             }
             // the stub builds no source directory, so the optional outputs stay empty
             assert process.out.align.size() == 0
-            assert process.out.snp.size() == 0
+            assert process.out.tree_msa.size() == 0
         }
     }
 }

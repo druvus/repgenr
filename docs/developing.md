@@ -113,7 +113,8 @@ derep/clusters.tsv        representative <TAB> member
 derep/genome_status.tsv   genome <TAB> status
 derep/cluster_summary.tsv one row per representative: size, species, quality
 align/msa.fasta           aligner output (MSA-FASTA)
-snp/core_snp.fasta        SNP typer output (core-SNP alignment)
+snp/core_snp.fasta        SNP typer output (core-SNP alignment, snptype stage)
+tree/msa/core_snp.fasta   core-SNP alignment from the typing pass of phylo
 tree/tree.nwk             Newick tree
 tree2tax.tsv              child <TAB> parent (FlexTaxD)
 genomes_map.tsv           accession <TAB> leaf

@@ -13,12 +13,13 @@ process PHYLO_MSA {
     tuple val(meta), path(reps_dir), path(outgroup, stageAs: 'outgroup/*'), path(outgroup_accession)
 
     output:
-    tuple val(meta), path("msa.fasta")                , emit: msa
-    // The source directory the alignment was built in: the aligner's or the
-    // SNP typer's files and the reuse stamp (msa_source.json).
-    tuple val(meta), path("align/*"), optional: true , emit: align
-    tuple val(meta), path("snp/*")  , optional: true , emit: snp
-    path "versions.yml"                               , emit: versions
+    tuple val(meta), path("msa.fasta")                   , emit: msa
+    // The source directory the alignment was built in: the aligner's files
+    // (align/) or the SNP typing pass's (tree/msa/), each with the reuse
+    // stamp (msa_source.json).
+    tuple val(meta), path("align/*")   , optional: true , emit: align
+    tuple val(meta), path("tree/msa/*"), optional: true , emit: tree_msa
+    path "versions.yml"                                  , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

@@ -93,12 +93,9 @@ worth knowing: `--with-snptype` adds the standalone `snptype` stage after
 dereplication, so the SNP tables under `snp/` are produced even when the tree
 is built another way, and `--genomes-dir` starts the chain from local genomes.
 With `--msa-source snptype`, `phylo` runs its own typing pass, outgroup
-included, into the same directory; `run` then places `snptype` after `phylo`,
-so `snp/` holds the tables the `snptype` record describes, and a later `phylo`
-run that changes only the tree builder types again. When a `phylo` typing pass
-replaces tables the `snptype` stage wrote, `phylo` removes the `snptype` record
-and says so in the log; `status` then no longer lists the stage, and a repeat
-`snptype` rebuilds the tables.
+included, into `tree/msa/`; `snp/` holds only the `snptype` stage's tables, so
+the two do not replace each other and a later `phylo` run that changes only the
+tree builder reuses its alignment.
 
 ### Starting from local genomes
 
@@ -659,7 +656,7 @@ the cap left out is not a candidate), and never counts against the limit.
 ### Reusing an alignment across tree builders
 
 `phylo` stamps the alignment it builds (`align/msa_source.json` or
-`snp/msa_source.json`) with what produced it: the source and its settings, the
+`tree/msa/msa_source.json`) with what produced it: the source and its settings, the
 genome set, and the alignment's own digest. A later `phylo` run that changes
 only the tree builder, the bootstrap or the thread count reuses that alignment
 instead of aligning or SNP-calling again, and says so in the log. Anything the
@@ -671,8 +668,9 @@ The same split is available to the stateless step: `phylo-build --msa-only`
 builds the alignment and writes `msa.fasta` without a tree, and `phylo-build
 --msa <file>` builds a tree from an alignment an earlier call produced. The
 Nextflow layer uses these to run the alignment and the tree as separate tasks.
-`--msa-only` leaves the SNP typer's `snp/` directory (and `scratch/`) in the
-step's output directory beside `msa.fasta`; they are left in place.
+`--msa-only` leaves the SNP typing pass's `tree/msa/` directory (and
+`scratch/`) in the step's output directory beside `msa.fasta`; they are left
+in place.
 
 ### SNP typing and masking
 
@@ -685,7 +683,8 @@ gubbins`) runs on the typer's whole-genome alignment and replaces the
 core-SNP alignment with Gubbins' filtered polymorphic sites. Typers that only
 emit variable sites cannot be masked.
 
-Branch lengths from a variable-site-only alignment (`snp/core_snp.fasta`) are
+Branch lengths from a variable-site-only alignment (`snp/core_snp.fasta`, or
+`tree/msa/core_snp.fasta` from the typing pass of `phylo`) are
 inflated, because the alignment carries no ascertainment-bias correction.
 Compare topologies and supports rather than lengths, or build the tree from the
 whole-genome alignment (`snp/full_alignment.fasta`, written by `simple`,
@@ -844,8 +843,8 @@ Combine an executor profile with an optional container profile, e.g.
 - **`test`**: minimal resources and a small target for a quick smoke run.
 
 `PHYLO` (and the split `PHYLO_MSA`/`PHYLO_TREE`) publish the alignment they
-built (`phylo/align/` for an aligner, `phylo/snp/` for a SNP typer, with the
-reuse stamp) and the tree builder's own files under `phylo/tree/`, beside the
+built (`phylo/align/` for an aligner, `phylo/tree/msa/` for a SNP typer, with
+the reuse stamp) and the tree builder's own files under `phylo/tree/`, beside the
 tree.
 
 ### Scaling

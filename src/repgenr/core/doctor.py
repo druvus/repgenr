@@ -66,6 +66,7 @@ def diagnose(workdir: Path) -> list[Finding]:
         _check_outgroup,
         _check_representatives,
         _check_tree,
+        _check_phylo_stamp_in_snp,
         _check_tree2tax_pair,
         _check_stale_inputs,
         _check_deliverables,
@@ -278,6 +279,27 @@ def _check_tree(workdir: Path, config: Config) -> list[Finding]:
     return [Finding("ok", "phylo", f"{TREE_NWK} looks like a complete tree")]
 
 
+def _check_phylo_stamp_in_snp(workdir: Path, config: Config) -> list[Finding]:
+    """A reuse stamp in snp/, left by phylo before its typing pass moved to tree/msa/.
+
+    That phylo version typed into snp/, the snptype stage's directory, so the
+    tables there may be phylo's (outgroup included), not the ones the snptype
+    record describes. phylo no longer reads or writes snp/.
+    """
+    stamp = workdir / "snp" / "msa_source.json"
+    if not stamp.is_file():
+        return []
+    return [
+        Finding(
+            "warn",
+            "snptype",
+            "snp/msa_source.json was left by an earlier phylo typing pass (now under "
+            "tree/msa/); the tables in snp/ may be phylo's. Delete the stamp, and run "
+            "'repgenr --force snptype' if the snptype tables are needed.",
+        )
+    ]
+
+
 def _check_tree2tax_pair(workdir: Path, config: Config) -> list[Finding]:
     t2t = workdir / TREE2TAX_TSV
     gmap = workdir / GENOMES_MAP_TSV
@@ -304,6 +326,7 @@ def _layout(workdir: Path) -> SimpleNamespace:
         representatives_dir=workdir / "derep" / "representatives",
         snp_dir=workdir / "snp",
         tree_dir=workdir / "tree",
+        phylo_msa_dir=workdir / "tree" / "msa",
     )
 
 

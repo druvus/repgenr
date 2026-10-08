@@ -340,53 +340,117 @@ def test_snptype_source_types_the_outgroup_too(
         ctx,
         PhyloParams(treebuilder="faketree_msa", msa_source="snptype", snptyper="fakesnptyper"),
     )
-    core = (workdir / "snp" / "core_snp.fasta").read_text()
+    core = (workdir / "tree" / "msa" / "core_snp.fasta").read_text()
     assert core.count(">") == 4 and ">Fam_gen_og_GCA_000009" in core
 
 
-def test_snptype_source_releases_the_snptype_record_it_replaces(
-    workdir: Path, fake_phylo_tools, fake_snptyper, caplog
-) -> None:
-    """phylo's typing pass writes into snp/, where the snptype stage's tables
-    were; the snptype record no longer describes them and is removed, so status
-    says so and a repeat snptype rebuilds them instead of skipping."""
-    from repgenr.core.config import Config
-
-    _make_reps(workdir)
-    snp = workdir / "snp"
-    snp.mkdir()
-    (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
-    ctx = WorkdirContext(workdir, create=True, logger=logging.getLogger("test-phylo"))
-    ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
-    ctx.save_config()
-    with caplog.at_level(logging.WARNING, logger="test-phylo"):
-        run(
-            ctx,
-            PhyloParams(
-                treebuilder="faketree_msa",
-                msa_source="snptype",
-                snptyper="fakesnptyper",
-                no_outgroup=True,
-            ),
-        )
-    assert "snptype" not in Config.load(workdir).stages
-    assert "phylo" in Config.load(workdir).stages
-    assert any("snptype ska2" in r.getMessage() for r in caplog.records)
-
-
-def test_aligner_source_keeps_the_snptype_record(workdir: Path, fake_phylo_tools) -> None:
-    from repgenr.core.config import Config
-
-    _make_reps(workdir)
+def _snptype_record_and_tables(workdir: Path) -> Path:
+    """A completed snptype stage: its record and its table in snp/."""
     snp = workdir / "snp"
     snp.mkdir()
     (snp / "core_snp.fasta").write_text(">from_snptype\nACGT\n")
     ctx = WorkdirContext(workdir, create=True)
     ctx.config.record_stage("snptype", tool="ska2", completed="2026-10-07T00:00:00")
     ctx.save_config()
+    return snp
+
+
+def test_snptype_source_types_under_tree_msa_and_leaves_snp_alone(
+    workdir: Path, fake_phylo_tools, fake_snptyper
+) -> None:
+    """snp/ belongs to the snptype stage: phylo's typing pass writes its
+    alignment and reuse stamp under tree/msa/, so the snptype tables and
+    record stay as they were."""
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = _snptype_record_and_tables(workdir)
+    ctx = WorkdirContext(workdir)
+    params = PhyloParams(
+        treebuilder="faketree_msa",
+        msa_source="snptype",
+        snptyper="fakesnptyper",
+        no_outgroup=True,
+    )
+    run(ctx, params)
+    assert (snp / "core_snp.fasta").read_text() == ">from_snptype\nACGT\n"
+    assert sorted(p.name for p in snp.iterdir()) == ["core_snp.fasta"]
+    msa_dir = workdir / "tree" / "msa"
+    assert (msa_dir / "core_snp.fasta").read_text().count(">") == 3
+    assert (msa_dir / "msa_source.json").is_file()
+    assert not (workdir / "scratch" / "snptype").exists(), "snptype's scratch is not shared"
+    stages = Config.load(workdir).stages
+    assert "snptype" in stages and "phylo" in stages
+
+
+def test_aligner_source_keeps_the_snptype_record(workdir: Path, fake_phylo_tools) -> None:
+    from repgenr.core.config import Config
+
+    _make_reps(workdir)
+    snp = _snptype_record_and_tables(workdir)
+    ctx = WorkdirContext(workdir)
     run(ctx, PhyloParams(treebuilder="faketree_msa", aligner="fakealigner", no_outgroup=True))
     assert "snptype" in Config.load(workdir).stages
     assert (snp / "core_snp.fasta").read_text() == ">from_snptype\nACGT\n"
+
+
+def _type_calls(monkeypatch) -> list[int]:
+    """Count SNP typer invocations across phylo runs."""
+    calls: list[int] = []
+    original = _FakeSnpTyper.call
+
+    def counting(self, genomes, reference, out_dir, params, logger):
+        calls.append(1)
+        return original(self, genomes, reference, out_dir, params, logger)
+
+    monkeypatch.setattr(_FakeSnpTyper, "call", counting)
+    return calls
+
+
+def test_snptype_msa_is_reused_from_tree_msa(
+    workdir: Path, fake_phylo_tools, fake_snptyper, monkeypatch
+) -> None:
+    """The typed alignment under tree/msa/ survives the tree builder's cleanup
+    of tree/ and is reused when only the tree builder settings change; a
+    snptype stage run in between does not invalidate it."""
+    from repgenr.stages.snptype import SnptypeParams
+    from repgenr.stages.snptype import run as snptype_run
+
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _type_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="snptype", snptyper="fakesnptyper")
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+    snptype_run(ctx, SnptypeParams(tool="fakesnptyper"))
+    assert len(calls) == 2
+    # The snptype stage's table differs from phylo's alignment (another typer
+    # or reference); it must not invalidate the alignment phylo built.
+    (workdir / "snp" / "core_snp.fasta").write_text(">other\nTTTT\n")
+    run(ctx, PhyloParams(no_outgroup=True, bootstrap=100, **base))
+    assert len(calls) == 2, "same inputs and settings: the alignment is reused"
+
+
+def test_stamp_left_under_snp_by_an_earlier_layout_is_not_reused(
+    workdir: Path, fake_phylo_tools, fake_snptyper, monkeypatch
+) -> None:
+    """A workdir whose phylo typing pass wrote snp/ (before tree/msa/) is typed
+    once more, into tree/msa/; the old snp/ files are not read or changed."""
+    import shutil
+
+    _make_reps(workdir)
+    ctx = WorkdirContext(workdir)
+    calls = _type_calls(monkeypatch)
+    base = dict(treebuilder="faketree_msa", msa_source="snptype", snptyper="fakesnptyper")
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 1
+    msa_dir = workdir / "tree" / "msa"
+    shutil.move(str(msa_dir), str(workdir / "snp"))
+    legacy = {p.name: p.read_bytes() for p in (workdir / "snp").iterdir()}
+    run(ctx, PhyloParams(no_outgroup=True, **base))
+    assert len(calls) == 2
+    assert (msa_dir / "msa_source.json").is_file()
+    assert {p.name: p.read_bytes() for p in (workdir / "snp").iterdir()} == legacy
 
 
 def test_alignment_free_builder_warns_that_msa_options_have_no_effect(
@@ -409,6 +473,7 @@ def test_alignment_free_builder_warns_that_msa_options_have_no_effect(
     assert len(warned) == 1
     assert "--msa-source snptype" in warned[0] and "--mask gubbins" in warned[0]
     assert not (workdir / "snp").exists()
+    assert not (workdir / "tree" / "msa").exists()
 
 
 def _align_calls(monkeypatch) -> list[int]:
