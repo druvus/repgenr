@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-28 commands, 304 flags (304 with a live test or an n/a reason, 0 pending).
+28 commands, 307 flags (307 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -117,6 +117,8 @@ dispatch: `query`
 | flag | aliases | param | validated | nextflow | live | docs |
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | n/a: query command, no stage parameters | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
+| `--quick` |  | n/a: query command, no stage parameters | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--json` |  | n/a: query command, no stage parameters | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 
 ## genome
 
@@ -375,6 +377,7 @@ dispatch: `query`
 | flag | aliases | param | validated | nextflow | live | docs |
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | n/a: query command, no stage parameters | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
+| `--json` |  | n/a: query command, no stage parameters | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 
 ## tree2tax
 
