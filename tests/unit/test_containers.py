@@ -481,3 +481,26 @@ def test_engine_readiness_is_checked_once_per_configuration(monkeypatch) -> None
     finally:
         containers.configure_container("none")
     assert calls == [["docker", "info"]]
+
+
+def test_an_image_docker_cannot_start_is_named_as_an_engine_failure(monkeypatch) -> None:
+    # A pin with a missing tag: docker exits 125 before the tool starts. The
+    # message said "sourmash failed (exit 125)", as if sourmash had run.
+    caps = ToolCapabilities(name="sourmash", container="quay.io/x/sourmash:0.0.0")
+    monkeypatch.setattr(containers, "_CONFIG", ContainerConfig(backend="docker"))
+    monkeypatch.setattr(
+        containers,
+        "wrap_command",
+        lambda image, argv, **kw: [
+            "sh",
+            "-c",
+            "echo \"Unable to find image 'quay.io/x/sourmash:0.0.0' locally\" >&2; "
+            "echo 'docker: Error response from daemon: manifest unknown' >&2; exit 125",
+        ],
+    )
+    with pytest.raises(containers.ToolExecutionError) as ei:
+        containers.run_tool(caps, ["sourmash", "compare"], logger=_LOG)
+    msg = str(ei.value)
+    assert "docker could not start image quay.io/x/sourmash:0.0.0 for sourmash" in msg
+    assert "manifest unknown" in msg
+    assert ei.value.exit_code == 6 and ei.value.returncode == 125

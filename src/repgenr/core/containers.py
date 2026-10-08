@@ -391,6 +391,31 @@ def wrap_command(
     return cmd
 
 
+# `docker run` exits 125 when the engine itself fails (image not found, pull
+# denied, bad option): the tool never started.
+_DOCKER_ENGINE_FAILURE = 125
+
+
+def _engine_failure(
+    exc: ToolExecutionError, image: str, caps: ToolCapabilities, config: ContainerConfig
+) -> ToolExecutionError:
+    """Name a failure of the engine itself instead of blaming the tool."""
+    if (
+        config.backend != DOCKER
+        or exc.returncode != _DOCKER_ENGINE_FAILURE
+        or exc.timeout is not None
+    ):
+        return exc
+    lines = [line.strip() for line in (exc.output or "").splitlines() if line.strip()]
+    detail = next((line for line in reversed(lines) if "rror" in line), lines[-1] if lines else "")
+    message = f"{config.engine_binary()} could not start image {image} for {caps.name} (exit 125)"
+    if detail:
+        message += f": {detail}"
+    return ToolExecutionError(
+        exc.command, exc.returncode, output=exc.output, tool=exc.tool, message=message
+    )
+
+
 def run_tool(
     caps: ToolCapabilities,
     command: Sequence[str | os.PathLike[str]],
@@ -437,16 +462,19 @@ def run_tool(
         image, argv, config=config, cwd=cwd, logger=logger, extra_mounts=extra_mounts
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
-    return process.run(
-        wrapped,
-        logger=logger,
-        cwd=cwd,
-        env=merged_env,
-        check=check,
-        stdout_path=stdout_path,
-        log_prefix=log_prefix or caps.name,
-        timeout=timeout,
-    )
+    try:
+        return process.run(
+            wrapped,
+            logger=logger,
+            cwd=cwd,
+            env=merged_env,
+            check=check,
+            stdout_path=stdout_path,
+            log_prefix=log_prefix or caps.name,
+            timeout=timeout,
+        )
+    except ToolExecutionError as exc:
+        raise _engine_failure(exc, image, caps, config) from exc
 
 
 def run_chain(
@@ -502,14 +530,17 @@ def run_chain(
         extra_mounts=[*extra_mounts, *paths],
     )
     merged_env = {**_engine_env(config), **(dict(env) if env else {})} or None
-    process.run(
-        wrapped,
-        logger=logger,
-        cwd=cwd,
-        env=merged_env,
-        log_prefix=caps.name,
-        timeout=timeout,
-    )
+    try:
+        process.run(
+            wrapped,
+            logger=logger,
+            cwd=cwd,
+            env=merged_env,
+            log_prefix=caps.name,
+            timeout=timeout,
+        )
+    except ToolExecutionError as exc:
+        raise _engine_failure(exc, image, caps, config) from exc
 
 
 def run_tool_with_retries(

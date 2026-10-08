@@ -57,6 +57,7 @@ class ToolExecutionError(RepGenRError):
         *,
         tool: str | None = None,
         timeout: float | None = None,
+        message: str | None = None,
     ):
         self.command = command
         self.returncode = returncode
@@ -74,7 +75,7 @@ class ToolExecutionError(RepGenRError):
             msg = f"{self.tool} exited 0 without writing its results"
         else:
             msg = f"{self.tool} failed (exit {returncode})"
-        super().__init__(msg)
+        super().__init__(message or msg)
 
     @property
     def output_tail(self) -> str:
