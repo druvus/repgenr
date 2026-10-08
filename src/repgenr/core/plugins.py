@@ -119,8 +119,8 @@ class Registry[T]:
             try:
                 self._classes[ep.name] = ep.load()
             except Exception as exc:  # a broken third-party plugin must not kill the run
-                # Deferred: surfaced only if the broken name is actually requested,
-                # but log at debug so a broken in-tree adapter is diagnosable.
+                # Warned here and raised only if the broken name is requested, so
+                # one broken plugin does not disable the rest of the family.
                 logging.getLogger("repgenr").warning(
                     "Plugin %r (group %s) failed to load and is unavailable: %s",
                     ep.name,
@@ -224,25 +224,27 @@ def _capabilities_of(registry: Registry, name: str) -> ToolCapabilities | None:
 def _tool_available(cap: ToolCapabilities) -> bool:
     """Is this adapter runnable in the CURRENT execution environment?
 
-    Under an active container backend the tool lives in an image, not on the
-    host, so a declared ``container`` or ``conda`` spec counts as available
-    (resolution itself happens at preflight); natively, the required binaries
-    must be on PATH.
+    This mirrors :func:`repgenr.core.containers.run_tool`. Under an active
+    container backend a tool runs in an image when it pins one, or when
+    ``--wave`` is on and it declares a conda spec; such a tool counts as
+    available (resolution itself happens at preflight). Any other tool runs on
+    the host, so it is available only when its required binaries are on PATH.
     """
     from .containers import get_config
 
-    if get_config().active:
-        return cap.container is not None or bool(cap.conda)
+    config = get_config()
+    if config.active and (cap.container is not None or (config.wave_enabled and bool(cap.conda))):
+        return True
     return all(shutil.which(spec.name) is not None for spec in cap.required_binaries)
 
 
-# Tie-break order for auto-selection, matching the documented per-family
-# defaults; unlisted tools rank after these, alphabetically.
 def tool_available(caps: ToolCapabilities) -> bool:
     """Whether an adapter can run here: on the host, or in an image under a backend."""
     return _tool_available(caps)
 
 
+# Tie-break order for auto-selection, matching the documented per-family
+# defaults; unlisted tools rank after these, alphabetically.
 _PREFERRED_ORDER = (
     "skder",
     "iqtree",

@@ -245,8 +245,10 @@ have nothing to read there. Parameters and profiles are in
 Each adapter declares `recommended_max_genomes`, an integer or none. `--tool
 auto` (dereplicate) and `--treebuilder auto` (phylo) use it as follows:
 
-1. Prefer tools that can run here. Under a container backend, a declared image
-   or conda spec counts as available. Natively, the binaries must be on `PATH`.
+1. Prefer tools that can run here. Under a container backend, a pinned image
+   counts as available, and so does a conda spec with `--wave`. A tool with
+   neither runs on the host, so its binaries must be on `PATH`, as they must
+   be natively.
 2. Prefer tools whose limit fits the number of genomes. Among those, the
    tightest limit wins, so the more careful but limited tool is chosen for
    small inputs. Tools without a limit come last among the fitting ones.

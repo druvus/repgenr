@@ -83,7 +83,7 @@ def test_auto_tiebreak_follows_documented_defaults() -> None:
 
 
 def test_auto_availability_is_container_aware(monkeypatch) -> None:
-    """Under an active container backend, a tool with an image/conda spec is
+    """Under an active container backend, a tool with a pinned image is
     available even when nothing is installed on the host."""
     from repgenr.core import containers, plugins
 
@@ -108,6 +108,49 @@ def test_auto_availability_is_container_aware(monkeypatch) -> None:
         containers.configure_container("none")
     # natively, the missing binary disqualifies imagetool
     assert plugins.auto_select(reg, 5) == "hosttool"
+
+
+def test_conda_only_tool_is_not_available_in_a_container_without_wave() -> None:
+    """A conda spec yields an image only through --wave. Without it the tool
+    runs on the host (run_tool warns and falls back), so availability must be
+    the host PATH: skDER was auto-selected for >2000 genomes under --container
+    docker and then exited 4 because skder was not installed."""
+    from repgenr.core import containers, plugins
+
+    reg = _make_registry(
+        {
+            "condaonly": ToolCapabilities(
+                name="condaonly",
+                required_binaries=(BinarySpec("definitely-missing-xyz"),),
+                conda=("bioconda::condaonly",),
+            ),
+            "imagetool": ToolCapabilities(
+                name="imagetool",
+                required_binaries=(BinarySpec("definitely-missing-xyz"),),
+                container="quay.io/x/imagetool:1",
+            ),
+        }
+    )
+    try:
+        containers.configure_container("docker")
+        assert not plugins.tool_available(reg.get("condaonly").capabilities)
+        assert plugins.tool_available(reg.get("imagetool").capabilities)
+        assert plugins.auto_select(reg, 5) == "imagetool"
+        containers.configure_container("docker", wave_enabled=True)
+        assert plugins.tool_available(reg.get("condaonly").capabilities)
+    finally:
+        containers.configure_container("none")
+
+
+def test_imageless_tool_on_the_host_is_available_in_a_container() -> None:
+    from repgenr.core import containers, plugins
+
+    caps = ToolCapabilities(name="hostonly", required_binaries=(BinarySpec("python"),))
+    try:
+        containers.configure_container("docker")
+        assert plugins.tool_available(caps)
+    finally:
+        containers.configure_container("none")
 
 
 def test_auto_skips_tools_with_missing_binaries() -> None:
