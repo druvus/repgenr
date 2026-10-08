@@ -38,6 +38,15 @@ All notable changes to RepGenR are documented here. The format follows
   (about 30 s per 1000 genomes on an exFAT disk); links, missing and untracked
   genomes are still checked, and the genome line says the content was not
   read.
+- Install (#238): `envs/` holds seven conda environment files that solve: a
+  core environment (`envs/core.yml`, Python 3.12, RepGenR and every tool that
+  shares its solve) and six satellites for tools that do not (Gubbins,
+  mashtree, snippy, parsnp with harvesttools, CheckM2, progressiveMauve). Each
+  file's first line names the platforms that solve and why it is separate.
+  `.github/workflows/envs.yml` dry-runs each solve on linux-64, and core on
+  osx-arm64, for changes to `envs/` and weekly. `tests/test_env_files.py`
+  checks that every preflight version floor appears in one file with the
+  same value, that core pins Python 3.12, and that no package is in two files.
 - `status` (#234): a finished stage whose recorded input changed, or whose
   declared output is missing, since it finished is listed as `[stale]` with
   the reason; it re-runs on its next invocation. `Next:` names the first
@@ -247,6 +256,23 @@ All notable changes to RepGenR are documented here. The format follows
   lines). The Gubbins masker warns when an outgroup name to leave out
   matches no alignment record, since the outgroup is then part of the
   recombination scan.
+- Install (#238): `environment.yml` is removed; it did not solve on linux-64
+  (Gubbins needs Python 3.8 to 3.10; mashtree and snippy need zlib older than
+  1.3). Create `envs/core.yml` and the satellites you need instead. Satellite
+  `bin` directories go after core on `PATH`, never before, so that mashtree's
+  samtools 0.1.19 and Gubbins' IQ-TREE 2 cannot shadow core's tools; install.md,
+  README.md and choosing-tools.md describe this. Two gaps remain under this
+  rule: snippy calls core's samtools and bcftools, and Gubbins calls core's
+  IQ-TREE 3 instead of its own 2.4 (the Gubbins log then reports version 3);
+  `--bin-dir` (#247) closes both. The progressiveMauve adapter's Wave spec
+  now names `bioconda::mauvealigner` (with `boost-cpp=1.74.0`), the package
+  that provides the binary of its pinned image, instead of `bioconda::mauve`,
+  which adds the Java GUI; `envs/mauve.yml` installs the same packages. All
+  files list the `nodefaults` channel, since a configured `defaults` channel
+  with flexible priority made the core solve run for more than 17 minutes. The live test suite's
+  `[bin_dirs]` are now appended to `PATH` instead of prepended, so a local
+  live config that relied on a satellite shadowing a legacy samtools in the
+  test environment has to run pytest in the core environment.
 - `phylo --msa-source snptype` (#228) writes its typing pass under
   `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
   under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the

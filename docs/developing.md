@@ -344,8 +344,12 @@ real binary with `@pytest.mark.requires_binary`.
    suite's literal set of built-in adapters.
 4. A row in the README adapter table and, if user-facing behavior differs,
    a note in `usage.md`.
-5. The conda package in `environment.yml` (or a note that the tool is
-   distributed separately, as cactus is).
+5. The conda package in `envs/core.yml`, with the same `>=` floor as its
+   `BinarySpec.min_version` (`tests/test_env_files.py` checks this). When
+   the package does not solve with core, add a satellite file
+   `envs/<tool>.yml` and its row in the matrix of
+   `.github/workflows/envs.yml`. A tool distributed separately, as cactus is,
+   needs a note instead.
 6. A citation in `CITATIONS.md`.
 7. For a dereplicator, the name in the `derep_tool` description of
    `nextflow/nextflow_schema.json`.

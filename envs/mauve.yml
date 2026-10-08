@@ -1,0 +1,9 @@
+# progressiveMauve from mauvealigner (2022 build, links boost 1.74), the binary of the pinned image, without the Java GUI of the 'mauve' package. Platforms: linux-64.
+name: repgenr-mauve
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - mauvealigner
+  - boost-cpp=1.74.0

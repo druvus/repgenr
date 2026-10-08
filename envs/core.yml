@@ -1,0 +1,37 @@
+# Core environment: RepGenR (Python 3.12) and every tool that shares its solve. Platforms: linux-64, osx-arm64. Floors match BinarySpec.min_version.
+name: repgenr
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pip
+  - matplotlib
+  - requests
+  - biopython
+  - dendropy
+  - pyyaml
+  - numpy>=1.26
+  - drep>=3.0            # linux-64 pulls checkm-genome; osx-arm64 has no pplacer
+  - skder>=1.0
+  - skani>=0.2
+  - galah>=0.4
+  - sourmash>=4.0
+  - sourmash_plugin_branchwater>=0.9
+  - ncbi-datasets-cli
+  - sibeliaz
+  - minimap2>=2.17
+  - samtools>=1.10
+  - bcftools>=1.10
+  - ska2>=0.3
+  - skesa>=2.4
+  - shovill>=1.1
+  - flye>=2.9
+  - medaka>=2.0
+  - racon>=1.4
+  - fasttree>=2.1
+  - iqtree>=2.0
+  - raxml-ng>=1.0
+  - pip:
+      - -e ..

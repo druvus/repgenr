@@ -38,12 +38,16 @@ def _load_live_config(config: pytest.Config) -> dict:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Prepend configured bin dirs to PATH before any ``requires_binary`` check."""
+    """Append configured bin dirs to PATH before any ``requires_binary`` check.
+
+    Appended, not prepended: a satellite environment must not shadow the
+    core environment's tools (mashtree's environment ships samtools 0.1.19).
+    """
     live = _load_live_config(config)
     config.stash[_LIVE_KEY] = live
     bin_dirs = [str(Path(p).expanduser()) for p in live.get("bin_dirs", {}).values()]
     if bin_dirs:
-        os.environ["PATH"] = os.pathsep.join([*bin_dirs, os.environ.get("PATH", "")])
+        os.environ["PATH"] = os.pathsep.join([os.environ.get("PATH", ""), *bin_dirs])
 
 
 _LIVE_KEY = pytest.StashKey[dict]()

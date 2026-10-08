@@ -4,15 +4,15 @@
 # Where network fixtures cache their downloads and where junit output goes.
 cache_dir = "/Volumes/sekvens2/repgenr/live-cache"
 
-# Directories prepended to PATH for every repgenr subprocess, keyed by the
-# tool they provide. Tools already on PATH (the environment pytest runs in)
-# need no entry.
-# Order matters: the first entry ends up first on PATH. Put an environment
-# with modern samtools/bcftools/minimap2 first when another one (or the
-# base environment) carries a legacy 0.1.x samtools that shadows them.
+# Directories appended to PATH for every repgenr subprocess, keyed by the
+# tool they provide. Run pytest in the core environment (envs/core.yml); its
+# tools need no entry. The satellites (envs/*.yml) come after core on PATH, so
+# they supply only what core lacks and mashtree's samtools 0.1.19 cannot
+# shadow core's samtools and bcftools.
 [bin_dirs]
-snptools = "~/miniforge3/envs/repgenr_snptools/bin"
-ska = "~/miniforge3/envs/repgenr_ska/bin"
-parsnp = "~/miniforge3/envs/repgenr_parsnp/bin"
-gubbins = "~/miniforge3/envs/repgenr_gubbins/bin"
+gubbins = "~/miniforge3/envs/repgenr-gubbins/bin"
+mashtree = "~/miniforge3/envs/repgenr-mashtree/bin"
+snippy = "~/miniforge3/envs/repgenr-snippy/bin"
+parsnp = "~/miniforge3/envs/repgenr-parsnp/bin"
+# simple = "~/miniforge3/envs/repgenr_snptools/bin"  # only if the pytest env has a pre-1.10 samtools
 nextflow = "~/miniforge3/envs/repgenr_nf/bin"

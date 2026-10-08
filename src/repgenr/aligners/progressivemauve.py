@@ -35,8 +35,11 @@ class ProgressiveMauveAligner(Aligner):
         #   * conda/Wave (--wave): boost-cpp is pinned to 1.74 below so the minted
         #     image matches. resolve_image() mints from the conda spec whenever
         #     --wave is given and uses the BioContainer otherwise.
+        # The spec names mauvealigner, which provides progressiveMauve (the
+        # 2022 build in the pinned image); the 'mauve' package adds the Java GUI.
+        # envs/mauve.yml installs the same two packages.
         container="quay.io/biocontainers/mauve:2.4.0.snapshot_2015_02_13--hdfd78af_4",
-        conda=("bioconda::mauve", "conda-forge::boost-cpp=1.74.0"),
+        conda=("bioconda::mauvealigner", "conda-forge::boost-cpp=1.74.0"),
         required_binaries=(BinarySpec("progressiveMauve", version_args=()),),
         recommended_max_genomes=500,  # progressiveMauve is single-threaded per alignment
         accepted_extras=frozenset({"seed_weight"}),
