@@ -15,6 +15,7 @@ from repgenr.core.contracts import (
     SelectionRow,
     read_clusters,
     read_genome_status,
+    read_selection,
     write_selection,
 )
 from repgenr.core.plugins import ToolCapabilities
@@ -832,3 +833,137 @@ def test_partial_selection_quality_reaches_no_chunk(tmp_path: Path, reg) -> None
     finally:
         registry._classes.pop("qualityrecorder", None)
     assert _QualityRecorder.seen == [{}]
+
+
+def _gtdb_selection(path: Path, genomes: list[Path], reps: set[int]) -> None:
+    """selection.tsv flagging ``genomes[i]`` for i in ``reps`` as GTDB species
+    representatives; genomes[0] carries the best quality so the quality rule
+    alone would keep it."""
+    write_selection(
+        path,
+        [
+            SelectionRow(
+                accession=f"GCA_{i:06d}.1",
+                family="Fam",
+                genus="g",
+                species="s",
+                is_outgroup=False,
+                filename=g.name,
+                completeness=99.0 if i == 0 else 90.0,
+                contamination=0.1 if i == 0 else 2.0,
+                gtdb_representative=i in reps,
+            )
+            for i, g in enumerate(genomes)
+        ],
+    )
+
+
+def test_chunk_keeper_gtdb_keeps_the_flagged_member(tmp_path: Path, reg) -> None:
+    genomes = _make_genomes(tmp_path / "genomes", 4)  # halver: g0 holds g1, g2 holds g3
+    selection = tmp_path / "selection.tsv"
+    _gtdb_selection(selection, genomes, {1})
+    result = dereplicate_chunk(
+        ChunkParams(
+            tool="halver",
+            genomes=genomes,
+            out_dir=tmp_path / "c0",
+            selection_tsv=selection,
+            keeper="gtdb",
+        ),
+        _LOG,
+    )
+    assert {r.name for r in result.representatives} == {genomes[1].name, genomes[2].name}
+    assert (tmp_path / "c0" / "representatives" / genomes[1].name).exists()
+    summary = (tmp_path / "c0" / CLUSTER_SUMMARY_TSV).read_text(encoding="utf-8").splitlines()
+    flags = {line.split("\t")[0]: line.split("\t")[-1] for line in summary[1:]}
+    assert flags == {genomes[1].name: "1", genomes[2].name: "0"}
+
+
+def test_merge_keeper_gtdb_keeps_the_flagged_chunk_representative(tmp_path: Path, reg) -> None:
+    """At the merge, g0 (best quality) and g2 meet in one cluster; g2 is the
+    GTDB representative and is kept."""
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    selection = tmp_path / "selection.tsv"
+    _gtdb_selection(selection, genomes, {2})
+    for name, part in (("c0", genomes[:4]), ("c1", genomes[4:])):
+        dereplicate_chunk(
+            ChunkParams(
+                tool="halver",
+                genomes=part,
+                out_dir=tmp_path / name,
+                selection_tsv=selection,
+                keeper="gtdb",
+            ),
+            _LOG,
+        )
+    final = dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+            keeper="gtdb",
+        ),
+        _LOG,
+    )
+    assert genomes[2].name in {r.name for r in final.representatives}
+    assert genomes[0].name not in {r.name for r in final.representatives}
+    assert (tmp_path / "merged" / "representatives" / genomes[2].name).exists()
+
+
+def test_merge_keeper_gtdb_without_flags_falls_back_to_quality(tmp_path: Path, reg) -> None:
+    genomes = _make_genomes(tmp_path / "genomes", 8)
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[:4], out_dir=tmp_path / "c0"), _LOG
+    )
+    dereplicate_chunk(
+        ChunkParams(tool="halver", genomes=genomes[4:], out_dir=tmp_path / "c1"), _LOG
+    )
+    selection = tmp_path / "selection.tsv"
+    _write_two_genome_selection(selection, genomes)
+    final = dereplicate_merge(
+        MergeParams(
+            tool="halver",
+            chunk_dirs=[tmp_path / "c0", tmp_path / "c1"],
+            out_dir=tmp_path / "merged",
+            selection_tsv=selection,
+            keeper="gtdb",
+        ),
+        _LOG,
+    )
+    assert {r.name for r in final.representatives} == {genomes[2].name, genomes[4].name}
+
+
+def test_chunk_keeper_gtdb_warns_when_only_the_outgroup_is_flagged(
+    tmp_path: Path, reg, caplog
+) -> None:
+    import logging
+
+    genomes = _make_genomes(tmp_path / "genomes", 4)
+    selection = tmp_path / "selection.tsv"
+    _gtdb_selection(selection, genomes, set())
+    rows = read_selection(selection)
+    rows.append(
+        SelectionRow(
+            accession="GCA_000099.1",
+            family="Fam",
+            genus="g",
+            species="other",
+            is_outgroup=True,
+            filename="Fam_g_other_GCA_000099.1.fasta",
+            gtdb_representative=True,
+        )
+    )
+    write_selection(selection, rows)
+    with caplog.at_level(logging.WARNING, logger=_LOG.name):
+        dereplicate_chunk(
+            ChunkParams(
+                tool="halver",
+                genomes=genomes,
+                out_dir=tmp_path / "c0",
+                selection_tsv=selection,
+                keeper="gtdb",
+            ),
+            _LOG,
+        )
+    assert any("flags no GTDB" in r.getMessage() for r in caplog.records)

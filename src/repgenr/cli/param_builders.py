@@ -340,7 +340,7 @@ def dereplicate_params(
     if reduce is not _UNSET:
         _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
     if keeper is not _UNSET:
-        _require_choice(keeper, {"quality", "tool"}, "--keeper")
+        _require_choice(keeper, {"quality", "gtdb", "tool"}, "--keeper")
     if target_reps is not _UNSET and target_reps < 0:
         raise UserInputError(f"--target-reps must be >= 0, got {target_reps}.")
     for value, label in (

@@ -107,8 +107,8 @@ def dereplicate_chunk_cmd(
         "quality",
         "--keeper",
         help="Representative choice when --selection-tsv is given: "
-        "quality (selection.tsv CheckM values and genome N50) "
-        "or tool (adapter's own pick).",
+        "quality (selection.tsv CheckM values and genome N50), gtdb (GTDB species "
+        "representative first, then quality) or tool (adapter's own pick).",
     ),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
@@ -123,7 +123,7 @@ def dereplicate_chunk_cmd(
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
-        _require_choice(keeper, {"quality", "tool"}, "--keeper")
+        _require_choice(keeper, {"quality", "gtdb", "tool"}, "--keeper")
         genomes = _read_path_fofn(genomes_fofn)
         dereplicate_chunk(
             ChunkParams(
@@ -335,8 +335,8 @@ def dereplicate_merge_cmd(
         "quality",
         "--keeper",
         help="Representative choice when --selection-tsv is given: "
-        "quality (selection.tsv CheckM values and genome N50) "
-        "or tool (adapter's own pick).",
+        "quality (selection.tsv CheckM values and genome N50), gtdb (GTDB species "
+        "representative first, then quality) or tool (adapter's own pick).",
     ),
     reduce: str = typer.Option(
         "none",
@@ -362,7 +362,7 @@ def dereplicate_merge_cmd(
         _require_unit_interval(primary_ani, "--primary-ani")
         _require_unit_interval(secondary_ani, "--secondary-ani")
         _require_unit_interval(aligned_fraction, "--aligned-fraction")
-        _require_choice(keeper, {"quality", "tool"}, "--keeper")
+        _require_choice(keeper, {"quality", "gtdb", "tool"}, "--keeper")
         _require_choice(reduce, {"none", "species", "genus"}, "--reduce")
         if target_reps < 0:
             raise UserInputError("--target-reps must be 0 (off) or a positive count.")

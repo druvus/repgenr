@@ -92,7 +92,8 @@ HELP_ALIGNER_ARG = (
 HELP_DEREP_TOOL_ARG = "Tool tuning as key=value (repeatable), e.g. mode=greedy."
 HELP_KEEPER = (
     "Representative choice per cluster: quality (manifest CheckM values and genome "
-    "N50) or tool (adapter's own)."
+    "N50), gtdb (a GTDB species representative first, then quality) or tool "
+    "(adapter's own)."
 )
 HELP_PROCESS_SIZE = "Chunk size; when set and exceeded, two-stage chunking runs for any tool."
 HELP_NUM_PROCESSES = (

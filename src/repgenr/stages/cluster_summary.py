@@ -2,8 +2,9 @@
 
 Summarises ``derep/clusters.tsv`` into ``derep/cluster_summary.tsv`` with the
 cluster size, the species it spans (from the manifest taxonomy, else parsed
-from the canonical filenames) and
-the manifest CheckM quality of the keeper against its members. The dereplicate
+from the canonical filenames),
+the manifest CheckM quality of the keeper against its members, and whether the
+keeper is a GTDB species representative. The dereplicate
 stage writes the file itself; this stage regenerates it for an existing
 working directory without rerunning the dereplicator.
 """
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,16 +49,23 @@ def summarise_clusters(
     quality: Quality,
     taxonomy: Taxonomy | None = None,
     n50: N50Of | None = None,
+    *,
+    gtdb_representatives: Collection[str] = (),
 ) -> list[ClusterSummaryRow]:
     """Build the summary rows, largest cluster first, then by representative name.
 
     ``taxonomy`` gives the species of each genome; a genome it lacks (or
     holds without a species) falls back to its canonical filename. ``n50``
     gives each genome's N50 for ``rep_n50`` and the keeper score; without it
-    those columns use no N50.
+    those columns use no N50. ``gtdb_representatives`` names the GTDB species
+    representatives.
     """
     taxonomy = taxonomy or {}
-    rows = [_summarise(rep, members, quality, taxonomy, n50) for rep, members in clusters.items()]
+    flagged = set(gtdb_representatives)
+    rows = [
+        _summarise(rep, members, quality, taxonomy, n50, rep in flagged)
+        for rep, members in clusters.items()
+    ]
     rows.sort(key=lambda r: (-r.n_members, r.representative))
     return rows
 
@@ -115,6 +123,7 @@ def _summarise(
     quality: Quality,
     taxonomy: Taxonomy,
     n50: N50Of | None,
+    gtdb_rep: bool = False,
 ) -> ClusterSummaryRow:
     others = [m for m in members if m != rep]
     n_species, species = _species_column(rep, others, taxonomy)
@@ -140,6 +149,7 @@ def _summarise(
         # representatives are not read.
         rep_n50=None if n50 is None or rep_q is None else n50(rep),
         best_score=_rounded(best_score(best_member, quality, n50) if best_member else None),
+        rep_is_gtdb_representative=gtdb_rep,
     )
 
 
@@ -158,6 +168,15 @@ def taxonomy_lookup(ctx: WorkdirContext) -> dict[str, tuple[str, str]]:
     return {r.filename: (r.genus or "", r.species or "") for r in records if r.filename}
 
 
+def gtdb_lookup(ctx: WorkdirContext) -> set[str]:
+    """Filenames of the manifest genomes flagged as GTDB species representatives."""
+    try:
+        return ctx.manifest.gtdb_representatives()
+    except (sqlite3.OperationalError, OSError):
+        # No manifest (data-channel path, tests): no genome is flagged.
+        return set()
+
+
 def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     logger = ctx.logger
     clusters_file = ctx.derep_dir / CLUSTERS_TSV
@@ -172,7 +191,9 @@ def run(ctx: WorkdirContext, params: ClusterSummaryParams) -> Path:
     if not quality:
         logger.info("No assembly quality in the manifest; quality columns are left blank")
     n50 = N50Lookup([ctx.genomes_dir])
-    rows = summarise_clusters(clusters, quality, taxonomy_lookup(ctx), n50)
+    rows = summarise_clusters(
+        clusters, quality, taxonomy_lookup(ctx), n50, gtdb_representatives=gtdb_lookup(ctx)
+    )
     warn_missing_n50(n50, logger)
     out = ctx.derep_dir / CLUSTER_SUMMARY_TSV
     write_cluster_summary(out, rows)

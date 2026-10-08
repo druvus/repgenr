@@ -225,6 +225,10 @@ class SelectionRow:
     filename: str
     completeness: float | None = None
     contamination: float | None = None
+    # GTDB marks one genome per species as its representative; the metadata
+    # stage copies that flag here so --keeper gtdb can keep those genomes.
+    # Every other entry path leaves it False.
+    gtdb_representative: bool = False
 
 
 def _require_columns(reader: csv.DictReader, path: Path, required: list[str]) -> None:
@@ -287,7 +291,11 @@ def atomic_path(path: Path) -> Iterator[Path]:
 
 
 def write_selection(path: Path, rows: list[SelectionRow]) -> None:
-    """Write the metadata selection (accession + taxonomy + filename + outgroup flag)."""
+    """Write the metadata selection (accession + taxonomy + filename + outgroup flag).
+
+    ``gtdb_representative`` is the last column, so the positions of the
+    earlier columns are those of files written before it was added.
+    """
     with atomic_replace(path, newline="") as fo:
         writer = _tsv_writer(fo)
         writer.writerow(
@@ -300,6 +308,7 @@ def write_selection(path: Path, rows: list[SelectionRow]) -> None:
                 "filename",
                 "completeness",
                 "contamination",
+                "gtdb_representative",
             ]
         )
         for r in rows:
@@ -313,6 +322,7 @@ def write_selection(path: Path, rows: list[SelectionRow]) -> None:
                     r.filename,
                     "" if r.completeness is None else f"{r.completeness:.2f}",
                     "" if r.contamination is None else f"{r.contamination:.2f}",
+                    "1" if r.gtdb_representative else "0",
                 ]
             )
 
@@ -323,19 +333,20 @@ def _opt_float(value: str | None) -> float | None:
     return float(value)
 
 
-_OUTGROUP_FLAGS = {"1": True, "true": True, "yes": True, "0": False, "false": False, "no": False}
+_FLAGS = {"1": True, "true": True, "yes": True, "0": False, "false": False, "no": False}
 
 
-def _outgroup_flag(value: str | None) -> bool:
-    """The is_outgroup column: 1/0 as written, true/false and yes/no accepted.
+def _outgroup_flag(value: str | None, column: str = "is_outgroup") -> bool:
+    """A 1/0 flag column (is_outgroup, gtdb_representative): 1/0 as written,
+    true/false and yes/no accepted, empty or absent read as 0.
 
     Any other value is an error: reading it as 0 put an intended outgroup into
     the ingroup without a message.
     """
     key = (value or "0").strip().lower() or "0"
-    if key not in _OUTGROUP_FLAGS:
-        raise ValueError(f"is_outgroup must be 0 or 1, not {value!r}")
-    return _OUTGROUP_FLAGS[key]
+    if key not in _FLAGS:
+        raise ValueError(f"{column} must be 0 or 1, not {value!r}")
+    return _FLAGS[key]
 
 
 def read_selection(path: Path) -> list[SelectionRow]:
@@ -364,6 +375,9 @@ def read_selection(path: Path) -> list[SelectionRow]:
                             filename=row["filename"],
                             completeness=_opt_float(row.get("completeness")),
                             contamination=_opt_float(row.get("contamination")),
+                            gtdb_representative=_outgroup_flag(
+                                row.get("gtdb_representative"), "gtdb_representative"
+                            ),
                         )
                     )
                 except ValueError as exc:
@@ -456,6 +470,9 @@ class ClusterSummaryRow:
     best_member: str = ""
     rep_n50: int | None = None
     best_score: float | None = None
+    # Whether the representative is a GTDB species representative (from the
+    # manifest or selection.tsv); False when the selection carries no flag.
+    rep_is_gtdb_representative: bool = False
 
     @property
     def n_genomes(self) -> int:
@@ -477,6 +494,7 @@ _CLUSTER_SUMMARY_COLUMNS = (
     "n_genomes",
     "rep_n50",
     "best_score",
+    "rep_is_gtdb_representative",
 )
 
 
@@ -499,6 +517,7 @@ def write_cluster_summary(path: Path, rows: list[ClusterSummaryRow]) -> None:
                     r.n_genomes,
                     "" if r.rep_n50 is None else r.rep_n50,
                     _fmt_opt(r.best_score),
+                    "1" if r.rep_is_gtdb_representative else "0",
                 ]
             )
 
@@ -525,6 +544,9 @@ def read_cluster_summary(path: Path) -> list[ClusterSummaryRow]:
                     best_member=rec.get("best_member", ""),
                     rep_n50=int(rec["rep_n50"]) if rec.get("rep_n50") else None,
                     best_score=_opt_float(rec.get("best_score")),
+                    rep_is_gtdb_representative=_outgroup_flag(
+                        rec.get("rep_is_gtdb_representative"), "rep_is_gtdb_representative"
+                    ),
                 )
             )
     return rows

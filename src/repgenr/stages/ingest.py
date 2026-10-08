@@ -8,8 +8,10 @@ downstream chain (``dereplicate`` -> ``phylo`` -> ``tree2tax``) then runs
 without any download, which is what the local Nextflow harness already does
 for the data-channel path.
 
-Taxonomy comes from ``--selection`` (an 8-column ``selection.tsv``, which also
-carries CheckM-style quality for ``--keeper quality``) or, failing that, from
+Taxonomy comes from ``--selection`` (a ``selection.tsv``: accession and
+filename are required; it may also carry CheckM-style quality for ``--keeper
+quality`` and the ``gtdb_representative`` flag for ``--keeper gtdb``, 0 when
+the column is absent) or, failing that, from
 canonical ``Family_genus_species_ACCESSION.fasta`` filenames; any other name
 yields an empty taxonomy and the file stem as accession.
 """

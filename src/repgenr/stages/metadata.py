@@ -188,6 +188,7 @@ def _select_via_tsv(
             data["tax"],
             completeness=data.get("completeness"),
             contamination=data.get("contamination"),
+            gtdb_representative=bool(data.get("is_rep")),
         )
         for acc, data in selected.items()
     ]
@@ -197,6 +198,7 @@ def _select_via_tsv(
         is_outgroup=True,
         completeness=outgroup_data.get("completeness"),
         contamination=outgroup_data.get("contamination"),
+        gtdb_representative=bool(outgroup_data.get("is_rep")),
     )
     return records, outgroup
 
@@ -207,6 +209,7 @@ def _record_from_tax(
     is_outgroup: bool = False,
     completeness: float | None = None,
     contamination: float | None = None,
+    gtdb_representative: bool = False,
 ) -> GenomeRecord:
     return GenomeRecord(
         accession=accession,
@@ -217,6 +220,7 @@ def _record_from_tax(
         species=tax["species"],
         completeness=completeness,
         contamination=contamination,
+        gtdb_representative=gtdb_representative,
     )
 
 
@@ -598,6 +602,7 @@ def _write_selection(ctx, selected: list[GenomeRecord], outgroup: GenomeRecord) 
                 filename=genome_filename(family, genus, species, r.accession),
                 completeness=r.completeness,
                 contamination=r.contamination,
+                gtdb_representative=r.gtdb_representative,
             )
         )
     write_selection(ctx.workdir / SELECTION_TSV, rows)
@@ -785,6 +790,7 @@ def _select_via_api(params: MetadataParams, logger) -> tuple[list[GenomeRecord],
                 _normalize_api_tax(row),
                 completeness=completeness,
                 contamination=contamination,
+                gtdb_representative=bool(row.get("gtdbIsRep", False)),
             )
         )
         selected_acc.add(acc)
@@ -866,6 +872,7 @@ def _select_outgroup_via_api(
             is_outgroup=True,
             completeness=completeness,
             contamination=contamination,
+            gtdb_representative=True,
         )
     raise WorkdirError("Could not determine an outgroup via the API; specify --outgroup-accession.")
 

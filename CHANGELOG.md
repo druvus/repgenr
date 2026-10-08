@@ -7,6 +7,20 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `--keeper gtdb` (#252) for `dereplicate`, `run`, `bacterial`,
+  `dereplicate-chunk` and `dereplicate-merge` (Nextflow `--derep_keeper gtdb`):
+  within each cluster a GTDB species representative is kept; a cluster without
+  one falls back to the quality rule, then to the tool's pick. A cluster that
+  holds several GTDB representatives (species joined by the ANI threshold)
+  keeps the best-scored one and a warning names the others. `--reduce` also
+  prefers a GTDB representative under this rule. `repgenr.yaml` records
+  `keeper_effective: gtdb` when the manifest flags at least one genome.
+- `selection.tsv` gains a last column `gtdb_representative` (#252), filled by
+  `metadata` from the GTDB table (`gtdb_genome_representative`) and the API
+  (`gtdbIsRep`), 0 on the other entry paths; it is read with the same 1/0,
+  true/false, yes/no parser as `is_outgroup`, and a file without it reads as
+  0. `derep/cluster_summary.tsv` gains a last column
+  `rep_is_gtdb_representative`.
 - `list-tools --check` under a container backend (#248): each line names
   where the tool runs, `[image <ref>]` or `[host]`, so a host version is not
   read as the image's. `--images` adds whether each image of a tool that passed
@@ -246,6 +260,13 @@ All notable changes to RepGenR are documented here. The format follows
   workdir change only when dereplicate is rerun with `--force`; the resume
   fingerprint is unchanged. `cluster-summary` and `derep-stock unpack` write
   the new columns.
+- Manifest schema version 3 (#252) adds the column `gtdb_representative`. An
+  older manifest is upgraded in place when a stage opens it, with every flag
+  0, and its resume fingerprints stay valid (the digest adds a field only for
+  a set flag). An earlier RepGenR refuses a version 3 manifest. Rerunning
+  `metadata --force` in an existing workdir records the flags; `genome` then
+  runs again because `selection.tsv` changed (it downloads nothing already
+  present), and `dereplicate` runs again because the manifest changed.
 - `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
@@ -650,6 +671,17 @@ All notable changes to RepGenR are documented here. The format follows
   engine options, which alone filled the line. A long adapter prefix is
   capped and the program and its first option are always shown, and a line
   that is still too long ends at a whole token, not inside a count.
+- Manifest upgrade (#252): processes that opened one older manifest at the
+  same time could both add a new column, and the second stopped with
+  "duplicate column name" (observed on exFAT). The upgrade now takes the
+  write lock before it reads the schema version and the columns, and a
+  column found already present counts as added. This covers the version 1
+  to 2 step as well as the new version 3 step.
+- Opening a manifest that is not in WAL mode (#252), for example one copied
+  or written by hand, from several processes at once failed with "database
+  is locked": the lock wait time was set after the switch to WAL mode, and
+  SQLite does not wait for that switch. The wait time is now set first, and
+  the switch is retried for up to 30 s.
 - Console output (#251): a tool command line is shortened on the console, so
   `dereplicate --tool skder`, which passes every genome path on argv, no
   longer prints a line of several thousand characters (6006 for 50 genomes).

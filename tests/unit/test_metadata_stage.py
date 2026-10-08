@@ -836,3 +836,46 @@ def test_nodownload_reuses_a_legacy_tarball_without_requesting_the_modern_layout
         tar.add(member, arcname=member.name)
     (ctx.workdir / "bac120_metadata_r232.release").write_text("232.0\n")
     assert metadata.run(ctx, _params(gtdb_tsv, metadata_path=None, nodownload=True)) == 3
+
+
+def test_tsv_selection_records_the_gtdb_representative_flag(tmp_path, gtdb_tsv) -> None:
+    """selection.tsv and the manifest carry gtdb_genome_representative == accession."""
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(ctx, _params(gtdb_tsv))
+    flags = {r["accession"]: r["gtdb_representative"] for r in _read_selection(ctx.workdir)}
+    assert flags == {
+        "GCF_000001.1": "1",
+        "GCF_000002.1": "0",
+        "GCF_000003.1": "1",
+        "GCF_000010.1": "1",
+    }
+    reps = {g.accession for g in ctx.manifest.all_genomes() if g.gtdb_representative}
+    assert reps == {"GCF_000001.1", "GCF_000003.1"}
+
+
+def test_api_selection_records_the_gtdb_representative_flag(tmp_path, monkeypatch) -> None:
+    selection_rows = [
+        _api_row("GCF_000001.1", "Francisella", "tularensis"),
+        _api_row("GCF_000002.1", "Francisella", "tularensis", is_rep=False),
+    ]
+    parent_rows = selection_rows + [_api_row("GCF_000010.1", "Francisella", "philomiragia")]
+    monkeypatch.setattr(
+        metadata,
+        "_api_get",
+        _fake_api_with_cards(selection_rows, parent_rows, _cards_for(parent_rows)),
+    )
+    ctx = WorkdirContext(tmp_path / "wd", create=True)
+    metadata.run(
+        ctx,
+        MetadataParams(
+            dataset="all",
+            level="species",
+            source="api",
+            target_genus="Francisella",
+            target_species="tularensis",
+        ),
+    )
+    flags = {r["accession"]: r["gtdb_representative"] for r in _read_selection(ctx.workdir)}
+    assert flags == {"GCF_000001.1": "1", "GCF_000002.1": "0", "GCF_000010.1": "1"}
+    reps = {g.accession for g in ctx.manifest.all_genomes() if g.gtdb_representative}
+    assert reps == {"GCF_000001.1"}
