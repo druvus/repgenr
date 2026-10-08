@@ -35,8 +35,14 @@ from ..core.contracts import (
     TREE_NWK,
     read_clusters,
 )
-from ..core.errors import RepGenRError, ToolExecutionError, UserInputError, WorkdirError
-from ..core.inputs import inputs_digest, manifest_digest_for_stage
+from ..core.errors import (
+    MissingBinaryError,
+    RepGenRError,
+    ToolExecutionError,
+    UserInputError,
+    WorkdirError,
+)
+from ..core.inputs import dir_stat_digest, inputs_digest, manifest_digest_for_stage
 from ..core.logging import configure_logging
 from ..core.manifest import MANIFEST_FILENAME
 
@@ -431,6 +437,26 @@ def missing_deliverables(ctx: Any, stage_name: str, params: Any) -> list[Path]:
     if spec is None:
         return []
     return [path for path in spec(ctx, params) if not _deliverable_present(path)]
+
+
+def _deliverables_state(ctx: Any, stage_name: str, params: Any) -> list[tuple[str, object]]:
+    """A cheap snapshot of a stage's deliverables: one stat per file.
+
+    Files by (size, mtime_ns), directories by their flat stat digest, absent
+    paths as None; compared before and after a refused run to tell a refusal
+    that touched nothing from one that left partial outputs.
+    """
+    spec = STAGE_DELIVERABLES.get(stage_name)
+    state: list[tuple[str, object]] = []
+    for path in spec(ctx, params) if spec is not None else []:
+        if path.is_dir():
+            state.append((str(path), dir_stat_digest(path)))
+        elif path.exists():
+            st = path.stat()
+            state.append((str(path), (st.st_size, st.st_mtime_ns)))
+        else:
+            state.append((str(path), None))
+    return state
 
 
 def deliverable_label(workdir: Path, path: Path) -> str:
@@ -932,6 +958,9 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     precheck = _STAGE_PRECHECKS.get(stage_name)
     if precheck is not None:
         precheck(ctx, params)
+    finished = (
+        (prior.completed, prior.fingerprint) if prior is not None and prior.completed else None
+    )
     if prior is not None and prior.completed:
         # Dirty the record before the stage body runs: a crash mid-stage
         # must not leave a completed-looking record over partial outputs.
@@ -953,23 +982,30 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     # The incomplete record now on file (provisional, dirtied, or left by an
     # earlier failure). A stage writes a new record object when it finishes.
     pending = ctx.config.stages.get(stage_name)
-    missing_before = (
-        set(missing_deliverables(ctx, stage_name, params)) if provisional is not None else set()
+    before = (
+        _deliverables_state(ctx, stage_name, params)
+        if provisional is not None or finished is not None
+        else None
     )
     module = __import__(f"repgenr.stages.{stage_name}", fromlist=["run"])
     try:
         module.run(ctx, params)
-    except (UserInputError, WorkdirError):
-        # A clean refusal that changed none of the stage's deliverables (for
-        # example phylo with too few genomes) did not start: drop the
-        # provisional record so `status` does not report it as interrupted.
-        # A tool failure (exit 4/6) or a crash keeps the record.
+    except (UserInputError, WorkdirError, MissingBinaryError):
+        # A refusal that left every deliverable as it was (phylo with too few
+        # genomes, a tool missing at preflight) did not start: put the record
+        # back as it was, so `status` and `doctor` do not report a stage that
+        # never ran as interrupted -- no record on a first run, the last
+        # finished one (whose outputs are untouched) on a re-run. A tool
+        # failure (exit 6) or a crash keeps the incomplete record.
         if (
-            provisional is not None
-            and ctx.config.stages.get(stage_name) is provisional
-            and set(missing_deliverables(ctx, stage_name, params)) == missing_before
+            before is not None
+            and ctx.config.stages.get(stage_name) is pending
+            and _deliverables_state(ctx, stage_name, params) == before
         ):
-            del ctx.config.stages[stage_name]
+            if provisional is not None:
+                del ctx.config.stages[stage_name]
+            elif pending is not None and finished is not None:
+                pending.completed, pending.fingerprint = finished
             ctx.save_config()
         raise
     if pending is not None and ctx.config.stages.get(stage_name) is pending:

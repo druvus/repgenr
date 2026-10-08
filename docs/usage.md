@@ -475,10 +475,13 @@ parameter, switch `--container`, or pass `--force` to re-run explicitly.
 as an unknown option. A stage writes its record without a completion stamp before it starts, so one
 that failed or crashed mid-run is listed as `[interrupted]` by `status`,
 reported as a failure by `doctor`, and always re-runs; a successful run
-stamps the record. A failure in parameter validation writes no record, and
-neither does a stage that refuses its input (exit 2 or 3) without changing
-any of its main outputs, for example `phylo` with fewer than three genomes.
-A failed external tool (exit 4 or 6) always leaves the record.
+stamps the record. A failure in parameter validation writes no record. A
+stage that refuses (exit 2 or 3, or 4 for a tool missing at its preflight)
+without changing any of its main outputs leaves the record as it was: none
+on a first run, and the last finished one on a re-run, since its outputs are
+untouched. Examples are `phylo` with fewer than three genomes and
+`snptype --mask gubbins` without Gubbins. A failed external tool (exit 6),
+or a refusal after a main output changed, leaves the record interrupted.
 Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
