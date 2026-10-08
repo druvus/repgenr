@@ -160,7 +160,7 @@
                     "type": "string",
                     "default": "quality",
                     "enum": ["quality", "tool"],
-                    "description": "Merge-step representative choice: 'quality' picks by manifest CheckM completeness/contamination (only when a selection.tsv reaches the merge step); 'tool' keeps the adapter's own pick.",
+                    "description": "Representative choice in the chunk and merge steps: 'quality' picks by the CheckM completeness/contamination in selection.tsv and the genome N50 (only when a selection.tsv reaches the dereplication steps); 'tool' keeps the adapter's own pick.",
                     "fa_icon": "fas fa-star"
                 },
                 "derep_reduce": {

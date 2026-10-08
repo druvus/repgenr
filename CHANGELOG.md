@@ -225,6 +225,27 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- Quality keeper (#254): the score is `completeness - 5 x contamination +
+  0.5 x log10(N50)`, dRep's default weights, with the N50 read once per
+  genome from its FASTA (gzip-aware). Equal scores go to higher completeness,
+  then lower contamination, then higher N50, then the filename, so skDER,
+  sourmash and galah end with the same keepers on the same clusters; the
+  tool's pick no longer wins ties. A scored genome replaces an unscored
+  representative only when it is high quality (completeness above 90,
+  contamination below 5), and an INFO line names the clusters left to the
+  tool. The same rule applies to `--reduce` (the largest cluster's
+  representative is the default keeper of a taxon) and to `best_member` in
+  `cluster_summary.tsv`, which gains `rep_n50` and `best_score` after
+  `n_genomes`. `dereplicate-chunk` writes `genome_n50.tsv` for the merge step.
+  On 30 GTDB r232 *F. tularensis* genomes the keeper of the largest cluster
+  was the 29-contig GCF_016603775.1 (100/0.00) for skDER, sourmash and galah;
+  it is now the two-contig GCF_001880245.1 (100/0.01, N50 1.89 Mb, score
+  103.09), ahead of the closed GCF_000833375.1 and GCF_000014645.1 (100/0.03,
+  102.99). The N50 is read only where two or more scored genomes are
+  compared, and for scored representatives in the summary. Representatives of an existing
+  workdir change only when dereplicate is rerun with `--force`; the resume
+  fingerprint is unchanged. `cluster-summary` and `derep-stock unpack` write
+  the new columns.
 - `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
@@ -639,6 +660,19 @@ All notable changes to RepGenR are documented here. The format follows
   representative, and the `derep-unpack` list of missing cluster members,
   show the first five names and a count on the console beyond five and ten
   genomes; the run log lists them all. No stage reruns for this.
+- `dereplicate-merge --keeper tool --reduce` (#254) ranked the
+  representatives of a taxon by `selection.tsv` quality; it now uses cluster
+  size, as the `dereplicate` stage does under `--keeper tool`. On a set with a
+  scored 40 percent fragment the merge step kept the fragment where the stage
+  kept the 19-member cluster. No workdir stage reruns for this.
+- `dereplicate --keeper quality` (#254) recorded `keeper_effective:
+  quality` and skipped its warning when the manifest held quality only for
+  genomes outside `genomes/`, such as the outgroup. The quality rule now
+  counts only the genomes being dereplicated. Representatives are unchanged.
+- Docs and help (#254): the keeper applies in the Nextflow chunk and merge
+  steps, not only at the merge; its values come from GTDB, `assemble
+  --checkm2-db` or `ingest --selection`, not only GTDB; ties, partial quality
+  and contiguity are described in usage.md.
 - Resume (#239): input directories are digested from their genome FASTA
   files only (the files `list_fasta` returns), so a leftover `x.fasta.tmp`, a
   `.fai` index or a README in `genomes/`, `derep/representatives/` or the

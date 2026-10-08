@@ -453,9 +453,10 @@ def _stratified_limit(candidates: Sequence[_Candidate], limit: int | None) -> li
     species' next best, and so on (round-robin), so a heavily sequenced species
     cannot fill the cap and file order plays no part.
 
-    Within a species genomes rank by CheckM score (the keeper's rule), unscored
-    genomes last, then the GTDB species-representative flag, then accession, so
-    the choice is deterministic. Species are visited in name order. With no
+    Within a species genomes rank by the CheckM part of the keeper score (no
+    N50 exists before download), unscored genomes last, then the GTDB
+    species-representative flag, then accession, so the choice is
+    deterministic. Species are visited in name order. With no
     limit every candidate is returned in that ranked order.
     """
 

@@ -603,19 +603,56 @@ fingerprint format changed).
 
 ### Representative selection
 
-`repgenr dereplicate` and `repgenr run` (the manual and `run` CLI entry points,
-not the Nextflow data-channel path) accept `--keeper quality|tool` (default
-`quality`). After the chosen dereplicator clusters the genomes, the keeper step
-re-picks each cluster's representative by `completeness - 5 x contamination`
-using GTDB CheckM values already present in the manifest
-(`src/repgenr/stages/derep_keeper.py`), which corrects the tendency of
-connectivity-based tools to keep the most-sequenced (not the best-quality)
-genome in a cluster. `--keeper tool` restores the adapter's own pick. Clusters
-with no manifest quality data keep the adapter's choice either way. The GTDB
-table carries CheckM values directly; `--source api` fetches them from each
-genome's card (one request per selected genome). When the manifest has no
-quality at all the stage warns, and `repgenr.yaml` records
-`keeper_effective: tool` next to the requested `keeper` and the swap count.
+`repgenr dereplicate` and `repgenr run` accept `--keeper quality|tool` (default
+`quality`), and so do the Nextflow steps `dereplicate-chunk` and
+`dereplicate-merge` (`--derep_keeper`). After the chosen dereplicator clusters
+the genomes, the keeper step re-picks each cluster's representative by
+assembly quality (`src/repgenr/stages/derep_keeper.py`), which corrects the tendency of connectivity-based tools to keep the
+most-sequenced (not the best-quality) genome in a cluster. The values come
+from the manifest: GTDB selections carry CheckM values (`--source api` fetches
+them from each genome's card, one request per selected genome), `assemble
+--checkm2-db` scores assemblies, and `ingest --selection` reads the
+`completeness` and `contamination` columns. The Nextflow steps read the same
+columns from `selection.tsv`. `--keeper tool` restores the adapter's own pick.
+When no genome under `genomes/` has quality the stage warns, and
+`repgenr.yaml` records `keeper_effective: tool` next to the requested `keeper`
+and the swap count.
+
+The score follows dRep's default weights for the terms that need no further
+tool: `completeness - 5 x contamination + 0.5 x log10(N50)`, with the N50
+read once per genome from its FASTA (gzipped or not). The N50 term separates
+genomes whose CheckM values differ by less than CheckM's precision: on 30
+GTDB *F. tularensis* genomes, all scored between 99.44 and 100, a 29-contig
+draft at 100/0.00 outscored closed genomes at 100/0.03 on CheckM alone, but
+not with the N50 term. Genomes are compared in this order:
+
+1. higher score;
+2. higher completeness;
+3. lower contamination;
+4. higher N50;
+5. genome filename, in sort order.
+
+Only genomes with completeness and contamination compete; a genome without
+them never becomes the representative. When the adapter's representative has
+values, the best genome in the cluster wins, that representative included, so
+the result does not depend on which genome the tool picked. When it has none,
+a scored genome replaces it only if it is high quality by the MIMAG
+thresholds (completeness above 90, contamination below 5). A scored fragment
+therefore does not displace an unscored complete genome; the log names the
+clusters left with the tool's representative for this reason. A cluster
+without any scored genome keeps the adapter's choice.
+
+The workdir stage applies the keeper once, to the final clusters of a chunked
+run. The Nextflow steps apply it within each chunk and again after the merge,
+so the merge pass compares the chunk keepers rather than the tools' picks.
+Both end with the keeper of each final cluster, but the clusters themselves
+can differ slightly, since the merge pass compares different genomes. Each
+chunk records the N50 of its scored genomes in `genome_n50.tsv`, so the merge
+step scores members whose files it does not receive.
+
+The keeper rule changed in this release (N50 term, high-quality condition,
+tie order). Existing workdirs keep their representatives until dereplicate is
+rerun with `--force`, since the resume fingerprint does not include the rule.
 
 The same manifest values also reach the dereplicator, whichever keeper rule is
 chosen (the Nextflow chunk and merge steps read them from `selection.tsv`),
@@ -639,8 +676,9 @@ except when the new file carries an older timestamp (copied with `cp -p` or
 directory after such a replacement.
 
 `--reduce species|genus` collapses the ANI representatives to one per taxon
-after dereplication, choosing the keeper by quality when scores are known and
-by cluster size otherwise; `--target-reps N` searches the secondary ANI to
+after dereplication. The representative of the largest cluster is the
+default keeper of a taxon; with `--keeper quality` and scores known, the
+keeper rule above re-picks among the taxon's representatives; `--target-reps N` searches the secondary ANI to
 land near N representatives. Both exist on `dereplicate` and, since the
 merge step is where the final set is decided, on `dereplicate-merge`, which
 the Nextflow layer drives through `--derep_reduce` and `--derep_target_reps`.
@@ -673,7 +711,10 @@ name is replaced, with a warning. `--action unpack` restores a stored run,
 refreshes the manifest and re-stamps the `dereplicate` record so that the
 next `dereplicate`, also inside `repgenr run`, recomputes. Unpack rebuilds
 `cluster_summary.tsv` from the restored clusters and the current manifest
-quality, and removes a live `genome_status.tsv` the stored run lacks. Unpack replaces
+quality, and removes a live `genome_status.tsv` the stored run lacks. The N50
+of a scored genome whose file is no longer in `genomes/` cannot be read, so
+its keeper score in the summary has no N50 term and `rep_n50` is blank; unpack
+and `cluster-summary` name such genomes in a warning. Unpack replaces
 `derep/representatives/` as a whole, so other files placed there are
 removed, and it takes the representatives by name from `genomes/`. The
 re-stamped record takes the tool, parameters and tool versions from the
@@ -797,10 +838,11 @@ record.
 `repgenr metadata --limit N` caps the bacterial selection at N genomes. The
 cap is not the first N rows of the GTDB table: candidates are grouped by
 species and taken round-robin, the best-quality genome of every species first,
-then each species' next best, until N. Within a species genomes rank by CheckM
-completeness minus five times contamination (the same score the keeper uses),
-unscored genomes last, then the GTDB species-representative flag, then
-accession, so the result is deterministic. A heavily sequenced species
+then each species' next best, until N. Within a species genomes rank by the
+CheckM part of the keeper score (completeness minus five times
+contamination): the ranking happens before download, so no N50 exists yet.
+Unscored genomes come last, and ties go to the GTDB species-representative
+flag, then the accession, so the result is deterministic. A heavily sequenced species
 therefore cannot fill the cap on its own. With `-d rep` there is one genome
 per species and the rule reduces to a quality ranking across species. On the
 `--source api` path the per-genome quality cards are fetched for every
@@ -982,7 +1024,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
-| `--derep_keeper` | `quality` | Representative choice at the merge step: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
+| `--derep_keeper` | `quality` | Representative choice in the chunk and merge steps: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
 | `--derep_reduce` | `none` | Collapse the merged representatives to one per `species` or `genus` (`dereplicate-merge --reduce`). |
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |

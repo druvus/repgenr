@@ -33,6 +33,7 @@ from ..core.contracts import (
     CLUSTER_SUMMARY_TSV,
     CLUSTERS_TSV,
     GENOME_STATUS_TSV,
+    atomic_replace,
     parse_genome_filename,
     read_clusters,
     read_genome_status,
@@ -53,7 +54,7 @@ from ..dereplicators.base import (
     run_quality,
 )
 from .cluster_summary import Taxonomy, summarise_clusters
-from .derep_keeper import rescore_representatives
+from .derep_keeper import N50Lookup, N50Of, rescore_representatives
 from .dereplicate import (
     DereplicateParams,
     _compose_two_stage,
@@ -62,6 +63,32 @@ from .dereplicate import (
 )
 
 _REPRESENTATIVES_DIR = "representatives"
+# N50 of the chunk's scored genomes, so the merge step scores members whose
+# files it does not receive (only chunk representatives are staged there).
+GENOME_N50_TSV = "genome_n50.tsv"
+
+
+def _write_n50(path: Path, values: Mapping[str, int]) -> None:
+    with atomic_replace(path, newline="") as fo:
+        fo.write("genome\tn50\n")
+        for name in sorted(values):
+            fo.write(f"{name}\t{values[name]}\n")
+
+
+def _read_n50(chunk_dirs: list[Path]) -> dict[str, int]:
+    """N50 values the chunks recorded; a chunk without the file adds none."""
+    values: dict[str, int] = {}
+    for d in chunk_dirs:
+        path = d / GENOME_N50_TSV
+        if not path.is_file():
+            continue
+        with open(path, encoding="utf-8") as fo:
+            next(fo, None)
+            for line in fo:
+                name, _, value = line.rstrip("\n").partition("\t")
+                if name and value.isdigit():
+                    values[name] = int(value)
+    return values
 
 
 def _maybe_write_versions(path: Path | None, versions: dict[str, str]) -> None:
@@ -150,10 +177,11 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
     warn_ignored_params(caps, derep_params, logger, family="Dereplicator")
     scratch = _fresh(params.out_dir / "scratch")
     result = adapter.dereplicate(params.genomes, scratch, derep_params, logger)
+    n50 = N50Lookup(sorted({g.parent for g in params.genomes}))
 
     if params.keeper == "quality" and params.selection_tsv is not None:
         quality = _quality_from_selection(params.selection_tsv)
-        result, keeper_swaps = rescore_representatives(result, quality, logger)
+        result, keeper_swaps = rescore_representatives(result, quality, logger, n50)
         if keeper_swaps:
             logger.info(
                 "dereplicate-chunk: quality-aware keeper changed %d representative(s)",
@@ -167,13 +195,24 @@ def dereplicate_chunk(params: ChunkParams, logger: logging.Logger) -> DerepResul
 
     check_result_complete(result, [g.name for g in params.genomes])
     fallbacks = sorted({g.parent for g in params.genomes})
+    summary_quality = _summary_quality(params.selection_tsv)
     _write_step_contract(
         params.out_dir,
         result,
         fallbacks,
-        _summary_quality(params.selection_tsv),
+        summary_quality,
         _summary_taxonomy(params.selection_tsv),
+        n50,
     )
+    # The merge step receives only the representatives' files, so record the
+    # N50 of the scored members it may still compare. In a cluster with two or
+    # more scored genomes the keeper has read them already (cached); only a
+    # scored member under an unscored representative is read here.
+    for members in result.clusters.values():
+        for name in members:
+            if name in summary_quality:
+                n50(name)
+    _write_n50(params.out_dir / GENOME_N50_TSV, n50.computed())
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-chunk: %d genomes -> %d representatives (%s)",
@@ -228,6 +267,8 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
     else:
         stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
     final = _compose_two_stage(stage1, stage2)
+    rep_dirs = [d / _REPRESENTATIVES_DIR for d in params.chunk_dirs]
+    n50 = N50Lookup(rep_dirs, known=_read_n50(params.chunk_dirs))
 
     if params.keeper == "quality" and params.selection_tsv is not None:
         # Only stage-1 representatives are staged at the merge step (each
@@ -242,7 +283,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
             for name, qual in _quality_from_selection(params.selection_tsv).items()
             if name in resolvable
         }
-        final, keeper_swaps = rescore_representatives(final, quality, logger)
+        final, keeper_swaps = rescore_representatives(final, quality, logger, n50)
         if keeper_swaps:
             logger.info(
                 "dereplicate-merge: quality-aware keeper changed %d representative(s)",
@@ -256,9 +297,11 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
 
     if params.reduce != "none":
         resolvable = {rep.name for r in stage1 for rep in r.representatives}
+        # As in the dereplicate stage: --keeper tool ranks the representatives
+        # of a taxon by cluster size alone, without the selection.tsv quality.
         quality = (
             {}
-            if params.selection_tsv is None
+            if params.selection_tsv is None or params.keeper == "tool"
             else {
                 name: qual
                 for name, qual in _quality_from_selection(params.selection_tsv).items()
@@ -274,6 +317,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
             taxon_of=_taxon_from_selection_or_names(
                 params.selection_tsv, resolvable, params.reduce
             ),
+            n50=n50,
         )
         logger.info(
             "dereplicate-merge: --reduce %s collapsed %d representatives to %d",
@@ -293,14 +337,16 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
 
     # The final representatives are stage-2 representative paths, which live in the
     # chunk representatives/ directories; fall back to those when resolving files.
-    fallbacks = [d / _REPRESENTATIVES_DIR for d in params.chunk_dirs]
+    fallbacks = rep_dirs
     _write_step_contract(
         params.out_dir,
         final,
         fallbacks,
         _summary_quality(params.selection_tsv),
         _summary_taxonomy(params.selection_tsv),
+        n50,
     )
+    _write_n50(params.out_dir / GENOME_N50_TSV, n50.computed())
     shutil.rmtree(scratch, ignore_errors=True)  # drop tool intermediates from the output
     logger.info(
         "dereplicate-merge: %d chunks, union of %d reps -> %d representatives (%s)",
@@ -362,6 +408,7 @@ def _write_step_contract(
     fallback_dirs: list[Path],
     quality: Mapping[str, tuple[float, float]],
     taxonomy: Taxonomy | None = None,
+    n50: N50Of | None = None,
 ) -> None:
     """Write representatives/, clusters.tsv, genome_status.tsv and
     cluster_summary.tsv under ``out_dir``."""
@@ -383,7 +430,7 @@ def _write_step_contract(
     write_clusters(out_dir / CLUSTERS_TSV, result.clusters)
     write_genome_status(out_dir / GENOME_STATUS_TSV, result.genome_status)
     write_cluster_summary(
-        out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality, taxonomy)
+        out_dir / CLUSTER_SUMMARY_TSV, summarise_clusters(result.clusters, quality, taxonomy, n50)
     )
 
 

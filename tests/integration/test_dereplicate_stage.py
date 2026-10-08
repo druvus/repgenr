@@ -244,6 +244,64 @@ def test_keeper_quality_without_manifest_quality_warns_and_records_fallback(
     assert any("quality" in m.lower() for m in warnings)
 
 
+def test_keeper_effective_ignores_quality_of_genomes_not_dereplicated(
+    workdir: Path, genome_files, fake_tool, caplog
+) -> None:
+    # Quality only for the outgroup (kept under outgroup/, never dereplicated):
+    # no representative can be re-picked, so the record must not claim the
+    # quality rule was applied.
+    import logging
+
+    from repgenr.core.manifest import GenomeRecord
+
+    ctx = WorkdirContext(workdir, create=True)
+    ctx.logger.addHandler(caplog.handler)
+    ctx.manifest.upsert(
+        GenomeRecord(
+            accession="GCF_999999999.1",
+            filename="Fam_Gen_out_GCF_999999999.1.fasta",
+            is_outgroup=True,
+            completeness=99.0,
+            contamination=0.5,
+        )
+    )
+    with caplog.at_level(logging.WARNING):
+        run(ctx, DereplicateParams(tool="fake", keeper="quality"))
+
+    assert ctx.config.stages["dereplicate"].params["keeper_effective"] == "tool"
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("--keeper quality has no effect" in m for m in warnings)
+
+
+def test_cluster_summary_command_regenerates_the_stage_summary(
+    workdir: Path, genome_files, fake_tool
+) -> None:
+    """`cluster-summary` writes the same file as the stage, N50 columns included."""
+    from repgenr.core.contracts import accession_from_filename
+    from repgenr.core.manifest import GenomeRecord
+    from repgenr.stages import cluster_summary
+
+    ctx = WorkdirContext(workdir, create=True)
+    for i, f in enumerate(genome_files):
+        ctx.manifest.upsert(
+            GenomeRecord(
+                accession=accession_from_filename(f.name),
+                filename=f.name,
+                completeness=99.0 - i,
+                contamination=0.5,
+            )
+        )
+    run(ctx, DereplicateParams(tool="fake", keeper="tool"))
+    path = ctx.derep_dir / CLUSTER_SUMMARY_TSV
+    written = path.read_text()
+    (summary,) = read_cluster_summary(path)
+    assert summary.rep_n50 == 40
+    assert summary.best_score is not None
+    path.unlink()
+    cluster_summary.run(ctx, cluster_summary.ClusterSummaryParams())
+    assert path.read_text() == written
+
+
 def test_keeper_quality_with_manifest_quality_records_quality(
     workdir: Path, genome_files, fake_tool
 ) -> None:

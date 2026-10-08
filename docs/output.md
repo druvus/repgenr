@@ -106,8 +106,10 @@ no row.
 | `species` | Those species, comma-separated: the keeper's first, then by number of genomes and name. At most five are listed, followed by `+N more`; `n_species` gives the full count. An epithet shared by two genera is written with its genus, for example `Escherichia coli`. |
 | `rep_completeness`, `rep_contamination` | CheckM values of the keeper from the manifest; blank when unknown. |
 | `member_max_completeness`, `member_min_contamination` | Best values among the scored members; blank when no member is scored. |
-| `best_member` | Highest-scoring genome in the cluster by completeness minus five times contamination, keeper included. Equals `representative` when the keeper is already the best; blank when nothing in the cluster is scored. |
-| `n_genomes` | Genomes in the cluster, the keeper included (`n_members` + 1). It is the last column, so the positions of the earlier columns are unchanged. |
+| `best_member` | The genome the quality keeper chooses in the cluster (score `completeness - 5 x contamination + 0.5 x log10(N50)`, ties and the high-quality condition as in usage.md, "Representative selection"). Usually equals `representative` under `--keeper quality`, except where `--reduce` or the Nextflow chunk and merge steps compare only representatives; blank when nothing in the cluster is scored. |
+| `n_genomes` | Genomes in the cluster, the keeper included (`n_members` + 1). It follows `best_member`, so the positions of the earlier columns are unchanged. |
+| `rep_n50` | N50 of the keeper in bases, read from its FASTA. Filled only when the keeper has completeness and contamination, so an unscored representative is not read; blank otherwise or when the file is not found. |
+| `best_score` | Keeper score of `best_member`, four decimals; blank when `best_member` is blank. |
 
 The species columns come from the manifest taxonomy (`selection.tsv` in the
 Nextflow steps), and from the canonical filename
@@ -116,15 +118,15 @@ with neither adds no species. In a cluster of one
 species `n_species` is 1. A larger value means the cluster joins several
 species, or, for names such as the synthetic benchmark sets, that every genome
 has its own species token. With no quality in the manifest (for example after
-`ingest` without `--selection` columns) the four quality columns and
-`best_member` are blank and the command logs that it left them blank.
+`ingest` without `--selection` columns) the four quality columns,
+`best_member` and `best_score` are blank and the command logs that it left them blank.
 
 To list the members of a cluster, see "Finding the members of a cluster" in
 [usage.md](usage.md#inspecting-a-dereplication).
 
 A row whose `best_member` differs from its `representative` marks a cluster
-where a member outscores the keeper. This is expected under `--keeper tool`,
-and can also follow `--reduce`, which merges representatives by taxon. The
+where the quality keeper would choose another genome. This happens under
+`--keeper tool`, where the adapter's pick stands, including after `--reduce`. The
 quality columns come from the manifest in the workdir CLI and from
 `--selection-tsv` in the Nextflow steps; without either they stay blank and
 the size and species columns still apply.

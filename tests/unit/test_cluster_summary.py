@@ -78,6 +78,8 @@ def test_summary_round_trip(tmp_path: Path) -> None:
         "member_min_contamination",
         "best_member",
         "n_genomes",
+        "rep_n50",
+        "best_score",
     ]
     assert read_cluster_summary(path) == rows
 
@@ -121,7 +123,8 @@ def test_summary_n_genomes_counts_the_keeper(tmp_path: Path) -> None:
     path = tmp_path / "cluster_summary.tsv"
     write_cluster_summary(path, rows)
     header, first = (line.split("\t") for line in path.read_text().splitlines()[:2])
-    assert header[-1] == "n_genomes" and first[-1] == "3"
+    assert first[header.index("n_genomes")] == "3"
+    assert header.index("n_genomes") == 9  # earlier column positions unchanged
 
 
 def test_summary_species_list_is_capped_most_frequent_first() -> None:
@@ -175,3 +178,19 @@ def test_taxonomy_lookup_reads_the_manifest(tmp_path: Path) -> None:
     }
     # No manifest at all: the filenames supply the species.
     assert taxonomy_lookup(WorkdirContext(tmp_path / "none")) == {}
+
+
+def test_summary_reads_no_n50_for_unscored_or_single_scored_clusters() -> None:
+    """rep_n50 is filled only for a scored keeper; an unscored cluster and a
+    cluster without a second scored genome to compare read nothing else."""
+    asked: list[str] = []
+
+    def n50(name: str) -> int | None:
+        asked.append(name)
+        return 1000
+
+    rows = summarise_clusters({REP: [M1, M2], SOLO: []}, {SOLO: (99.0, 0.0)}, None, n50)
+    by_rep = {r.representative: r for r in rows}
+    assert by_rep[REP].rep_n50 is None
+    assert by_rep[SOLO].rep_n50 == 1000
+    assert set(asked) == {SOLO}

@@ -140,3 +140,41 @@ def test_taxonomy_reduce_keeps_unannotated_genomes(tmp_path):
     )
     reduced = _reduce_by_taxonomy(result, "species", {}, _LOGGER, taxon_of={})
     assert [r.name for r in reduced.representatives] == ["unknown_rep.fasta"]
+
+
+def _two_rep_group(tmp_path):
+    big, small = tmp_path / "big.fasta", tmp_path / "small.fasta"
+    for p in (big, small):
+        p.write_text(">x\nACGT\n", encoding="utf-8")
+    members = [f"m{i}.fasta" for i in range(5)]
+    result = DerepResult(
+        representatives=[big, small],
+        clusters={"big.fasta": members, "small.fasta": []},
+        genome_status={
+            **{n: STATUS_CONTAINED for n in members},
+            "big.fasta": STATUS_REPRESENTATIVE,
+            "small.fasta": STATUS_REPRESENTATIVE,
+        },
+    )
+    taxon = {n: "sp" for n in ["big.fasta", "small.fasta", *members]}
+    return result, taxon
+
+
+def test_taxonomy_reduce_scored_fragment_does_not_displace_unscored_keeper(tmp_path):
+    # The largest cluster's representative has no quality; a scored genome
+    # replaces it only when high quality, as within a cluster.
+    result, taxon = _two_rep_group(tmp_path)
+    fragment = {"small.fasta": (40.0, 0.0)}
+    reduced = _reduce_by_taxonomy(result, "species", fragment, _LOGGER, taxon_of=taxon)
+    assert [r.name for r in reduced.representatives] == ["big.fasta"]
+    good = {"small.fasta": (95.0, 1.0)}
+    reduced = _reduce_by_taxonomy(result, "species", good, _LOGGER, taxon_of=taxon)
+    assert [r.name for r in reduced.representatives] == ["small.fasta"]
+
+
+def test_taxonomy_reduce_uses_the_n50_term(tmp_path):
+    result, taxon = _two_rep_group(tmp_path)
+    quality = {"big.fasta": (100.0, 0.03), "small.fasta": (100.0, 0.0)}
+    n50 = {"big.fasta": 1_900_000, "small.fasta": 150_000}.get
+    reduced = _reduce_by_taxonomy(result, "species", quality, _LOGGER, taxon_of=taxon, n50=n50)
+    assert [r.name for r in reduced.representatives] == ["big.fasta"]
