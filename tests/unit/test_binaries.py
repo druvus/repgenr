@@ -11,9 +11,7 @@ from repgenr.core.errors import MissingBinaryError
 
 def _fake_env(monkeypatch, present: set[str], versions: dict[str, str]) -> None:
     monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n if n in present else None)
-    monkeypatch.setattr(
-        binaries, "_query_version", lambda name, args, timeout=None, path=None: versions.get(name)
-    )
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args, **_: versions.get(name))
 
 
 def test_missing_binary_raises(monkeypatch) -> None:
@@ -57,7 +55,7 @@ def test_strict_version_rejects_unparseable(monkeypatch) -> None:
 
 
 def _fake_run(monkeypatch, returncode: int, stdout: str) -> None:
-    monkeypatch.setattr(binaries, "_ask", lambda argv, timeout: (returncode, stdout))
+    monkeypatch.setattr(binaries, "_ask", lambda argv, timeout, path=None: (returncode, stdout))
 
 
 def test_rejected_version_flag_is_recorded_as_unknown(monkeypatch) -> None:
@@ -78,7 +76,7 @@ def test_unnumbered_version_line_is_kept_on_success(monkeypatch) -> None:
 
 def test_strict_version_reports_a_missing_version_without_text(monkeypatch) -> None:
     monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n)
-    monkeypatch.setattr(binaries, "_query_version", lambda name, args, timeout=None, path=None: None)
+    monkeypatch.setattr(binaries, "_query_version", lambda name, args, **_: None)
     with pytest.raises(MissingBinaryError, match="could not read a version") as exc:
         check_binaries((BinarySpec("samtools", min_version="1.10", strict_version=True),))
     assert "None" not in str(exc.value)
@@ -296,11 +294,11 @@ def test_a_running_version_query_is_reached_by_stop_running_tools(tmp_path) -> N
 def test_check_binaries_passes_its_timeout_and_reports_unknown(monkeypatch) -> None:
     seen: list[float | None] = []
 
-    def query(name, args, timeout=None):
+    def query(name, args, timeout=None, path=None):
         seen.append(timeout)
         return None
 
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: n)
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: n)
     monkeypatch.setattr(binaries, "_query_version", query)
     spec = BinarySpec("tool")
     assert check_binaries((spec,), timeout=8) == {"tool": "unknown"}
@@ -322,11 +320,11 @@ def test_list_tools_check_queries_versions_with_a_short_timeout(monkeypatch) -> 
 
     seen: set[float | None] = set()
 
-    def query(name, args, timeout=None):
+    def query(name, args, timeout=None, path=None):
         seen.add(timeout)
         return "1.0"
 
-    monkeypatch.setattr(binaries.shutil, "which", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(binaries.shutil, "which", lambda n, path=None: f"/usr/bin/{n}")
     monkeypatch.setattr(binaries, "_query_version", query)
     result = CliRunner().invoke(app, ["list-tools", "--check"])
     assert result.exit_code == 0, result.output
