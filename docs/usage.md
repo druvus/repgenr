@@ -603,19 +603,40 @@ fingerprint format changed).
 
 ### Representative selection
 
-`repgenr dereplicate` and `repgenr run` (the manual and `run` CLI entry points,
-not the Nextflow data-channel path) accept `--keeper quality|tool` (default
-`quality`). After the chosen dereplicator clusters the genomes, the keeper step
-re-picks each cluster's representative by `completeness - 5 x contamination`
-using GTDB CheckM values already present in the manifest
-(`src/repgenr/stages/derep_keeper.py`), which corrects the tendency of
-connectivity-based tools to keep the most-sequenced (not the best-quality)
-genome in a cluster. `--keeper tool` restores the adapter's own pick. Clusters
-with no manifest quality data keep the adapter's choice either way. The GTDB
-table carries CheckM values directly; `--source api` fetches them from each
-genome's card (one request per selected genome). When the manifest has no
-quality at all the stage warns, and `repgenr.yaml` records
-`keeper_effective: tool` next to the requested `keeper` and the swap count.
+`repgenr dereplicate` and `repgenr run` accept `--keeper quality|tool` (default
+`quality`), and so do the Nextflow steps `dereplicate-chunk` and
+`dereplicate-merge` (`--derep_keeper`). After the chosen dereplicator clusters
+the genomes, the keeper step re-picks each cluster's representative by
+`completeness - 5 x contamination` (`src/repgenr/stages/derep_keeper.py`),
+which corrects the tendency of connectivity-based tools to keep the
+most-sequenced (not the best-quality) genome in a cluster. The values come
+from the manifest: GTDB selections carry CheckM values (`--source api` fetches
+them from each genome's card, one request per selected genome), `assemble
+--checkm2-db` scores assemblies, and `ingest --selection` reads the
+`completeness` and `contamination` columns. The Nextflow steps read the same
+columns from `selection.tsv`. `--keeper tool` restores the adapter's own pick.
+When no genome under `genomes/` has quality the stage warns, and
+`repgenr.yaml` records `keeper_effective: tool` next to the requested `keeper`
+and the swap count.
+
+The rule is strict. A member replaces the representative only when its score
+is higher; on equal scores the adapter's representative stays, so which of
+two equally scored genomes represents a cluster depends on the tool. A genome
+without values never replaces a scored representative, a cluster without any
+scored genome keeps the adapter's choice, and a scored genome replaces an
+unscored representative whatever its score. With quality for only part of the
+set, a scored fragment can therefore replace an unscored complete genome;
+check `cluster_summary.tsv` (`rep_completeness`) in that case or use
+`--keeper tool`. The score ignores contiguity: between genomes scored within a
+fraction of a point, as is common for closed and draft genomes of one species,
+a draft can replace a closed genome.
+
+The workdir stage applies the keeper once, to the final clusters of a chunked
+run. The Nextflow steps apply it within each chunk and again after the merge,
+so the merge pass compares the chunk keepers rather than the tools' picks.
+Both end with the best-scoring genome of each final cluster, but the clusters
+themselves can differ slightly, since the merge pass compares different
+genomes.
 
 The same manifest values also reach the dereplicator, whichever keeper rule is
 chosen (the Nextflow chunk and merge steps read them from `selection.tsv`),
@@ -640,7 +661,7 @@ directory after such a replacement.
 
 `--reduce species|genus` collapses the ANI representatives to one per taxon
 after dereplication, choosing the keeper by quality when scores are known and
-by cluster size otherwise; `--target-reps N` searches the secondary ANI to
+`--keeper` is `quality`, and by cluster size otherwise; `--target-reps N` searches the secondary ANI to
 land near N representatives. Both exist on `dereplicate` and, since the
 merge step is where the final set is decided, on `dereplicate-merge`, which
 the Nextflow layer drives through `--derep_reduce` and `--derep_target_reps`.
@@ -982,7 +1003,7 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_tool` | `skder` | Dereplicator for the scatter-gather step. |
 | `--derep_process_size` | `null` | Genomes per dereplication chunk (single chunk if unset). |
 | `--derep_primary_ani` / `--derep_secondary_ani` / `--derep_aligned_fraction` | `0.90` / `0.99` / `0.50` | ANI / aligned-fraction thresholds. |
-| `--derep_keeper` | `quality` | Representative choice at the merge step: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
+| `--derep_keeper` | `quality` | Representative choice in the chunk and merge steps: `quality` (CheckM scores from `selection.tsv`) or `tool`. |
 | `--derep_reduce` | `none` | Collapse the merged representatives to one per `species` or `genus` (`dereplicate-merge --reduce`). |
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
 | `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |

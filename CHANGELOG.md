@@ -639,6 +639,19 @@ All notable changes to RepGenR are documented here. The format follows
   representative, and the `derep-unpack` list of missing cluster members,
   show the first five names and a count on the console beyond five and ten
   genomes; the run log lists them all. No stage reruns for this.
+- `dereplicate-merge --keeper tool --reduce` (this PR) ranked the
+  representatives of a taxon by `selection.tsv` quality; it now uses cluster
+  size, as the `dereplicate` stage does under `--keeper tool`. On a set with a
+  scored 40 percent fragment the merge step kept the fragment where the stage
+  kept the 19-member cluster. No workdir stage reruns for this.
+- `dereplicate --keeper quality` (this PR) recorded `keeper_effective:
+  quality` and skipped its warning when the manifest held quality only for
+  genomes outside `genomes/`, such as the outgroup. The quality rule now
+  counts only the genomes being dereplicated. Representatives are unchanged.
+- Docs and help (this PR): the keeper applies in the Nextflow chunk and merge
+  steps, not only at the merge; its values come from GTDB, `assemble
+  --checkm2-db` or `ingest --selection`, not only GTDB; ties, partial quality
+  and contiguity are described in usage.md.
 - Resume (#239): input directories are digested from their genome FASTA
   files only (the files `list_fasta` returns), so a leftover `x.fasta.tmp`, a
   `.fai` index or a README in `genomes/`, `derep/representatives/` or the

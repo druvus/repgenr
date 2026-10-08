@@ -76,7 +76,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--primary-ani` | `0.9` | Primary (pre-clustering) ANI threshold in (0, 1]. |
 | `--secondary-ani` | `0.99` | Secondary (final cluster) ANI threshold in (0, 1]. |
 | `--aligned-fraction` | `0.5` | Minimum aligned fraction in (0, 1] for a pair to be compared. |
-| `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
+| `--keeper` | `quality` | Representative choice per cluster: quality (manifest completeness minus 5 x contamination) or tool (adapter's own). |
 | `-s`, `--process-size` |  | Chunk size; when set and exceeded, two-stage chunking runs for any tool. |
 | `-p`, `--num-processes` | `0` | Parallel stage-1 chunk workers (threads split across them). 0 = auto (~threads/4, capped by cores). |
 | `--pre-primary-ani` |  | Stage-1 (intra-chunk) primary ANI; defaults to --primary-ani. |
@@ -280,7 +280,7 @@ Cluster genomes by ANI and select representatives.
 | `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--allow-incomplete` | off | Proceed with a warning when the input genome set is incomplete. |
-| `--keeper` | `quality` | Representative choice per cluster: quality (CheckM score from GTDB) or tool (adapter's own). |
+| `--keeper` | `quality` | Representative choice per cluster: quality (manifest completeness minus 5 x contamination) or tool (adapter's own). |
 
 ### snptype
 
@@ -484,7 +484,7 @@ Dereplicate one chunk of genomes (scatter step; writes a chunk result dir).
 | `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
-| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
+| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (selection.tsv completeness minus 5 x contamination) or tool (adapter's own pick). |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### dereplicate-merge
@@ -504,7 +504,7 @@ Dereplicate the union of chunk representatives (gather step).
 | `--virus` | off | Pass virus-tuned parameters to dRep (--tool drep); the other tools do not read it. |
 | `--tool-arg` |  | Tool tuning as key=value (repeatable), e.g. mode=greedy. |
 | `--selection-tsv` |  | selection.tsv with quality columns; enables quality-aware representatives. |
-| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (manifest completeness/contamination) or tool (adapter's own pick). |
+| `--keeper` | `quality` | Representative choice when --selection-tsv is given: quality (selection.tsv completeness minus 5 x contamination) or tool (adapter's own pick). |
 | `--reduce` | `none` | Taxonomy-aware reduction after the merge: none, species, or genus (one representative per taxon; taxonomy from --selection-tsv or the filenames). |
 | `--target-reps` | `0` | Target representative count: search --secondary-ani of the merge pass to land near it (0 = off; re-runs the merge per search step). |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
