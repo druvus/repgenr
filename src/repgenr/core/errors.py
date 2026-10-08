@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# `repgenr doctor` exits with this status when at least one finding is a
+# failure, so a caller can tell a damaged workdir from a crashed check (1).
+DOCTOR_FAILURES_EXIT = 7
+
 
 class RepGenRError(Exception):
     """Base class for all expected, user-facing RepGenR failures.

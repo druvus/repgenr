@@ -510,6 +510,7 @@ parser), so they also apply to commands other than the one named.
 | all stages | Under `--container docker`, a tool that ignores the SIGTERM forwarded through `--init` kept its container running after repgenr was stopped (seen with busybox); containers are now named and stopped with `docker stop` when the run is interrupted | #235 |
 | snptype | `--mask gubbins` passed the default 16 threads to Gubbins, whose IQ-TREE tree builder refuses more threads than cores (11 on the audit machine); the masker now caps them at the CPUs where Gubbins runs | #235 |
 | install | install.md presented `environment.yml` as the Linux single-environment route, but a linux-64 dry-run does not solve (Gubbins needs Python 3.8 to 3.10; mashtree's BioPerl chain needs zlib older than 1.3, against harvesttools and medaka); the docs now say so | #235 |
+| doctor, status | `doctor` exited 1 for failures found and for an unexpected error alike, and neither command had machine-readable output; `doctor` now exits 7 for failures, and both accept `--json` | #242 |
 
 Observations left for the maintainer. None changed a documented behaviour, so
 they are recorded here and not fixed.
@@ -541,8 +542,7 @@ they are recorded here and not fixed.
 | dereplicate | On `mixed_1000_clustered` (20 truth clusters) skder, galah, sourmash sparse and sourmash dense all recover the truth partition at the defaults (adjusted Rand index 1.0); sparse and dense pick different representatives within clusters, as choosing-tools.md states. |
 | dereplicate | Without manifest quality, galah picks a 40 percent fragment as the representative of its cluster (input order), and sourmash keeps the fragment as its own cluster (k-mer similarity counts the missing part). `--keeper quality` with manifest quality corrects the first. |
 | dereplicate | `--target-reps` with `--process-size` re-sketches the union of chunk representatives at each search step, since the union changes with the threshold; on 50 genomes the search took 87 s against 22 s unchunked. |
-| doctor | `doctor` exits 1 for failures found and also for an unexpected error, so a script cannot tell them apart by exit code; there is no machine-readable output (`--json`). |
-| doctor | The first-bytes FASTA check reads every genome: 28 s for 1000 genomes on an exFAT USB volume (about 35 ms per file, not cached between runs); 8 to 16 threads gave 1.3 to 1.7 times. `status` reads no genome content and takes 0.4 s there. |
+| doctor | The first-bytes FASTA check reads every genome: 28 s for 1000 genomes on an exFAT USB volume (about 35 ms per file, not cached between runs); 8 to 16 threads gave 1.3 to 1.7 times. `status` reads no genome content and takes 0.4 s there. `doctor --quick` skips the check (#242). |
 | status, doctor | A record from a version without resume fingerprints, or a `dereplicate` record restored by `derep-stock unpack`, is shown as done although the next invocation recomputes it. Marking it stale would send the user to re-run a restored dereplication. |
 | doctor | Opening the WAL-mode manifest lets SQLite create or touch `manifest.sqlite-shm` and `-wal`; no data changes. |
 | Environment | dRep 3.4.5 in the local environment fails in fastANI parsing (`read_csv` no longer accepts `delim_whitespace` in the installed pandas); ANImf (`--virus`) runs. The container pin is dRep 3.7.1. |

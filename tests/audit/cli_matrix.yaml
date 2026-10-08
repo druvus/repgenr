@@ -771,7 +771,28 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_aux_commands.py::test_doctor_passes_then_fails_on_a_corrupt_genome
-        observable: exit 0 on a sound workdir, 1 after corrupting a genome
+        observable: exit 0 on a sound workdir, 7 after corrupting a genome
+      --quick:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick
+        observable: the genome line reads content not read; a non-FASTA genome is not reported
+      --json:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/output.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick
+        observable: one repgenr.doctor/1 JSON object on stdout; exit_code agrees with the exit status
   genome:
     dispatch: stage
     base_args:
@@ -2726,6 +2747,17 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree
         observable: reports the local chain with every stage done
+      --json:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/output.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: tests/live/test_aux_commands.py::test_doctor_and_status_json_and_quick
+        observable: one repgenr.status/1 JSON object on stdout
   tree2tax:
     dispatch: stage
     base_args:

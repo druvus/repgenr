@@ -551,9 +551,17 @@ entry stage. For `glance` only
 when no value falls within the plot bounds. `repgenr
 doctor -wd <wd>` verifies a workdir's outputs against its records (missing,
 corrupt or untracked genomes, manifest drift, truncated deliverables,
-interrupted stages). It exits 1 on failures and 0 when it finds only
+interrupted stages). It exits 7 on failures and 0 when it finds only
 warnings; a missing deliverable or a changed input is a warning under the
-same path, since the stage will re-run. `status` reads the same tables and
+same path, since the stage will re-run. `doctor --quick` skips reading the
+first bytes of each genome file, the slowest check on a large genome set
+(about 30 s per 1000 files on an exFAT disk); links, missing and untracked
+genomes are still checked, and the genome line says the content was not
+read, so a non-FASTA file saved under a FASTA name goes unnoticed. Both
+commands accept `--json` and then print one versioned JSON object on stdout
+instead of the text report, for scripts and workflow wrappers; the exit
+codes are unchanged, and on exit 3 stdout stays empty. The schemas are in
+[output.md](output.md#machine-readable-status). `status` reads the same tables and
 lists such a stage as `[stale]`, so the two commands agree on what re-runs.
 A malformed `repgenr.yaml` is reported by both: `doctor` as a failure,
 `status` and every stage with exit 3.
@@ -1274,11 +1282,15 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   | Code | Meaning |
   |------|---------|
   | 0 | Success. |
-  | 1 | An unexpected error (traceback in the run log), or `doctor` found failures. |
+  | 1 | An unexpected error (traceback in the run log). |
   | 2 | Invalid or missing user input (also Typer's own usage errors). |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, NCBI Datasets, BV-BRC, ENA) failed, e.g. because the network is unreachable. `genome` and `vmetadata` on NCBI Virus check that the NCBI Datasets host answers before running the `datasets` CLI; a network failure inside `datasets` is reported as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. `assemble` then leaves an empty genome set rather than the previous one (except under `--append`), so `dereplicate` also exits 3 instead of running on stale genomes; see [output.md](output.md#when-every-sequencing-run-is-excused). |
   | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, BV-BRC, ENA) failed, e.g. because the network is unreachable. A download run through the `datasets` CLI (`genome`, `vmetadata` on NCBI Virus) reports a network failure as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. When an earlier `assemble` call wrote the genome set and at least one run was judged (rejected by the assembler, polisher or quality gate), `assemble` empties that set, so `dereplicate` also exits 3 instead of running on stale genomes; a set written by another stage, or one kept because every run failed to download, stays in place. See [output.md](output.md#when-every-sequencing-run-is-excused). |
   | 4 | A required external tool is absent or below its version floor, or the Docker daemon cannot be reached under `--container docker`. `list-tools --check --strict` exits 4 when any adapter is missing or errored. |
   | 5 | A requested tool adapter could not be found or loaded. `list-tools --check --strict` exits 5 when any plugin failed to load (this takes precedence over 4). |
+  | 3 | The working directory does not exist (every command, including `status` and `doctor`) or is missing files or in a bad state, or a request to a remote service (GTDB, NCBI Entrez, NCBI Datasets, BV-BRC, ENA) failed, e.g. because the network is unreachable. `genome` and `vmetadata` on NCBI Virus check that the NCBI Datasets host answers before running the `datasets` CLI; a network failure inside `datasets` is reported as 6 instead. `assemble` and `reads-gather` also exit 3 when every run was excused and nothing was produced; the reasons are in `excused_runs.tsv`. When an earlier `assemble` call wrote the genome set and at least one run was judged (rejected by the assembler, polisher or quality gate), `assemble` empties that set, so `dereplicate` also exits 3 instead of running on stale genomes; a set written by another stage, or one kept because every run failed to download, stays in place. See [output.md](output.md#when-every-sequencing-run-is-excused). |
+  | 4 | A required external tool is absent or below its version floor, or the Docker daemon cannot be reached under `--container docker`. |
+  | 5 | A requested tool adapter could not be found or loaded. |
   | 6 | An external tool failed (one console line; the command and output tail are in `repgenr.log`). Under `REPGENR_PROPAGATE_TOOL_EXIT=1` (set by the Nextflow modules) the tool's own status is forwarded instead, a signal kill as 128 plus the signal number. |
+  | 7 | `doctor` found at least one failure: an output that disagrees with its record, a malformed `repgenr.yaml`, or a check that could not complete. Warnings alone exit 0. |

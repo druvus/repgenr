@@ -18,6 +18,16 @@ All notable changes to RepGenR are documented here. The format follows
   `bin` directory; it was recorded as `unknown`. A stage that recorded
   `unknown` is not rerun for this, since versions are not part of the resume
   fingerprint.
+- `status --json` and `doctor --json` (#PRNUM): one versioned JSON object on
+- `status --json` and `doctor --json` (#242): one versioned JSON object on
+  stdout (`repgenr.status/1`, `repgenr.doctor/1`) in place of the text report,
+  so scripts and workflow wrappers need not parse wording; exit codes are
+  unchanged and stdout stays empty on exit 3. The schemas are in output.md,
+  "Machine-readable status". The text output of both commands is unchanged.
+- `doctor --quick` (#242): skips reading the first bytes of each genome file
+  (about 30 s per 1000 genomes on an exFAT disk); links, missing and untracked
+  genomes are still checked, and the genome line says the content was not
+  read.
 - `status` (#234): a finished stage whose recorded input changed, or whose
   declared output is missing, since it finished is listed as `[stale]` with
   the reason; it re-runs on its next invocation. `Next:` names the first
@@ -30,7 +40,7 @@ All notable changes to RepGenR are documented here. The format follows
   same leaves as `genomes_map.tsv`, warns about genome files under `genomes/`
   that `selection.tsv` does not list, and warns when `repgenr.yaml` records
   no stage beside existing outputs. Its help states the exit codes: 0 with
-  only warnings, 1 on failures, 3 for a missing workdir.
+  only warnings, 1 on failures (7 since #242), 3 for a missing workdir.
 - `ingest` (#229): genome files ending in `.fna.gz` (the NCBI FTP default) and
   `.fa.gz` are accepted beside `.fasta.gz` (one suffix list in
   `core.contracts.FASTA_SUFFIXES`), and were previously skipped with a
@@ -186,6 +196,11 @@ All notable changes to RepGenR are documented here. The format follows
 - `list-tools`, `versions` (#237): a warning logged while they run (a plugin
   that fails to load) carries the standard timestamp and level instead of
   Python's bare fallback line.
+- `doctor` (#PRNUM): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
+- `doctor` (#242): exits 7 (`core.errors.DOCTOR_FAILURES_EXIT`) when it finds
+  a failure, including a malformed `repgenr.yaml` or a check that could not
+  complete; it exited 1, the status of an unexpected error. A script that
+  tested for 1 after `doctor` must test for 7. Warnings alone still exit 0.
 - `phylo --msa-source snptype` (#228) writes its typing pass under
   `tree/msa/` (alignment, optional tables and the reuse stamp) and its scratch
   under `scratch/phylo_snptype/`; `snp/` and `scratch/snptype/` belong to the

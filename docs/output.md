@@ -129,6 +129,89 @@ quality columns come from the manifest in the workdir CLI and from
 `--selection-tsv` in the Nextflow steps; without either they stay blank and
 the size and species columns still apply.
 
+## Machine-readable status
+
+`repgenr status --json` and `repgenr doctor --json` print one JSON object on
+stdout and nothing else; log messages go to stderr. The `schema` key names the
+format and its version, and a change that removes or renames a key raises the
+version. The exit codes are the same as without `--json`: on exit 3 (a missing
+workdir, or for `status` a malformed `repgenr.yaml`) stdout is empty and the
+error is on stderr, so a caller checks the exit code before parsing. Scripts
+should key on `level`, `area`, `state`, `pipeline` and `next`; the `message`,
+`reason`, `detail` and `notes` texts are meant for people and may change
+wording between releases.
+
+`status`:
+
+```json
+{
+  "schema": "repgenr.status/1",
+  "repgenr": "2.1.0",
+  "workdir": "/data/wd",
+  "pipeline": "local",
+  "stages": [
+    {"name": "ingest", "in_chain": true, "state": "done", "reason": null,
+     "tool": null, "completed": "2026-10-08T07:22:34+00:00",
+     "fingerprint": true, "detail": null},
+    {"name": "dereplicate", "in_chain": true, "state": "stale",
+     "reason": "input changed: genomes", "tool": "sourmash",
+     "completed": "2026-10-08T07:30:00+00:00", "fingerprint": true,
+     "detail": null},
+    {"name": "phylo", "in_chain": true, "state": "pending", "reason": null,
+     "tool": null, "completed": null, "fingerprint": false, "detail": null}
+  ],
+  "next": "dereplicate",
+  "notes": [],
+  "unchecked": null
+}
+```
+
+- `pipeline` is `bacterial`, `viral`, `local` or `reads` (the lineage `status`
+  follows), and null when the workdir has no `repgenr.yaml`; `stages` is then
+  empty and `notes` names the entry stages.
+- `stages` lists the stages of that lineage in order (`in_chain` true), then
+  any other recorded stage (`in_chain` false), such as `snptype` or `glance`.
+- `state` is `done`, `stale` (completed, but an input changed or an output is
+  missing; `reason` says which), `interrupted` (started and did not finish) or
+  `pending` (not run).
+- `fingerprint` is true when the record holds a resume fingerprint. `detail`
+  holds the GTDB release or API query date of `metadata`, else null.
+- `next` is the first stage of the lineage that is not done, or null when all
+  are. `notes` holds advice about that stage, for example that `phylo` will
+  refuse too few representatives.
+- `unchecked` is null, or the error that stopped the staleness check; the
+  states are then based on the records alone.
+
+`doctor`:
+
+```json
+{
+  "schema": "repgenr.doctor/1",
+  "repgenr": "2.1.0",
+  "workdir": "/data/wd",
+  "quick": false,
+  "findings": [
+    {"level": "fail", "area": "genomes",
+     "message": "1 selected genome(s) missing from /data/wd/genomes (e.g. GCF_2.1); re-run genome."},
+    {"level": "ok", "area": "metadata", "message": "completed 2026-10-08T07:22:34+00:00"}
+  ],
+  "counts": {"fail": 1, "warn": 0, "ok": 1},
+  "exit_code": 7
+}
+```
+
+- `level` is `fail`, `warn` or `ok`; findings are ordered failures first, then
+  warnings, then the rest, each group by `area`, as in the text report.
+- `area` is a stage name (`dereplicate`, `phylo`) or a topic such as
+  `config`, `genomes`, `manifest`, `outgroup`, `leftovers` or `summary`. A
+  check that raised an error is reported as a `fail` in an area named after
+  the check (for example `tree` or `manifest_drift`), with a message starting
+  "Check could not complete".
+- `exit_code` is the status the command exits with: 7 when `counts.fail` is
+  above zero, else 0.
+- `quick` is true under `--quick`; the genome files were then not read, and a
+  non-FASTA file under a FASTA name is not reported.
+
 ## Pipeline information
 
 Under `<outdir>/pipeline_info/`, each run writes timestamped Nextflow execution

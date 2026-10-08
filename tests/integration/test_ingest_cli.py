@@ -116,7 +116,7 @@ def test_doctor_names_links_left_dangling_by_a_moved_source(tmp_path: Path) -> N
 
     result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
 
-    assert result.exit_code == 1, result.output
+    assert result.exit_code == 7, result.output
     assert "2 link(s)" in result.output
     assert "source was moved or deleted" in result.output
     assert "not FASTA" not in result.output
