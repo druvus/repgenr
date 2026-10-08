@@ -412,3 +412,22 @@ def test_cli_doctor_exit_codes(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
     assert result.exit_code == 1
     assert "FAIL" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["stages: [\n  bad", "- a\n- b\n", "stages:\n  phylo:\n    params: oops\n"],
+)
+def test_malformed_record_is_a_config_failure_not_a_traceback(tmp_path: Path, text: str) -> None:
+    wd = _base_workdir(tmp_path)
+    (wd / "repgenr.yaml").write_text(text, encoding="utf-8")
+    findings = diagnose(wd)
+    assert [(f.level, f.area) for f in findings] == [("fail", "config")]
+    assert "not a readable RepGenR record" in findings[0].message
+    result = _runner.invoke(app, ["doctor", "-wd", str(wd)])
+    assert result.exit_code == 1
+    assert "[FAIL] config" in result.stdout
+    for command in ("status", "versions"):
+        result = _runner.invoke(app, [command, "-wd", str(wd)])
+        assert result.exit_code == 3, result.output
+        assert "not a readable RepGenR record" in result.output

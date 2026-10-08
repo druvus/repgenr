@@ -33,6 +33,7 @@ from .contracts import (
     read_clusters,
     read_selection,
 )
+from .errors import WorkdirError
 from .inputs import file_digest, inputs_digest, manifest_digest_for_stage
 from .integrity import (
     check_genome_completeness,
@@ -59,7 +60,10 @@ def diagnose(workdir: Path) -> list[Finding]:
         return [Finding("warn", "config", f"No RepGenR run found at {workdir}.")]
 
     findings: list[Finding] = []
-    config = Config.load(workdir)
+    try:
+        config = Config.load(workdir)
+    except WorkdirError as exc:
+        return [Finding("fail", "config", str(exc))]
     checks = (
         _check_stage_records,
         _check_genomes,

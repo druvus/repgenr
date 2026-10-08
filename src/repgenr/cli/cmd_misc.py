@@ -50,7 +50,11 @@ def versions(
         raise typer.Exit(code=err.exit_code)
     from ..stages.metadata import gtdb_provenance
 
-    cfg = Config.load(workdir)
+    try:
+        cfg = Config.load(workdir)
+    except WorkdirError as exc:
+        typer.echo(f"ERROR {exc}", err=True)
+        raise typer.Exit(code=exc.exit_code) from exc
     merged: dict[str, str] = {}
     for record in cfg.stages.values():
         merged.update(record.tool_versions)
@@ -86,6 +90,7 @@ def status(
     repgenr.yaml prints which entry stage to run first and exits 0.
     """
     from ..core.config import CONFIG_FILENAME, Config
+    from ..core.errors import WorkdirError
 
     require_existing_workdir(workdir)
     if not (workdir / CONFIG_FILENAME).exists():
@@ -96,7 +101,11 @@ def status(
         )
         raise typer.Exit()
 
-    cfg = Config.load(workdir)
+    try:
+        cfg = Config.load(workdir)
+    except WorkdirError as exc:
+        typer.echo(f"ERROR {exc}", err=True)
+        raise typer.Exit(code=exc.exit_code) from exc
     recorded = cfg.stages
     chain: tuple[str, ...]
     if "reads" in recorded and "metadata" not in recorded:
