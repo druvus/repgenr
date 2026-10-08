@@ -5,7 +5,10 @@ parameters, so re-running an upstream stage invalidates downstream stages.
 Directories of genomes can hold thousands of files and tens of gigabytes, so
 they are digested from file metadata (name, size, mtime_ns) rather than
 content: one ``stat`` per file, catching adds, removes, renames, and rewrites
-(every stage that regenerates a file bumps its mtime). Small contract files
+(every stage that regenerates a file bumps its mtime). Only genome FASTA files
+are counted, the files every consumer reads through ``list_fasta``, so a
+leftover ``x.fasta.tmp``, a ``.fai`` index or a README beside the genomes does
+not rerun the stages that read the directory. Small contract files
 (selection.tsv, clusters.tsv, tree.nwk) are digested by content. A same-size,
 mtime-preserving in-place edit is therefore not detected; ``--force`` covers
 that deliberate case.
@@ -17,6 +20,8 @@ import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from .contracts import FASTA_SUFFIXES
 
 if TYPE_CHECKING:
     from .manifest import Manifest
@@ -39,18 +44,24 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def dir_stat_digest(path: Path) -> str:
+def dir_stat_digest(path: Path, *, fasta_only: bool = True) -> str:
     """sha256 over sorted (name, size, mtime_ns) of a directory's files.
 
-    Flat (non-recursive: the contract directories are flat) and dotfile-filtered,
-    matching :func:`repgenr.core.contracts.list_fasta` semantics. ``ABSENT`` when
-    the directory is missing.
+    Flat (non-recursive: the contract directories are flat) and dotfile-filtered.
+    With ``fasta_only`` (the default) only names ending in a FASTA suffix are
+    counted, matching :func:`repgenr.core.contracts.list_fasta`; for a
+    directory that holds only FASTA files the digest is the same either way.
+    ``fasta_only=False`` counts every regular file, for callers that snapshot
+    a directory rather than digest a genome set. ``ABSENT`` when the directory
+    is missing.
     """
     if not path.is_dir():
         return ABSENT
     digest = hashlib.sha256()
     for entry in sorted(path.iterdir()):
         if entry.name.startswith(".") or not entry.is_file():
+            continue
+        if fasta_only and not entry.name.endswith(FASTA_SUFFIXES):
             continue
         st = entry.stat()
         digest.update(f"{entry.name}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())

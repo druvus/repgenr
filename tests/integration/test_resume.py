@@ -64,6 +64,27 @@ def test_incomplete_stage_reruns(tmp_path: Path, monkeypatch) -> None:
     assert calls == [1, 1]  # not skipped, because completed was never set
 
 
+def test_stray_non_fasta_file_in_an_input_dir_does_not_rerun(tmp_path: Path, monkeypatch) -> None:
+    # A leftover x.fasta.tmp or a README beside the genomes is not read by any
+    # stage, so it must not rerun the stages that digest the directory.
+    calls: list[int] = []
+    _install_fake_stage(monkeypatch, calls)
+    input_dir = tmp_path / "genomes"
+    input_dir.mkdir(parents=True)
+    (input_dir / "g1.fasta").write_text(">g1\nACGT\n", encoding="utf-8")
+    monkeypatch.setitem(cli.STAGE_INPUTS, "faketest", lambda ctx, p: [ctx.genomes_dir])
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)
+    (input_dir / "g2.fasta.tmp").write_text(">g2\nAC", encoding="utf-8")
+    (input_dir / "README").write_text("notes\n", encoding="utf-8")
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # skipped
+    assert calls == [1]
+    (input_dir / "g2.fna.gz").write_bytes(b"\x1f\x8b")
+    cli._run("faketest", tmp_path, lambda: _P(), create=True)  # a new genome reruns
+    assert calls == [1, 1]
+
+
 def test_registered_input_change_reruns(tmp_path: Path, monkeypatch) -> None:
     """A stage with a STAGE_INPUTS entry reruns when its input dir changes."""
     calls: list[int] = []
@@ -269,6 +290,25 @@ def test_deliverable_directory_with_only_dotfiles_is_missing(tmp_path: Path) -> 
         (tmp_path / "manifest.sqlite").write_text("", encoding="utf-8")
         params = types.SimpleNamespace(genomes_dir=str(tmp_path / "src"))
         assert cli.missing_deliverables(ctx, "ingest", params) == [ctx.genomes_dir]
+    finally:
+        ctx.close()
+
+
+def test_genome_directory_with_only_a_temporary_file_is_missing(tmp_path: Path) -> None:
+    # An interrupted copy can leave x.fasta.tmp in an otherwise empty
+    # genomes/; that is not a genome set, so the stage that writes it reruns.
+    from repgenr.core.context import WorkdirContext
+
+    ctx = WorkdirContext(tmp_path, create=True)
+    try:
+        ctx.genomes_dir.mkdir()
+        (ctx.genomes_dir / "a.fasta.tmp").write_text(">a\nA\n", encoding="utf-8")
+        (tmp_path / "selection.tsv").write_text("x\n", encoding="utf-8")
+        (tmp_path / "manifest.sqlite").write_text("", encoding="utf-8")
+        params = types.SimpleNamespace(genomes_dir=str(tmp_path / "src"))
+        assert cli.missing_deliverables(ctx, "ingest", params) == [ctx.genomes_dir]
+        (ctx.genomes_dir / "a.fasta").write_text(">a\nA\n", encoding="utf-8")
+        assert cli.missing_deliverables(ctx, "ingest", params) == []
     finally:
         ctx.close()
 

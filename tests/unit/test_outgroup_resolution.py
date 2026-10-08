@@ -58,3 +58,19 @@ def test_a_gzipped_outgroup_leaf_is_named_without_its_suffix(tmp_path: Path) -> 
     file, leaf = resolve_outgroup_files(og_dir, acc_file, _LOG)
     assert file is not None and leaf == "Fam_Out_grp_GCF_1.1"
     assert _resolve_outgroup_leaf_from(og_dir, acc_file, _LOG) == "Fam_Out_grp_GCF_1.1"
+
+
+def test_a_leftover_temporary_file_is_not_chosen_as_outgroup(tmp_path: Path) -> None:
+    # A partial download sorts first and contains the accession; only genome
+    # FASTA files are candidates, in phylo and tree2tax alike.
+    og_dir, acc_file = _setup(tmp_path, "GCF_1.1", ["AAA_GCF_1.1.fasta.tmp", "outgroup_GCF_1.1.fa"])
+    file, leaf = resolve_outgroup_files(og_dir, acc_file, _LOG)
+    assert file is not None and file.name == "outgroup_GCF_1.1.fa"
+    assert leaf == "outgroup_GCF_1.1"
+    assert _resolve_outgroup_leaf_from(og_dir, acc_file, _LOG) == "outgroup_GCF_1.1"
+
+
+def test_an_outgroup_dir_holding_only_a_temporary_file_resolves_to_none(tmp_path: Path) -> None:
+    og_dir, acc_file = _setup(tmp_path, "GCF_1.1", ["Fam_Out_grp_GCF_1.1.fasta.tmp"])
+    assert resolve_outgroup_files(og_dir, acc_file, _LOG) == (None, None)
+    assert _resolve_outgroup_leaf_from(og_dir, acc_file, _LOG) is None

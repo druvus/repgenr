@@ -92,6 +92,40 @@ def test_dir_digest_ignores_dotfiles(tmp_path) -> None:
     assert dir_stat_digest(d) == base
 
 
+def test_dir_digest_ignores_files_that_are_not_genome_fasta(tmp_path) -> None:
+    # Every consumer reads the directory through list_fasta, so a leftover
+    # temporary file, an index or a README is not an input change.
+    d = tmp_path / "genomes"
+    d.mkdir()
+    _write(d / "g1.fasta")
+    base = dir_stat_digest(d)
+    _write(d / "g2.fasta.tmp")
+    _write(d / "g1.fasta.fai")
+    _write(d / "README")
+    assert dir_stat_digest(d) == base
+    assert dir_stat_digest(d, fasta_only=False) != base
+
+
+def test_dir_digest_of_a_fasta_only_dir_equals_the_unfiltered_digest(tmp_path) -> None:
+    # A workdir digested before the FASTA filter holds the same digest for a
+    # directory of FASTA files only, so a clean workdir does not rerun.
+    d = tmp_path / "genomes"
+    d.mkdir()
+    for name in ("a.fasta", "b.fna", "c.fa.gz", "d.fasta.gz"):
+        _write(d / name)
+    (d / "sub.fasta").mkdir()  # a directory is not a file in either mode
+    assert dir_stat_digest(d) == dir_stat_digest(d, fasta_only=False)
+
+
+def test_dir_digest_changes_on_an_added_gzipped_genome(tmp_path) -> None:
+    d = tmp_path / "genomes"
+    d.mkdir()
+    _write(d / "g1.fasta")
+    base = dir_stat_digest(d)
+    _write(d / "g2.fna.gz")
+    assert dir_stat_digest(d) != base
+
+
 # --- path_digest / inputs_digest ----------------------------------------------
 
 

@@ -141,6 +141,36 @@ def test_derep_stock_unpack_reruns_after_the_dereplication_changed(
     assert clusters.read_text(encoding="utf-8") == stored
 
 
+def test_derep_stock_unpack_digests_the_stored_run_file_by_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The stored run is digested from its tables and representatives, listed
+    # one by one, so a stray file there does not repeat the unpack.
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    wd = _derep_workdir(tmp_path)
+    args = ["derep-stock", "-wd", str(wd), "--name", "r1", "--action"]
+    assert _runner.invoke(app, [*args, "pack"]).exit_code == 0
+    assert _runner.invoke(app, [*args, "unpack"]).exit_code == 0
+    rec = Config.load(wd).stages["derep_stock"]
+    assert {
+        "derep/stock/r1/clusters.tsv",
+        "derep/stock/r1/genome_status.tsv",
+        "derep/stock/r1/record.json",
+        "derep/stock/r1/representatives",
+    } <= set(rec.inputs)
+    stamp = rec.completed
+    # A stray file in the stored run is no input.
+    (wd / "derep" / "stock" / "r1" / "notes.txt").write_text("x\n", encoding="utf-8")
+    assert _runner.invoke(app, [*args, "unpack"]).exit_code == 0
+    assert Config.load(wd).stages["derep_stock"].completed == stamp
+
+    # A genome added to the stored representatives by hand is an input change.
+    stored_reps = wd / "derep" / "stock" / "r1" / "representatives"
+    (stored_reps / "Fam_Gen_sp2_GCA_000002.1.fasta").write_text(">s\nACGT\n", encoding="utf-8")
+    assert _runner.invoke(app, [*args, "unpack"]).exit_code == 0
+    assert Config.load(wd).stages["derep_stock"].completed != stamp
+
+
 def test_derep_stock_on_missing_workdir_exits_3(tmp_path: Path) -> None:
     # A mistyped -wd must not read as an empty store.
     wd = tmp_path / "absent"

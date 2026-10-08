@@ -535,7 +535,9 @@ Before skipping, a stage also checks that its main outputs exist (for example
 `genomes/` and `manifest.sqlite` for `ingest`, `derep/clusters.tsv` and
 `derep/representatives/` for `dereplicate`, `tree/tree.nwk` for `phylo`,
 `tree2tax.tsv` and `genomes_map.tsv` for `tree2tax`; a directory must not be
-empty, and dotfiles such as `.DS_Store` or exFAT `._` files do not count).
+empty, and dotfiles such as `.DS_Store` or exFAT `._` files do not count;
+`genomes/` and `derep/representatives/` count only with a genome FASTA file
+in them, so one holding only a leftover `x.fasta.tmp` is treated as empty).
 Each genome listed in `selection.tsv` is checked for the stage that wrote
 the genome set (`genome`, `ingest`, `vgenome`, `assemble`), and each
 representative listed in `derep/clusters.tsv` for `dereplicate`. If one was
@@ -555,6 +557,17 @@ same path, since the stage will re-run. `status` reads the same tables and
 lists such a stage as `[stale]`, so the two commands agree on what re-runs.
 A malformed `repgenr.yaml` is reported by both: `doctor` as a failure,
 `status` and every stage with exit 3.
+
+Input directories (`genomes/`, `derep/representatives/`, `outgroup/`, the
+`ingest --genomes-dir` source) are digested from the genome FASTA files in
+them, the files the stages read (names ending in `.fasta`, `.fa`, `.fna`,
+`.fas`, `.fasta.gz`, `.fna.gz` or `.fa.gz`). A leftover `x.fasta.tmp`, a
+`.fai` index, a `truth.json` or a README beside the genomes therefore does
+not re-run the stages that read the directory. A workdir recorded by an
+earlier version re-runs a stage once only when such a file was present
+(for example `ingest` from a source directory that holds a `truth.json`);
+`derep-stock --action unpack` repeats once, since its stored run is now
+digested file by file.
 
 Two limitations, both covered by `--force`: input directories are digested from
 file metadata (name, size, mtime), so an in-place edit that preserves size and

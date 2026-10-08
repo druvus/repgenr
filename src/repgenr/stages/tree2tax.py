@@ -28,6 +28,7 @@ from ..core.contracts import (
     TREE2TAX_TSV,
     TREE_NWK,
     accession_from_filename,
+    list_fasta,
     newick_is_complete,
     read_clusters,
     read_segments,
@@ -265,7 +266,9 @@ def _resolve_outgroup_leaf_from(
     if not accession:
         logger.warning("No outgroup accession recorded; tree is left unrooted")
         return None
-    candidates = sorted(p for p in outgroup_dir.iterdir() if not p.name.startswith("."))
+    # The same candidates as phylo's resolve_outgroup_files, so the leaf
+    # named here is the one phylo placed in the tree.
+    candidates = list_fasta(outgroup_dir)
     for f in candidates:
         if accession_from_filename(f.name) == accession:
             return strip_fasta_suffix(f.name)

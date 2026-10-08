@@ -768,7 +768,9 @@ def resolve_outgroup_files(
     if not accession:
         logger.warning("No outgroup accession recorded; proceeding without one")
         return None, None
-    candidates = sorted(p for p in outgroup_dir.iterdir() if not p.name.startswith("."))
+    # Genome FASTA files only: a leftover GCF_x.fasta.tmp or a .fai index
+    # must not win the substring match below.
+    candidates = list_fasta(outgroup_dir)
     # Exact match on the parsed accession first; a stale file whose name merely
     # contains the accession must not shadow the intended outgroup.
     for f in candidates:
