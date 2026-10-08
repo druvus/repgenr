@@ -166,6 +166,25 @@ All notable changes to RepGenR are documented here. The format follows
   marked as interrupted. Before, the interpreter ended at once and left the
   tool running (seen with FastTree). A pool of parallel tasks
   (`parallel_map`) now cancels its queued items when one task fails.
+- (#PRNUM) Every external tool starts in its own session and process group,
+  and SIGTERM, SIGHUP, Ctrl-C (SIGINT) and a failure inside repgenr stop the
+  whole group: SIGTERM first, SIGKILL after 5 s for what is left. Helpers a
+  tool starts are now stopped with it (RAxML or IQ-TREE under
+  `run_gubbins.py`, skani under skDER, minimap2 under a typer); before, only
+  the tool itself was signalled. Because a tool no longer shares repgenr's
+  terminal, repgenr forwards Ctrl-C (raising `KeyboardInterrupt` as before)
+  and Ctrl-Z (the tools are suspended and resumed with repgenr). A second
+  signal kills the remaining tools at once. With the Docker backend the group
+  holds the `docker run` client. Docker forwards SIGTERM to the container,
+  where the tool runs as process 1 and ignores the signal unless it handles
+  it; such a container keeps running after the client is killed
+  (`docker ps`). Singularity and Apptainer run the tool as an
+  ordinary process in the group.
+- `run` (#223): `--with-snptype --msa-source snptype` runs the `snptype` stage after
+  `phylo` instead of before it, so the tables left in `snp/` are the ones the
+  `snptype` record describes. As a consequence, a later `phylo` run that
+  changes only the tree builder types the genomes again, since `snp/` no
+  longer holds phylo's own alignment.
 - `phylo` (#223): the MSA stamp version is 3: an alignment cached before the ParSNP and
   cactus record names changed is rebuilt once.
 - `phylo` (#223) warns when an alignment-free tree builder (mashtree, sourmash) is

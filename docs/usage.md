@@ -1053,6 +1053,21 @@ stacking with Nextflow's own Docker engine implies docker-in-docker.
   host does not answer) stops the lookup at the first batch with exit 3.
 - **A tool hangs.** Set `REPGENR_SUBPROCESS_TIMEOUT=<seconds>` to cap every
   external tool; on expiry the process group is killed with a clear error.
+- **Stopping a run.** Each external tool runs in its own process group,
+  together with the helpers it starts (for example IQ-TREE under
+  `run_gubbins.py`). On SIGTERM (`kill`, a scheduler), SIGHUP (the terminal
+  closes) or Ctrl-C, repgenr sends SIGTERM to every running tool group,
+  starts no queued tool, sends SIGKILL to the groups still present after
+  5 s, and exits: 143 for SIGTERM, 129 for SIGHUP, and the usual
+  `KeyboardInterrupt` for Ctrl-C. The stage is then listed as
+  `[interrupted]` and a partial output is removed. A second signal kills the
+  tools at once. Ctrl-Z suspends the tools with repgenr, and `fg` or `bg`
+  resumes them. SIGKILL to repgenr cannot be handled, so its tools keep
+  running; stop them by their process group (`pkill -g <pgid>`). With
+  `--container docker`, Docker forwards SIGTERM to the container, where the
+  tool runs as process 1 and ignores the signal unless it handles it; such
+  a container keeps running after the `docker run` client is killed, so
+  check `docker ps`.
 - **Exit codes.** A script can tell the failure classes apart without
   reading the log:
 

@@ -452,6 +452,7 @@ parser), so they also apply to commands other than the one named.
 | phylo | `--msa-source snptype` and `--mask` with an alignment-free builder were dropped without notice; the stage now warns | #223 |
 | tree2tax, tree2tax-relations | An outgroup accession matching no file in the outgroup directory was reported as "not present among tree leaves" | #223 |
 | all commands | SIGTERM to repgenr left the running tool (FastTree, live) behind; the tools are now stopped and repgenr exits 143 | #223 |
+| all commands | SIGTERM stopped the tool but not the helpers it started; each tool now runs in its own process group, which SIGTERM, SIGHUP and Ctrl-C stop as a whole. Unit tests with a shell that starts `sleep`; live on the 50-genome set, SIGTERM during `snptype --mask gubbins` left neither `run_gubbins.py` nor its IQ-TREE running (250 ms, `pgrep` empty) | #PRNUM |
 | docs | usage.md and output.md: sourmash tree units for `--collapse-length`, the simple typer's treatment of absent sequence, `snp/` written by phylo, the distance matrix computed before masking | #223 |
 | assemble | A finished run was reused whatever the settings, so another `--min-contig-length`, `--assembler`, `--polisher`, `--polish-rounds` or `--tool-arg` kept the old contigs; the marker records the settings, a higher floor refilters and any other change assembles again | #226 |
 | assemble | A resumed run recorded no tool versions and the record named the tool `auto`; reused markers supply their versions and the record names the assemblers used | #226 |

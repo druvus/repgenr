@@ -33,67 +33,129 @@ _module_logger = logging.getLogger(__name__)
 # subprocess launch.
 _warned_bad_timeout = False
 
-# Tools running now, with whether each leads its own process group, so a
-# termination signal can stop them before repgenr exits (see
-# install_termination_handler). Several run at once under parallel_map.
-# Reentrant: the signal handler runs on the main thread, which may hold the
-# lock inside run() when the signal arrives.
+# Every tool starts as the leader of its own session and process group
+# (POSIX), so it can be stopped together with the helpers it starts (RAxML
+# under run_gubbins.py, skani under skDER, minimap2 under a typer). The tool
+# then no longer receives the terminal's Ctrl-C or hangup, so repgenr's own
+# handlers (install_termination_handler) forward them.
+_OWN_GROUP = os.name == "posix"
+
+# After SIGTERM, seconds a tool group gets to exit before it is sent SIGKILL.
+STOP_GRACE_SECONDS = 5.0
+
+# Tools running now, so a termination signal can stop them before repgenr
+# exits. Several run at once under parallel_map. Reentrant: the signal handler
+# runs on the main thread, which may hold the lock inside run() when the
+# signal arrives.
 _live_lock = threading.RLock()
-_live: dict[subprocess.Popen[bytes], bool] = {}
+_live: set[subprocess.Popen[bytes]] = set()
 # Set by the termination handler: run() then starts no further tool, so tasks
 # still queued in a thread pool do not launch while repgenr shuts down.
 stop_requested = threading.Event()
 
 
-def stop_running_tools() -> int:
-    """Send SIGTERM to every tool started by :func:`run` that is still running.
+def _signal_group(proc: subprocess.Popen[bytes], sig: int) -> bool:
+    """Send ``sig`` to the tool's process group (or the tool alone off POSIX).
 
-    A tool that leads its own process group (a timeout is set) is signalled
-    with its children; otherwise the tool itself. Returns the number signalled.
+    The group is signalled even when the tool itself has exited, because a
+    helper it started can outlive it. Returns False when nothing was there.
+    """
+    try:
+        if _OWN_GROUP:
+            os.killpg(proc.pid, sig)
+        elif proc.poll() is None:
+            proc.send_signal(sig)
+        else:
+            return False
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+    return True
+
+
+def _stop_group(proc: subprocess.Popen[bytes], grace: float | None = None) -> None:
+    """Stop a tool and its helpers: SIGTERM, wait up to ``grace`` s, then SIGKILL."""
+    _signal_group(proc, signal.SIGTERM)
+    try:
+        proc.wait(timeout=STOP_GRACE_SECONDS if grace is None else grace)
+    except subprocess.TimeoutExpired:
+        pass
+    # Also reaches helpers that ignored SIGTERM or outlived the tool.
+    _signal_group(proc, signal.SIGKILL)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def stop_running_tools(sig: int = signal.SIGTERM) -> int:
+    """Send ``sig`` to every tool started by :func:`run` that is still running.
+
+    Each tool is signalled with its process group, so helpers it started are
+    reached too. Returns the number of tool groups signalled.
     """
     with _live_lock:
-        running = list(_live.items())
-    stopped = 0
-    for proc, own_group in running:
-        if proc.poll() is not None:
-            continue
-        try:
-            if own_group:
-                os.killpg(proc.pid, signal.SIGTERM)
-            else:
-                proc.terminate()
-            stopped += 1
-        except (ProcessLookupError, PermissionError, OSError):
-            pass
-    return stopped
+        running = list(_live)
+    return sum(1 for proc in running if _signal_group(proc, sig))
 
 
 def install_termination_handler() -> None:
-    """Stop running tools when repgenr receives SIGTERM or SIGHUP.
+    """Stop running tools when repgenr receives SIGTERM, SIGHUP or SIGINT.
 
-    Python's default action ends the interpreter at once, leaving the external
-    tool running without its parent (seen live: FastTree kept running after
-    its phylo run was terminated). The handler stops the tools, then exits
-    with 128 + the signal number, so the stage record stays marked as
-    interrupted and a temporary output is removed. A second signal of the same
-    kind takes the default action. Only the main thread can install handlers.
+    Python's default action for SIGTERM and SIGHUP ends the interpreter at
+    once, leaving the external tool running without its parent (seen live:
+    FastTree kept running after its phylo run was terminated). Because each
+    tool runs in its own session, it does not receive the terminal's Ctrl-C
+    either. The handler sends SIGTERM to every running tool group, sends
+    SIGKILL to the groups still present after :data:`STOP_GRACE_SECONDS`, and
+    then exits with 128 + the signal number (SIGTERM, SIGHUP) or raises
+    :class:`KeyboardInterrupt` (SIGINT), so the stage record stays marked as
+    interrupted and a temporary output is removed. A second signal kills the
+    remaining tool groups at once and takes the default action. Only the main
+    thread can install handlers.
+
+    Ctrl-Z (SIGTSTP) suspends the running tool groups together with repgenr,
+    and they resume when repgenr is continued.
     """
     if threading.current_thread() is not threading.main_thread():
         return
 
     def _on_signal(signum: int, _frame: object) -> None:
-        signal.signal(signum, signal.SIG_DFL)
+        if stop_requested.is_set():
+            # Second signal: do not wait any longer.
+            stop_running_tools(signal.SIGKILL)
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+            return
         stop_requested.set()
-        stopped = stop_running_tools()
+        stopped = stop_running_tools(signal.SIGTERM)
+        # Tools on pool threads are not waited on by the main thread; a timer
+        # kills the groups that ignore SIGTERM. Daemon, so it never delays exit.
+        escalate = threading.Timer(STOP_GRACE_SECONDS, stop_running_tools, args=(signal.SIGKILL,))
+        escalate.daemon = True
+        escalate.start()
         # os.write is safe in a signal handler; logging is not.
         os.write(
             2,
             f"repgenr: received signal {signum}; stopped {stopped} running tool(s)\n".encode(),
         )
+        if signum == signal.SIGINT:
+            raise KeyboardInterrupt
         raise SystemExit(128 + signum)
 
-    for signum in (signal.SIGTERM, signal.SIGHUP):
+    def _on_suspend(_signum: int, _frame: object) -> None:
+        # Ctrl-Z: suspend the tool groups with repgenr, resume them with it.
+        # repgenr stops itself with SIGSTOP: a re-sent SIGTSTP is discarded in
+        # an orphaned process group, which would leave the tools stopped while
+        # repgenr waits for them.
+        stop_running_tools(signal.SIGSTOP)
+        os.kill(os.getpid(), signal.SIGSTOP)
+        # Execution continues here once repgenr receives SIGCONT (fg, bg).
+        stop_running_tools(signal.SIGCONT)
+
+    for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
         signal.signal(signum, _on_signal)
+    if hasattr(signal, "SIGTSTP"):
+        signal.signal(signal.SIGTSTP, _on_suspend)
 
 
 def _default_timeout() -> float | None:
@@ -143,6 +205,9 @@ def run(
     state. When ``stdout_path`` is given, stdout is written there instead
     (stderr still goes to the logger) -- use this for tools that emit their
     result on stdout (e.g. ``mashtree``).
+
+    The tool starts in its own session and process group, so stopping it
+    (timeout, signal, or a failure here) also stops the helpers it started.
 
     ``timeout`` (seconds) caps the run: on expiry the whole process group is
     killed and :class:`ToolExecutionError` is raised, so a hung tool (or a stuck
@@ -196,24 +261,22 @@ def run(
             # Binary so that a "\r" inside a line is ours to interpret; text
             # mode's universal newlines would split every progress-bar redraw
             # into its own line.
-            # Own process group so a timeout can kill the tool and its children.
-            start_new_session=limit is not None,
+            # Own session and process group: a timeout or a signal stops the
+            # tool together with the helpers it starts.
+            start_new_session=_OWN_GROUP,
         )
         with _live_lock:
-            _live[proc] = limit is not None
+            _live.add(proc)
         if stop_requested.is_set():
             # Started while the handler was stopping the others.
-            stop_running_tools()
+            _signal_group(proc, signal.SIGTERM)
 
         if limit is not None:
 
             def _kill() -> None:
                 nonlocal timed_out
                 timed_out = True
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                except (ProcessLookupError, PermissionError, OSError):
-                    pass
+                _signal_group(proc, signal.SIGKILL)
 
             timer = threading.Timer(limit, _kill)
             timer.start()
@@ -230,27 +293,18 @@ def run(
                 logger.debug("%s%s", prefix, line)
         returncode = proc.wait()
     except BaseException:
-        # A failure in this function (a logging handler, a KeyboardInterrupt)
-        # must not orphan the tool: kill it and its group before re-raising.
-        if proc is not None and proc.poll() is None:
-            try:
-                if limit is not None:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                else:
-                    proc.kill()
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                pass
+        # A failure in this function (a logging handler, a KeyboardInterrupt,
+        # the SystemExit of the termination handler) must not orphan the tool
+        # or its helpers: stop the whole group before re-raising.
+        if proc is not None:
+            _stop_group(proc)
         if out_target is not None and out_tmp is not None:
             out_tmp.unlink(missing_ok=True)
         raise
     finally:
         if proc is not None:
             with _live_lock:
-                _live.pop(proc, None)
+                _live.discard(proc)
         if timer is not None:
             timer.cancel()
         if out_handle is not None:
