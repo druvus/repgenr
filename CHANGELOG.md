@@ -11,8 +11,8 @@ All notable changes to RepGenR are documented here. The format follows
   (`sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` on all FASTQ
   files of the run, named by run accession) into
   `assemblies/<run>/reads.sig.zip`. The sketch runs in a thread beside the
-  assembler, which gives up one thread of the run's share when it has more
-  than one, and it ends before the reads are deleted. `--reads-sketch`
+  assembler, which keeps its full thread share (the single-threaded sketch
+  runs one thread over it), and it ends before the reads are deleted. `--reads-sketch`
   requires sourmash (exit 4 before any download), `--no-reads-sketch` skips
   it, and the default sketches when sourmash can run. A failed sketch is a
   warning and never fails the assembly. The done marker records

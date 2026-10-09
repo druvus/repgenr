@@ -124,13 +124,15 @@ def test_reads_are_sketched_beside_the_assembler(
     assert not (ctx.scratch_dir / "assemble" / "SRR1").exists()
 
 
-def test_the_assembler_gives_one_thread_to_the_sketch(
+def test_the_assembler_keeps_its_full_thread_share(
     workdir, tmp_path, fake_assembler, fake_sourmash
 ) -> None:
+    """The single-threaded sketch runs one thread over the run's share."""
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
     run(ctx, AssembleParams(assembler="fakeasm", threads=8, jobs=2))
-    assert _marker(workdir, "SRR1")["tool_stats"]["threads"] == 3  # 8 // 2 - 1
-    assert _marker(workdir, "SRR2")["tool_stats"]["threads"] == 3
+    assert _marker(workdir, "SRR1")["tool_stats"]["threads"] == 4  # 8 // 2
+    assert _marker(workdir, "SRR2")["tool_stats"]["threads"] == 4
+    assert len(fake_sourmash.reads_calls) == 2
 
 
 def test_with_one_thread_each_the_sketch_runs_alongside(
@@ -142,7 +144,7 @@ def test_with_one_thread_each_the_sketch_runs_alongside(
     assert _sketch(workdir, "SRR1").is_file()
 
 
-def test_no_reads_sketch_keeps_every_thread_for_the_assembler(
+def test_no_reads_sketch_writes_no_sketch_and_null_fields(
     workdir, tmp_path, fake_assembler, fake_sourmash
 ) -> None:
     ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])

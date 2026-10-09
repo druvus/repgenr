@@ -781,9 +781,10 @@ def _fetch_and_assemble(
     ``reads_sketch`` is the sourmash version when the run's reads are to be
     sketched, None otherwise. The sketch runs in a thread beside the
     assembler, on the verified FASTQ files, and ends before the reads are
-    removed. sourmash sketches on one thread, which is taken from the run's
-    share when the share is larger than one; with a share of one thread the
-    two run side by side. A failed sketch is a warning, never an excuse.
+    removed. The assembler keeps the run's full thread share and the
+    single-threaded sketch runs alongside it, one thread over the share;
+    giving that thread up slowed the assembler more than the sketch took.
+    A failed sketch is a warning, never an excuse.
     """
     row = outcome.row
     # The marker names finished contigs; a run assembled again has none until it ends.
@@ -803,19 +804,9 @@ def _fetch_and_assemble(
     sketch = None
     if reads_sketch is not None:
         sketch = ReadsSketchJob(row.run_accession, files, out_dir / READS_SKETCH_NAME, logger)
-    asm_threads = threads - 1 if sketch is not None and threads > 1 else threads
     try:
         marker = _assemble_fetched(
-            outcome,
-            params,
-            files,
-            asm_threads,
-            threads,
-            out_dir,
-            run_scratch,
-            versions,
-            logger,
-            sketch,
+            outcome, params, files, threads, out_dir, run_scratch, versions, logger
         )
     finally:
         sketched = sketch.wait() if sketch is not None else False
@@ -850,18 +841,16 @@ def _assemble_fetched(
     params: AssembleParams,
     files: tuple[Path, ...],
     threads: int,
-    all_threads: int,
     out_dir: Path,
     run_scratch: Path,
     versions: dict[str, str],
     logger: logging.Logger,
-    sketch: ReadsSketchJob | None,
 ) -> dict | None:
     """Assemble, polish and filter fetched reads into ``out_dir``.
 
     Returns the done marker to write, or None when the run is excused (set on
     ``outcome``). Removes nothing: the caller cleans up once the reads sketch
-    has ended. The polisher gets ``all_threads`` when the sketch has ended.
+    has ended.
     """
     row = outcome.row
     assert outcome.assembler is not None
@@ -881,14 +870,13 @@ def _assemble_fetched(
     contigs_in = result.contigs
     polish_stats: dict = {}
     if outcome.polisher is not None:
-        polish_threads = all_threads if sketch is None or sketch.done() else threads
         try:
             polished = polisher_registry.create(outcome.polisher).polish(
                 reads,
                 result.contigs,
                 run_scratch / "polish",
                 PolishParams(
-                    threads=polish_threads, rounds=params.polish_rounds, extra=dict(params.extra)
+                    threads=threads, rounds=params.polish_rounds, extra=dict(params.extra)
                 ),
                 logger,
             )

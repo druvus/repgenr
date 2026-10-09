@@ -475,9 +475,12 @@ size), named by run accession and written to `assemblies/<run>/reads.sig.zip`.
 The k-mer sizes and the scale are those of the genome sketches; abundances are
 kept because read k-mers also carry coverage. The sketch starts once the FASTQ
 files are verified and runs in a thread beside the assembler, so the assembler
-is not delayed. sourmash sketches on one thread, which is taken from the run's
-share of `--threads` when that share is larger than one; with one thread per
-run the two run side by side. The sketch ends before the reads are deleted.
+is not delayed. The assembler keeps its full share of `--threads` and the
+single-threaded sketch runs alongside it, so each run uses one thread more
+than its share while the sketch lasts. Taking that thread from the assembler
+was measured to cost more than it saved (SKESA on a 134 MB MiSeq run took 55 s
+on three threads against 41 s on four). The sketch ends before the reads are
+deleted.
 It is written to a temporary file in the run directory and renamed into place,
 so an interrupted sketch leaves no `reads.sig.zip`.
 
