@@ -1,0 +1,5 @@
+{
+ "run_accession": "SRR000002",
+ "decision": "excused",
+ "reason": "taxon_mismatch: submitted genus Francisella, GTDB genus Escherichia"
+}

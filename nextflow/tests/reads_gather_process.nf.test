@@ -34,6 +34,9 @@ nextflow_process {
             def selection = path(process.out.selection.get(0).get(1)).text.split('\n')
             assert selection.size() == 3 && selection[1].startsWith('SRR000001\tFrancisellaceae')
             assert path(process.out.assembly_stats.get(0).get(1)).text.contains('SRR000002')
+            def stats = path(process.out.assembly_stats.get(0).get(1)).text.split('\n')
+            assert stats[0].endsWith('\tpolisher\treads_sketch\tscreen')
+            assert stats[1].split('\t', -1).size() == stats[0].split('\t', -1).size()
             assert path(process.out.excused.get(0).get(1)).text.contains('SRR000003\tassemble\tunsupported_platform')
             assert path(process.out.outgroup_accession.get(0).get(1)).text == ''
         }
@@ -56,6 +59,31 @@ nextflow_process {
             assert process.success
             assert [process.out.genomes.get(0).get(1)].flatten().size() == 1
             assert process.out.excused.size() == 0
+            assert process.out.screen.size() == 0
+        }
+    }
+
+    test("screen.json files of screened runs reach screen_reads.tsv") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'reads'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv"),
+                    [ file("${projectDir}/nextflow/tests/data/screened/SRR000001"),
+                      file("${projectDir}/nextflow/tests/data/screened/SRR000002") ],
+                    []
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def screen = path(process.out.screen.get(0).get(1)).text.split('\n')
+            assert screen[0].startsWith('run_accession\ttop_match')
+            assert screen.findAll { line -> line.startsWith('SRR000001\t') && line.contains('\tpass\t') }.size() == 1
+            assert screen.findAll { line -> line.startsWith('SRR000002\t') && line.contains('\texcused\t') }.size() == 1
+            assert path(process.out.excused.get(0).get(1)).text.contains('SRR000002\tscreen\ttaxon_mismatch')
         }
     }
 }

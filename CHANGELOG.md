@@ -7,6 +7,28 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `assemble --screen-reads` (off by default) screens each run's reads sketch
+  after the fetch and before an assembler starts, and excuses a run with step
+  `screen` when its GTDB genus differs from the submitted one
+  (`taxon_mismatch`; `sourmash gather` and `tax genome` as the classifier
+  runs them, with its `genus_renamed` tolerance), when the top species holds
+  less than `--screen-min-fraction` (0.3) of the abundance-weighted reads
+  (`low_match_fraction`), or when an accepted run of the same biosample
+  earlier in `reads.tsv` contains it at an ANI estimate of `--screen-dup-ani`
+  (0.999) or more (`duplicate_isolate`). A tool failure is `screen_failed`,
+  which is not counted as judged. Screened-out runs keep their reads sketch
+  and gather output; each decision is stored in `assemblies/<run>/screen.json`
+  with its settings, so a repeat screens nothing again and a changed
+  threshold screens again from the kept sketch without a download. The
+  working directory gains `screen_reads.tsv`, `assembly_stats.tsv` a `screen`
+  column (older tables read as empty), the stage record `n_screened_out`.
+  The flag needs sourmash and the GTDB sketch and lineages, and exits 2 (4
+  without sourmash) before any download otherwise. `assemble-run` takes
+  `--screen-reads`, `--screen-min-fraction`, `--gtdb-sketch` and
+  `--gtdb-lineages` without the duplicate check; in Nextflow
+  `--assemble_args '--screen-reads'` adds the pipeline's GTDB paths, and
+  `reads-gather` writes `screen_reads.tsv`. The classifier's gather and
+  `tax genome` calls are shared functions now.
 - `ingest --from-workdir` checks the record of the stage that wrote each
   source's genome set (the latest of `genome`, `vgenome`, `ingest` and
   `assemble`) with the evaluation `status` applies in that working directory,

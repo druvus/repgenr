@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import csv
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.containers import run_chain, run_tool
 from ..core.contracts import record_name
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
-from ..core.plugins import parse_extra_int
+from ..core.plugins import ToolCapabilities, parse_extra_int
 from ..core.sourmash import sourmash_capabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
@@ -34,9 +35,131 @@ def gather_workers(n_genomes: int, threads: int, memory_gb: float | None) -> int
     return workers
 
 
+GATHER_KSIZE = 31
+GATHER_THRESHOLD_BP = 50000
+
+
+def gather_command(
+    query: Path | str,
+    db: Path | str,
+    out_csv: Path,
+    *,
+    ksize: int = GATHER_KSIZE,
+    threshold_bp: int = GATHER_THRESHOLD_BP,
+) -> list[str | Path]:
+    """The one ``sourmash gather`` call of a query signature against a reference
+    database; shared by the classifier and the reads screen of assemble."""
+    return [
+        "sourmash",
+        "gather",
+        query,
+        db,
+        "-k",
+        str(ksize),
+        "--threshold-bp",
+        str(threshold_bp),
+        "-o",
+        out_csv,
+    ]
+
+
+def tax_genome(
+    caps: ToolCapabilities,
+    gather_csvs: Sequence[Path],
+    lineages: Path | str,
+    base: Path,
+    *,
+    logger: logging.Logger,
+    mounts: Sequence[str] = (),
+    containment_threshold: float | None = None,
+) -> Path:
+    """Resolve gather results to lineages with ``sourmash tax genome``.
+
+    Returns the classifications CSV. ``containment_threshold`` None keeps
+    sourmash's default (0.1); the reads screen passes 0, since most k-mers of
+    a reads sketch are sequencing errors that match nothing, so the unweighted
+    fraction of a pure isolate stays well below 0.1.
+    """
+    extra: list[str | Path] = []
+    if containment_threshold is not None:
+        extra = ["--containment-threshold", f"{containment_threshold:g}"]
+    run_tool(
+        caps,
+        [
+            "sourmash",
+            "tax",
+            "genome",
+            "--gather-csv",
+            *gather_csvs,
+            "--taxonomy-csv",
+            lineages,
+            "--output-base",
+            base,
+            "--force",
+            *extra,
+        ],
+        logger=logger,
+        log_prefix="sourmash",
+        extra_mounts=list(mounts),
+    )
+    return Path(str(base) + ".classifications.csv")
+
+
+@dataclass(frozen=True)
+class TaxRow:
+    """One query of a ``tax genome`` table."""
+
+    lineage: str
+    rank: str
+    fraction: float | None
+    # The abundance-weighted fraction of the query at that rank (sourmash 4.4+).
+    f_weighted: float | None
+
+
+def read_tax_genome(path: Path) -> dict[str, TaxRow]:
+    """Query name -> its row of a ``tax genome`` classifications CSV."""
+    out: dict[str, TaxRow] = {}
+    if not path.exists():
+        return out
+    with open(path, encoding="utf-8", newline="") as fo:
+        for rec in csv.DictReader(fo):
+            if rec.get("status") in ("match", "nomatch", "below_threshold") and rec.get("lineage"):
+                out[rec["query_name"]] = TaxRow(
+                    rec["lineage"],
+                    rec.get("rank", ""),
+                    _opt_float(rec.get("fraction")),
+                    _opt_float(rec.get("f_weighted_at_rank")),
+                )
+    return out
+
+
+def read_gather_top(path: Path) -> tuple[str, float | None] | None:
+    """The first (largest) match of a gather CSV: its name and f_unique_weighted.
+
+    None when the gather found nothing above its threshold.
+    """
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8", newline="") as fo:
+        for rec in csv.DictReader(fo):
+            return rec.get("name", ""), _opt_float(rec.get("f_unique_weighted"))
+    return None
+
+
+def _opt_float(value: str | None) -> float | None:
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
 class SourmashClassifier(Classifier):
     capabilities = sourmash_capabilities(
-        default_params={"ksize": 31, "scaled": 1000, "threshold_bp": 50000},
+        default_params={
+            "ksize": GATHER_KSIZE,
+            "scaled": 1000,
+            "threshold_bp": GATHER_THRESHOLD_BP,
+        },
         accepted_extras=frozenset({"ksize", "scaled", "threshold_bp"}),
     )
     needs_lineages = True
@@ -114,18 +237,7 @@ class SourmashClassifier(Classifier):
             steps.append(
                 (
                     "sourmash",
-                    [
-                        "sourmash",
-                        "gather",
-                        sig,
-                        params.db,
-                        "-k",
-                        str(ksize),
-                        "--threshold-bp",
-                        str(threshold),
-                        "-o",
-                        gather_csv,
-                    ],
+                    gather_command(sig, params.db, gather_csv, ksize=ksize, threshold_bp=threshold),
                 )
             )
             run_chain(self.capabilities, steps, logger=logger, extra_mounts=mounts)
@@ -143,26 +255,15 @@ class SourmashClassifier(Classifier):
         )
         gathers = parallel_map(gather, genomes, workers, logger=logger)
         # A gather with no match writes only a header; tax genome still lists it.
-        base = out_dir / "tax"
-        run_tool(
+        table = tax_genome(
             self.capabilities,
-            [
-                "sourmash",
-                "tax",
-                "genome",
-                "--gather-csv",
-                *gathers,
-                "--taxonomy-csv",
-                params.lineages,
-                "--output-base",
-                base,
-                "--force",
-            ],
+            gathers,
+            params.lineages,
+            out_dir / "tax",
             logger=logger,
-            log_prefix="sourmash",
-            extra_mounts=mounts,
+            mounts=mounts,
         )
-        by_query = _parse_classifications(Path(str(base) + ".classifications.csv"))
+        by_query = _parse_classifications(table)
         results: dict[str, Classification] = {}
         for genome in genomes:
             hit = by_query.get(record_name(genome))
@@ -176,16 +277,4 @@ class SourmashClassifier(Classifier):
 
 def _parse_classifications(path: Path) -> dict[str, tuple[str, str, float | None]]:
     """Query name -> (lineage, rank, fraction) from a ``tax genome`` table."""
-    out: dict[str, tuple[str, str, float | None]] = {}
-    if not path.exists():
-        return out
-    with open(path, encoding="utf-8", newline="") as fo:
-        for rec in csv.DictReader(fo):
-            if rec.get("status") in ("match", "nomatch", "below_threshold") and rec.get("lineage"):
-                score = rec.get("fraction")
-                out[rec["query_name"]] = (
-                    rec["lineage"],
-                    rec.get("rank", ""),
-                    float(score) if score else None,
-                )
-    return out
+    return {q: (r.lineage, r.rank, r.fraction) for q, r in read_tax_genome(path).items()}

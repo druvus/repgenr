@@ -2139,6 +2139,39 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: offline stage tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py'
         observable: assemblies/<run>/reads.sig.zip and the reads_sketch fields of assembly.ok
+      --screen-reads:
+        param: AssembleParams.screen_reads
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/output.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer passes the flag to assemble-run through params.assemble_args'
+        live: 'n/a: offline stage tests with fake gather tables in tests/integration/test_assemble_screen.py; a live check is reported in the pull request'
+        observable: screen_reads.tsv, the screen column of assembly_stats.tsv and excused_runs.tsv rows with step screen
+      --screen-min-fraction:
+        param: AssembleParams.screen_min_fraction
+        value: '0.5'
+        validated: unit_interval
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer passes the flag to assemble-run through params.assemble_args'
+        live: 'n/a: offline stage tests in tests/integration/test_assemble_screen.py'
+        observable: runs below the fraction are excused as low_match_fraction
+      --screen-dup-ani:
+        param: AssembleParams.screen_dup_ani
+        value: '0.99'
+        validated: unit_interval
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: the duplicate check needs every run and is made by the workdir command only'
+        live: 'n/a: offline stage tests in tests/integration/test_assemble_screen.py'
+        observable: runs contained in an earlier run at this ANI are excused as duplicate_isolate
 
   reads:
     dispatch: stage
@@ -3842,6 +3875,43 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.assemble_args
         live: 'n/a: offline step tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py'
+      --screen-reads:
+        param: AssembleRunParams.screen_reads
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests with fake gather tables in tests/integration/test_assemble_screen.py'
+        observable: assemblies/<run>/screen.json; a screened-out run writes excused_runs.tsv with step screen
+      --screen-min-fraction:
+        param: AssembleRunParams.screen_min_fraction
+        value: '0.5'
+        validated: unit_interval
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests in tests/integration/test_assemble_screen.py'
+      --gtdb-sketch:
+        param: AssembleRunParams.gtdb_sketch
+        value: '{file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: conf/modules.config adds params.gtdb_sketch when params.assemble_args holds --screen-reads'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_screen.py'
+      --gtdb-lineages:
+        param: AssembleRunParams.gtdb_lineages
+        value: '{alt_file}'
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'module: conf/modules.config adds params.gtdb_lineages when params.assemble_args holds --screen-reads'
+        live: 'n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_screen.py'
       --versions-out:
         param: AssembleRunParams.versions_out
         value: '{alt_file}'

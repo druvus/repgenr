@@ -24,6 +24,7 @@ from repgenr.core.contracts import (
 )
 from repgenr.core.errors import UserInputError, WorkdirError
 from repgenr.stages import assemble as stage
+from repgenr.stages import taxon_match
 from repgenr.stages.assemble import AssembleParams, planned_layout, run
 from repgenr.stages.assemble_qc import CHECKM2_CACHE
 
@@ -219,7 +220,7 @@ def test_a_shared_epithet_in_another_family_is_a_disagreement(
     ],
 )
 def test_epithet_comparison(submitted, gtdb, same) -> None:
-    assert stage._same_epithet(submitted, gtdb) is same
+    assert taxon_match.same_epithet(submitted, gtdb) is same
 
 
 # --- classifier memory budget ---------------------------------------------------------

@@ -12,8 +12,10 @@ inputs and writes a result directory: no manifest, no shared workdir.
                    (CheckM2) and ``classification.tsv`` (classifier).
 ``reads_gather``   ``reads.tsv`` + the run directories + the optional QC
                    directory -> ``genomes/``, ``selection.tsv``,
-                   ``assembly_stats.tsv``, ``excused_runs.tsv`` and an empty
-                   ``outgroup_accession.txt`` (the genome contract).
+                   ``assembly_stats.tsv``, ``excused_runs.tsv``,
+                   ``screen_reads.tsv`` (after ``assemble-run --screen-reads``)
+                   and an empty ``outgroup_accession.txt`` (the genome
+                   contract).
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ from ..core.versions import write_versions_fragment
 from . import assemble as stage
 from .assemble import AssembleParams
 from .assemble_qc import checkm2_db_from_env
+from .assemble_screen import SCREEN_READS_TSV, ScreenGate, read_screen_json, write_screen_table
 from .ingest import OUTGROUP_ACCESSION_TXT
 
 QUALITY_TSV = "quality.tsv"
@@ -69,6 +72,11 @@ class AssembleRunParams:
     extra: dict[str, str] = field(default_factory=dict)
     # As AssembleParams.reads_sketch: None sketches when sourmash can run.
     reads_sketch: bool | None = None
+    # The reads screen without its duplicate check, which needs the other runs.
+    screen_reads: bool = False
+    screen_min_fraction: float = 0.3
+    gtdb_sketch: str | None = None
+    gtdb_lineages: str | None = None
     versions_out: Path | None = None
 
 
@@ -98,7 +106,12 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         keep_files=params.keep_files,
         extra=dict(params.extra),
         reads_sketch=params.reads_sketch,
+        screen_reads=params.screen_reads,
+        screen_min_fraction=params.screen_min_fraction,
+        gtdb_sketch=params.gtdb_sketch,
+        gtdb_lineages=params.gtdb_lineages,
     )
+    screen = stage.screen_settings(stage_params)
     out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     # An excuse from an earlier attempt no longer applies to this one.
@@ -108,10 +121,16 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         stage._excuse_missing_assemblers([outcome], logger)
     if stage_params.polisher == "auto":
         stage._warn_missing_polishers([outcome], logger)
+    gate = None
+    if screen is not None:
+        gate = ScreenGate(screen, logger, duplicates=False)
+        stage.screen_planned([outcome], gate, out_dir.parent, params.threads, logger)
     versions = dict(outcome.versions)
     versions.update(stage._preflight([outcome], logger))
     if outcome.excused is None and outcome.stats is None:
-        reads_versions = sourmash_for_reads_sketch(params.reads_sketch, "assemble-run", logger)
+        reads_versions = sourmash_for_reads_sketch(
+            True if gate is not None else params.reads_sketch, "assemble-run", logger
+        )
         versions.update(reads_versions)
         scratch = out_dir.parent / f"{out_dir.name}.scratch"
         outcome = stage._fetch_and_assemble(
@@ -123,6 +142,7 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
             versions,
             logger,
             reads_sketch=reads_versions.get("sourmash", "") if reads_versions else None,
+            gate=gate,
         )
         if scratch.exists() and not (params.keep_files or params.keep_reads):
             remove_tree(scratch)
@@ -133,7 +153,8 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         # stage's later reuse, but here the marker would make genome-qc and
         # reads-gather take it as finished.
         (out_dir / _MARKER).unlink(missing_ok=True)
-        stage.drop_reads_sketch(outcome, out_dir)
+        if not stage.keeps_reads_sketch(outcome.excused):
+            stage.drop_reads_sketch(outcome, out_dir)
         write_excused_runs(out_dir / EXCUSED_RUNS_TSV, [outcome.excused])
         logger.info("assemble-run: %s excused (%s)", params.run, outcome.excused.reason)
         return False
@@ -326,6 +347,14 @@ def reads_gather(params: ReadsGatherParams, logger: logging.Logger) -> int:
     excused = [o.excused for o in outcomes if o.excused is not None]
     if excused:
         write_excused_runs(out / EXCUSED_RUNS_TSV, excused)
+    # The decisions of assemble-run --screen-reads, one screen.json per run.
+    screened = [
+        rec
+        for rec in (read_screen_json(assemblies_dir / r.run_accession) for r in rows)
+        if rec is not None
+    ]
+    if screened:
+        write_screen_table(out / SCREEN_READS_TSV, screened, [r.run_accession for r in rows])
     if not assembled:
         raise WorkdirError(
             f"None of the {len(rows)} runs produced an accepted assembly; see {EXCUSED_RUNS_TSV}."

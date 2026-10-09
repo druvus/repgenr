@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-30 commands, 343 flags (343 with a live test or an n/a reason, 0 pending).
+30 commands, 350 flags (350 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -311,6 +311,9 @@ dispatch: `stage`
 | `--max-runs` |  | AssembleParams.max_runs | range | n/a: workdir command; the Nextflow layer bounds the selection with params.reads_args --max-runs | n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_max_runs.py | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--sketch` |  | AssembleParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py) | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--reads-sketch` |  | AssembleParams.reads_sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--screen-reads` |  | AssembleParams.screen_reads | none | n/a: workdir command; the Nextflow layer passes the flag to assemble-run through params.assemble_args | n/a: offline stage tests with fake gather tables in tests/integration/test_assemble_screen.py; a live check is reported in the pull request | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--screen-min-fraction` |  | AssembleParams.screen_min_fraction | unit_interval | n/a: workdir command; the Nextflow layer passes the flag to assemble-run through params.assemble_args | n/a: offline stage tests in tests/integration/test_assemble_screen.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--screen-dup-ani` |  | AssembleParams.screen_dup_ani | unit_interval | n/a: the duplicate check needs every run and is made by the workdir command only | n/a: offline stage tests in tests/integration/test_assemble_screen.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## reads
 
@@ -531,6 +534,10 @@ dispatch: `step:repgenr.stages.assemble_steps.assemble_run`
 | `--keep-files` |  | AssembleRunParams.keep_files | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--tool-arg` |  | AssembleRunParams.extra | none | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--reads-sketch` |  | AssembleRunParams.reads_sketch | none | params.assemble_args | n/a: offline step tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--screen-reads` |  | AssembleRunParams.screen_reads | none | params.assemble_args | n/a: offline step tests with fake gather tables in tests/integration/test_assemble_screen.py | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--screen-min-fraction` |  | AssembleRunParams.screen_min_fraction | unit_interval | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_screen.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-sketch` |  | AssembleRunParams.gtdb_sketch | none | module: conf/modules.config adds params.gtdb_sketch when params.assemble_args holds --screen-reads | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_screen.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-lineages` |  | AssembleRunParams.gtdb_lineages | none | module: conf/modules.config adds params.gtdb_lineages when params.assemble_args holds --screen-reads | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_screen.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | AssembleRunParams.versions_out | none | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## genome-qc

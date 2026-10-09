@@ -216,6 +216,9 @@ def assemble_params(
     reads_sketch: Any = _UNSET,
     extra: Any = _UNSET,
     max_runs: Any = _UNSET,
+    screen_reads: Any = _UNSET,
+    screen_min_fraction: Any = _UNSET,
+    screen_dup_ani: Any = _UNSET,
 ) -> AssembleParams:
     from ..assemblers.base import registry as _asm_registry
     from ..classifiers.base import registry as _cls_registry
@@ -251,6 +254,9 @@ def assemble_params(
         reads_sketch=reads_sketch,
         extra=extra,
         max_runs=max_runs,
+        screen_reads=screen_reads,
+        screen_min_fraction=screen_min_fraction,
+        screen_dup_ani=screen_dup_ani,
     )
 
 
