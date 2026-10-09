@@ -189,11 +189,16 @@ def search_runs(query: str, *, fields: Sequence[str] = RUN_FIELDS) -> list[dict]
             "limit": 0,
         },
     )
-    return read_tsv_records(lines, url=PORTAL_URL)
+    return read_tsv_records(lines, fields=fields, url=PORTAL_URL)
 
 
-def read_tsv_records(lines: Iterable[str], *, url: str = PORTAL_URL) -> list[dict]:
+def read_tsv_records(
+    lines: Iterable[str], *, fields: Sequence[str] | None = None, url: str = PORTAL_URL
+) -> list[dict]:
     """Records from the portal's TSV answer: a header line, then one run per line.
+
+    With ``fields``, a header other than the requested fields (such as an
+    HTML page served with status 200) raises :class:`WorkdirError`.
 
     A line with another number of columns than the header (a body cut short)
     raises :class:`WorkdirError` instead of returning a partial record.
@@ -206,6 +211,11 @@ def read_tsv_records(lines: Iterable[str], *, url: str = PORTAL_URL) -> list[dic
             break
     if header is None:
         return []
+    if fields is not None and header != list(fields):
+        raise WorkdirError(
+            f"Unexpected answer from {url}: the first line is {header[0][:80]!r} where "
+            f"the header of the fields {', '.join(fields)} was expected."
+        )
     width = len(header)
     records = []
     for line in it:

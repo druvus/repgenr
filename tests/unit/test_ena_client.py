@@ -78,8 +78,9 @@ def test_search_runs_asks_for_every_record_in_one_request(monkeypatch) -> None:
 
     def fake_iter_lines(url, params=None):
         calls.append(dict(params))
-        yield "run_accession\ttax_id"
-        yield from (f"R{i}\t{i}" for i in range(4))
+        fields = params["fields"].split(",")
+        yield "\t".join(fields)
+        yield from ("\t".join([f"R{i}", *[""] * (len(fields) - 1)]) for i in range(4))
 
     monkeypatch.setattr(http, "iter_lines", fake_iter_lines)
     rows = ena.search_runs("tax_tree(1)")
@@ -121,6 +122,26 @@ def test_tsv_reader_rejects_a_record_cut_short() -> None:
     assert ena.read_tsv_records(iter(["run_accession\ttax_id"])) == []
     with pytest.raises(WorkdirError, match="1 columns where the header has 2"):
         ena.read_tsv_records(iter(["run_accession\ttax_id", "R1\t9", "R2"]))
+
+
+def test_tsv_reader_refuses_a_header_other_than_the_fields() -> None:
+    """An HTML page served with status 200 is not read as records."""
+    page = iter(["<!DOCTYPE html>", "<html><body>Service unavailable</body></html>"])
+    with pytest.raises(WorkdirError, match="Unexpected answer.*DOCTYPE"):
+        ena.read_tsv_records(page, fields=("run_accession", "tax_id"))
+    with pytest.raises(WorkdirError, match="Unexpected answer"):
+        ena.read_tsv_records(iter(["tax_id\trun_accession"]), fields=("run_accession", "tax_id"))
+    assert ena.read_tsv_records(
+        iter(["run_accession\ttax_id", "R1\t9"]), fields=("run_accession", "tax_id")
+    ) == [{"run_accession": "R1", "tax_id": "9"}]
+
+
+def test_search_runs_refuses_an_html_answer(monkeypatch) -> None:
+    monkeypatch.setattr(
+        http, "iter_lines", lambda url, params=None: iter(["<html>", "<p>maintenance</p>"])
+    )
+    with pytest.raises(WorkdirError, match="Unexpected answer"):
+        ena.search_runs("q")
 
 
 def test_count_runs_reads_the_count_endpoint(monkeypatch) -> None:

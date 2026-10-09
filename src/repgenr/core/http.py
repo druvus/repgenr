@@ -164,7 +164,8 @@ def iter_lines(
 ) -> Iterator[str]:
     """GET ``url`` and yield the body line by line as it arrives (status-checked).
 
-    The body is never held whole, so a large tabular answer costs the memory
+    Lines end at newline only (a trailing carriage return is removed). The
+    body is never held whole, so a large tabular answer costs the memory
     of what the caller keeps. A connection lost mid-body raises
     :class:`WorkdirError`, as a failed request does.
     """
@@ -173,7 +174,10 @@ def iter_lines(
             resp.raise_for_status()
             if resp.encoding is None:
                 resp.encoding = "utf-8"
-            yield from resp.iter_lines(decode_unicode=True)
+            # Split on newline only: str.splitlines would also split on
+            # U+0085, U+2028, \v, \f and \x1c-\x1e, which may occur in a value.
+            for line in resp.iter_lines(chunk_size=_CHUNK, decode_unicode=True, delimiter="\n"):
+                yield line.rstrip("\r")
     except requests.RequestException as exc:
         raise _request_error("HTTP request failed", url, exc) from exc
 

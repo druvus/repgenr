@@ -87,7 +87,9 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     rows = _filter(rows, params, logger)
     if params.one_per_sample:
         rows = _best_per_sample(rows)
-    rows.sort(key=lambda r: -r.bases)
+    # Ties broken by accession, so --max-runs keeps the same runs whatever
+    # order the portal returns them in.
+    rows.sort(key=lambda r: (-r.bases, r.run_accession))
     if params.max_runs is not None:
         rows = rows[: params.max_runs]
     if not rows:

@@ -265,3 +265,20 @@ def test_an_accession_with_no_whole_genome_run_is_refused(workdir: Path, ena_fak
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="No sequencing runs selected"):
         run(ctx, ReadsParams(accessions=["PRJNA954307"]))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_max_runs_ties_are_broken_by_accession(workdir: Path, ena_fake, monkeypatch, reverse):
+    """Runs of equal size are kept in accession order, whatever order ENA returns."""
+    base = _records("ena_read_run_accessions.json")[0]
+    records = [{**base, "run_accession": acc} for acc in ("SRR9", "SRR1", "SRR5")]
+    if reverse:
+        records.reverse()
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in records])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 3)
+    ctx = WorkdirContext(workdir, create=True)
+    params = ReadsParams(
+        accessions=["PRJNA954307"], one_per_sample=False, drop_selection=[], max_runs=2
+    )
+    run(ctx, params)
+    assert [r.run_accession for r in read_reads(workdir / READS_TSV)] == ["SRR1", "SRR5"]

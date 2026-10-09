@@ -780,6 +780,8 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `reads --max-runs` kept an arbitrary subset of runs of equal size, which
+  depended on the order of the ENA answer; ties are now broken by run accession.
 - `census -tg Bacillus_A --runs` printed a header counting the runs of the
   whole NCBI genus Bacillus as if they belonged to the GTDB genus. The header
   now names the taxon of the runs (`19772 runs of NCBI genus Bacillus`), and
