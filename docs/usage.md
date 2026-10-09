@@ -300,6 +300,19 @@ directory of each source are resume inputs, so a change in a source working
 directory reruns `ingest`; the source manifest is not, so a change of a
 source label alone needs `--force`.
 
+Before staging, `ingest` reads the record of the stage that wrote each
+source's genome set (the latest of `genome`, `vgenome`, `ingest` and
+`assemble`) and evaluates it as `repgenr status` would in that working
+directory. A source whose record is interrupted, or stale against its own
+inputs (an input changed, or a deliverable is missing), is named in one
+warning with the stage and its state, and its genomes are taken as they are.
+A source with no such record (a `selection.tsv` and `genomes/` written by
+other means) is accepted with the warning "no stage record". `--strict-sources`
+turns each of these warnings into a refusal (exit 2) before anything is
+written. The state of each source is kept in the ingest record
+(`source_states`), and `status` names the sources that were not done when
+they were ingested.
+
 `assemble --append` is the alternative within one working directory: it adds
 the assemblies to the GTDB selection already there.
 

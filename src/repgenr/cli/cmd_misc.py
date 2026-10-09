@@ -97,9 +97,23 @@ def _gtdb_note(params: dict) -> str:
 
 
 def _ingest_note(params: dict) -> str:
-    """The source workdirs of an ingest that merged earlier working directories."""
+    """The source workdirs of an ingest that merged earlier working directories.
+
+    A source whose genome-set record was not done when ingest read it is
+    named with that stage and state (the ``source_states`` of the record).
+    """
     workdirs = params.get("from_workdirs") or []
-    return f"from workdirs: {', '.join(workdirs)}" if workdirs else ""
+    if not workdirs:
+        return ""
+    note = f"from workdirs: {', '.join(workdirs)}"
+    flagged = [
+        f"{s.get('path')} ({s['stage'] + ' ' if s.get('stage') else ''}{s.get('state')})"
+        for s in params.get("source_states") or []
+        if isinstance(s, dict) and s.get("state") != "done"
+    ]
+    if flagged:
+        note += f"; sources not done when ingested: {', '.join(flagged)}"
+    return note
 
 
 STATUS_SCHEMA = "repgenr.status/1"

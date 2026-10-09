@@ -27,6 +27,13 @@ def ingest(
         "source of each genome; its outgroup is not carried over. Repeatable; may be "
         "combined with --genomes-dir.",
     ),
+    strict_sources: bool = typer.Option(
+        False,
+        "--strict-sources",
+        help="Refuse (exit 2, nothing written) a --from-workdir whose genome set was "
+        "written by a stage that status lists as interrupted or stale, or that has no "
+        "stage record; without it each such source is named in a warning and taken.",
+    ),
     selection: Path | None = typer.Option(
         None,
         "--selection",
@@ -68,6 +75,7 @@ def ingest(
             copy=copy,
             drop_foreign=drop_foreign,
             sketch=sketch,
+            strict_sources=strict_sources,
         )
 
     _run("ingest", workdir, build, create=True)
