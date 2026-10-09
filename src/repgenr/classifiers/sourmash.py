@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import logging
 import os
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,28 +87,31 @@ def tax_genome(
     if containment_threshold is not None:
         extra = ["--containment-threshold", f"{containment_threshold:g}"]
     # One gather CSV per genome: pass them in a list file (--from-file), not
-    # on argv, where thousands of paths can exceed ARG_MAX.
-    csv_list = write_fofn(gather_csvs, Path(str(base) + ".gather_csvs.txt"))
+    # on argv, where thousands of paths can exceed ARG_MAX. The list is
+    # scratch, kept out of the working directory (the temp directory is bound
+    # by the container backends).
     csv_dirs = sorted({os.path.dirname(os.path.abspath(c)) for c in gather_csvs})
-    run_tool(
-        caps,
-        [
-            "sourmash",
-            "tax",
-            "genome",
-            "--from-file",
-            csv_list,
-            "--taxonomy-csv",
-            lineages,
-            "--output-base",
-            base,
-            "--force",
-            *extra,
-        ],
-        logger=logger,
-        log_prefix="sourmash",
-        extra_mounts=[*mounts, *csv_dirs],
-    )
+    with tempfile.TemporaryDirectory(prefix="repgenr_tax_") as scratch:
+        csv_list = write_fofn(gather_csvs, Path(scratch) / "gather_csvs.txt")
+        run_tool(
+            caps,
+            [
+                "sourmash",
+                "tax",
+                "genome",
+                "--from-file",
+                csv_list,
+                "--taxonomy-csv",
+                lineages,
+                "--output-base",
+                base,
+                "--force",
+                *extra,
+            ],
+            logger=logger,
+            log_prefix="sourmash",
+            extra_mounts=[*mounts, *csv_dirs],
+        )
     return Path(str(base) + ".classifications.csv")
 
 

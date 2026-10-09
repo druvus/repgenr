@@ -683,7 +683,7 @@ def warn_argv_bytes(
     """Warn when an argv approaches the operating system's ARG_MAX limit.
 
     For tools that take every genome path on argv and have no list-file
-    alternative (progressiveMauve, SibeliaZ, snippy-core). The size is measured
+    alternative (SibeliaZ, snippy-core). The size is measured
     (argv plus this process's environment) against the platform's ARG_MAX, not
     estimated from a genome count. :func:`run` refuses a command over the
     limit; this warns earlier, from three quarters of it.

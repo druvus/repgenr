@@ -10,7 +10,7 @@ from pathlib import Path
 from ..core.binaries import BinarySpec
 from ..core.containers import run_tool
 from ..core.plugins import ToolCapabilities
-from ..core.process import warn_argv_bytes, write_fofn
+from ..core.process import write_fofn
 from .base import InputKind, TreeBuilder, TreeParams, as_genome_list
 
 
@@ -53,7 +53,6 @@ class MashtreeBuilder(TreeBuilder):
         tree = out_dir / "tree.nwk"
         matrix = out_dir / "distance_matrix.tsv"
         cmd = self._command(params, matrix, genomes)
-        warn_argv_bytes("mashtree", cmd, logger)
         # The genome paths live in the fofn, not argv: declare their directories
         # so the container backend binds them.
         genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})

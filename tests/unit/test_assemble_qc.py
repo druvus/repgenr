@@ -129,6 +129,7 @@ def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkey
 
     active, peak, lock = 0, 0, threading.Lock()
     tax_calls: list[list[str]] = []
+    tax_lists: list[list[str]] = []
 
     def fake_run_chain(caps, steps, *, logger, **kwargs):
         nonlocal active, peak
@@ -149,6 +150,10 @@ def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkey
     def fake_run_tool(caps, argv, *, logger, **kwargs):
         cmd = [str(c) for c in argv]
         tax_calls.append(cmd)
+        # The list file is scratch, removed after the call: read it now.
+        listing = Path(cmd[cmd.index("--from-file") + 1])
+        assert listing.parent != tmp_path / "cls"
+        tax_lists.append(listing.read_text(encoding="utf-8").split())
         base = Path(cmd[cmd.index("--output-base") + 1])
         rows = [_CLASSIFICATION.splitlines()[0]]
         for i in range(4):
@@ -175,12 +180,9 @@ def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkey
     # The gather CSVs reach tax genome in a list file, not one argv token each.
     assert len(tax_calls) == 1 and "--gather-csv" not in tax_calls[0]
     assert not any(t.endswith("gather.csv") for t in tax_calls[0])
-    listed = (
-        Path(tax_calls[0][tax_calls[0].index("--from-file") + 1])
-        .read_text(encoding="utf-8")
-        .split()
-    )
-    assert len(listed) == 4 and all(Path(p).is_file() for p in listed)
+    assert len(tax_lists) == 1 and len(tax_lists[0]) == 4
+    assert all(Path(p).is_file() for p in tax_lists[0])
+    assert not list((tmp_path / "cls").glob("*gather_csvs*"))
 
 
 def test_gather_workers_are_bounded_by_the_memory_budget() -> None:

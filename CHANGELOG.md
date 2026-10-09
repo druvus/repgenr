@@ -857,12 +857,12 @@ All notable changes to RepGenR are documented here. The format follows
   platform's ARG_MAX less a margin, and on Linux each string against the
   128 KiB single-argument limit. A command over the limit stops with exit 2
   and a message that names `--process-size`, instead of failing in exec with
-  "Argument list too long". `warn_argv_bytes` (SibeliaZ, snippy-core,
-  mashtree) warns from three quarters of the measured limit instead of a fixed
+  "Argument list too long". `warn_argv_bytes` (SibeliaZ, snippy-core)
+  warns from three quarters of the measured limit instead of a fixed
   900 kB.
 - `sourmash tax genome` (classify, and the reads screen of assemble) reads the
-  per-genome gather CSVs from a list file (`--from-file`) instead of one
-  command-line argument per genome.
+  per-genome gather CSVs from a list file (`--from-file`, written to a
+  temporary directory) instead of one command-line argument per genome.
 - `tree2tax --collapse-support` (and `tree2tax-relations`) judged the wrong
   nodes when the outgroup was not a child of the root of the tree as written.
   Rooting on the outgroup reverses the branches between the old and the new
