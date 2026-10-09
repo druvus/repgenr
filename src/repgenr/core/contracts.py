@@ -40,6 +40,8 @@ SELECTION_TSV = "selection.tsv"
 MSA_FASTA = "msa.fasta"
 CORE_SNP_FASTA = "core_snp.fasta"
 TREE_NWK = "tree.nwk"
+# The tree builder's output as written, kept beside tree.nwk when phylo rerooted it.
+TREE_UNROOTED_NWK = "tree.unrooted.nwk"
 # Under tree/: the alignment phylo's own SNP typing pass (--msa-source snptype)
 # writes, with its reuse stamp. snp/ belongs to the snptype stage.
 PHYLO_MSA_DIR = "msa"

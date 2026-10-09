@@ -28,6 +28,23 @@ All notable changes to RepGenR are documented here. The format follows
   `n assembled, n deferred`. The stage record gains `n_deferred`, and
   `n_excused` no longer counts deferred runs. The Nextflow layer bounds the
   selection instead (`--reads_args '--max-runs N'`).
+- `phylo --root outgroup|midpoint|none` (also on `phylo-build` and `run`):
+  phylo roots `tree/tree.nwk` after any tree builder, with dendropy. The
+  default is `outgroup` when an outgroup is staged and `--no-outgroup` is not
+  given, else `none`. `outgroup` roots on the branch to the outgroup, split in
+  two halves, as `tree2tax` did; `midpoint` roots at the midpoint and needs
+  branch lengths. A tree already rooted on the outgroup (bifurcating root) is
+  left as written; the trifurcating root that `iqtree -o` and
+  `raxmlng --outgroup` write is rerooted with one INFO line. Support values
+  are carried by split, so each stays with the branch it was computed for.
+  The builder's output is kept as `tree/tree.unrooted.nwk` when the tree is
+  rerooted. `--root outgroup` without an outgroup, or with `--no-outgroup`,
+  exits 2. The phylo record gains `root`. The rooting functions are in
+  `repgenr.tree.rooting` and `tree2tax` uses the same one.
+- `tree2tax-relations --keep-root` keeps the tree's own root (a midpoint
+  root) instead of rerooting on the outgroup; `tree2tax` does so when phylo
+  recorded `root: midpoint`. The Nextflow `TREE2TAX` process receives
+  `--keep-root` when `phylo_args` contains `--root midpoint`.
 - Reads sketch: `assemble` sketches each run's reads with sourmash
   (`sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` on all FASTQ
   files of the run, named by run accession) into
@@ -357,6 +374,11 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- `tree/tree.nwk` is rooted on the outgroup by `phylo` when an outgroup is
+  staged; it was the builder's output, unrooted for `fasttree`, `mashtree`
+  and `sourmash`, and rooted only in `tree2tax`. The `tree2tax` relations are
+  unchanged. The new `root` parameter enters the phylo resume fingerprint, so
+  a completed phylo stage runs once more on the next `phylo` or `run`.
 - ENA run searches (`reads` by taxon and `census --runs`) count the runs
   with the portal count endpoint first and log the number; above 100000 runs
   a warning names the count, the taxon and the expected memory, and the

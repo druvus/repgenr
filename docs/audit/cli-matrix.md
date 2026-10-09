@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-30 commands, 339 flags (339 with a live test or an n/a reason, 0 pending).
+30 commands, 343 flags (343 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -249,6 +249,7 @@ dispatch: `stage`
 | `--snptyper` |  | PhyloParams.snptyper | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete | docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--all-genomes` |  | PhyloParams.all_genomes | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_treebuilders_offline.py::test_all_genomes_puts_every_genome_in_the_tree | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root` |  | PhyloParams.root | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_treebuilders_offline.py::test_alignment_free_builder_roots_at_the_midpoint | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--bootstrap` | -B | PhyloParams.bootstrap | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_iqtree_from_snptype_with_bootstrap_and_outgroup | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--reference` |  | PhyloParams.reference | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_species_set.py::test_ska2_source_with_reference_and_allow_incomplete | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
 | `--aligner-arg` |  | PhyloParams.extra | callback | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_container_runs.py::test_sibeliaz_in_a_wave_container | docs/developing.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
@@ -271,6 +272,7 @@ dispatch: `step:repgenr.stages.phylo.phylo_build`
 | `--aligner` |  | PhyloBuildParams.phylo.aligner | registry | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/usage.md, docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--snptyper` |  | PhyloBuildParams.phylo.snptyper | registry | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | PhyloBuildParams.phylo.no_outgroup | none | params.phylo_args | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root` |  | PhyloBuildParams.phylo.root | choice | params.phylo_args | tests/live/test_treebuilders_offline.py::test_alignment_free_builder_roots_at_the_midpoint | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--bootstrap` | -B | PhyloBuildParams.phylo.bootstrap | range | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--reference` |  | PhyloBuildParams.phylo.reference | none | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/audit/cli-matrix.md |
 | `--aligner-arg` |  | PhyloBuildParams.phylo.extra | callback | params.phylo_args | tests/live/test_steps.py::test_phylo_build_aligner_and_snp_source_variants | docs/developing.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
@@ -378,6 +380,7 @@ dispatch: `stage`
 | `--aligner` |  | PhyloParams.aligner | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_dry_run_reports_family_and_species_targets | docs/usage.md, docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--snptyper` |  | PhyloParams.snptyper | registry | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: run forwards the phylo flags unchanged (test_species_set.py covers them on phylo) | docs/choosing-tools.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | PhyloParams.no_outgroup | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--root` |  | PhyloParams.root | choice | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: run forwards the phylo flags unchanged (test_treebuilders_offline.py covers --root on phylo) | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxParams.include_dereplicated | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_viral_chain_end_to_end | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--threads` | -t | DereplicateParams.threads | range | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_bacterial_chain_end_to_end | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--dry-run` |  | n/a: prints the chain and exits before any stage | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_network.py::test_run_dry_run_prints_the_chain_without_network | docs/cli-reference.md, docs/audit/cli-matrix.md |
@@ -452,6 +455,7 @@ dispatch: `step:repgenr.stages.tree2tax.tree2tax_relations`
 | `--root-name` |  | Tree2taxStepParams.root_name | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--remove-outgroup` |  | Tree2taxStepParams.remove_outgroup | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--no-outgroup` |  | Tree2taxStepParams.no_outgroup | none | params.phylo_args | n/a: covered offline in tests/integration/test_dataflow_phylo_steps.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--keep-root` |  | Tree2taxStepParams.keep_root | none | params.phylo_args | n/a: covered offline in tests/integration/test_phylo_root.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--include-dereplicated` |  | Tree2taxStepParams.include_dereplicated | none | params.tree2tax_args | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | Tree2taxStepParams.versions_out | none | module: fixed by the process script | tests/live/test_steps.py::test_phylo_build_and_tree2tax_relations_with_outgroup | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--collapse-support` |  | Tree2taxStepParams.collapse_support | range | params.tree2tax_args | tests/live/test_steps.py::test_tree2tax_relations_collapse_flags | docs/cli-reference.md, docs/audit/scaling-audit.md, docs/usage.md, docs/audit/cli-matrix.md |

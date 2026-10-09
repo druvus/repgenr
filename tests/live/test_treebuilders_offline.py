@@ -34,6 +34,26 @@ def test_alignment_free_builder_on_representatives(run_repgenr, derep_wd, builde
     assert newick_leaves(tree) == {Path(r).stem for r in representatives(wd)}
 
 
+@pytest.mark.parametrize(
+    "builder",
+    [
+        pytest.param("mashtree", marks=pytest.mark.requires_binary("mashtree")),
+        pytest.param("sourmash", marks=pytest.mark.requires_binary("sourmash")),
+    ],
+)
+def test_alignment_free_builder_roots_at_the_midpoint(run_repgenr, derep_wd, builder: str) -> None:
+    import dendropy
+
+    _, wd = derep_wd
+    run_repgenr("phylo", "-wd", wd, "--treebuilder", builder, "--no-outgroup", "--root", "midpoint")
+    text = (wd / "tree" / TREE_NWK).read_text(encoding="utf-8")
+    tree = dendropy.Tree.get(data=text, schema="newick", preserve_underscores=True)
+    assert len(tree.seed_node.child_nodes()) == 2
+    assert newick_leaves(text) == {Path(r).stem for r in representatives(wd)}
+    unrooted = (wd / "tree" / "tree.unrooted.nwk").read_text(encoding="utf-8")
+    assert newick_leaves(unrooted) == newick_leaves(text)
+
+
 @pytest.mark.requires_binary("mashtree")
 def test_all_genomes_puts_every_genome_in_the_tree(run_repgenr, derep_wd) -> None:
     genomes, wd = derep_wd

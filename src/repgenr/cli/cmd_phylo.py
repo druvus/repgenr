@@ -20,6 +20,7 @@ from .base import (
     HELP_NODE_BASENAME,
     HELP_REFERENCE,
     HELP_REMOVE_OUTGROUP,
+    HELP_ROOT,
     HELP_ROOT_NAME,
     HELP_THREADS,
     HELP_WORKDIR,
@@ -90,6 +91,7 @@ def phylo(
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     all_genomes: bool = typer.Option(False, "--all-genomes", help=HELP_ALL_GENOMES),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    root: str | None = typer.Option(None, "--root", help=HELP_ROOT),
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option(
@@ -122,6 +124,7 @@ def phylo(
             snptyper=snptyper,
             all_genomes=all_genomes,
             no_outgroup=no_outgroup,
+            root=root,
             bootstrap=bootstrap,
             reference=reference,
             threads=threads,

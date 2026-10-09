@@ -170,7 +170,7 @@ multi-threaded RAxML build when given more than one thread; see
 
 ## 6. Tree builders
 
-| Builder | Input | Scaling | Resolution | Rooting |
+| Builder | Input | Scaling | Resolution | Rooting by the builder |
 |---|---|---|---|---|
 | `iqtree` | MSA | Declared 500. Poor beyond that. | Good on both diverse and clonal sets. Use at least 1000 ultrafast bootstrap replicates for supports. | Roots on the outgroup. |
 | `raxmlng` | MSA | Declared 1000. Slow beyond that. | Supports from its own bootstrap procedure. | Roots on the outgroup. |
@@ -179,8 +179,13 @@ multi-threaded RAxML build when given more than one thread; see
 | `sourmash` | Genomes | Declared 2000. Cubic in the neighbour-joining step. | Poor on clonal sets. No supports. | Unrooted. |
 
 The stage adds the outgroup to the input and passes it to builders that can
-root. `tree2tax` then roots every tree on the outgroup edge, so the taxonomy
-always separates the outgroup from one ingroup clade.
+root. Whatever the builder, `phylo` then roots `tree/tree.nwk` itself
+(`--root`): on the outgroup branch by default when an outgroup is staged, so
+the trees of `fasttree`, `mashtree` and `sourmash` are rooted as well, at the
+midpoint with `--root midpoint`, or not at all with `--root none`. The
+builder's own output is kept as `tree/tree.unrooted.nwk`. On an
+outgroup-rooted tree the taxonomy from `tree2tax` separates the outgroup from
+one ingroup clade. See [usage.md](usage.md#rooting-the-tree).
 
 `tree2tax` can collapse weak splits before it names nodes:
 `--collapse-length L` merges a node whose branch is shorter than `L` in the

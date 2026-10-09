@@ -1,8 +1,9 @@
 """tree2tax stage: turn a rooted tree into FlexTaxD-compatible relations.
 
 Turns a rooted tree into a FlexTaxD child->parent table (via dendropy): read
-``tree/tree.nwk``, root by the outgroup, name internal nodes (a user basename or
-a leaf-derived hash), then emit ``tree2tax.tsv`` (child -> parent) and
+``tree/tree.nwk``, root it on the outgroup unless phylo already did so (or
+rooted it at the midpoint, which is kept), name internal nodes (a user basename
+or a leaf-derived hash), then emit ``tree2tax.tsv`` (child -> parent) and
 ``genomes_map.tsv`` (accession -> leaf). Optionally lists redundant
 (dereplicated) genomes under their representative leaf, read from the derep
 ``clusters.tsv`` contract.
@@ -37,6 +38,7 @@ from ..core.contracts import (
     write_tree2tax,
 )
 from ..core.errors import WorkdirError
+from ..tree.rooting import ROOT_MIDPOINT, root_on_outgroup
 
 
 @dataclass
@@ -75,6 +77,9 @@ class Tree2taxStepParams:
     # The tree was built without an outgroup (phylo --no-outgroup): ignore the
     # staged outgroup inputs and leave the tree unrooted.
     no_outgroup: bool = False
+    # The tree is already rooted as wanted (phylo --root midpoint): do not
+    # reroot it on the outgroup. The outgroup is still read for --remove-outgroup.
+    keep_root: bool = False
 
 
 def _emit_relations(
@@ -92,6 +97,7 @@ def _emit_relations(
     collapse_length: float | None = None,
     segments: dict[str, list[str]] | None = None,
     tree_source: Path | None = None,
+    keep_root: bool = False,
 ) -> tuple[Path, Path, int]:
     """Build FlexTaxD relations from a tree and write the two output tables.
 
@@ -116,8 +122,9 @@ def _emit_relations(
     except (DataParseError, ValueError) as exc:
         raise WorkdirError(f"{source} is not a valid Newick tree: {exc}") from exc
 
-    if outgroup_leaf is not None:
-        _set_outgroup(tree, outgroup_leaf, source)
+    if outgroup_leaf is not None and not keep_root:
+        if not _set_outgroup(tree, outgroup_leaf, source):
+            logger.info("The tree is already rooted on the outgroup %s", outgroup_leaf)
 
     # Collapse before naming so node names describe the collapsed topology.
     stats = _collapse_weak_nodes(
@@ -145,7 +152,9 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         # member from genomes_map.tsv without notice.
         raise WorkdirError(f"Clusters table not found: {params.clusters}.")
     outgroup_leaf = None
-    if params.no_outgroup:
+    if params.no_outgroup and params.keep_root:
+        logger.info("No outgroup (--no-outgroup); the tree's own root is kept (--keep-root)")
+    elif params.no_outgroup:
         logger.warning("No outgroup (--no-outgroup); tree is left unrooted")
     elif params.outgroup_dir is not None and params.outgroup_accession is not None:
         outgroup_leaf = _resolve_outgroup_leaf_from(
@@ -176,6 +185,7 @@ def tree2tax_relations(params: Tree2taxStepParams, logger: logging.Logger) -> tu
         collapse_support=params.collapse_support,
         collapse_length=params.collapse_length,
         tree_source=params.tree,
+        keep_root=params.keep_root,
     )
     return out_tree2tax, out_map
 
@@ -195,7 +205,10 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
             tree_file,
         )
 
-    outgroup_leaf = _resolve_outgroup_leaf(ctx, logger)
+    keep_root = phylo is not None and phylo.params.get("root") == ROOT_MIDPOINT
+    if keep_root:
+        logger.info("phylo rooted the tree at the midpoint; that root is kept")
+    outgroup_leaf = _resolve_outgroup_leaf(ctx, logger, quiet=keep_root)
     redundant = _load_redundant(ctx) if params.include_dereplicated else {}
     segments_path = ctx.workdir / SEGMENTS_TSV
     segments = read_segments(segments_path) if segments_path.exists() else None
@@ -214,6 +227,7 @@ def run(ctx: WorkdirContext, params: Tree2taxParams) -> tuple[Path, Path]:
         collapse_length=params.collapse_length,
         segments=segments,
         tree_source=tree_file,
+        keep_root=keep_root,
     )
 
     ctx.config.record_stage(
@@ -242,16 +256,23 @@ def _dendropy_versions() -> dict[str, str]:
         return {}
 
 
-def _resolve_outgroup_leaf(ctx: WorkdirContext, logger) -> str | None:
+def _resolve_outgroup_leaf(ctx: WorkdirContext, logger, *, quiet: bool = False) -> str | None:
+    """The outgroup leaf to root on, or None.
+
+    ``quiet`` (a tree whose root is kept) drops the 'left unrooted' warnings:
+    the outgroup is then needed only for --remove-outgroup.
+    """
     phylo = ctx.config.stages.get("phylo")
     if phylo is not None and phylo.completed and phylo.params.get("outgroup", "") is None:
         # phylo ran without an outgroup (--no-outgroup, or none was found), so
         # the tree has no outgroup leaf to root on.
-        logger.warning("phylo built the tree without an outgroup; tree is left unrooted")
+        if not quiet:
+            logger.warning("phylo built the tree without an outgroup; tree is left unrooted")
         return None
     acc_file = ctx.workdir / "outgroup_accession.txt"
     if not acc_file.exists() or not ctx.outgroup_dir.exists():
-        logger.warning("No outgroup available; tree is left unrooted")
+        if not quiet:
+            logger.warning("No outgroup available; tree is left unrooted")
         return None
     return _resolve_outgroup_leaf_from(ctx.outgroup_dir, acc_file, logger)
 
@@ -288,25 +309,21 @@ def _leaf_label(node) -> str:
     return node.taxon.label if node.taxon is not None else ""
 
 
-def _set_outgroup(tree: dendropy.Tree, leaf_label: str, source: object) -> None:
-    node = tree.find_node_with_taxon_label(leaf_label)
-    if node is None or not node.is_leaf():
-        # Leaving the tree unrooted would give a taxonomy rooted at an
-        # arbitrary node with exit 0; a named outgroup must root the tree.
-        raise WorkdirError(
-            f"Outgroup {leaf_label} is not a leaf of the tree {source}. Rebuild the "
-            "tree with this outgroup; if the tree was built without one (phylo "
-            "--no-outgroup), pass --no-outgroup to tree2tax-relations."
-        )
-    # Root on the outgroup's edge, not at its parent node: to_outgroup_position
-    # keeps the parent as the root, and on an unrooted (trifurcating) tree from
-    # mashtree, fasttree or the sourmash NJ that leaves the root with three
-    # children -- the outgroup, its nearest ingroup neighbour and everything
-    # else -- so the ingroup never appears as one clade. Splitting the edge gives
-    # a bifurcating root: outgroup on one side, the whole ingroup on the other.
-    length = node.edge.length
-    half = None if length is None else length / 2
-    tree.reroot_at_edge(node.edge, length1=half, length2=half, update_bipartitions=False)
+def _set_outgroup(tree: dendropy.Tree, leaf_label: str, source: object) -> bool:
+    """Root on the outgroup's branch, as phylo does; False when already rooted so.
+
+    Leaving the tree unrooted when the outgroup is missing would give a
+    taxonomy rooted at an arbitrary node with exit 0, so that is an error.
+    """
+    return root_on_outgroup(
+        tree,
+        leaf_label,
+        source=source,
+        hint=(
+            " Rebuild the tree with this outgroup; if the tree was built without one "
+            "(phylo --no-outgroup), pass --no-outgroup to tree2tax-relations."
+        ),
+    )
 
 
 @dataclass

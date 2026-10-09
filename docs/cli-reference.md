@@ -91,6 +91,7 @@ is 'vmetadata --source'. --platform filters the sequencing platform with
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--root` |  | How phylo roots tree/tree.nwk: outgroup (on the branch to the outgroup), midpoint, or none (as the tree builder wrote it). Default: outgroup when an outgroup is staged and --no-outgroup is not given, else none. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
@@ -322,6 +323,7 @@ Build a phylogenetic tree from an alignment, SNP alignment, or directly.
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--all-genomes` | off | Use all genomes, not only the representatives. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--root` |  | How phylo roots tree/tree.nwk: outgroup (on the branch to the outgroup), midpoint, or none (as the tree builder wrote it). Default: outgroup when an outgroup is staged and --no-outgroup is not given, else none. |
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
@@ -584,6 +586,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--aligner` | `progressivemauve` | cactus, progressivemauve, sibeliaz. |
 | `--snptyper` | `simple` | SNP typer: parsnp, simple, ska2, snippy. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--root` |  | How phylo roots tree/tree.nwk: outgroup (on the branch to the outgroup), midpoint, or none (as the tree builder wrote it). Default: outgroup when an outgroup is staged and --no-outgroup is not given, else none. |
 | `-B`, `--bootstrap` | `0` | Bootstrap replicates. 0 turns bootstrapping off; IQ-TREE needs at least 1000 when it is on. |
 | `--reference` |  | Reference genome filename. |
 | `--aligner-arg` |  | Aligner tuning as key=value (repeatable), e.g. kmer=15 (sibeliaz) or seed_weight=11 (progressivemauve). |
@@ -611,6 +614,7 @@ Here --outgroup-accession takes a file that names the accession, not the accessi
 | `--root-name` | `root` | Label of the top node. |
 | `--remove-outgroup` | off | Leave the outgroup out of the taxonomy after rooting. |
 | `--no-outgroup` | off | Do not root with an outgroup. |
+| `--keep-root` | off | Keep the tree's own root (a tree from phylo --root midpoint) instead of rerooting on the outgroup; the outgroup is still read for --remove-outgroup. |
 | `--include-dereplicated`, `--no-include-dereplicated` | on | List redundant genomes under their representative in the taxonomy. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 | `--collapse-support` |  | Merge nodes whose support is below this fraction into their parent. |

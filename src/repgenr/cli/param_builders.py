@@ -408,6 +408,7 @@ def phylo_params(
     snptyper: Any = _UNSET,
     all_genomes: Any = _UNSET,
     no_outgroup: Any = _UNSET,
+    root: Any = _UNSET,
     bootstrap: Any = _UNSET,
     reference: Any = _UNSET,
     threads: Any = _UNSET,
@@ -418,11 +419,15 @@ def phylo_params(
     from ..aligners.base import registry as _aln_registry
     from ..core.errors import UserInputError
     from ..snptypers.base import registry as _snp_registry
-    from ..stages.phylo import PhyloParams
+    from ..stages.phylo import PhyloParams, check_root_request
+    from ..tree.rooting import ROOT_METHODS
     from ..treebuilders.base import registry as _tb_registry
 
     if treebuilder is not _UNSET:
         _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
+    if root is not _UNSET and root is not None:
+        _require_choice(root, set(ROOT_METHODS), "--root")
+        check_root_request(root, no_outgroup is not _UNSET and bool(no_outgroup))
     effective_source = msa_source if msa_source is not _UNSET else "aligner"
     _require_choice(effective_source, {"aligner", "snptype"}, "--msa-source")
     if effective_source == "aligner":
@@ -446,6 +451,7 @@ def phylo_params(
         snptyper=snptyper,
         all_genomes=all_genomes,
         no_outgroup=no_outgroup,
+        root=root,
         bootstrap=bootstrap,
         reference=reference,
         threads=threads,
