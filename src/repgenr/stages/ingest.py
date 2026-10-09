@@ -479,7 +479,6 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
             # Per --from-workdir: the stage that wrote its genome set and the
             # state of that record when this ingest read it.
             "source_states": [state.to_dict() for state in states],
-            "strict_sources": params.strict_sources,
             "sketches": sketches,
         },
         tool_versions=sketch_versions,

@@ -546,3 +546,30 @@ def test_status_names_a_source_not_done_when_ingested(tmp_path, monkeypatch, sou
     assert status.exit_code == 0, status.output
     assert f"sources not done when ingested: {wd2} (no stage record)" in status.output
     assert f"{src} (" not in status.output, "a done source is not named"
+
+
+def test_cli_repeat_with_strict_sources_skips(tmp_path, monkeypatch) -> None:
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    wd3 = tmp_path / "wd3"
+    argv = ["ingest", "-wd", str(wd3), "--from-workdir", str(src)]
+    first = _runner.invoke(app, argv)
+    assert first.exit_code == 0, first.output
+    stamp = Config.load(wd3).stages["ingest"].completed
+    second = _runner.invoke(app, [*argv, "--strict-sources"])
+    assert second.exit_code == 0, second.output
+    assert "skipping" in second.output
+    assert Config.load(wd3).stages["ingest"].completed == stamp
+
+
+def test_cli_strict_refusal_is_not_announced_as_a_rerun(tmp_path, monkeypatch) -> None:
+    src, raw = _recorded_source(tmp_path, "src", monkeypatch)
+    wd3 = tmp_path / "wd3"
+    argv = ["ingest", "-wd", str(wd3), "--from-workdir", str(src)]
+    assert _runner.invoke(app, argv).exit_code == 0
+    # Changing a source FASTA makes both the source and the ingest of wd3 stale.
+    target = raw / GTDB_ROWS[0].filename
+    target.write_text(target.read_text() + "ACGTACGT\n")
+    result = _runner.invoke(app, [*argv, "--strict-sources"])
+    assert result.exit_code == 2, result.output
+    assert "re-running" not in result.output
+    assert not Config.load(wd3).stages["ingest"].interrupted
