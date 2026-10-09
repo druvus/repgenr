@@ -11,6 +11,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,19 @@ from repgenr.viral import ncbi_virus
 
 runner = CliRunner()
 LOG = logging.getLogger("test.census")
+# Rich renders usage errors in colour and wraps them at the terminal width on
+# CI; plain, wide output and flattened whitespace keep flag names matchable.
+_PLAIN = {"TERM": "dumb", "NO_COLOR": "1", "COLUMNS": "200"}
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_BOX = re.compile(r"[\s\u2500-\u257f]+")
+
+
+def _plain_error(args: list[str]) -> tuple[int, str]:
+    """Exit code and the flattened output of a census invocation."""
+    result = runner.invoke(app, ["census", *args], env=_PLAIN)
+    text = _ANSI.sub("", result.output + str(result.exception or ""))
+    return result.exit_code, _BOX.sub(" ", text)
+
 
 # --- GTDB fixtures -------------------------------------------------------------
 
@@ -257,9 +271,9 @@ def test_genus_from_the_api_has_one_row_per_species(fake_api) -> None:
 
 
 def test_console_header_and_table(fake_api) -> None:
-    result = runner.invoke(app, ["census", "-tf", "Testaceae"])
+    result = runner.invoke(app, ["census", "-tf", "Testaceae"], env=_PLAIN)
     assert result.exit_code == 0, result.output
-    lines = result.stdout.splitlines()
+    lines = _ANSI.sub("", result.stdout).splitlines()
     assert lines[0] == "Testaceae: 2 genera, 3 species, 5 genomes (3 representatives)"
     assert lines[1].split() == ["name", "species", "genomes", "representatives"]
     assert lines[2].split() == ["Alpha", "2", "3", "2"]
@@ -288,9 +302,9 @@ def test_table_source_reuses_the_cached_release_table(tmp_path, monkeypatch) -> 
 
 
 def test_table_source_needs_a_release() -> None:
-    result = runner.invoke(app, ["census", "-tg", "Beta", "--source", "table"])
-    assert result.exit_code == 2
-    assert "--release" in result.output
+    code, text = _plain_error(["-tg", "Beta", "--source", "table"])
+    assert code == 2
+    assert "--release" in text
 
 
 def test_runs_add_ena_columns_grouped_by_species(fake_api, fake_ena) -> None:
@@ -388,8 +402,8 @@ def test_bvbrc_without_a_workdir_names_vmetadata() -> None:
 
 
 def test_unknown_source_is_rejected_naming_the_flag() -> None:
-    result = runner.invoke(app, ["census", "-tf", "X", "--source", "bogus"])
-    assert result.exit_code == 2 and "--source" in result.output
+    code, text = _plain_error(["-tf", "X", "--source", "bogus"])
+    assert code == 2 and "--source" in text
 
 
 # --- mode 2 ---------------------------------------------------------------------
@@ -609,9 +623,9 @@ def test_selection_counts_by_source_with_candidates_and_clusters(tmp_path) -> No
 def test_selection_console_and_tsv(tmp_path) -> None:
     wd = _selection_workdir(tmp_path)
     out = tmp_path / "census.tsv"
-    result = runner.invoke(app, ["census", "-wd", str(wd), "--tsv", str(out)])
+    result = runner.invoke(app, ["census", "-wd", str(wd), "--tsv", str(out)], env=_PLAIN)
     assert result.exit_code == 0, result.output
-    header = result.stdout.splitlines()[0]
+    header = _ANSI.sub("", result.stdout).splitlines()[0]
     assert header.startswith("Testaceae: 2 genera, 2 species, 4 genomes (1 representative)")
     assert "outgroup GCF_000009.1 excluded" in header
     lines = out.read_text(encoding="utf-8").splitlines()
@@ -699,8 +713,8 @@ def test_assemble_workdir_takes_reads_as_candidates(tmp_path) -> None:
 
 def test_workdir_flags_that_select_a_taxon_query_exit_2(tmp_path) -> None:
     wd = _selection_workdir(tmp_path)
-    result = runner.invoke(app, ["census", "-wd", str(wd), "--source", "api"])
-    assert result.exit_code == 2 and "--source" in result.output
+    code, text = _plain_error(["-wd", str(wd), "--source", "api"])
+    assert code == 2 and "--source" in text
 
 
 def test_missing_workdir_exits_3(tmp_path) -> None:
