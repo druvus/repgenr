@@ -29,6 +29,7 @@ from .base import (
     HELP_NO_OUTGROUP,
     HELP_NODE_BASENAME,
     HELP_PRIMARY_ANI,
+    HELP_READS_SKETCH,
     HELP_REFERENCE,
     HELP_REMOVE_OUTGROUP,
     HELP_ROOT_NAME,
@@ -443,6 +444,11 @@ def assemble_run_cmd(
     tool_arg: list[str] = typer.Option(
         [], "--tool-arg", help="Assembler tuning as key=value (repeatable), e.g. mode=nano-raw."
     ),
+    reads_sketch: bool | None = typer.Option(
+        None,
+        "--reads-sketch/--no-reads-sketch",
+        help=HELP_READS_SKETCH,
+    ),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Fetch and assemble one run of a reads.tsv (stateless data-channel step)."""
@@ -468,6 +474,7 @@ def assemble_run_cmd(
                 keep_reads=keep_reads,
                 keep_files=keep_files,
                 extra=_parse_key_values(tool_arg, "--tool-arg"),
+                reads_sketch=reads_sketch,
                 versions_out=versions_out,
             ),
             logger,

@@ -164,17 +164,24 @@ def download(
     *,
     timeout: Timeout = _DEFAULT_TIMEOUT,
     logger: logging.Logger | None = None,
+    md5: str | None = None,
 ) -> Path:
     """Stream ``url`` to ``dest``, verifying the size and writing atomically.
 
     Writes to ``<dest>.part`` and renames on success; a transfer that drops
     short of the server's ``Content-Length`` is deleted and raised as a
     :class:`WorkdirError` rather than left as a silently-truncated file.
+
+    With ``md5`` (hex, any case) the digest is updated per chunk as the bytes
+    are written and compared at the end, so the file is not read a second
+    time. A mismatch deletes the ``.part`` file and raises the error that
+    :func:`verify_md5` raises.
     """
     dest = Path(dest)
     tmp = dest.with_name(dest.name + ".part")
     written = 0
     expected = 0
+    digest = hashlib.md5() if md5 else None
     try:
         with session().get(url, stream=True, timeout=timeout) as resp:
             resp.raise_for_status()
@@ -183,6 +190,8 @@ def download(
                 for chunk in resp.iter_content(chunk_size=_CHUNK):
                     fo.write(chunk)
                     written += len(chunk)
+                    if digest is not None:
+                        digest.update(chunk)
     except requests.RequestException as exc:
         tmp.unlink(missing_ok=True)
         raise _request_error("Download failed", url, exc) from exc
@@ -190,6 +199,11 @@ def download(
     if expected and written != expected:
         tmp.unlink(missing_ok=True)
         raise WorkdirError(f"Incomplete download: {url} got {written} of {expected} bytes.")
+    if digest is not None and md5 is not None:
+        actual = digest.hexdigest()
+        if actual != md5.lower():
+            tmp.unlink(missing_ok=True)
+            raise WorkdirError(_md5_mismatch(dest.name, md5, actual))
     tmp.replace(dest)
     if logger is not None:
         logger.info("Downloaded %s (%d bytes)", dest.name, written)
@@ -234,7 +248,11 @@ def verify_md5(path: Path, expected: str) -> None:
             digest.update(chunk)
     actual = digest.hexdigest()
     if actual != expected.lower():
-        raise WorkdirError(
-            f"Checksum mismatch for {path.name}: expected {expected.lower()}, got {actual}. "
-            "The download is corrupt; delete it and re-run."
-        )
+        raise WorkdirError(_md5_mismatch(path.name, expected, actual))
+
+
+def _md5_mismatch(name: str, expected: str, actual: str) -> str:
+    return (
+        f"Checksum mismatch for {name}: expected {expected.lower()}, got {actual}. "
+        "The download is corrupt; delete it and re-run."
+    )

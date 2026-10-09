@@ -344,7 +344,8 @@ repgenr run -wd $WD --reads -ts "Francisella tularensis" --platform illumina --m
 ```
 
 `assemble` downloads each run's FASTQ files from the locations ENA lists
-(over HTTPS, verified against ENA's checksums), assembles them, keeps the
+(over HTTPS, verified against ENA's checksums, which are computed while the
+bytes are written, so a file is not read a second time), assembles them, keeps the
 contigs of at least `--min-contig-length` bases (500) renamed
 `<run>_contig<n>`, and names the genome `Family_genus_species_RUN.fasta` from
 the tokens the reads stage resolved. `--assembler auto` (the default) picks
@@ -465,6 +466,45 @@ database the checks are skipped and the log says so. `run --reads` forwards
 `--accession-file`, `--platform`, `--max-runs`, `--assembler`, `--threads`
 and `--outgroup`; the rest is available on the stage commands.
 
+#### Reads sketch
+
+While a run is assembled, `assemble` also sketches its reads with sourmash:
+one `sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` call on all
+FASTQ files of the run (the two files of a pair give one signature per k-mer
+size), named by run accession and written to `assemblies/<run>/reads.sig.zip`.
+The k-mer sizes and the scale are those of the genome sketches; abundances are
+kept because read k-mers also carry coverage. The sketch starts once the FASTQ
+files are verified and runs in a thread beside the assembler, so the assembler
+is not delayed. The assembler keeps its full share of `--threads` and the
+single-threaded sketch runs alongside it, so each run uses one thread more
+than its share while the sketch lasts. Taking that thread from the assembler
+was measured to cost more than it saved (SKESA on a 134 MB MiSeq run took 55 s
+on three threads against 41 s on four). The sketch ends before the reads are
+deleted.
+It is written to a temporary file in the run directory and renamed into place,
+so an interrupted sketch leaves no `reads.sig.zip`.
+
+`--reads-sketch/--no-reads-sketch` controls it. By default the reads are
+sketched when sourmash can run; otherwise one INFO line per stage says so.
+`--reads-sketch` requires sourmash and exits 4 before anything is downloaded
+when it is missing, as `--sketch` does. A failed sketch never fails the
+assembly: it is logged as a warning and the marker records no sketch. The
+done marker records the file name (`reads_sketch`), the parameter string and
+the sourmash version, or null for each; `assembly_stats.tsv` has a
+`reads_sketch` column (1 or 0). An excused run keeps no reads sketch, a
+quality-excused one included. A finished run whose marker records no sketch,
+for example one assembled before this option existed, is not assembled again:
+when its FASTQ files were kept (`--keep-reads`) and still match their
+checksums, the next `assemble` call sketches them and updates the marker;
+otherwise the sketch stays empty and one INFO line counts such runs. When the
+stage is otherwise up to date, that call needs `--force`.
+
+The reads sketch is not a genome sketch. It is kept beside the assembly and
+is never copied into `sketches/`, which holds one signature per genome for
+the consumers described under "Genome sketches". A gate that would screen the
+reads against a reference before assembly (`--screen-reads`) is planned but
+not implemented.
+
 The same work is available as three stateless steps, which the Nextflow reads
 mode runs as separate tasks and which also serve a scheduler of your own:
 
@@ -485,8 +525,10 @@ repgenr reads-gather --reads-tsv $WD/reads.tsv --assemblies asm --qc qc -o out \
 `assemble-run` writes `contigs.fasta` and the `assembly.ok` marker into its
 `--out` directory, or `excused_runs.tsv` when the run has no FASTQ mirror, an
 unsupported platform, or fails to download, assemble or polish (`--polisher`,
-`--polish-rounds`, `--keep-reads`, `--keep-files` and `--tool-arg` as on
-`assemble`). `genome-qc` reads a
+`--polish-rounds`, `--keep-reads`, `--keep-files`, `--tool-arg` and
+`--reads-sketch/--no-reads-sketch` as on `assemble`; the reads sketch goes to
+`reads.sig.zip` in the same directory). In Nextflow, the parameter
+`--assemble_args '--no-reads-sketch'` turns it off. `genome-qc` reads a
 directory of such run directories (`--assemblies`) and writes `quality.tsv`
 and `classification.tsv` keyed by run accession; it needs at least one
 database. `reads-gather` applies the quality gate and the naming policy above

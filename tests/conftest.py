@@ -142,12 +142,19 @@ class FakeSourmash:
     as a tool killed mid-write would; ``interrupt`` names genomes whose call
     raises KeyboardInterrupt. ``barrier`` (a threading.Barrier) makes calls
     wait for each other, so an overlap is certain and ``peak`` measures it.
+
+    A reads sketch (``-p ...,abund``, several FASTQ inputs) is recorded in
+    ``reads_calls`` as (name, inputs) instead of ``calls``; ``fail`` applies
+    to it by name. ``reads_hook``, when set, is called with the name before
+    the file is written (a test synchronises with the assembler through it).
     """
 
     def __init__(self) -> None:
         import threading
 
         self.calls: list[str] = []
+        self.reads_calls: list[tuple[str, list[str]]] = []
+        self.reads_hook = None
         self.fail: set[str] = set()
         self.interrupt: set[str] = set()
         self.barrier: threading.Barrier | None = None
@@ -167,9 +174,20 @@ class FakeSourmash:
             first = source.read_text(encoding="utf-8").splitlines()[1]
             out.write_text(f"{name}\n{first}\n", encoding="utf-8")
             return 0
-        assert argv[:5] == ["sourmash", "sketch", "dna", "-p", "k=21,k=31,k=51,scaled=1000"]
         name = argv[argv.index("--name") + 1]
         out = Path(argv[argv.index("-o") + 1])
+        if argv[:5] == ["sourmash", "sketch", "dna", "-p", "k=21,k=31,k=51,scaled=1000,abund"]:
+            inputs = argv[argv.index("-o") + 2 :]
+            with self._lock:
+                self.reads_calls.append((name, inputs))
+            if self.reads_hook is not None:
+                self.reads_hook(name)
+            if name in self.fail:
+                out.write_text("partial", encoding="utf-8")
+                raise ToolExecutionError(argv, 1, output="killed", tool="sourmash")
+            out.write_text("\n".join([name, *inputs]) + "\n", encoding="utf-8")
+            return 0
+        assert argv[:5] == ["sourmash", "sketch", "dna", "-p", "k=21,k=31,k=51,scaled=1000"]
         with self._lock:
             self.calls.append(name)
             self._active += 1

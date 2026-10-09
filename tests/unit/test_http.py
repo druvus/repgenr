@@ -110,6 +110,83 @@ def test_download_request_error(monkeypatch, tmp_path: Path) -> None:
     assert not (tmp_path / "f.gz.part").exists()
 
 
+def _count_reads(monkeypatch) -> list[str]:
+    """Record every opening of a file for reading (the md5 must not need one)."""
+    import builtins
+
+    reads: list[str] = []
+    real_open = builtins.open
+
+    def counting_open(file, mode="r", *args, **kwargs):  # noqa: ANN001, ANN202
+        if "r" in mode:
+            reads.append(str(file))
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", counting_open)
+    return reads
+
+
+def test_download_with_md5_hashes_while_writing(monkeypatch, tmp_path: Path) -> None:
+    import hashlib
+
+    body = bytes(range(256)) * 9000  # more than one 1 MiB chunk
+    _patch(monkeypatch, _FakeResp(content=body, headers={"Content-Length": str(len(body))}))
+    reads = _count_reads(monkeypatch)
+    verified: list[Path] = []
+    monkeypatch.setattr(http, "verify_md5", lambda path, md5: verified.append(path))
+    dest = tmp_path / "f.gz"
+    digest = hashlib.md5(body).hexdigest().upper()  # any case
+    assert http.download("https://x/f.gz", dest, md5=digest) == dest
+    # The file was opened for writing only: never read back, never verified again.
+    assert reads == []
+    assert verified == []
+    assert dest.read_bytes() == body
+    assert not (tmp_path / "f.gz.part").exists()
+
+
+def test_download_with_a_wrong_md5_leaves_nothing(monkeypatch, tmp_path: Path) -> None:
+    body = b"A" * 2048
+    _patch(monkeypatch, _FakeResp(content=body, headers={"Content-Length": str(len(body))}))
+    dest = tmp_path / "f.gz"
+    with pytest.raises(WorkdirError) as info:
+        http.download("https://x/f.gz", dest, md5="0" * 32)
+    # The same text verify_md5 gives.
+    assert str(info.value).startswith(f"Checksum mismatch for f.gz: expected {'0' * 32}, got ")
+    assert "The download is corrupt; delete it and re-run." in str(info.value)
+    assert not dest.exists()
+    assert not (tmp_path / "f.gz.part").exists()
+
+
+def test_download_without_md5_does_not_hash(monkeypatch, tmp_path: Path) -> None:
+    import hashlib
+
+    body = b"A" * 2048
+    _patch(monkeypatch, _FakeResp(content=body, headers={"Content-Length": str(len(body))}))
+    real_md5 = hashlib.md5
+    made: list[int] = []
+
+    def md5(*args, **kwargs):  # noqa: ANN202
+        made.append(1)
+        return real_md5(*args, **kwargs)
+
+    monkeypatch.setattr(http.hashlib, "md5", md5)
+    dest = tmp_path / "f.gz"
+    http.download("https://x/f.gz", dest)
+    assert dest.read_bytes() == body and made == []
+
+
+def test_verify_md5_and_download_give_the_same_mismatch_text(monkeypatch, tmp_path: Path) -> None:
+    body = b"payload"
+    _patch(monkeypatch, _FakeResp(content=body, headers={"Content-Length": str(len(body))}))
+    with pytest.raises(WorkdirError) as during:
+        http.download("https://x/f.gz", tmp_path / "f.gz", md5="ab" * 16)
+    local = tmp_path / "f.gz"
+    local.write_bytes(body)
+    with pytest.raises(WorkdirError) as after:
+        http.verify_md5(local, "ab" * 16)
+    assert str(during.value) == str(after.value)
+
+
 # --- MD5 manifest verification ------------------------------------------------
 
 

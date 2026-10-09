@@ -71,6 +71,11 @@ HELP_SKETCH = (
     "Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). "
     "Default: when sourmash can run; --sketch requires it, --no-sketch skips it."
 )
+HELP_READS_SKETCH = (
+    "Sketch each run's reads with sourmash (k=21,31,51, scaled=1000, with abundances) "
+    "into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. "
+    "Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it."
+)
 HELP_WORKDIR = "Working directory."
 HELP_WORKDIR_CREATED = "Working directory (created)."
 HELP_GTDB_RELEASE = "GTDB release (tsv source)."

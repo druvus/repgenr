@@ -18,6 +18,8 @@ import logging
 import os
 import re
 import shutil
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -28,7 +30,7 @@ from ..assemblers.base import ReadSet, accepting_assemblers, registry, select_as
 from ..assemblers.contigs import ContigStats, filter_contigs
 from ..classifiers.base import Classification, ClassifyParams
 from ..classifiers.base import registry as classifier_registry
-from ..core import http
+from ..core import http, process
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     ASSEMBLY_STATS_TSV,
@@ -62,12 +64,17 @@ from ..core.executors import parallel_map
 from ..core.manifest import MANIFEST_FILENAME, SketchRecord, record_from_selection
 from ..core.process import check_free_disk, link_or_copy, remove_tree, staged_dir
 from ..core.sketches import (
+    READS_SKETCH_NAME,
+    READS_SKETCH_PARAMS,
     SketchSource,
     adapter_sketches,
+    clear_partials,
     remove_stale,
     require_sourmash_if_requested,
     sketch_beside,
+    sketch_reads,
     sketch_stage_genomes,
+    sourmash_for_reads_sketch,
 )
 from ..polishers.base import PolishParams, accepting_polishers, select_polisher
 from ..polishers.base import registry as polisher_registry
@@ -130,6 +137,10 @@ class AssembleParams:
     # Genome sketches (core.sketches): None sketches when sourmash can run,
     # True requires it, False skips them. --append sketches the new genomes only.
     sketch: bool | None = None
+    # The reads sketch of each run (assemblies/<run>/reads.sig.zip), made by
+    # sourmash beside the assembler: None sketches when sourmash can run, True
+    # requires it, False skips it. Not a genome sketch; never in sketches/.
+    reads_sketch: bool | None = None
     # Tool tuning from ``--tool-arg``; each adapter declares the keys it reads.
     extra: dict = field(default_factory=dict)
 
@@ -151,6 +162,8 @@ class _Outcome:
     taxonomy_flag: str = ""
     # Tool versions a reused marker recorded (its run needs no preflight).
     versions: dict = field(default_factory=dict)
+    # Whether assemblies/<run>/reads.sig.zip holds the run's reads sketch.
+    reads_sketch: bool = False
 
 
 def run(ctx: WorkdirContext, params: AssembleParams) -> int:
@@ -163,6 +176,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
         raise WorkdirError(f"{READS_TSV} lists no runs.")
     _check_outgroup_file(params.outgroup)
     require_sourmash_if_requested(params.sketch)
+    require_sourmash_if_requested(params.reads_sketch)
 
     assemblies = ctx.workdir / "assemblies"
     scratch = ctx.scratch_dir / "assemble"
@@ -190,6 +204,9 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             gtdb_lineages=gtdb_lineages,
         )
     )
+    reads_versions = sourmash_for_reads_sketch(params.reads_sketch, "assemble", logger)
+    reads_sketch_version = reads_versions.get("sourmash", "") if reads_versions else None
+    versions.update(reads_versions)
     pending = [o for o in plan if o.excused is None and o.stats is None]
     if pending:  # a rerun over finished runs downloads nothing
         check_free_disk(
@@ -219,8 +236,13 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             scratch / outcome.row.run_accession,
             versions,
             logger,
+            reads_sketch=reads_sketch_version,
         )
 
+    if reads_sketch_version is not None:
+        refill_reads_sketches(
+            plan, assemblies, scratch, reads_sketch_version, params.threads, logger
+        )
     done = parallel_map(work, pending, jobs, logger=logger)
     by_run = {o.row.run_accession: o for o in [*plan, *done]}
     outcomes = [by_run[r.run_accession] for r in rows]
@@ -256,6 +278,10 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if quality is not None:
         apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
         assembled = [o for o in assembled if o.excused is None]
+    # An excused run keeps no reads sketch.
+    for o in outcomes:
+        if o.excused is not None:
+            drop_reads_sketch(o, assemblies / o.row.run_accession)
     n_disagree = 0
     if classified is not None:
         n_disagree = apply_classification(assembled, classified, versions, logger)
@@ -345,6 +371,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "n_genus_renamed": sum(1 for o in assembled if o.taxonomy_flag == GENUS_RENAMED),
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
             "sketches": sketches,
+            "n_reads_sketches": sum(1 for o in assembled if o.reads_sketch),
         },
         tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),
@@ -569,6 +596,9 @@ def _reuse_finished(
     outcome.versions = dict(done.get("tool_versions") or {})
     if not outcome.versions and done.get("version"):
         outcome.versions = {done["assembler"]: done["version"]}
+    # A marker written before reads sketches existed has no such field.
+    sketch_name = done.get("reads_sketch")
+    outcome.reads_sketch = bool(sketch_name) and (run_dir / str(sketch_name)).is_file()
     if check_settings and (old_floor is None or old_floor < params.min_contig_length):
         # A marker without settings may hold contigs below the floor; filtering
         # again is a no-op when it does not.
@@ -744,11 +774,25 @@ def _fetch_and_assemble(
     run_scratch: Path,
     versions: dict[str, str],
     logger: logging.Logger,
+    *,
+    reads_sketch: str | None = None,
 ) -> _Outcome:
-    """Fetch and assemble one run into ``out_dir`` (contigs and the done marker)."""
+    """Fetch and assemble one run into ``out_dir`` (contigs and the done marker).
+
+    ``reads_sketch`` is the sourmash version when the run's reads are to be
+    sketched, None otherwise. The sketch runs in a thread beside the
+    assembler, on the verified FASTQ files, and ends before the reads are
+    removed. The assembler keeps the run's full thread share and the
+    single-threaded sketch runs alongside it, one thread over the share;
+    giving that thread up slowed the assembler more than the sketch took.
+    A failed sketch is a warning, never an excuse.
+    """
     row = outcome.row
     # The marker names finished contigs; a run assembled again has none until it ends.
     (out_dir / _DONE_MARKER).unlink(missing_ok=True)
+    (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+    # A hard exit can leave the temporary file of a sketch thread behind.
+    clear_partials(out_dir)
     _clear_scratch(row, run_scratch)
     run_scratch.mkdir(parents=True, exist_ok=True)
     try:
@@ -759,10 +803,68 @@ def _fetch_and_assemble(
         remove_tree(run_scratch)
         return outcome
 
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sketch = None
+    if reads_sketch is not None:
+        sketch = ReadsSketchJob(row.run_accession, files, out_dir / READS_SKETCH_NAME, logger)
+    try:
+        marker = _assemble_fetched(
+            outcome, params, files, threads, out_dir, run_scratch, versions, logger
+        )
+    finally:
+        # A stopped or failed assembler still waits for the sketch, which
+        # reads the files the cleanup below removes.
+        if sketch is not None:
+            sketch.join()
+    # Raises when a stop request cut the sketch short: no marker is written
+    # and the reads stay, so a resume keeps them and assembles the run again.
+    sketched = sketch.wait() if sketch is not None else False
+    if marker is None:  # excused
+        (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+        if not params.keep_files:
+            remove_tree(run_scratch)
+        return outcome
+    assert outcome.stats is not None
+    outcome.reads_sketch = sketched
+    marker.update(reads_sketch_fields(reads_sketch if sketched else None))
+    _write_marker(out_dir / _DONE_MARKER, marker)
+    if params.keep_files:
+        pass
+    elif params.keep_reads:
+        remove_tree(run_scratch / "asm")
+    else:
+        remove_tree(run_scratch)
+    logger.info(
+        "%s: %d contigs, %d bp, N50 %d (%s)",
+        row.run_accession,
+        outcome.stats.n_contigs,
+        outcome.stats.total_length,
+        outcome.stats.n50,
+        outcome.assembler,
+    )
+    return outcome
+
+
+def _assemble_fetched(
+    outcome: _Outcome,
+    params: AssembleParams,
+    files: tuple[Path, ...],
+    threads: int,
+    out_dir: Path,
+    run_scratch: Path,
+    versions: dict[str, str],
+    logger: logging.Logger,
+) -> dict | None:
+    """Assemble, polish and filter fetched reads into ``out_dir``.
+
+    Returns the done marker to write, or None when the run is excused (set on
+    ``outcome``). Removes nothing: the caller cleans up once the reads sketch
+    has ended.
+    """
+    row = outcome.row
     assert outcome.assembler is not None
     adapter = registry.create(outcome.assembler)
     reads = read_set(row, files)
-    out_dir.mkdir(parents=True, exist_ok=True)
     try:
         result = adapter.assemble(
             reads,
@@ -773,9 +875,7 @@ def _fetch_and_assemble(
     except RepGenRError as exc:
         logger.warning("%s: assembly failed (%s)", row.run_accession, exc)
         outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {_why(exc)}")
-        if not params.keep_files:
-            remove_tree(run_scratch)
-        return outcome
+        return None
     contigs_in = result.contigs
     polish_stats: dict = {}
     if outcome.polisher is not None:
@@ -794,9 +894,7 @@ def _fetch_and_assemble(
             outcome.excused = ExcusedRun(
                 row.run_accession, "assemble", f"polish_failed: {_why(exc)}"
             )
-            if not params.keep_files:
-                remove_tree(run_scratch)
-            return outcome
+            return None
         contigs_in = polished.contigs
         outcome.polish_rounds = polished.rounds
         polish_stats = dict(polished.tool_stats)
@@ -810,9 +908,7 @@ def _fetch_and_assemble(
     except RepGenRError as exc:
         logger.warning("%s: contig filtering failed (%s)", row.run_accession, exc)
         outcome.excused = ExcusedRun(row.run_accession, "assemble", f"assembly_failed: {_why(exc)}")
-        if not params.keep_files:
-            remove_tree(run_scratch)
-        return outcome
+        return None
     if stats.n_contigs == 0:
         outcome.excused = ExcusedRun(
             row.run_accession,
@@ -820,16 +916,14 @@ def _fetch_and_assemble(
             f"assembly_failed: no contig of {params.min_contig_length} bp or more",
         )
         (out_dir / _CONTIGS_NAME).unlink(missing_ok=True)
-        if not params.keep_files:
-            remove_tree(run_scratch)
-        return outcome
+        return None
 
     outcome.stats = stats
     outcome.tool_stats = dict(result.tool_stats)
     tools: list[tuple[str, object]] = [(outcome.assembler, registry)]
     if outcome.polisher is not None:
         tools.append((outcome.polisher, polisher_registry))
-    marker = {
+    return {
         "assembler": outcome.assembler,
         "version": versions.get(adapter.capabilities.name, ""),
         "polisher": outcome.polisher or "",
@@ -840,22 +934,164 @@ def _fetch_and_assemble(
         "tool_versions": _marker_versions(versions, tools),
         "settings": _settings(params),
     }
-    _write_marker(out_dir / _DONE_MARKER, marker)
-    if params.keep_files:
-        pass
-    elif params.keep_reads:
-        remove_tree(run_scratch / "asm")
-    else:
-        remove_tree(run_scratch)
-    logger.info(
-        "%s: %d contigs, %d bp, N50 %d (%s)",
-        row.run_accession,
-        stats.n_contigs,
-        stats.total_length,
-        stats.n50,
-        outcome.assembler,
-    )
-    return outcome
+
+
+# --- reads sketch -----------------------------------------------------------------
+
+
+def reads_sketch_fields(version: str | None) -> dict[str, str | None]:
+    """The done-marker fields of a reads sketch; all None when there is none.
+
+    ``reads_sketch`` is the file name within the run directory.
+    """
+    if version is None:
+        return {"reads_sketch": None, "reads_sketch_params": None, "reads_sketch_version": None}
+    return {
+        "reads_sketch": READS_SKETCH_NAME,
+        "reads_sketch_params": READS_SKETCH_PARAMS,
+        "reads_sketch_version": version,
+    }
+
+
+class ReadsSketchJob:
+    """One sourmash call on a run's FASTQ files, in a thread beside the assembler.
+
+    :meth:`wait` joins the thread and reports the outcome: an INFO line with
+    the time taken, or a WARNING when the sketch failed. A failure never
+    propagates; the temporary file is removed by :func:`sketch_reads`.
+    """
+
+    def __init__(self, run: str, files: Sequence[Path], out: Path, logger: logging.Logger) -> None:
+        self.run = run
+        self.out = out
+        self.seconds = 0.0
+        self._logger = logger
+        self._error: Exception | None = None
+        self._thread = threading.Thread(
+            target=self._work, args=(tuple(files),), name=f"reads-sketch-{run}", daemon=True
+        )
+        self._thread.start()
+
+    def _work(self, files: tuple[Path, ...]) -> None:
+        start = time.monotonic()
+        try:
+            sketch_reads(files, self.run, self.out, self._logger)
+        except Exception as exc:  # a sketch never fails the assembly
+            self._error = exc
+        self.seconds = time.monotonic() - start
+
+    def done(self) -> bool:
+        return not self._thread.is_alive()
+
+    def join(self) -> None:
+        self._thread.join()
+
+    def wait(self) -> bool:
+        """Join the thread; True when the sketch was written.
+
+        A sketch cut short by a stop request (SIGTERM or SIGINT) is raised
+        rather than reported: the caller must not record the run as finished
+        without a sketch, nor remove its reads, since a resume can then sketch
+        them again.
+        """
+        self._thread.join()
+        if self._error is not None and process.stop_requested.is_set():
+            raise self._error
+        if self._error is not None:
+            self._logger.warning(
+                "%s: reads sketch not written (%s); the assembly is not affected",
+                self.run,
+                _why(self._error) if isinstance(self._error, RepGenRError) else self._error,
+            )
+            return False
+        self._logger.info("%s: reads sketch written in %.1f s", self.run, self.seconds)
+        return True
+
+
+def _kept_reads(row: ReadRow, run_scratch: Path) -> tuple[Path, ...] | None:
+    """The run's FASTQ files left in scratch (--keep-reads), checked against
+    their md5 when known; None unless every file is there and matches."""
+    if not row.fastq_urls:
+        return None
+    md5s = list(row.fastq_md5) + [""] * (len(row.fastq_urls) - len(row.fastq_md5))
+    files = []
+    for url, md5 in zip(row.fastq_urls, md5s, strict=True):
+        path = run_scratch / Path(url).name
+        if not path.is_file() or (md5 and not _verified(path, md5)):
+            return None
+        files.append(path)
+    return tuple(files)
+
+
+def refill_reads_sketches(
+    plan: list[_Outcome],
+    assemblies: Path,
+    scratch: Path,
+    version: str,
+    threads: int,
+    logger: logging.Logger,
+) -> int:
+    """Sketch the reads of finished runs whose marker records no reads sketch.
+
+    Applies to runs whose FASTQ files were kept (``--keep-reads``); the run is
+    not assembled again. Runs without kept files keep a null sketch, and one
+    INFO line counts them. Returns the number of sketches written.
+    """
+    missing = [o for o in plan if o.stats is not None and o.excused is None and not o.reads_sketch]
+    if not missing:
+        return 0
+    todo = []
+    for o in missing:
+        run_dir = assemblies / o.row.run_accession
+        clear_partials(run_dir)
+        done = _read_marker(run_dir / _DONE_MARKER)
+        if done is not None and done.get("reads_sketch"):
+            # The marker names a sketch file that is gone: make it say so.
+            done.update(reads_sketch_fields(None))
+            _write_marker(run_dir / _DONE_MARKER, done)
+        files = _kept_reads(o.row, scratch / o.row.run_accession)
+        if files is not None:
+            todo.append((o, files))
+    if len(todo) < len(missing):
+        logger.info(
+            "%d finished run(s) have no reads sketch and their FASTQ files were not kept "
+            "(--keep-reads); their reads sketch stays empty.",
+            len(missing) - len(todo),
+        )
+    if not todo:
+        return 0
+    logger.info("Sketching the kept reads of %d finished run(s)", len(todo))
+
+    def one(item: tuple[_Outcome, tuple[Path, ...]]) -> bool:
+        o, files = item
+        run_dir = assemblies / o.row.run_accession
+        job = ReadsSketchJob(o.row.run_accession, files, run_dir / READS_SKETCH_NAME, logger)
+        if not job.wait():
+            return False
+        done = _read_marker(run_dir / _DONE_MARKER)
+        if done is None:
+            (run_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+            return False
+        done.update(reads_sketch_fields(version))
+        _write_marker(run_dir / _DONE_MARKER, done)
+        o.reads_sketch = True
+        return True
+
+    results = parallel_map(one, todo, max(1, min(threads, len(todo))), logger=logger)
+    return sum(1 for r in results if r)
+
+
+def drop_reads_sketch(outcome: _Outcome, run_dir: Path) -> None:
+    """Remove the reads sketch of an excused run and clear it in its marker."""
+    outcome.reads_sketch = False
+    sketch = run_dir / READS_SKETCH_NAME
+    if not sketch.exists():
+        return
+    done = _read_marker(run_dir / _DONE_MARKER)
+    if done is not None and done.get("reads_sketch"):
+        done.update(reads_sketch_fields(None))
+        _write_marker(run_dir / _DONE_MARKER, done)
+    sketch.unlink(missing_ok=True)
 
 
 def _clear_scratch(row: ReadRow, run_scratch: Path) -> None:
@@ -886,7 +1122,9 @@ def _verified(path: Path, md5: str) -> bool:
 def _fetch(row: ReadRow, run_scratch: Path, logger: logging.Logger) -> tuple[Path, ...]:
     """Bring the run's FASTQ files into scratch, verified when a checksum is known.
 
-    A file left by an interrupted attempt is kept when it matches its checksum.
+    A download is checked against its md5 as it is written; a local copy is
+    hashed after the copy. A file left by an interrupted attempt is kept when
+    it matches its checksum.
     """
     files = []
     md5s = list(row.fastq_md5) + [""] * (len(row.fastq_urls) - len(row.fastq_md5))
@@ -899,10 +1137,11 @@ def _fetch(row: ReadRow, run_scratch: Path, logger: logging.Logger) -> tuple[Pat
             continue
         if source.exists():
             shutil.copy2(source, dest)
+            if md5:
+                http.verify_md5(dest, md5)
         else:
-            http.download(url, dest, logger=logger)
-        if md5:
-            http.verify_md5(dest, md5)
+            # The checksum is computed while the bytes are written.
+            http.download(url, dest, logger=logger, md5=md5 or None)
         files.append(dest)
     return tuple(files)
 
@@ -1009,6 +1248,7 @@ def precheck(ctx: WorkdirContext, params: AssembleParams) -> None:
     a finished record incomplete (registered in the CLI's stage prechecks)."""
     _check_outgroup_file(params.outgroup)
     require_sourmash_if_requested(params.sketch)
+    require_sourmash_if_requested(params.reads_sketch)
     check_quality_inputs(
         checkm2_db=params.checkm2_db or checkm2_db_from_env(),
         classifier=classifier_for(params.classifier, params.gtdb_sketch),
@@ -1314,6 +1554,7 @@ def _stats_row(o: _Outcome) -> AssemblyStatsRow:
         label_source=o.label_source,
         taxonomy_flag=o.taxonomy_flag,
         polisher=o.polisher or "",
+        reads_sketch=o.reads_sketch,
     )
 
 

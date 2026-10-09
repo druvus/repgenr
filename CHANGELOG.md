@@ -7,6 +7,28 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Reads sketch: `assemble` sketches each run's reads with sourmash
+  (`sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` on all FASTQ
+  files of the run, named by run accession) into
+  `assemblies/<run>/reads.sig.zip`. The sketch runs in a thread beside the
+  assembler, which keeps its full thread share (the single-threaded sketch
+  runs one thread over it), and it ends before the reads are deleted. `--reads-sketch`
+  requires sourmash (exit 4 before any download), `--no-reads-sketch` skips
+  it, and the default sketches when sourmash can run. A failed sketch is a
+  warning and never fails the assembly. The done marker records
+  `reads_sketch`, `reads_sketch_params` and `reads_sketch_version` (null
+  without a sketch), `assembly_stats.tsv` gains a `reads_sketch` column (1 or
+  0; older tables still read), and excused runs keep no sketch. A finished
+  run without a sketch is not assembled again; its kept FASTQ files
+  (`--keep-reads`) are sketched on the next call. The reads sketch is not a
+  genome sketch and is never written to `sketches/`. `assemble-run` takes the
+  same flags.
+- Downloads check their md5 while the bytes are written: `core.http.download`
+  takes an optional `md5` and compares the digest at the end, deleting the
+  `.part` file on a mismatch with the error `verify_md5` raises. The
+  `assemble` fetch passes ENA's checksum and no longer reads each FASTQ file a
+  second time after a fresh download; a file kept from an earlier attempt and
+  a local copy are still hashed with `verify_md5`.
 - Genome sketches, step 2: the sourmash tools read `sketches/` instead of
   sketching each genome again. `dereplicate --tool sourmash` (branchwater
   `pairwise` over a path list of the `.sig.zip` files, or `sourmash compare`),
