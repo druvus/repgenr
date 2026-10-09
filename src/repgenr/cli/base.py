@@ -730,7 +730,11 @@ def _require_unit_interval(value: float | None, label: str) -> None:
 # sketch (--sketch/--no-sketch of the genome-writing stages) adds sketches/,
 # which is not a deliverable, so it changes no result either; a workdir
 # finished without sketches gets them from `repgenr sketch`.
-_NON_RESULT_PARAMS = frozenset({"threads", "num_processes", "allow_incomplete", "sketch"})
+# strict_sources (ingest --strict-sources) only refuses a run; the genomes
+# staged are the same, so a repeat with it skips like one without.
+_NON_RESULT_PARAMS = frozenset(
+    {"threads", "num_processes", "allow_incomplete", "sketch", "strict_sources"}
+)
 
 
 # Fingerprint format version. Bumping it guarantees fingerprints from older
@@ -1080,6 +1084,13 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     digests = _stage_input_digests(ctx, stage_name, params)
     fingerprint = _stage_fingerprint(stage_name, params, digests, _env_fragment())
     prior = ctx.config.stages.get(stage_name)
+    # Why a completed stage re-runs; logged after the precheck, so that a
+    # refused run is not announced as re-running first.
+    rerun_notes: list[tuple[Any, ...]] = []
+
+    def rerun_note(*args: Any) -> None:
+        rerun_notes.append(args)
+
     if not _RUN_STATE["force"] and prior is not None and prior.completed:
         if prior.fingerprint == fingerprint:
             missing = missing_deliverables(ctx, stage_name, params)
@@ -1102,13 +1113,13 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
             # Per-file deliverables (genomes, representatives) can number in
             # the thousands; name a few.
             for path in missing[:_LOGGED_MISSING]:
-                logger.info(
+                rerun_note(
                     "Stage '%s': deliverable %s missing; re-running.",
                     stage_name,
                     deliverable_label(ctx.workdir, path),
                 )
             if len(missing) > _LOGGED_MISSING:
-                logger.info(
+                rerun_note(
                     "Stage '%s': %d more deliverable(s) missing.",
                     stage_name,
                     len(missing) - _LOGGED_MISSING,
@@ -1121,13 +1132,13 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
         added = sorted(digests.keys() - prior.inputs.keys())
         dropped = sorted(prior.inputs.keys() - digests.keys())
         if changed and prior.inputs:
-            logger.info(
+            rerun_note(
                 "Stage '%s': input %s changed since last completion; re-running.",
                 stage_name,
                 ", ".join(f"'{c}'" for c in changed),
             )
         if (added or dropped) and prior.inputs:
-            logger.info(
+            rerun_note(
                 "Stage '%s': reads a different input set than at last completion "
                 "(added: %s; no longer read: %s); re-running.",
                 stage_name,
@@ -1141,6 +1152,8 @@ def _run_stage(stage_name: str, ctx: WorkdirContext, params, logger) -> None:
     precheck = _STAGE_PRECHECKS.get(stage_name)
     if precheck is not None:
         precheck(ctx, params)
+    for args in rerun_notes:
+        logger.info(*args)
     finished = (
         (prior.completed, prior.fingerprint) if prior is not None and prior.completed else None
     )

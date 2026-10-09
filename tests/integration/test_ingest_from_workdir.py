@@ -413,3 +413,163 @@ def test_keeper_gtdb_on_the_merged_workdir(tmp_path, sources, first_rep_tool) ->
     assert [r.name for r in result.representatives] == [GTDB_ROWS[1].filename]
     params = ctx.config.stages["dereplicate"].params
     assert params["keeper_effective"] == "gtdb"
+
+
+# --- state of the source records ---------------------------------------------------
+
+
+def _recorded_source(tmp_path: Path, name: str, monkeypatch) -> tuple[Path, Path]:
+    """A source workdir written by `repgenr ingest --genomes-dir` (a finished
+    ingest record with its resume inputs), and the directory it took."""
+    monkeypatch.setitem(cli._RUN_STATE, "force", False)
+    raw = tmp_path / f"{name}_fasta"
+    raw.mkdir()
+    for i, row in enumerate(r for r in GTDB_ROWS if not r.is_outgroup):
+        (raw / row.filename).write_text(f">{row.accession}\n{'ACGT' * (10 + i)}\n")
+    wd = tmp_path / name
+    result = _runner.invoke(app, ["ingest", "-wd", str(wd), "--genomes-dir", str(raw)])
+    assert result.exit_code == 0, result.output
+    assert not Config.load(wd).stages["ingest"].interrupted
+    return wd, raw
+
+
+def _source_warnings(caplog) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "--from-workdir" in r.getMessage()
+    ]
+
+
+def test_done_source_gives_no_warning(tmp_path, monkeypatch, caplog) -> None:
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    ctx = _ctx(tmp_path / "wd3", caplog)
+    with caplog.at_level(logging.INFO):
+        run(ctx, IngestParams(from_workdirs=[str(src)], strict_sources=True))
+    assert _source_warnings(caplog) == []
+    params = ctx.config.stages["ingest"].params
+    assert params["source_states"] == [{"path": str(src), "stage": "ingest", "state": "done"}]
+
+
+def test_stale_source_warns_and_is_taken(tmp_path, monkeypatch, caplog) -> None:
+    src, raw = _recorded_source(tmp_path, "src", monkeypatch)
+    # A genome file the source ingest took changed after it finished.
+    target = raw / GTDB_ROWS[0].filename
+    target.write_text(target.read_text() + "ACGTACGT\n")
+    ctx = _ctx(tmp_path / "wd3", caplog)
+    with caplog.at_level(logging.INFO):
+        n = run(ctx, IngestParams(from_workdirs=[str(src)]))
+    assert n == 2
+    warnings = _source_warnings(caplog)
+    assert len(warnings) == 1
+    assert str(src) in warnings[0] and "ingest, which is stale" in warnings[0]
+    assert "input changed" in warnings[0]
+    (state,) = ctx.config.stages["ingest"].params["source_states"]
+    assert state == {"path": str(src), "stage": "ingest", "state": "stale"}
+
+
+def test_interrupted_source_warns(tmp_path, monkeypatch, caplog) -> None:
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    cfg = Config.load(src)
+    cfg.stages["ingest"].completed = None  # the mark of a run that did not finish
+    cfg.save(src)
+    ctx = _ctx(tmp_path / "wd3", caplog)
+    with caplog.at_level(logging.INFO):
+        run(ctx, IngestParams(from_workdirs=[str(src)]))
+    (warning,) = _source_warnings(caplog)
+    assert "written by ingest, which is interrupted" in warning
+    (state,) = ctx.config.stages["ingest"].params["source_states"]
+    assert state["state"] == "interrupted"
+
+
+def test_source_without_record_warns_and_is_taken(tmp_path, sources, caplog) -> None:
+    wd1, wd2 = sources
+    ctx = _ctx(tmp_path / "wd3", caplog)
+    with caplog.at_level(logging.INFO):
+        n = run(ctx, IngestParams(from_workdirs=[str(wd1), str(wd2)]))
+    assert n == 4
+    warnings = _source_warnings(caplog)
+    assert len(warnings) == 2
+    assert all("no stage record" in w for w in warnings)
+    assert [s["state"] for s in ctx.config.stages["ingest"].params["source_states"]] == [
+        "no stage record",
+        "no stage record",
+    ]
+
+
+def test_latest_genome_set_record_is_evaluated(tmp_path, monkeypatch) -> None:
+    from repgenr.stages.ingest import source_state
+
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    cfg = Config.load(src)
+    # An older genome record without inputs: the later ingest record is the one read.
+    cfg.record_stage("genome", params={}, completed="2000-01-01T00:00:00+00:00")
+    cfg.save(src)
+    state = source_state(src)
+    assert (state.stage, state.state) == ("ingest", "done")
+
+
+def test_cli_strict_sources_refuses_before_writing(tmp_path, monkeypatch) -> None:
+    src, raw = _recorded_source(tmp_path, "src", monkeypatch)
+    target = raw / GTDB_ROWS[0].filename
+    target.write_text(target.read_text() + "ACGTACGT\n")
+    wd3 = tmp_path / "wd3"
+    result = _runner.invoke(
+        app, ["ingest", "-wd", str(wd3), "--from-workdir", str(src), "--strict-sources"]
+    )
+    assert result.exit_code == 2, result.output
+    assert "--strict-sources" in result.output and "stale" in result.output
+    assert not (wd3 / SELECTION_TSV).exists()
+    assert not (wd3 / "genomes").exists()
+    assert "ingest" not in Config.load(wd3).stages
+
+
+def test_cli_strict_sources_refuses_a_source_without_record(tmp_path, sources) -> None:
+    wd1, _ = sources
+    wd3 = tmp_path / "wd3"
+    result = _runner.invoke(
+        app, ["ingest", "-wd", str(wd3), "--from-workdir", str(wd1), "--strict-sources"]
+    )
+    assert result.exit_code == 2, result.output
+    assert "no stage record" in result.output
+    assert not (wd3 / SELECTION_TSV).exists()
+
+
+def test_status_names_a_source_not_done_when_ingested(tmp_path, monkeypatch, sources) -> None:
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    _, wd2 = sources
+    wd3 = tmp_path / "wd3"
+    argv = ["ingest", "-wd", str(wd3), "--from-workdir", str(src), "--from-workdir", str(wd2)]
+    result = _runner.invoke(app, argv)
+    assert result.exit_code == 0, result.output
+    status = _runner.invoke(app, ["status", "-wd", str(wd3)])
+    assert status.exit_code == 0, status.output
+    assert f"sources not done when ingested: {wd2} (no stage record)" in status.output
+    assert f"{src} (" not in status.output, "a done source is not named"
+
+
+def test_cli_repeat_with_strict_sources_skips(tmp_path, monkeypatch) -> None:
+    src, _ = _recorded_source(tmp_path, "src", monkeypatch)
+    wd3 = tmp_path / "wd3"
+    argv = ["ingest", "-wd", str(wd3), "--from-workdir", str(src)]
+    first = _runner.invoke(app, argv)
+    assert first.exit_code == 0, first.output
+    stamp = Config.load(wd3).stages["ingest"].completed
+    second = _runner.invoke(app, [*argv, "--strict-sources"])
+    assert second.exit_code == 0, second.output
+    assert "skipping" in second.output
+    assert Config.load(wd3).stages["ingest"].completed == stamp
+
+
+def test_cli_strict_refusal_is_not_announced_as_a_rerun(tmp_path, monkeypatch) -> None:
+    src, raw = _recorded_source(tmp_path, "src", monkeypatch)
+    wd3 = tmp_path / "wd3"
+    argv = ["ingest", "-wd", str(wd3), "--from-workdir", str(src)]
+    assert _runner.invoke(app, argv).exit_code == 0
+    # Changing a source FASTA makes both the source and the ingest of wd3 stale.
+    target = raw / GTDB_ROWS[0].filename
+    target.write_text(target.read_text() + "ACGTACGT\n")
+    result = _runner.invoke(app, [*argv, "--strict-sources"])
+    assert result.exit_code == 2, result.output
+    assert "re-running" not in result.output
+    assert not Config.load(wd3).stages["ingest"].interrupted

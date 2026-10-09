@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-30 commands, 337 flags (337 with a live test or an n/a reason, 0 pending).
+30 commands, 338 flags (338 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -198,6 +198,7 @@ dispatch: `stage`
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/cli-reference.md, docs/usage.md, docs/output.md, docs/audit/cli-matrix.md |
 | `--genomes-dir` |  | IngestParams.genomes_dir | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_smoke.py::test_offline_chain_sourmash_mashtree | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--from-workdir` |  | IngestParams.from_workdirs | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline tests in tests/integration/test_ingest_from_workdir.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--strict-sources` |  | IngestParams.strict_sources | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline tests in tests/integration/test_ingest_from_workdir.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--selection` |  | IngestParams.selection | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_selection_table_drives_taxonomy_and_subset | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--outgroup` |  | IngestParams.outgroup | stage | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--copy` |  | IngestParams.copy | none | n/a: workdir command; the Nextflow layer uses the stateless steps | tests/live/test_ingest_flags.py::test_outgroup_and_copy | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |

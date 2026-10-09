@@ -1241,6 +1241,17 @@ commands:
         live: 'n/a: offline tests in tests/integration/test_ingest_from_workdir.py'
         observable: genomes/, selection.tsv and the manifest hold the genome sets of the
           source workdirs, with their sources
+      --strict-sources:
+        param: IngestParams.strict_sources
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline tests in tests/integration/test_ingest_from_workdir.py'
+        observable: a source whose genome-set record is not done exits 2 before anything
+          is written
       --selection:
         param: IngestParams.selection
         value: '{alt_file}'

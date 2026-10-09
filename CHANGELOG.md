@@ -7,6 +7,15 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `ingest --from-workdir` checks the record of the stage that wrote each
+  source's genome set (the latest of `genome`, `vgenome`, `ingest` and
+  `assemble`) with the evaluation `status` applies in that working directory,
+  and logs one warning per source whose record is interrupted or stale, or
+  that has no record ("no stage record"); the genomes are taken as they are.
+  The new `--strict-sources` refuses such a source with exit 2 before
+  anything is written. The ingest record keeps `source_states` (path, stage,
+  state per source), and the `status` line of `ingest` names the sources that
+  were not done when they were ingested.
 - Reads sketch: `assemble` sketches each run's reads with sourmash
   (`sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` on all FASTQ
   files of the run, named by run accession) into

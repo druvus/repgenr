@@ -22,6 +22,11 @@ resolved under its ``genomes/``, and the manifest source of each genome
 (gtdb, sra, ncbi_virus, bvbrc, local) is kept when that workdir has a manifest.
 The outgroup of a source workdir is not carried over; ``--outgroup`` sets the
 outgroup of the new workdir and may name a genome from any source.
+
+Before staging, the record of the stage that wrote each source's genome set
+(the latest of genome, vgenome, ingest and assemble) is evaluated as
+``status`` evaluates it: a source whose record is missing, interrupted or
+stale is named in one warning, and ``--strict-sources`` refuses it instead.
 """
 
 from __future__ import annotations
@@ -73,6 +78,95 @@ class IngestParams:
     # True requires it, False skips them. An up-to-date sketch of a
     # --from-workdir genome is copied instead of sketched again.
     sketch: bool | None = None
+    # Refuse a --from-workdir whose genome-set record is not done (missing,
+    # interrupted or stale) instead of warning about it.
+    strict_sources: bool = False
+
+
+# Stages that write the genome set (selection.tsv and genomes/) of a workdir.
+GENOME_SET_STAGES = ("genome", "vgenome", "ingest", "assemble")
+SOURCE_DONE = "done"
+SOURCE_NO_RECORD = "no stage record"
+
+
+@dataclass(frozen=True)
+class SourceState:
+    """The state of the record that wrote a source workdir's genome set.
+
+    ``stage`` is None when no such record exists; ``state`` is done, stale,
+    interrupted, ``no stage record``, ``unreadable record`` or ``unchecked``
+    (the staleness check itself failed); ``reason`` says why when known.
+    """
+
+    path: str
+    stage: str | None
+    state: str
+    reason: str | None = None
+
+    @property
+    def done(self) -> bool:
+        return self.state == SOURCE_DONE
+
+    def describe(self) -> str:
+        if self.stage is None:
+            what = self.state
+        else:
+            what = f"its genome set was written by {self.stage}, which is {self.state}"
+        return f"--from-workdir {self.path}: {what}" + (f" ({self.reason})" if self.reason else "")
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {"path": self.path, "stage": self.stage, "state": self.state}
+
+
+def source_state(workdir: Path) -> SourceState:
+    """Evaluate the genome-set record of an earlier working directory.
+
+    The record is the latest finished one of GENOME_SET_STAGES, or an
+    interrupted one when any is (its re-run may have left the genome set
+    partial). Its state comes from the checks ``status`` applies: a record
+    without a completion stamp is interrupted, and ``core.doctor.stale_stages``
+    (changed inputs, missing deliverables) decides stale.
+    """
+    from ..core.config import CONFIG_FILENAME, Config
+    from ..core.doctor import stale_stages
+
+    path = str(workdir)
+    if not (workdir / CONFIG_FILENAME).is_file():
+        return SourceState(path, None, SOURCE_NO_RECORD)
+    try:
+        cfg = Config.load(workdir)
+    except WorkdirError as exc:
+        return SourceState(path, None, "unreadable record", str(exc))
+    records = {n: cfg.stages[n] for n in GENOME_SET_STAGES if n in cfg.stages}
+    if not records:
+        return SourceState(path, None, SOURCE_NO_RECORD)
+    interrupted = [n for n, r in records.items() if r.interrupted]
+    if interrupted:
+        return SourceState(path, interrupted[-1], "interrupted")
+    stage = max(records, key=lambda n: records[n].completed or "")
+    try:
+        stale = stale_stages(workdir, Config(stages={stage: records[stage]}))
+    except Exception as exc:  # a damaged artifact is reported, not raised
+        return SourceState(path, stage, "unchecked", str(exc))
+    if stage in stale:
+        return SourceState(path, stage, "stale", stale[stage])
+    return SourceState(path, stage, SOURCE_DONE)
+
+
+def _source_states(params: IngestParams) -> list[SourceState]:
+    return [source_state(Path(wd).expanduser()) for wd in params.from_workdirs]
+
+
+def _refuse_sources(states: list[SourceState]) -> None:
+    """--strict-sources: refuse any source whose genome-set record is not done."""
+    bad = [s for s in states if not s.done]
+    if bad:
+        raise UserInputError(
+            "--strict-sources: "
+            + "; ".join(s.describe() for s in bad)
+            + ". Re-run or finish the stage in that working directory, or drop "
+            "--strict-sources to take its genomes as they are."
+        )
 
 
 # Manifest source of a genome that no source manifest describes.
@@ -141,6 +235,8 @@ def precheck(ctx: WorkdirContext, params: IngestParams) -> None:
     (and the stages built on it) looking interrupted.
     """
     plan = _plan(params, ctx.workdir, logger=None)
+    if params.strict_sources:
+        _refuse_sources(_source_states(params))
     require_sourmash_if_requested(params.sketch)
     # Only an existing manifest can hold appended genomes; opening one in a new
     # workdir would create an empty manifest.sqlite for a refused ingest.
@@ -306,6 +402,12 @@ def _manifest_sources(wd: Path, origin: str) -> dict[str, str]:
 def run(ctx: WorkdirContext, params: IngestParams) -> int:
     logger = ctx.logger
     plan = _plan(params, ctx.workdir, logger)
+    states = _source_states(params)
+    if params.strict_sources:
+        _refuse_sources(states)
+    for state in states:
+        if not state.done:
+            logger.warning("%s; its genomes are taken as they are.", state.describe())
     require_sourmash_if_requested(params.sketch)
     refuse_foreign_rows(
         ctx,
@@ -374,6 +476,9 @@ def run(ctx: WorkdirContext, params: IngestParams) -> int:
             "total": len(ingroup),
             # Ingroup genomes per manifest source (gtdb, sra, local, ...).
             "sources": dict(sorted(by_source.items())),
+            # Per --from-workdir: the stage that wrote its genome set and the
+            # state of that record when this ingest read it.
+            "source_states": [state.to_dict() for state in states],
             "sketches": sketches,
         },
         tool_versions=sketch_versions,
