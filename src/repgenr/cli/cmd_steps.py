@@ -25,6 +25,7 @@ from .base import (
     HELP_DEREP_TOOL_ARG,
     HELP_INCLUDE_DEREPLICATED,
     HELP_KEEP_FILES,
+    HELP_KEEP_ROOT,
     HELP_MSA_SOURCE,
     HELP_NO_OUTGROUP,
     HELP_NODE_BASENAME,
@@ -32,6 +33,7 @@ from .base import (
     HELP_READS_SKETCH,
     HELP_REFERENCE,
     HELP_REMOVE_OUTGROUP,
+    HELP_ROOT,
     HELP_ROOT_NAME,
     HELP_SECONDARY_ANI,
     HELP_SKETCHES_DIR,
@@ -171,6 +173,7 @@ def phylo_build_cmd(
     aligner: str = typer.Option("progressivemauve", "--aligner", help=_aligner_help()),
     snptyper: str = typer.Option("simple", "--snptyper", help=_snp_help()),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    root: str | None = typer.Option(None, "--root", help=HELP_ROOT),
     bootstrap: int = typer.Option(0, "-B", "--bootstrap", min=0, help=HELP_BOOTSTRAP),
     reference: str | None = typer.Option(None, "--reference", help=HELP_REFERENCE),
     aligner_arg: list[str] = typer.Option([], "--aligner-arg", help=HELP_ALIGNER_ARG),
@@ -195,7 +198,8 @@ def phylo_build_cmd(
     """
     from ..aligners.base import registry as _aln_registry
     from ..snptypers.base import registry as _snp_registry
-    from ..stages.phylo import PhyloBuildParams, PhyloParams, phylo_build
+    from ..stages.phylo import PhyloBuildParams, PhyloParams, check_root_request, phylo_build
+    from ..tree.rooting import ROOT_METHODS
     from ..treebuilders.base import registry as _tb_registry
     from .param_builders import require_mask
 
@@ -203,6 +207,9 @@ def phylo_build_cmd(
     with stage_errors(logger):
         _require_choice(treebuilder, {"auto", *_tb_registry.names()}, "--treebuilder")
         _require_choice(msa_source, {"aligner", "snptype"}, "--msa-source")
+        if root is not None:
+            _require_choice(root, set(ROOT_METHODS), "--root")
+            check_root_request(root, no_outgroup)
         if msa_source == "aligner":
             _require_choice(aligner, set(_aln_registry.names()), "--aligner")
         else:
@@ -221,6 +228,7 @@ def phylo_build_cmd(
             aligner=aligner,
             snptyper=snptyper,
             no_outgroup=no_outgroup,
+            root=root,
             bootstrap=bootstrap,
             reference=reference,
             threads=threads,
@@ -264,6 +272,7 @@ def tree2tax_relations_cmd(
     root_name: str = typer.Option("root", "--root-name", help=HELP_ROOT_NAME),
     remove_outgroup: bool = typer.Option(False, "--remove-outgroup", help=HELP_REMOVE_OUTGROUP),
     no_outgroup: bool = typer.Option(False, "--no-outgroup", help=HELP_NO_OUTGROUP),
+    keep_root: bool = typer.Option(False, "--keep-root", help=HELP_KEEP_ROOT),
     include_dereplicated: bool = typer.Option(
         True,
         "--include-dereplicated/--no-include-dereplicated",
@@ -307,6 +316,7 @@ def tree2tax_relations_cmd(
                 collapse_support=collapse_support,
                 collapse_length=collapse_length,
                 no_outgroup=no_outgroup,
+                keep_root=keep_root,
             ),
             logger,
         )

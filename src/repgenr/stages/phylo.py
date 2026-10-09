@@ -8,8 +8,10 @@ Three orthogonal choices:
                      (alignment-free)
 
 The outgroup genome is added to the input set here and passed to builders that
-can root (iqtree, raxmlng); the others emit an unrooted tree. Rooting on the
-outgroup is done once, for every builder, in the tree2tax stage.
+can root (iqtree, raxmlng); the others emit an unrooted tree. Whatever the
+builder, the tree is then rooted here (--root): on the branch leading to the
+outgroup, at the midpoint, or not at all. A rerooted tree is written to
+tree/tree.nwk and the builder's own output is kept as tree/tree.unrooted.nwk.
 
 The SNP typing pass (--msa-source snptype) writes under tree/msa/, not snp/:
 snp/ belongs to the snptype stage, so the two never replace each other's
@@ -40,6 +42,7 @@ from ..core.contracts import (
     MSA_FASTA,
     PHYLO_MSA_DIR,
     TREE_NWK,
+    TREE_UNROOTED_NWK,
     accession_from_filename,
     atomic_path,
     list_fasta,
@@ -56,6 +59,15 @@ from ..core.sketches import (
     adapter_sketches,
     directory_provider,
     workdir_provider,
+)
+from ..tree.rooting import (
+    ROOT_METHODS,
+    ROOT_NONE,
+    ROOT_OUTGROUP,
+    midpoint_root,
+    read_newick,
+    root_on_outgroup,
+    write_newick,
 )
 from ..treebuilders.base import InputKind, TreeParams
 from ..treebuilders.base import registry as treebuilder_registry
@@ -119,6 +131,9 @@ class PhyloParams:
     reference: str | None = None
     allow_incomplete: bool = False
     extra: dict = field(default_factory=dict)
+    # outgroup | midpoint | none; None picks outgroup when an outgroup is
+    # staged (and not --no-outgroup), else none.
+    root: str | None = None
 
 
 @dataclass
@@ -138,6 +153,79 @@ class PhyloOutcome:
     treebuilder: str
     versions: dict[str, str]
     outgroup_leaf: str | None
+    # The rooting applied: outgroup, midpoint or none.
+    root: str = ROOT_NONE
+
+
+def check_root_request(root: str | None, no_outgroup: bool) -> None:
+    """Refuse a --root value, or a combination, that cannot be carried out."""
+    if root is None:
+        return
+    if root not in ROOT_METHODS:
+        raise UserInputError(f"--root must be one of {', '.join(ROOT_METHODS)}; got '{root}'.")
+    if root == ROOT_OUTGROUP and no_outgroup:
+        raise UserInputError(
+            "--root outgroup needs the outgroup that --no-outgroup leaves out; "
+            "use --root midpoint or --root none."
+        )
+
+
+def resolve_root(root: str | None, outgroup_leaf: str | None, no_outgroup: bool) -> str:
+    """The rooting to apply, given the request and whether an outgroup is staged."""
+    check_root_request(root, no_outgroup)
+    has_outgroup = outgroup_leaf is not None and not no_outgroup
+    if root is None:
+        return ROOT_OUTGROUP if has_outgroup else ROOT_NONE
+    if root == ROOT_OUTGROUP and not has_outgroup:
+        raise UserInputError(
+            "--root outgroup needs an outgroup, but none is staged (no "
+            "outgroup_accession.txt, or its genome is not in outgroup/). Stage one "
+            "with the genome stage, or use --root midpoint or --root none."
+        )
+    return root
+
+
+def apply_root(
+    tree: Path,
+    root: str,
+    outgroup_leaf: str | None,
+    treebuilder: str,
+    logger: logging.Logger,
+) -> None:
+    """Root the tree file in place; keep the builder's output when it changes.
+
+    ``none`` leaves the file as the builder wrote it. A tree that is already
+    rooted on the outgroup (a bifurcating root with the outgroup as one child)
+    is left alone as well. Otherwise the builder's output is copied to
+    tree.unrooted.nwk beside it and the rooted tree replaces tree.nwk.
+    """
+    if root == ROOT_NONE:
+        return
+    parsed = read_newick(tree.read_text(encoding="utf-8"))
+    if root == ROOT_OUTGROUP:
+        assert outgroup_leaf is not None  # resolve_root guarantees it
+        if not root_on_outgroup(parsed, outgroup_leaf, source=tree):
+            logger.info(
+                "The %s tree is already rooted on the outgroup %s; left as written",
+                treebuilder,
+                outgroup_leaf,
+            )
+            return
+        what = f"on the branch to the outgroup {outgroup_leaf}"
+    else:
+        midpoint_root(parsed, source=tree)
+        what = "at the midpoint"
+    unrooted = tree.with_name(TREE_UNROOTED_NWK)
+    with atomic_path(unrooted) as tmp:
+        shutil.copy2(tree, tmp)
+    with atomic_path(tree) as tmp:
+        tmp.write_text(write_newick(parsed), encoding="utf-8")
+    logger.info(
+        "Rooted the %s tree %s; the builder's output is kept as %s",
+        treebuilder,
+        what,
+        unrooted.name,
+    )
 
 
 # Stamp written beside a built MSA, so a later run that only changes the tree
@@ -370,13 +458,16 @@ def build_tree(
     """Build a phylogeny from explicit inputs into ``dirs`` (stateless; no config).
 
     Selects (or auto-picks) the tree builder, derives the MSA from an aligner or
-    a SNP typer when needed, roots by the outgroup and writes ``tree/tree.nwk``.
+    a SNP typer when needed, writes ``tree/tree.nwk`` and roots it as
+    ``params.root`` asks (by default on the outgroup when one is staged).
     The reference (for aligner/SNP sources) is resolved by basename against the
     genome set, so the core needs no working directory. ``sketch_provider``
     supplies genome sketches to a builder that compares them.
     """
     if not genomes:
         raise WorkdirError("No genomes found for phylo. Run the genome (and derep) stages first.")
+    # Decided before any tool runs, so an impossible request costs nothing.
+    root = resolve_root(params.root, outgroup_leaf, params.no_outgroup)
 
     treebuilder = _resolve_treebuilder(params, len(genomes), logger)
     builder = treebuilder_registry.create(treebuilder)
@@ -465,8 +556,13 @@ def build_tree(
     leaf_names = [record_name(g) for g in expected]
     check_tree_leaves(final, leaf_names, treebuilder)
     restore_leaf_names(final, leaf_names, logger)
+    apply_root(final, root, outgroup_leaf, treebuilder, logger)
     return PhyloOutcome(
-        tree=final, treebuilder=treebuilder, versions=versions, outgroup_leaf=outgroup_leaf
+        tree=final,
+        treebuilder=treebuilder,
+        versions=versions,
+        outgroup_leaf=outgroup_leaf,
+        root=root,
     )
 
 
@@ -831,6 +927,8 @@ def run(ctx: WorkdirContext, params: PhyloParams) -> Path:
             "all_genomes": params.all_genomes,
             "bootstrap": params.bootstrap,
             "outgroup": None if params.no_outgroup else outcome.outgroup_leaf,
+            # The rooting applied to tree.nwk; tree2tax keeps a midpoint root.
+            "root": outcome.root,
             # What produced the alignment: the reference a mapping typer or
             # aligner used, the masker if any, and the adapter tuning. Without
             # them the record could not tell a masked tree from an unmasked one.

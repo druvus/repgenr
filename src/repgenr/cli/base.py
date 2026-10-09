@@ -66,6 +66,15 @@ HELP_TARGET_GENUS = "Restrict the selection to this genus."
 HELP_TARGET_SPECIES = "Restrict the selection to this species."
 HELP_OUTGROUP_ACCESSION = "Accession to fetch and set aside as the outgroup."
 HELP_NO_OUTGROUP = "Do not root with an outgroup."
+HELP_ROOT = (
+    "How phylo roots tree/tree.nwk: outgroup (on the branch to the outgroup), midpoint, "
+    "or none (as the tree builder wrote it). Default: outgroup when an outgroup is "
+    "staged and --no-outgroup is not given, else none."
+)
+HELP_KEEP_ROOT = (
+    "Keep the tree's own root (a tree from phylo --root midpoint) instead of rerooting "
+    "on the outgroup; the outgroup is still read for --remove-outgroup."
+)
 HELP_KEEP_FILES = "Keep download and scratch intermediates."
 HELP_SKETCH = (
     "Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). "

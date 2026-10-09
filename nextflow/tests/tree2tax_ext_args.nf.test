@@ -59,4 +59,84 @@ nextflow_process {
             assert !line.contains('--no-outgroup')
         }
     }
+
+    test("--root midpoint in phylo_args reaches tree2tax-relations as --keep-root") {
+        when {
+            params {
+                phylo_args = "--treebuilder mashtree --root midpoint"
+                tree2tax_args = ""
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert line.contains('--keep-root')
+            assert !line.contains('--no-outgroup')
+        }
+    }
+
+    test("--root=midpoint with --no-outgroup passes both flags") {
+        when {
+            params {
+                phylo_args = "--treebuilder mashtree --no-outgroup --root=midpoint"
+                tree2tax_args = "--keep-root"
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert line.contains('--no-outgroup')
+            assert line.split('--keep-root', -1).size() == 2
+        }
+    }
+
+    test("--root outgroup in phylo_args adds no --keep-root") {
+        when {
+            params {
+                phylo_args = "--treebuilder mashtree --root outgroup"
+                tree2tax_args = ""
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'bacterial'],
+                    file("${projectDir}/nextflow/tests/data/tree.nwk"),
+                    file("${projectDir}/nextflow/tests/data/derep_out"),
+                    [ file("${projectDir}/nextflow/tests/data/outgroup/Fam_Out_grp_GCF_000009.1.fasta") ],
+                    file("${projectDir}/nextflow/tests/data/outgroup_accession.txt")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def line = process.stdout.find { it.contains('ext.args:') }
+            assert line != null
+            assert !line.contains('--keep-root')
+        }
+    }
 }

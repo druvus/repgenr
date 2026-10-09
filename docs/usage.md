@@ -818,12 +818,47 @@ tools rewrite them. This matching is looser than `tree2tax`, which uses leaf
 names as written, so a tree that passes the check can still leave leaves that
 `tree2tax` does not map to a genome.
 
-`tree2tax` and `tree2tax-relations` root the tree on the outgroup and exit 3
-when the outgroup is not a leaf of the tree. After `phylo --no-outgroup`,
-`tree2tax` leaves the tree unrooted; `tree2tax-relations` does so when given
-`--no-outgroup`, which ignores `--outgroup-dir` and `--outgroup-accession`.
-The Nextflow pipeline passes `--no-outgroup` to `tree2tax-relations` when
-`phylo_args` contains it.
+#### Rooting the tree
+
+`phylo` (and `phylo-build`, and `run`) roots `tree/tree.nwk` after any tree
+builder has finished, chosen with `--root`:
+
+- `outgroup` roots on the branch leading to the outgroup, which is split in
+  two halves, so the root has two children: the outgroup and the whole
+  ingroup. This is the default when an outgroup is staged and
+  `--no-outgroup` is not given.
+- `midpoint` roots at the midpoint of the longest leaf-to-leaf path. It needs
+  branch lengths and does not use the outgroup, so it is the choice for a
+  tree built with `--no-outgroup`.
+- `none` keeps the tree as the builder wrote it. This is the default without
+  an outgroup.
+
+`--root outgroup` without a staged outgroup, or together with
+`--no-outgroup`, exits 2 before any tool runs. Builders that are given the
+outgroup (`iqtree -o`, `raxmlng --outgroup`) place it at a root with three
+children; such a tree is rerooted like any other, with one INFO line. A tree
+whose root already has the outgroup as one of two children is left as
+written. Branch lengths and support values are kept: each support value stays
+with the split it was computed for. A midpoint that falls on an internal
+branch splits that branch in two, and its support value is written on both
+new root branches, since both describe the same split. When the tree is rerooted, the builder's
+own output is kept as `tree/tree.unrooted.nwk`. The stage record holds the
+rooting applied (`root`) and the outgroup leaf (`outgroup`).
+
+`tree2tax` and `tree2tax-relations` root the tree on the outgroup when it is
+not rooted there yet; on a tree from `phylo --root outgroup` this changes
+nothing, and the relations are the same as when `tree2tax` rooted the
+builder's output itself. They exit 3 when the outgroup is not a leaf of the
+tree. After `phylo --root midpoint`, `tree2tax` keeps the midpoint root (it
+reads the `root` that phylo recorded); `tree2tax-relations` does so when given
+`--keep-root`. The root is named by `--root-name` in either case, and
+`--remove-outgroup` still removes the outgroup leaf. After
+`phylo --no-outgroup` with `--root none`, `tree2tax` leaves the tree unrooted
+(its relations start at the builder's root); `tree2tax-relations` does so
+when given `--no-outgroup`, which ignores `--outgroup-dir` and
+`--outgroup-accession`. The Nextflow pipeline passes `--no-outgroup` to
+`tree2tax-relations` when `phylo_args` contains it, and `--keep-root` when
+`phylo_args` contains `--root midpoint`.
 
 Two alternatives to the whole-genome alignment in the bacterial example (see
 [choosing-tools.md](choosing-tools.md#5-phylogeny-routes) for when to use which):
@@ -1370,10 +1405,10 @@ Run `nextflow run nextflow/main.nf --help` for the parameter summary.
 | `--derep_keeper` | `quality` | Representative choice in the chunk and merge steps: `quality` (CheckM scores from `selection.tsv`), `gtdb` (a GTDB species representative from `selection.tsv` first, then quality) or `tool`. |
 | `--derep_reduce` | `none` | Collapse the merged representatives to one per `species` or `genus` (`dereplicate-merge --reduce`). |
 | `--derep_target_reps` | `0` | Search the merge pass's secondary ANI to land near this many representatives (`dereplicate-merge --target-reps`). |
-| `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny. |
+| `--phylo_args` | `--treebuilder mashtree` | Aligner or tree builder for the phylogeny, and the rooting (`--root outgroup\|midpoint\|none`). |
 | `--phylo_split_msa` | `false` | Run the alignment and the tree as separate tasks. |
 | `--sketch` | `false` | Bacterial mode: sketch the genomes and the outgroup with sourmash, publish `sketches/`, and stage them into the dereplication and tree tasks. |
-| `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). `--no-outgroup` is added when `phylo_args` contains it. |
+| `--tree2tax_args` | (empty) | tree-to-taxonomy (FlexTaxD) arguments; redundant genomes are listed by default (`--no-include-dereplicated` to omit them). `--no-outgroup` is added when `phylo_args` contains it, and `--keep-root` when it contains `--root midpoint`. |
 
 `--phylo_split_msa` splits the phylogeny into `PHYLO_MSA` and `PHYLO_TREE`.
 The alignment then keeps its own cache entry, so trying another tree builder or
