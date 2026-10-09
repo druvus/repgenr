@@ -30,7 +30,7 @@ from ..assemblers.base import ReadSet, accepting_assemblers, registry, select_as
 from ..assemblers.contigs import ContigStats, filter_contigs
 from ..classifiers.base import Classification, ClassifyParams
 from ..classifiers.base import registry as classifier_registry
-from ..core import http
+from ..core import http, process
 from ..core.context import WorkdirContext
 from ..core.contracts import (
     ASSEMBLY_STATS_TSV,
@@ -68,6 +68,7 @@ from ..core.sketches import (
     READS_SKETCH_PARAMS,
     SketchSource,
     adapter_sketches,
+    clear_partials,
     remove_stale,
     require_sourmash_if_requested,
     sketch_beside,
@@ -790,6 +791,8 @@ def _fetch_and_assemble(
     # The marker names finished contigs; a run assembled again has none until it ends.
     (out_dir / _DONE_MARKER).unlink(missing_ok=True)
     (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+    # A hard exit can leave the temporary file of a sketch thread behind.
+    clear_partials(out_dir)
     _clear_scratch(row, run_scratch)
     run_scratch.mkdir(parents=True, exist_ok=True)
     try:
@@ -809,7 +812,13 @@ def _fetch_and_assemble(
             outcome, params, files, threads, out_dir, run_scratch, versions, logger
         )
     finally:
-        sketched = sketch.wait() if sketch is not None else False
+        # A stopped or failed assembler still waits for the sketch, which
+        # reads the files the cleanup below removes.
+        if sketch is not None:
+            sketch.join()
+    # Raises when a stop request cut the sketch short: no marker is written
+    # and the reads stay, so a resume keeps them and assembles the run again.
+    sketched = sketch.wait() if sketch is not None else False
     if marker is None:  # excused
         (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
         if not params.keep_files:
@@ -974,9 +983,20 @@ class ReadsSketchJob:
     def done(self) -> bool:
         return not self._thread.is_alive()
 
-    def wait(self) -> bool:
-        """Join the thread; True when the sketch was written."""
+    def join(self) -> None:
         self._thread.join()
+
+    def wait(self) -> bool:
+        """Join the thread; True when the sketch was written.
+
+        A sketch cut short by a stop request (SIGTERM or SIGINT) is raised
+        rather than reported: the caller must not record the run as finished
+        without a sketch, nor remove its reads, since a resume can then sketch
+        them again.
+        """
+        self._thread.join()
+        if self._error is not None and process.stop_requested.is_set():
+            raise self._error
         if self._error is not None:
             self._logger.warning(
                 "%s: reads sketch not written (%s); the assembly is not affected",
@@ -1022,6 +1042,13 @@ def refill_reads_sketches(
         return 0
     todo = []
     for o in missing:
+        run_dir = assemblies / o.row.run_accession
+        clear_partials(run_dir)
+        done = _read_marker(run_dir / _DONE_MARKER)
+        if done is not None and done.get("reads_sketch"):
+            # The marker names a sketch file that is gone: make it say so.
+            done.update(reads_sketch_fields(None))
+            _write_marker(run_dir / _DONE_MARKER, done)
         files = _kept_reads(o.row, scratch / o.row.run_accession)
         if files is not None:
             todo.append((o, files))

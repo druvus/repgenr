@@ -8,6 +8,7 @@ import json
 import logging
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -467,3 +468,75 @@ def test_sketch_reads_needs_files(tmp_path) -> None:
 
     with pytest.raises(WorkdirError, match="no FASTQ files"):
         sketches.sketch_reads([], "SRR1", tmp_path / "reads.sig.zip", logging.getLogger("t"))
+
+
+def test_a_stop_during_the_sketch_writes_no_marker_and_keeps_the_reads(
+    workdir, tmp_path, fake_assembler, fake_sourmash, monkeypatch
+) -> None:
+    """A stop request that ends sourmash after the assembler finished must not
+    record the run as done without a sketch: the reads stay for the resume."""
+    from repgenr.core import process
+    from repgenr.core.errors import ToolExecutionError
+
+    def stopped(name: str) -> None:
+        # The assembler has finished before the stop arrives.
+        deadline = time.monotonic() + 10
+        while _FakeAssembler.calls != ["SRR1"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+        process.stop_requested.set()
+        raise ToolExecutionError(["sourmash"], -15, output="terminated", tool="sourmash")
+
+    fake_sourmash.reads_hook = stopped
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    try:
+        with pytest.raises(ToolExecutionError):
+            run(ctx, AssembleParams(assembler="fakeasm", jobs=1))
+    finally:
+        process.stop_requested.clear()
+    run_dir = workdir / "assemblies" / "SRR1"
+    assert _FakeAssembler.calls == ["SRR1"]
+    assert not (run_dir / "assembly.ok").exists()
+    assert not _sketch(workdir, "SRR1").exists()
+    assert _hidden(run_dir) == []
+    run_scratch = ctx.scratch_dir / "assemble" / "SRR1"
+    assert (run_scratch / "SRR1_1.fastq.gz").is_file()
+    assert (run_scratch / "SRR1_2.fastq.gz").is_file()
+
+    # The resume keeps the verified reads, assembles again and sketches.
+    fake_sourmash.reads_hook = None
+    run(ctx, AssembleParams(assembler="fakeasm", jobs=1))
+    assert _FakeAssembler.calls == ["SRR1", "SRR1"]
+    assert _marker(workdir, "SRR1")["reads_sketch"] == "reads.sig.zip"
+    assert _sketch(workdir, "SRR1").is_file()
+
+
+def test_a_marker_naming_a_missing_sketch_is_cleared_by_the_refill(
+    workdir, tmp_path, fake_assembler, fake_sourmash
+) -> None:
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1")])
+    run(ctx, AssembleParams(assembler="fakeasm"))
+    _sketch(workdir, "SRR1").unlink()
+    run(ctx, AssembleParams(assembler="fakeasm"))  # no kept reads: nothing to sketch
+    assert len(fake_sourmash.reads_calls) == 1
+    marker = _marker(workdir, "SRR1")
+    assert marker["reads_sketch"] is None and marker["reads_sketch_version"] is None
+    assert _stats(workdir) == {"SRR1": False}
+    assert ctx.config.stages["assemble"].params["n_reads_sketches"] == 0
+
+
+def test_temporary_sketch_files_of_a_hard_exit_are_removed(
+    workdir, tmp_path, fake_assembler, fake_sourmash
+) -> None:
+    ctx = _prepare(workdir, [_row(tmp_path, "SRR1"), _row(tmp_path, "SRR2")])
+    run(ctx, AssembleParams(assembler="fakeasm", keep_reads=True, reads_sketch=False))
+    # SRR1: assembled again (lower floor); SRR2: refilled from its kept reads.
+    for run_acc in ("SRR1", "SRR2"):
+        leftover = workdir / "assemblies" / run_acc / ".reads.partial.abc123.sig.zip"
+        leftover.write_text("partial", encoding="utf-8")
+    marker = _marker(workdir, "SRR1")
+    marker["settings"]["min_contig_length"] = 600
+    (workdir / "assemblies" / "SRR1" / "assembly.ok").write_text(json.dumps(marker), "utf-8")
+    run(ctx, AssembleParams(assembler="fakeasm", keep_reads=True))
+    for run_acc in ("SRR1", "SRR2"):
+        assert _hidden(workdir / "assemblies" / run_acc) == []
+        assert _sketch(workdir, run_acc).is_file()

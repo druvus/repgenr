@@ -300,6 +300,12 @@ def _clear_partials(directory: Path) -> None:
             entry.unlink(missing_ok=True)
 
 
+def clear_partials(directory: Path) -> None:
+    """Remove temporary sketch files left in ``directory`` (public form, for
+    run directories outside ``sketches/``)."""
+    _clear_partials(directory)
+
+
 def sketch_command(genome: Path, name: str, out: Path) -> list[str | os.PathLike[str]]:
     """The one sourmash call that sketches a genome (three k-mer sizes, one file)."""
     return ["sourmash", "sketch", "dna", "-p", SKETCH_PARAMS, "--name", name, "-o", out, genome]
