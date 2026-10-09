@@ -421,6 +421,33 @@ this way, unless `assemble` has also run in that working directory. To keep
 the two sets in separate working directories instead, combine them with
 `ingest --from-workdir` (see "Combining working directories").
 
+`assemble --max-runs N` keeps at most N runs with a finished assembly in the
+working directory, so a large `reads.tsv` can be assembled in parts. Runs are
+taken in `reads.tsv` order, which the reads stage writes largest by bases
+first. Runs already assembled in the working directory count toward N first
+and are always kept, also when there are more of them than N; the remaining
+places go to the runs still to be assembled. Runs excused before any
+download (no FASTQ mirror, no accepting or installed assembler) take no
+place. The other runs are listed in `excused_runs.tsv` with reason
+`deferred`, so `dereplicate` runs on the assembled part; the selection and
+the manifest hold only assembled runs. N counts runs in the working
+directory rather than runs in one call because the result then depends only
+on `reads.tsv`, N and the finished assemblies: a repeat with the same N
+assembles nothing new and is skipped as finished, while a larger N, or no
+`--max-runs`, is a new request that assembles the next deferred runs and
+removes their rows. A run counts toward N once assembled, also when the
+quality gate later excuses it. A deferred run never counts as judged when
+every run is excused (see
+[output.md](output.md#when-every-sequencing-run-is-excused)), and `--append`
+takes `--max-runs` in the same way. `status` shows the stage as, for
+example, `20 assembled, 35 deferred`. The alternative is to bound the
+selection itself: `reads --max-runs N` keeps the N largest runs in
+`reads.tsv`, and a later `reads` call with a larger N followed by
+`assemble` assembles only the new runs, since finished runs are reused. In
+the Nextflow pipeline, where each run is one `assemble-run` task, the bound
+is set on the selection with `--reads_args '--max-runs N'`; `assemble-run`
+takes no `--max-runs`.
+
 Long-read assemblies are polished with the run's own reads before the
 contig filter: `--polisher auto` (the default) runs medaka for ONT runs
 (racon when medaka is not installed) and racon (minimap2 overlaps, `--polish-rounds` rounds) for PacBio CLR runs, and

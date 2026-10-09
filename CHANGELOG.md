@@ -16,6 +16,18 @@ All notable changes to RepGenR are documented here. The format follows
   anything is written. The ingest record keeps `source_states` (path, stage,
   state per source), and the `status` line of `ingest` names the sources that
   were not done when they were ingested.
+- `assemble --max-runs N` keeps at most N runs with a finished assembly in
+  the working directory, taken in `reads.tsv` order (largest by bases first).
+  Finished runs count toward N and are always kept; runs excused before any
+  download take no place. The remaining runs are written to
+  `excused_runs.tsv` with reason `deferred`, so the completeness guard lets
+  `dereplicate` run on the assembled part, and a later call with a larger N,
+  or without the flag, assembles them and removes their rows. Deferred runs
+  are not counted as judged when every run is excused, N is part of the
+  resume fingerprint, `--append` takes it, and `status` shows
+  `n assembled, n deferred`. The stage record gains `n_deferred`, and
+  `n_excused` no longer counts deferred runs. The Nextflow layer bounds the
+  selection instead (`--reads_args '--max-runs N'`).
 - Reads sketch: `assemble` sketches each run's reads with sourmash
   (`sourmash sketch dna -p k=21,k=31,k=51,scaled=1000,abund` on all FASTQ
   files of the run, named by run accession) into

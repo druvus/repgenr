@@ -8,7 +8,9 @@ a minimum length, and labelled with the family, genus and species the reads
 stage resolved. Runs that cannot be fetched or assembled are written to
 ``excused_runs.tsv`` so the completeness guard of later stages does not count
 them as missing. Finished assemblies carry a marker under ``assemblies/<run>/``
-and are skipped on a re-run.
+and are skipped on a re-run. ``--max-runs N`` keeps at most N runs with a
+finished assembly in the workdir; the remaining runs are recorded as
+``deferred`` and are assembled by a later call with a larger N or without it.
 """
 
 from __future__ import annotations
@@ -143,6 +145,10 @@ class AssembleParams:
     reads_sketch: bool | None = None
     # Tool tuning from ``--tool-arg``; each adapter declares the keys it reads.
     extra: dict = field(default_factory=dict)
+    # At most this many runs with a finished assembly (reused or new), taken in
+    # reads.tsv order; the remaining pending runs are excused as deferred.
+    # None assembles every run.
+    max_runs: int | None = None
 
 
 @dataclass
@@ -187,6 +193,8 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if params.assembler == "auto":
         _excuse_missing_assemblers(plan, logger)
         _require_something_to_assemble(plan)
+    if params.max_runs is not None:
+        defer_beyond(plan, params.max_runs, logger)
     if params.polisher == "auto":
         _warn_missing_polishers(plan, logger)
     checkm2_db = params.checkm2_db or checkm2_db_from_env()
@@ -218,11 +226,14 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     requested = params.jobs if params.jobs is not None else _default_jobs(pending)
     jobs = max(1, min(requested, len(pending) or 1))
     threads_each = max(1, params.threads // jobs)
+    n_deferred = sum(1 for o in plan if _is_deferred(o.excused))
     logger.info(
-        "Assembling %d runs (%d already done, %d excused) with %d concurrent jobs, %d threads each",
+        "Assembling %d runs (%d already done, %d excused, %d deferred) with %d concurrent "
+        "jobs, %d threads each",
         len(pending),
         sum(1 for o in plan if o.stats is not None),
-        sum(1 for o in plan if o.excused is not None),
+        sum(1 for o in plan if o.excused is not None) - n_deferred,
+        n_deferred,
         jobs,
         threads_each,
     )
@@ -278,9 +289,9 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if quality is not None:
         apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
         assembled = [o for o in assembled if o.excused is None]
-    # An excused run keeps no reads sketch.
+    # An excused run keeps no reads sketch; a deferred run was not judged.
     for o in outcomes:
-        if o.excused is not None:
+        if o.excused is not None and not _is_deferred(o.excused):
             drop_reads_sketch(o, assemblies / o.row.run_accession)
     n_disagree = 0
     if classified is not None:
@@ -366,7 +377,8 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "assemblers_used": assemblers_used,
             "polishers_used": sorted({o.polisher for o in assembled if o.polisher}),
             "n_assembled": len(assembled),
-            "n_excused": len(excused),
+            "n_excused": len(excused) - n_deferred,
+            "n_deferred": n_deferred,
             "n_disagree": n_disagree,
             "n_genus_renamed": sum(1 for o in assembled if o.taxonomy_flag == GENUS_RENAMED),
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
@@ -378,13 +390,24 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     )
     ctx.save_config()
     logger.info(
-        "Assembled %d of %d runs (%d excused, %d classifier disagreements); wrote %s",
+        "Assembled %d of %d runs (%d excused, %d deferred, %d classifier disagreements); wrote %s",
         len(assembled),
         len(rows),
-        len(excused),
+        len(excused) - n_deferred,
+        n_deferred,
         n_disagree,
         SELECTION_TSV,
     )
+    if n_deferred:
+        logger.info(
+            "%d run(s) deferred by --max-runs %d are listed in %s; a later call with a "
+            "larger --max-runs, or without it, assembles them. Finished runs keep their "
+            "places, including ones the quality gate excused, so --force with the same "
+            "--max-runs does not.",
+            n_deferred,
+            params.max_runs,
+            EXCUSED_RUNS_TSV,
+        )
     return len(assembled)
 
 
@@ -728,6 +751,51 @@ def _warn_missing_polishers(plan: list[_Outcome], logger: logging.Logger) -> Non
             counts[platform],
             platform,
             ", ".join(names),
+        )
+
+
+DEFERRED = "deferred"
+
+
+def _is_deferred(excused: ExcusedRun | None) -> bool:
+    return excused is not None and excused.reason == DEFERRED
+
+
+def defer_beyond(plan: list[_Outcome], max_runs: int, logger: logging.Logger) -> None:
+    """Excuse as ``deferred`` the pending runs beyond ``max_runs``.
+
+    ``max_runs`` bounds the runs with a finished assembly in the workdir, not
+    the runs assembled in one call: finished runs (reused markers) count
+    first and are always kept, and the remaining places go to pending runs in
+    ``reads.tsv`` order (the reads stage writes the largest by bases first).
+    Runs excused up front (no FASTQ mirror, no accepting or installed
+    assembler) count toward nothing. The result is therefore the same for a
+    repeated call with the same N, which the resume fingerprint relies on.
+    """
+    if max_runs < 1:
+        raise UserInputError(f"--max-runs must be at least 1 (got {max_runs}).")
+    n_finished = sum(1 for o in plan if o.stats is not None)
+    pending = [o for o in plan if o.excused is None and o.stats is None]
+    places = max(0, max_runs - n_finished)
+    deferred = pending[places:]
+    for o in deferred:
+        o.assembler = None
+        o.polisher = None
+        o.excused = ExcusedRun(o.row.run_accession, "assemble", DEFERRED)
+    if n_finished > max_runs:
+        logger.info(
+            "--max-runs %d: %d finished run(s) are kept beyond N%s",
+            max_runs,
+            n_finished,
+            "; nothing is pending" if not pending else "",
+        )
+    if deferred:
+        logger.info(
+            "--max-runs %d: %d run(s) already assembled, %d to assemble, %d deferred",
+            max_runs,
+            n_finished,
+            len(pending) - len(deferred),
+            len(deferred),
         )
 
 
@@ -1581,10 +1649,11 @@ def _append_rows(
     return [*kept, *new_rows]
 
 
-# Excuses that say nothing about the run's data: it was never fetched, or no
-# assembler could be run on this host. A stage in which only these occurred
-# has not judged any run, so it does not discard an existing genome set.
-_UNJUDGED_REASONS = ("download_failed", "no_fastq_mirror", ASSEMBLER_NOT_INSTALLED)
+# Excuses that say nothing about the run's data: it was never fetched, no
+# assembler could be run on this host, or --max-runs deferred it. A stage in
+# which only these occurred has not judged any run, so it does not discard an
+# existing genome set.
+_UNJUDGED_REASONS = ("download_failed", "no_fastq_mirror", ASSEMBLER_NOT_INSTALLED, DEFERRED)
 
 
 def _total_failure(

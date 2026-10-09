@@ -2078,6 +2078,19 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: offline stage tests in tests/integration/test_assemble_stage.py'
+      --max-runs:
+        param: AssembleParams.max_runs
+        value: '1'
+        validated: range
+        docs:
+        - docs/usage.md
+        - docs/output.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer bounds the selection with params.reads_args --max-runs'
+        live: 'n/a: offline stage tests with a registered fake assembler in tests/integration/test_assemble_max_runs.py'
+        observable: excused_runs.tsv lists the runs beyond N with reason deferred
+        invalid: '0'
       --sketch:
         secondary:
         - --no-sketch

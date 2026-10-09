@@ -131,6 +131,14 @@ def assemble(
     outgroup: Path | None = typer.Option(
         None, "--outgroup", help="A FASTA file to set aside as the outgroup for rooting."
     ),
+    max_runs: int | None = typer.Option(
+        None,
+        "--max-runs",
+        min=1,
+        help="Keep at most N runs with a finished assembly, in reads.tsv order (largest "
+        "first); finished runs count toward N and are kept. The other runs are listed as "
+        "deferred in excused_runs.tsv; a later call with a larger N assembles them.",
+    ),
     append: bool = typer.Option(
         False,
         "--append",
@@ -205,6 +213,7 @@ def assemble(
             sketch=sketch,
             reads_sketch=reads_sketch,
             extra=_parse_key_values(tool_arg, "--tool-arg"),
+            max_runs=max_runs,
         )
 
     _run("assemble", workdir, build)
