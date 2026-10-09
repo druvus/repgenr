@@ -54,28 +54,107 @@ def test_edges_below_cutoff_not_clustered(tmp_path: Path) -> None:
     assert result.genome_status["memX.fasta"] == "contained"
 
 
-def test_skder_warns_when_argv_may_overflow(tmp_path, monkeypatch, caplog) -> None:
-    import logging
+_FAKE_SKDER = """\
+import os, pathlib, sys
+args = sys.argv[1:]
+pathlib.Path(os.environ["FAKE_SKDER_ARGV"]).write_text("\\n".join(args))
+gdir = args[args.index("-g") + 1]
+out = pathlib.Path(args[args.index("-o") + 1])
+names = sorted(os.listdir(gdir))
+# Every staged entry must resolve to an input genome (no dangling link).
+assert all(os.path.isfile(os.path.join(gdir, n)) for n in names), "dangling entry"
+pathlib.Path(os.environ["FAKE_SKDER_LISTED"]).write_text("\\n".join(names))
+reps = out / "Dereplicated_Representative_Genomes"
+reps.mkdir(parents=True)
+(reps / names[0]).write_text(">x\\nACGT\\n")
+with open(out / "Skani_Triangle_Edge_Output.txt", "w") as fo:
+    fo.write("Ref_file\\tQuery_file\\tANI\\tAlign_fraction_ref\\tAlign_fraction_query\\n")
+    for n in names[1:]:
+        fo.write(f"{gdir}/{names[0]}\\t{gdir}/{n}\\t99.9\\t90\\t90\\n")
+"""
 
+
+def _install_fake_skder(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    import os
+    import sys
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    exe = bin_dir / "skder"
+    exe.write_text(f"#!{sys.executable}\n{_FAKE_SKDER}")
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}")
+    argv_log, listed = tmp_path / "argv.txt", tmp_path / "listed.txt"
+    monkeypatch.setenv("FAKE_SKDER_ARGV", str(argv_log))
+    monkeypatch.setenv("FAKE_SKDER_LISTED", str(listed))
+    return argv_log, listed
+
+
+def test_skder_receives_one_staged_directory_for_10000_genomes(tmp_path, monkeypatch) -> None:
+    """The genome count does not reach argv: one -g token, the results map back."""
+    from repgenr.dereplicators.base import DerepParams
+    from repgenr.dereplicators.skder import SkderDereplicator
+
+    argv_log, listed = _install_fake_skder(tmp_path, monkeypatch)
+    src = tmp_path / "genomes"
+    src.mkdir()
+    genomes = []
+    for i in range(10000):
+        g = src / f"Fam_Gen_sp_GCA_{i:09d}.1.fasta"
+        g.touch()
+        genomes.append(g)
+    # An AppleDouble companion beside the genomes is not part of the set.
+    (src / f"._{genomes[0].name}").touch()
+    params = DerepParams(primary_ani=0.9, secondary_ani=0.999, threads=1)
+
+    result = SkderDereplicator().dereplicate(genomes, tmp_path / "out", params, _LOG)
+
+    args = argv_log.read_text().split("\n")
+    assert len(args) == 12  # -g DIR -o OUT -i -f -c -d with their values
+    staged = Path(args[args.index("-g") + 1])
+    assert args.count("-g") == 1 and not staged.name.endswith(".fasta")
+    names = listed.read_text().split("\n")
+    assert names == sorted(g.name for g in genomes)
+    assert [p.name for p in result.representatives] == [genomes[0].name]
+    assert len(result.clusters[genomes[0].name]) == 9999
+    assert set(result.genome_status) == {g.name for g in genomes}
+    assert not staged.exists(), "the staging directory is scratch and is removed"
+
+
+def test_staged_genome_dir_links_by_basename(tmp_path: Path) -> None:
+    import os
+
+    from repgenr.dereplicators.skder import stage_genome_dir
+
+    a = tmp_path / "a" / "Fam_Gen_sp_X1.fasta.gz"
+    a.parent.mkdir()
+    a.write_bytes(b"gz")
+    staged = stage_genome_dir([a], tmp_path / "staged")
+    entry = staged / a.name
+    assert entry.is_symlink() and os.readlink(entry) == os.path.abspath(a)
+    assert [p.name for p in staged.iterdir()] == [a.name]
+
+
+def test_skder_refuses_two_genomes_with_one_basename(tmp_path, monkeypatch) -> None:
     import pytest
 
+    from repgenr.core.errors import UserInputError
     from repgenr.dereplicators import skder as skder_mod
     from repgenr.dereplicators.base import DerepParams
     from repgenr.dereplicators.skder import SkderDereplicator
 
-    monkeypatch.setattr(skder_mod, "_ARGV_WARN_GENOMES", 3)
+    def must_not_run(caps, cmd, **kwargs):
+        raise AssertionError("skDER must not run")
 
-    def stop(caps, cmd, **kwargs):
-        raise RuntimeError("stop before running the tool")
-
-    monkeypatch.setattr(skder_mod, "run_tool", stop)
-    genomes = [tmp_path / f"g{i}.fasta" for i in range(4)]
+    monkeypatch.setattr(skder_mod, "run_tool", must_not_run)
+    first, second = tmp_path / "a" / "x.fasta", tmp_path / "b" / "x.fasta"
+    for g in (first, second):
+        g.parent.mkdir()
+        g.write_text(">x\nACGT\n")
     params = DerepParams(primary_ani=0.9, secondary_ani=0.99, threads=1)
-    with caplog.at_level(logging.WARNING), pytest.raises(RuntimeError):
-        SkderDereplicator().dereplicate(
-            genomes, tmp_path / "out", params, logging.getLogger("test")
-        )
-    assert "--process-size" in caplog.text
+    with pytest.raises(UserInputError) as exc:
+        SkderDereplicator().dereplicate([first, second], tmp_path / "out", params, _LOG)
+    assert str(first) in str(exc.value) and str(second) in str(exc.value)
 
 
 def test_partial_genome_joins_by_its_own_aligned_fraction(tmp_path: Path) -> None:

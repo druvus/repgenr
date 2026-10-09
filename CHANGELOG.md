@@ -845,6 +845,24 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- skDER receives the genome set as a staged directory; the genome count no
+  longer limits a single call. The adapter links each genome by its basename
+  into a scratch directory and passes that one path to `-g` (it passed one
+  path per genome before, and warned above 5000), binds the genome
+  directories for a container backend, and refuses two genomes with the same
+  basename, which skDER could not tell apart. The ARG_MAX warning for skDER
+  is removed.
+- Every tool command is measured before it starts: argv (including a
+  container backend's own arguments) plus the environment against the
+  platform's ARG_MAX less a margin, and on Linux each string against the
+  128 KiB single-argument limit. A command over the limit stops with exit 2
+  and a message that names `--process-size`, instead of failing in exec with
+  "Argument list too long". `warn_argv_bytes` (SibeliaZ, snippy-core)
+  warns from three quarters of the measured limit instead of a fixed
+  900 kB.
+- `sourmash tax genome` (classify, and the reads screen of assemble) reads the
+  per-genome gather CSVs from a list file (`--from-file`, written to a
+  temporary directory) instead of one command-line argument per genome.
 - `tree2tax --collapse-support` (and `tree2tax-relations`) judged the wrong
   nodes when the outgroup was not a child of the root of the tree as written.
   Rooting on the outgroup reverses the branches between the old and the new

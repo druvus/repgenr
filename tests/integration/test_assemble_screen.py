@@ -102,7 +102,8 @@ class FakeGather:
             return 0
         assert argv[:3] == ["sourmash", "tax", "genome"]
         assert argv[argv.index("--containment-threshold") + 1] == "0"
-        gather_csv = Path(argv[argv.index("--gather-csv") + 1])
+        csv_list = Path(argv[argv.index("--from-file") + 1])
+        gather_csv = Path(csv_list.read_text(encoding="utf-8").split()[0])
         run = gather_csv.read_text(encoding="utf-8").splitlines()[1].split(",")[-1]
         lineage, fraction = self.hits[run]  # type: ignore[misc]
         base = Path(argv[argv.index("--output-base") + 1])

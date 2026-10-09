@@ -58,11 +58,10 @@ def _read_fofn(path: str) -> list[Path]:
 
 def _fake_skder(cmd: list[str]) -> None:
     result_dir = Path(_flag_value(cmd, "-o"))
-    i = cmd.index("-g") + 1
-    genome_args: list[Path] = []
-    while i < len(cmd) and not cmd[i].startswith("-"):
-        genome_args.append(Path(cmd[i]))
-        i += 1
+    # One -g token: a directory staged with one entry per genome.
+    genome_dir = Path(_flag_value(cmd, "-g"))
+    assert genome_dir.is_dir() and cmd[cmd.index("-g") + 2] == "-o"
+    genome_args = sorted(genome_dir.iterdir())
     rep_dir = result_dir / "Dereplicated_Representative_Genomes"
     rep_dir.mkdir(parents=True)
     by_name = {p.name: p for p in genome_args}

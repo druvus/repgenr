@@ -91,7 +91,14 @@ outgroup that is not a leaf of the tree is an error (exit 3); a tree that
 * Genome state lives in a SQLite manifest, not `str(dict)`/`pickle`; no repeated
   directory scans.
 * `process.run` always passes argument vectors and uses file-of-filenames
-  instead of shell globs, so large genome sets do not hit `ARG_MAX`.
+  instead of shell globs, so large genome sets do not hit `ARG_MAX`. A tool
+  without a list-file option gets a staged directory where it reads one
+  (skDER, ParSNP); the few that take every path on argv (SibeliaZ,
+  snippy-core) call `warn_argv_bytes`. `process.run` measures the final argv
+  (container preamble included) plus the environment against
+  `os.sysconf("SC_ARG_MAX")` and, on Linux, the 128 KiB single-argument
+  limit, and raises `UserInputError` before the exec instead of failing with
+  E2BIG.
 * Two-stage chunked dereplication is opt-in via `--process-size` for any tool;
   `supports_native_scaling` only changes the log wording. Auto-selection keys
   on `recommended_max_genomes`.

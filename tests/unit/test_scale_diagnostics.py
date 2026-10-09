@@ -23,7 +23,10 @@ _LOGGER = logging.getLogger("scale-diagnostics")
 # --- argv byte preflight ------------------------------------------------------
 
 
-def test_warn_argv_bytes_warns_near_arg_max(caplog):
+def test_warn_argv_bytes_warns_near_arg_max(caplog, monkeypatch):
+    from repgenr.core import process
+
+    monkeypatch.setattr(process, "arg_max", lambda: 1 << 20)
     argv = ["tool", *[f"/data/genomes/genome_{i:06d}.fasta" for i in range(40000)]]
     with caplog.at_level(logging.WARNING):
         warn_argv_bytes("mashtree", argv, _LOGGER)
@@ -34,6 +37,63 @@ def test_warn_argv_bytes_quiet_for_small_argv(caplog):
     with caplog.at_level(logging.WARNING):
         warn_argv_bytes("mashtree", ["tool", "a.fasta", "b.fasta"], _LOGGER)
     assert not caplog.records
+
+
+def test_argv_over_arg_max_is_refused_before_the_tool_starts(monkeypatch):
+    """A command over ARG_MAX fails with advice, not with E2BIG from exec."""
+    import subprocess
+
+    import pytest
+
+    from repgenr.core import process
+    from repgenr.core.errors import UserInputError
+
+    monkeypatch.setattr(process, "arg_max", lambda: 64 * 1024)
+
+    def must_not_start(*args, **kwargs):
+        raise AssertionError("the tool must not be started")
+
+    monkeypatch.setattr(subprocess, "Popen", must_not_start)
+    argv = ["mashtree", *[f"/data/genomes/genome_{i:06d}.fasta" for i in range(5000)]]
+    with pytest.raises(UserInputError) as exc:
+        process.run(argv, logger=_LOGGER, env={"X": "1"})
+    assert "--process-size" in str(exc.value) and "ARG_MAX" in str(exc.value)
+
+
+def test_argv_size_counts_the_environment(monkeypatch):
+    import pytest
+
+    from repgenr.core import process
+    from repgenr.core.errors import UserInputError
+
+    monkeypatch.setattr(process, "arg_max", lambda: 64 * 1024)
+    process.check_argv_size(["tool", "a.fasta"], {"SMALL": "1"})
+    with pytest.raises(UserInputError):
+        process.check_argv_size(["tool", "a.fasta"], {"BIG": "x" * 60_000})
+
+
+def test_linux_single_argument_limit(monkeypatch):
+    import sys
+
+    import pytest
+
+    from repgenr.core import process
+    from repgenr.core.errors import UserInputError
+
+    monkeypatch.setattr(process, "arg_max", lambda: 64 << 20)
+    long_arg = "x" * (200 * 1024)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    process.check_argv_size(["tool", long_arg], {})
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(UserInputError, match="--process-size"):
+        process.check_argv_size(["tool", long_arg], {})
+
+
+def test_normal_commands_pass_the_argv_check():
+    from repgenr.core import process
+
+    assert process.arg_max() > 64 * 1024
+    assert process.run(["true"], logger=_LOGGER) == 0
 
 
 def test_mashtree_reads_genomes_from_a_file_of_files(tmp_path, monkeypatch, caplog):
