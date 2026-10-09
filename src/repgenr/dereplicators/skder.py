@@ -5,10 +5,20 @@ estimates pairwise ANI/AF with skani and picks representatives in one round.
 
 CLI used::
 
-    skder -g <files> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
+    skder -g <staged_dir> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
           -d dynamic|greedy|low_mem_greedy
 
-Two robustness notes:
+Three robustness notes:
+
+* skDER takes the genome set as one directory, not one path per genome: the
+  adapter stages a directory of symbolic links (one per genome, same basename)
+  and passes that single path to ``-g``. Thousands of paths on the command line
+  can exceed the operating system's argument-size limit (ARG_MAX), and skDER
+  has no file-of-filenames option. skDER lists the directory and keeps every
+  entry with a FASTA suffix, so the directory holds the links and nothing else.
+  It lives in the local scratch directory below, not in the working
+  directory: exFAT cannot hold symbolic links, and macOS adds ``._*`` files
+  there, which skDER would read as genomes.
 
 * skDER is run in a local scratch directory and the results are copied into the
   working directory afterwards. skDER's ``determineN50`` does
@@ -24,6 +34,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 import shutil
 import tempfile
 from collections.abc import Iterator, Sequence
@@ -44,7 +55,6 @@ from .base import (
     DerepResult,
 )
 
-_ARGV_WARN_GENOMES = 5000
 # Placement warnings beyond this count are folded into one line.
 _MAX_PLACED_LINES = 5
 # skDER asks for confirmation below this ANI (percent); skani is unreliable there.
@@ -72,8 +82,6 @@ class SkderDereplicator(Dereplicator):
         ignored_params=frozenset({"primary_ani"}),
     )
 
-    # skDER takes genome paths on argv (no fofn-style input); warn when the
-    # set is large enough that the OS ARG_MAX limit becomes a concern.
     def dereplicate(
         self,
         genomes: Sequence[Path],
@@ -89,19 +97,20 @@ class SkderDereplicator(Dereplicator):
         # then copy its results back next to the working directory.
         local_tmp = Path(tempfile.mkdtemp(prefix="repgenr_skder_"))
         result_dir = local_tmp / "skder_out"
-        if len(genomes) > _ARGV_WARN_GENOMES:
-            logger.warning(
-                "skDER receives %d genome paths on argv; at this scale the OS "
-                "ARG_MAX limit may be exceeded. Use --process-size to bound the "
-                "number of genomes per call.",
-                len(genomes),
-            )
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
         af_pct = _as_percent(params.aligned_fraction)
+        try:
+            genome_dir = stage_genome_dir(genomes, local_tmp / "genomes")
+        except BaseException:
+            shutil.rmtree(local_tmp, ignore_errors=True)
+            raise
+        # The links point at the genome files' own directories; bind those so
+        # a container backend resolves them.
+        genome_dirs = sorted({os.path.dirname(os.path.abspath(g)) for g in genomes})
         cmd = [
             "skder",
             "-g",
-            *[str(g) for g in genomes],
+            genome_dir,
             "-o",
             result_dir,
             "-i",
@@ -114,7 +123,13 @@ class SkderDereplicator(Dereplicator):
             mode,
         ]
         try:
-            run_tool(self.capabilities, cmd, logger=logger, log_prefix="skder")
+            run_tool(
+                self.capabilities,
+                cmd,
+                logger=logger,
+                log_prefix="skder",
+                extra_mounts=genome_dirs,
+            )
             staged = out_dir / "skder_out"
             if staged.exists():
                 remove_tree(staged)
@@ -126,6 +141,37 @@ class SkderDereplicator(Dereplicator):
             shutil.rmtree(local_tmp, ignore_errors=True)
 
         return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
+
+
+def stage_genome_dir(genomes: Sequence[Path], dest: Path) -> Path:
+    """Stage ``genomes`` as a directory of entries named by their basenames.
+
+    Each entry is a symbolic link to the absolute (not symlink-resolved) path
+    of the genome, so a container backend that binds the genome directories
+    at their host paths resolves it. Where the filesystem refuses a symbolic
+    link the genome is hardlinked, or copied as a last resort
+    (:func:`~repgenr.core.process.link_or_copy`). skDER reports genomes by
+    basename, so two genomes with the same basename cannot be told apart;
+    they are refused before anything is staged.
+    """
+    seen: dict[str, Path] = {}
+    for g in genomes:
+        other = seen.setdefault(Path(g).name, Path(g))
+        if other != Path(g):
+            raise UserInputError(
+                f"Two genomes share the basename {Path(g).name!r} ({other} and {g}); "
+                "skDER reports genomes by basename, so the results could not be "
+                "assigned. Rename one of them."
+            )
+    dest.mkdir(parents=True, exist_ok=False)
+    for name, src in seen.items():
+        target = os.path.abspath(src)
+        link = dest / name
+        try:
+            os.symlink(target, link)
+        except OSError:
+            link_or_copy(target, link)
+    return dest
 
 
 def check_secondary_ani(value: float, label: str = "--secondary-ani") -> None:

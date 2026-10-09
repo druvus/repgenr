@@ -18,6 +18,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import zipfile
 import zlib
@@ -471,6 +472,9 @@ def run(
     log_command(logger, cmd, prefix, console_command=console_command)
 
     full_env = {**os.environ, **env} if env else None
+    # Refuse a command the operating system would not start; the container
+    # backends add their own tokens, so the final argv is measured here.
+    check_argv_size(cmd, full_env, tool=log_prefix)
     tail: deque[str] = deque(maxlen=_DEFAULT_TAIL)
     limit = timeout if timeout is not None else _default_timeout()
 
@@ -593,30 +597,109 @@ def unzip(zip_path: str | os.PathLike[str], dest: str | os.PathLike[str]) -> Non
         ) from exc
 
 
-# Close to the common ARG_MAX of 1 MiB (macOS and most Linux configurations);
-# execve also counts the environment, so warn with headroom.
-_ARGV_BYTES_WARN = 900_000
+# Used when the platform does not report ARG_MAX: the common value on macOS
+# and on Linux with the default 8 MiB stack.
+_FALLBACK_ARG_MAX = 1 << 20
+# Bytes kept free below ARG_MAX: execve also stores the program path and the
+# auxiliary vector, and the kernel's accounting differs slightly between
+# platforms.
+_ARG_MAX_MARGIN = 16 * 1024
+# Linux refuses a single argument or environment string longer than this
+# (MAX_ARG_STRLEN, 32 pages), whatever ARG_MAX is.
+_LINUX_MAX_ARG_STRLEN = 32 * 4096
+# warn_argv_bytes warns once a command uses this fraction of the limit.
+_ARGV_WARN_FRACTION = 0.75
+# What a user can do about an oversized command line, named in the warning
+# and in the error.
+_ARGV_ADVICE = (
+    "Reduce the number of genomes per call (for dereplication, --process-size "
+    "bounds the genomes in one tool call), or dereplicate before this stage."
+)
+
+
+def arg_max() -> int:
+    """The operating system's limit on argv plus environment, in bytes."""
+    try:
+        value = os.sysconf("SC_ARG_MAX")
+    except (AttributeError, ValueError, OSError):
+        return _FALLBACK_ARG_MAX
+    return value if value > 0 else _FALLBACK_ARG_MAX
+
+
+def _strings_bytes(strings: Sequence[str]) -> int:
+    """Bytes execve needs for ``strings``: each one with its NUL and pointer."""
+    return sum(len(os.fsencode(s)) + 1 + 8 for s in strings)
+
+
+def _env_strings(env: Mapping[str, str] | None) -> list[str]:
+    return [f"{k}={v}" for k, v in (os.environ if env is None else env).items()]
+
+
+def argv_bytes(argv: Sequence[str | os.PathLike[str]], env: Mapping[str, str] | None = None) -> int:
+    """Bytes ``argv`` plus the environment occupy in an execve call.
+
+    ``env`` is the child's full environment (None: this process's).
+    """
+    return _strings_bytes([os.fspath(a) for a in argv]) + _strings_bytes(_env_strings(env))
+
+
+def check_argv_size(
+    argv: Sequence[str | os.PathLike[str]],
+    env: Mapping[str, str] | None = None,
+    *,
+    tool: str | None = None,
+) -> None:
+    """Refuse a command that the operating system would not start (E2BIG).
+
+    Measures the argument vector and the environment against ARG_MAX less a
+    margin and, on Linux, every string against the 128 KiB single-argument
+    limit. Raises :class:`UserInputError` naming --process-size before the
+    tool is started, instead of an opaque "Argument list too long" from exec.
+    """
+    args = [os.fspath(a) for a in argv]
+    name = tool or (Path(args[0]).name if args else "tool")
+    total = argv_bytes(args, env)
+    limit = arg_max() - _ARG_MAX_MARGIN
+    if total > limit:
+        raise UserInputError(
+            f"{name}: the command line and environment take {total // 1024} KiB "
+            f"across {len(args)} arguments, more than the operating system "
+            f"accepts ({limit // 1024} KiB of ARG_MAX). {_ARGV_ADVICE}"
+        )
+    if sys.platform.startswith("linux"):
+        for s in [*args, *_env_strings(env)]:
+            if len(os.fsencode(s)) + 1 > _LINUX_MAX_ARG_STRLEN:
+                raise UserInputError(
+                    f"{name}: one command-line or environment string is "
+                    f"{len(os.fsencode(s)) // 1024} KiB long, more than the "
+                    f"{_LINUX_MAX_ARG_STRLEN // 1024} KiB Linux accepts for a "
+                    f"single argument ({s[:60]}...). {_ARGV_ADVICE}"
+                )
 
 
 def warn_argv_bytes(
     tool: str, argv: Sequence[str | os.PathLike[str]], logger: logging.Logger
 ) -> None:
-    """Warn when an argv's byte size approaches the OS ARG_MAX limit.
+    """Warn when an argv approaches the operating system's ARG_MAX limit.
 
-    Some tools take every genome path on argv (mashtree, sibeliaz,
-    snippy-core); at thousands of genomes the exec can fail with E2BIG.
-    Use before run_tool for such invocations. Reduce the set (dereplicate
-    first, or --process-size for dereplication) when the warning fires.
+    For tools that take every genome path on argv and have no list-file
+    alternative (progressiveMauve, SibeliaZ, snippy-core). The size is measured
+    (argv plus this process's environment) against the platform's ARG_MAX, not
+    estimated from a genome count. :func:`run` refuses a command over the
+    limit; this warns earlier, from three quarters of it.
     """
-    total = sum(len(os.fsencode(os.fspath(a))) + 1 for a in argv)
-    if total >= _ARGV_BYTES_WARN:
+    total = argv_bytes(argv)
+    limit = arg_max() - _ARG_MAX_MARGIN
+    if total >= _ARGV_WARN_FRACTION * limit:
         logger.warning(
-            "%s receives ~%d KB across %d command-line arguments; the OS "
-            "ARG_MAX limit (commonly 1 MB) may be exceeded and the tool may "
-            "fail to launch. Reduce the genome set per call.",
+            "%s receives %d KiB across %d command-line arguments (with the "
+            "environment), %.0f%% of the operating system's ARG_MAX limit (%d KiB usable). %s",
             tool,
-            total // 1000,
+            total // 1024,
             len(argv),
+            100.0 * total / limit,
+            limit // 1024,
+            _ARGV_ADVICE,
         )
 
 

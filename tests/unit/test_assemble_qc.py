@@ -172,8 +172,15 @@ def test_sourmash_classifier_gathers_genomes_concurrently(tmp_path: Path, monkey
     )
     assert sorted(result) == [f"SRR{i}.fasta" for i in range(4)]
     assert peak > 1, "gathers did not overlap"
-    assert len(tax_calls) == 1 and tax_calls[0].count("--gather-csv") == 1
-    assert sum(1 for t in tax_calls[0] if t.endswith("gather.csv")) == 4
+    # The gather CSVs reach tax genome in a list file, not one argv token each.
+    assert len(tax_calls) == 1 and "--gather-csv" not in tax_calls[0]
+    assert not any(t.endswith("gather.csv") for t in tax_calls[0])
+    listed = (
+        Path(tax_calls[0][tax_calls[0].index("--from-file") + 1])
+        .read_text(encoding="utf-8")
+        .split()
+    )
+    assert len(listed) == 4 and all(Path(p).is_file() for p in listed)
 
 
 def test_gather_workers_are_bounded_by_the_memory_budget() -> None:

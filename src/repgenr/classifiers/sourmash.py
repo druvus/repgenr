@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,7 @@ from ..core.contracts import record_name
 from ..core.errors import UserInputError
 from ..core.executors import parallel_map
 from ..core.plugins import ToolCapabilities, parse_extra_int
+from ..core.process import write_fofn
 from ..core.sourmash import sourmash_capabilities
 from .base import Classification, Classifier, ClassifyParams, db_version
 
@@ -83,14 +85,18 @@ def tax_genome(
     extra: list[str | Path] = []
     if containment_threshold is not None:
         extra = ["--containment-threshold", f"{containment_threshold:g}"]
+    # One gather CSV per genome: pass them in a list file (--from-file), not
+    # on argv, where thousands of paths can exceed ARG_MAX.
+    csv_list = write_fofn(gather_csvs, Path(str(base) + ".gather_csvs.txt"))
+    csv_dirs = sorted({os.path.dirname(os.path.abspath(c)) for c in gather_csvs})
     run_tool(
         caps,
         [
             "sourmash",
             "tax",
             "genome",
-            "--gather-csv",
-            *gather_csvs,
+            "--from-file",
+            csv_list,
             "--taxonomy-csv",
             lineages,
             "--output-base",
@@ -100,7 +106,7 @@ def tax_genome(
         ],
         logger=logger,
         log_prefix="sourmash",
-        extra_mounts=list(mounts),
+        extra_mounts=[*mounts, *csv_dirs],
     )
     return Path(str(base) + ".classifications.csv")
 
