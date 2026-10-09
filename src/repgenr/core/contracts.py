@@ -702,6 +702,9 @@ class AssemblyStatsRow:
     polisher: str = ""
     # Whether assemblies/<run>/reads.sig.zip holds a sketch of the run's reads.
     reads_sketch: bool = False
+    # "pass" when the reads screen (assemble --screen-reads) passed the run;
+    # empty when it was not screened.
+    screen: str = ""
 
 
 _ASSEMBLY_STATS_COLUMNS = [
@@ -721,6 +724,7 @@ _ASSEMBLY_STATS_COLUMNS = [
     "taxonomy_flag",
     "polisher",
     "reads_sketch",
+    "screen",
 ]
 
 
@@ -747,6 +751,7 @@ def write_assembly_stats(path: Path, rows: list[AssemblyStatsRow]) -> None:
                     r.taxonomy_flag,
                     r.polisher,
                     1 if r.reads_sketch else 0,
+                    r.screen,
                 ]
             )
 
@@ -774,6 +779,7 @@ def read_assembly_stats(path: Path) -> list[AssemblyStatsRow]:
                     polisher=rec.get("polisher", "") or "",
                     # Absent from tables written before the column existed.
                     reads_sketch=(rec.get("reads_sketch") or "0").strip() == "1",
+                    screen=rec.get("screen") or "",
                 )
             )
     return rows
@@ -784,7 +790,7 @@ class ExcusedRun:
     """A selected run that produced no genome: which step gave up and why."""
 
     run_accession: str
-    step: str  # fetch | assemble | qc | classify
+    step: str  # fetch | screen | assemble | qc | classify
     reason: str
 
 

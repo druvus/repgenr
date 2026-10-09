@@ -544,9 +544,87 @@ stage is otherwise up to date, that call needs `--force`.
 
 The reads sketch is not a genome sketch. It is kept beside the assembly and
 is never copied into `sketches/`, which holds one signature per genome for
-the consumers described under "Genome sketches". A gate that would screen the
-reads against a reference before assembly (`--screen-reads`) is planned but
-not implemented.
+the consumers described under "Genome sketches".
+
+#### Reads screen
+
+`assemble --screen-reads` (off by default) checks each run's reads sketch
+before the run is assembled. Within the per-run worker the order is: fetch
+and verify the FASTQ files, sketch the reads, screen the sketch, and only
+then choose and start the assembler. Under the screen the reads sketch is
+therefore awaited rather than run beside the assembler. A run that fails a
+check is excused in `excused_runs.tsv` with step `screen` and one of three
+reasons:
+
+- `taxon_mismatch`: `sourmash gather` of the reads sketch (k=31) against the
+  GTDB sketch, resolved to a lineage with `sourmash tax genome` and the
+  lineages CSV (the commands of the post-assembly classifier), gives a genus
+  other than the submitted one. The classifier's tolerance applies: a genus
+  that differs while the family and the species epithet agree
+  (`genus_renamed`) passes. A run with no GTDB match above the gather
+  threshold (50 kbp) is also excused with this reason. A run whose submitted
+  genus is unknown is not tested for it.
+- `host_dominated`: the abundance-weighted fraction of the reads assigned to
+  the top species (`f_weighted_at_rank` of `tax genome` at species rank) is
+  below `--screen-min-fraction` (default 0.5). Host, contaminant and
+  sequencing-error k-mers all lower it. `tax genome` is run with a
+  containment threshold of 0 here, since most distinct k-mers of a reads
+  sketch are sequencing errors and the unweighted fraction of a pure isolate
+  stays far below sourmash's default threshold of 0.1.
+- `duplicate_isolate`: the run's reads are contained in those of a run
+  accepted before it, of the same taxid or the same biosample, at an ANI
+  estimate of `--screen-dup-ani` (default 0.999) or more. Runs are compared
+  in `reads.tsv` order, which the reads stage writes largest first, so of
+  two duplicates the larger run is kept; a run waits for the decisions on
+  the earlier runs of its taxid and biosample, so the result does not depend
+  on which worker finishes first. The comparison is limited to runs accepted
+  in the same call and finished runs with a reads sketch. It uses the k=31
+  signature: k-mers seen at least a tenth of the abundance-weighted median
+  (and at least twice) are taken as genomic, their containment C in the
+  k-mers the other run saw at least twice gives the estimate C^(1/31), as
+  sourmash's containment ANI does. Two runs of different strains with an ANI
+  above the threshold are also treated as duplicates.
+
+A tool failure while screening (a failed reads sketch or gather) excuses the
+run with `screen_failed`, which, like a failed download, does not count as a
+judgement of the run's data when every run is excused (see
+[output.md](output.md#when-every-sequencing-run-is-excused)); the three
+reasons above do count. The screen needs sourmash and the GTDB sketch and
+lineages CSV (`--gtdb-sketch` and `--gtdb-lineages`, or
+`REPGENR_GTDB_SKETCH` and `REPGENR_GTDB_LINEAGES`, as for the classifier);
+without a sketch or lineages file, or with `--no-reads-sketch`, the stage
+exits 2 before anything is downloaded, and without sourmash it exits 4. The
+classifier setting does not matter: the screen runs with `--classifier
+none` as well. The post-assembly classifier runs unchanged on the accepted
+assemblies.
+
+The cost is one gather per run, about 30 s against the GTDB rs226
+representatives sketch, plus the time the sketch would otherwise have
+overlapped with the assembler. Gathers of concurrent runs are bounded by the
+classifier's memory budget (`--memory-gb` / 0.6 GB). An excused run keeps its
+reads sketch, its decision in `assemblies/<run>/screen.json` and the gather
+and `tax genome` output under `assemblies/<run>/screen/`, so the reason can
+be inspected; its reads are removed as usual. `screen_reads.tsv` in the
+working directory lists every screened run (see
+[output.md](output.md#working-directory-layout)), and `assembly_stats.tsv` marks the
+genomes that passed (`screen` column).
+
+Each decision records its settings (both thresholds and the resolved paths
+of the GTDB sketch and lineages CSV). A repeat with the same settings screens
+nothing again: an excused run is excused from its recorded decision without
+a download, and a finished run keeps its decision. When a setting changed,
+the runs are screened again from their kept reads sketches, without
+fetching their reads: an excused run is fetched again only when it now
+passes, and a finished run that now fails is excused while its contigs and
+marker stay for a later call. A finished run assembled without the screen is
+screened from its reads sketch; one without a reads sketch is not screened,
+and one INFO line counts such runs.
+
+With `--max-runs`, a run excused by the screen while it is processed does not
+give its place to a deferred run in the same call, since the places are
+fixed before any run is fetched. The next call excuses it from its recorded
+decision before the places are counted, so a deferred run takes its place
+then.
 
 The same work is available as three stateless steps, which the Nextflow reads
 mode runs as separate tasks and which also serve a scheduler of your own:
@@ -571,7 +649,15 @@ unsupported platform, or fails to download, assemble or polish (`--polisher`,
 `--polish-rounds`, `--keep-reads`, `--keep-files`, `--tool-arg` and
 `--reads-sketch/--no-reads-sketch` as on `assemble`; the reads sketch goes to
 `reads.sig.zip` in the same directory). In Nextflow, the parameter
-`--assemble_args '--no-reads-sketch'` turns it off. `genome-qc` reads a
+`--assemble_args '--no-reads-sketch'` turns it off. `assemble-run
+--screen-reads` (with `--screen-min-fraction`, `--gtdb-sketch` and
+`--gtdb-lineages`) applies the taxon and fraction checks of the reads screen
+and writes `screen.json` beside the sketch; the duplicate check needs the
+other runs and is made only by `assemble`, since each `assemble-run` task
+sees one run. In Nextflow, `--assemble_args '--screen-reads'` turns it on,
+and `conf/modules.config` then adds `--gtdb-sketch` and `--gtdb-lineages`
+from the pipeline parameters of the same names. `reads-gather` collects the
+`screen.json` files into `screen_reads.tsv`. `genome-qc` reads a
 directory of such run directories (`--assemblies`) and writes `quality.tsv`
 and `classification.tsv` keyed by run accession; it needs at least one
 database. `reads-gather` applies the quality gate and the naming policy above

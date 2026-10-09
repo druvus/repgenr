@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import shutil
 import threading
 import time
@@ -32,6 +31,7 @@ from ..assemblers.base import ReadSet, accepting_assemblers, registry, select_as
 from ..assemblers.contigs import ContigStats, filter_contigs
 from ..classifiers.base import Classification, ClassifyParams
 from ..classifiers.base import registry as classifier_registry
+from ..classifiers.sourmash import gather_workers
 from ..core import http, process
 from ..core.context import WorkdirContext
 from ..core.contracts import (
@@ -50,7 +50,6 @@ from ..core.contracts import (
     read_reads,
     read_selection,
     record_name,
-    sanitise_taxon_tokens,
     write_assembly_stats,
     write_excused_runs,
     write_selection,
@@ -89,7 +88,22 @@ from .assemble_qc import (
     run_checkm2,
     store_cached_quality,
 )
+from .assemble_screen import (
+    SCREEN_DIR,
+    SCREEN_FAILED,
+    SCREEN_JSON,
+    SCREEN_READS_TSV,
+    SCREEN_STEP,
+    ScreenGate,
+    ScreenRecord,
+    ScreenSettings,
+    read_screen_json,
+    write_screen_json,
+    write_screen_table,
+)
 from .ingest import OUTGROUP_ACCESSION_TXT
+from .taxon_match import AGREE, GENUS_RENAMED, genus_agreement
+from .taxon_match import gtdb_tokens as _gtdb_tokens
 
 GTDB_SKETCH_ENV = "REPGENR_GTDB_SKETCH"
 GTDB_LINEAGES_ENV = "REPGENR_GTDB_LINEAGES"
@@ -149,6 +163,13 @@ class AssembleParams:
     # reads.tsv order; the remaining pending runs are excused as deferred.
     # None assembles every run.
     max_runs: int | None = None
+    # The reads screen (assemble_screen): after the fetch and the reads
+    # sketch, before an assembler runs; needs the GTDB sketch and lineages.
+    screen_reads: bool = False
+    # Minimum abundance-weighted fraction of the reads in the top species.
+    screen_min_fraction: float = 0.5
+    # ANI estimate from which a run contained in an earlier run is a duplicate.
+    screen_dup_ani: float = 0.999
 
 
 @dataclass
@@ -170,6 +191,8 @@ class _Outcome:
     versions: dict = field(default_factory=dict)
     # Whether assemblies/<run>/reads.sig.zip holds the run's reads sketch.
     reads_sketch: bool = False
+    # The reads screen's decision, when the run was screened.
+    screen: ScreenRecord | None = None
 
 
 def run(ctx: WorkdirContext, params: AssembleParams) -> int:
@@ -183,6 +206,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     _check_outgroup_file(params.outgroup)
     require_sourmash_if_requested(params.sketch)
     require_sourmash_if_requested(params.reads_sketch)
+    screen = screen_settings(params)
 
     assemblies = ctx.workdir / "assemblies"
     scratch = ctx.scratch_dir / "assemble"
@@ -193,6 +217,15 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if params.assembler == "auto":
         _excuse_missing_assemblers(plan, logger)
         _require_something_to_assemble(plan)
+    gate = None
+    if screen is not None:
+        gate = ScreenGate(
+            screen,
+            logger,
+            gather_slots=gather_workers(len(plan), params.threads, params.memory_gb),
+        )
+        # Before --max-runs: a run excused from its kept sketch takes no place.
+        screen_planned(plan, gate, assemblies, params.threads, logger)
     if params.max_runs is not None:
         defer_beyond(plan, params.max_runs, logger)
     if params.polisher == "auto":
@@ -212,10 +245,14 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             gtdb_lineages=gtdb_lineages,
         )
     )
-    reads_versions = sourmash_for_reads_sketch(params.reads_sketch, "assemble", logger)
+    reads_versions = sourmash_for_reads_sketch(
+        True if gate is not None else params.reads_sketch, "assemble", logger
+    )
     reads_sketch_version = reads_versions.get("sourmash", "") if reads_versions else None
     versions.update(reads_versions)
     pending = [o for o in plan if o.excused is None and o.stats is None]
+    if gate is not None:
+        gate.set_pending([o.row for o in pending])
     if pending:  # a rerun over finished runs downloads nothing
         check_free_disk(
             ctx.workdir,
@@ -239,16 +276,22 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     )
 
     def work(outcome: _Outcome) -> _Outcome:
-        return _fetch_and_assemble(
-            outcome,
-            params,
-            threads_each,
-            assemblies / outcome.row.run_accession,
-            scratch / outcome.row.run_accession,
-            versions,
-            logger,
-            reads_sketch=reads_sketch_version,
-        )
+        try:
+            return _fetch_and_assemble(
+                outcome,
+                params,
+                threads_each,
+                assemblies / outcome.row.run_accession,
+                scratch / outcome.row.run_accession,
+                versions,
+                logger,
+                reads_sketch=reads_sketch_version,
+                gate=gate,
+            )
+        finally:
+            # A run that ends before its screen must not hold up later ones.
+            if gate is not None:
+                gate.release(outcome.row.run_accession)
 
     if reads_sketch_version is not None:
         refill_reads_sketches(
@@ -289,10 +332,19 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if quality is not None:
         apply_quality(assembled, quality, params.min_completeness, params.max_contamination, logger)
         assembled = [o for o in assembled if o.excused is None]
-    # An excused run keeps no reads sketch; a deferred run was not judged.
+    # An excused run keeps no reads sketch; a deferred run was not judged, and
+    # a run the screen excused keeps it so the reason can be inspected.
     for o in outcomes:
-        if o.excused is not None and not _is_deferred(o.excused):
+        if keeps_reads_sketch(o.excused):
+            continue
+        if o.excused is not None:
             drop_reads_sketch(o, assemblies / o.row.run_accession)
+    if gate is not None:
+        write_screen_table(
+            ctx.workdir / SCREEN_READS_TSV,
+            [o.screen for o in outcomes if o.screen is not None],
+            [r.run_accession for r in rows],
+        )
     n_disagree = 0
     if classified is not None:
         n_disagree = apply_classification(assembled, classified, versions, logger)
@@ -384,6 +436,7 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             "outgroup_accession": outgroup_row.accession if outgroup_row else None,
             "sketches": sketches,
             "n_reads_sketches": sum(1 for o in assembled if o.reads_sketch),
+            "n_screened_out": sum(1 for e in excused if e.step == SCREEN_STEP),
         },
         tool_versions=versions,
         completed=datetime.now(UTC).isoformat(),
@@ -622,6 +675,8 @@ def _reuse_finished(
     # A marker written before reads sketches existed has no such field.
     sketch_name = done.get("reads_sketch")
     outcome.reads_sketch = bool(sketch_name) and (run_dir / str(sketch_name)).is_file()
+    # The screen decision the run was assembled under, when it was screened.
+    outcome.screen = ScreenRecord.from_json(done.get("screen"))
     if check_settings and (old_floor is None or old_floor < params.min_contig_length):
         # A marker without settings may hold contigs below the floor; filtering
         # again is a no-op when it does not.
@@ -844,6 +899,7 @@ def _fetch_and_assemble(
     logger: logging.Logger,
     *,
     reads_sketch: str | None = None,
+    gate: ScreenGate | None = None,
 ) -> _Outcome:
     """Fetch and assemble one run into ``out_dir`` (contigs and the done marker).
 
@@ -854,11 +910,21 @@ def _fetch_and_assemble(
     single-threaded sketch runs alongside it, one thread over the share;
     giving that thread up slowed the assembler more than the sketch took.
     A failed sketch is a warning, never an excuse.
+
+    With ``gate`` (``--screen-reads``) the sketch is awaited instead, and the
+    reads screen judges the run before any assembler starts; a run it
+    excuses keeps its reads sketch. A run whose kept sketch passed the
+    screen while planning (``outcome.screen``) is not sketched again.
     """
     row = outcome.row
+    sketch_path = out_dir / READS_SKETCH_NAME
+    prior = outcome.screen if gate is not None else None
+    keep_sketch = prior is not None and sketch_path.is_file()
     # The marker names finished contigs; a run assembled again has none until it ends.
     (out_dir / _DONE_MARKER).unlink(missing_ok=True)
-    (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+    if not keep_sketch:
+        sketch_path.unlink(missing_ok=True)
+        _clear_screen(out_dir)
     # A hard exit can leave the temporary file of a sketch thread behind.
     clear_partials(out_dir)
     _clear_scratch(row, run_scratch)
@@ -873,8 +939,21 @@ def _fetch_and_assemble(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     sketch = None
-    if reads_sketch is not None:
-        sketch = ReadsSketchJob(row.run_accession, files, out_dir / READS_SKETCH_NAME, logger)
+    if reads_sketch is not None and not keep_sketch:
+        sketch = ReadsSketchJob(row.run_accession, files, sketch_path, logger)
+    screened_sketch = False
+    if gate is not None:
+        # Under the screen the sketch is awaited: the screen reads it.
+        screened_sketch = keep_sketch or (sketch is not None and sketch.wait())
+        sketch = None
+        outcome.screen = gate.judge(row, sketch_path if screened_sketch else None, out_dir, prior)
+        if not outcome.screen.passed:
+            outcome.excused = ExcusedRun(row.run_accession, SCREEN_STEP, outcome.screen.reason)
+            outcome.assembler = None
+            outcome.polisher = None
+            if not (params.keep_files or params.keep_reads):
+                remove_tree(run_scratch)
+            return outcome
     try:
         marker = _assemble_fetched(
             outcome, params, files, threads, out_dir, run_scratch, versions, logger
@@ -886,15 +965,17 @@ def _fetch_and_assemble(
             sketch.join()
     # Raises when a stop request cut the sketch short: no marker is written
     # and the reads stay, so a resume keeps them and assembles the run again.
-    sketched = sketch.wait() if sketch is not None else False
+    sketched = sketch.wait() if sketch is not None else screened_sketch
     if marker is None:  # excused
-        (out_dir / READS_SKETCH_NAME).unlink(missing_ok=True)
+        sketch_path.unlink(missing_ok=True)
         if not params.keep_files:
             remove_tree(run_scratch)
         return outcome
     assert outcome.stats is not None
     outcome.reads_sketch = sketched
     marker.update(reads_sketch_fields(reads_sketch if sketched else None))
+    if outcome.screen is not None:
+        marker["screen"] = outcome.screen.to_json()
     _write_marker(out_dir / _DONE_MARKER, marker)
     if params.keep_files:
         pass
@@ -1162,6 +1243,174 @@ def drop_reads_sketch(outcome: _Outcome, run_dir: Path) -> None:
     sketch.unlink(missing_ok=True)
 
 
+def keeps_reads_sketch(excused: ExcusedRun | None) -> bool:
+    """Whether a run keeps its reads sketch at the end of the stage.
+
+    Accepted runs do; of the excused runs, a deferred one (not judged) and one
+    the reads screen excused (the sketch shows why, and a later call with other
+    thresholds screens it again without fetching).
+    """
+    return excused is None or _is_deferred(excused) or excused.step == SCREEN_STEP
+
+
+# --- reads screen -------------------------------------------------------------------
+
+
+def screen_settings(params: AssembleParams) -> ScreenSettings | None:
+    """The reads screen's settings, or None without ``--screen-reads``.
+
+    Refuses, before anything is fetched, a screen without the GTDB sketch and
+    lineages (flag or environment variable) or with the reads sketch turned
+    off (UserInputError), and one without sourmash (MissingBinaryError).
+    """
+    if not params.screen_reads:
+        return None
+    if params.reads_sketch is False:
+        raise UserInputError(
+            "--screen-reads screens the reads sketch; it cannot be combined with --no-reads-sketch."
+        )
+    if not 0.0 <= params.screen_min_fraction <= 1.0:
+        raise UserInputError(
+            f"--screen-min-fraction must be within [0, 1] (got {params.screen_min_fraction})."
+        )
+    if not 0.0 < params.screen_dup_ani <= 1.0:
+        raise UserInputError(
+            f"--screen-dup-ani must be within (0, 1] (got {params.screen_dup_ani})."
+        )
+    sketch = params.gtdb_sketch or os.environ.get(GTDB_SKETCH_ENV)
+    lineages = params.gtdb_lineages or os.environ.get(GTDB_LINEAGES_ENV)
+    if not sketch or not lineages:
+        raise UserInputError(
+            "--screen-reads needs the GTDB sketch and the lineages CSV published with it "
+            f"(--gtdb-sketch and --gtdb-lineages, or {GTDB_SKETCH_ENV} and {GTDB_LINEAGES_ENV})."
+        )
+    for flag, value in (("--gtdb-sketch", sketch), ("--gtdb-lineages", lineages)):
+        if not Path(value).expanduser().exists():
+            raise UserInputError(
+                f"{flag} {value} does not exist (from the flag or the environment variable)."
+            )
+    require_sourmash_if_requested(True)
+    return ScreenSettings(
+        min_fraction=params.screen_min_fraction,
+        dup_ani=params.screen_dup_ani,
+        gtdb_sketch=str(Path(sketch).expanduser().resolve()),
+        gtdb_lineages=str(Path(lineages).expanduser().resolve()),
+    )
+
+
+def _clear_screen(run_dir: Path) -> None:
+    """Remove a run's screen decision and gather output from an earlier attempt."""
+    (run_dir / SCREEN_JSON).unlink(missing_ok=True)
+    if (run_dir / SCREEN_DIR).is_dir():
+        remove_tree(run_dir / SCREEN_DIR)
+
+
+def _apply_screen(o: _Outcome, record: ScreenRecord) -> None:
+    o.screen = record
+    if not record.passed:
+        # A finished run keeps its contigs and marker for a later call.
+        o.stats = None
+        o.assembler = None
+        o.polisher = None
+        o.excused = ExcusedRun(o.row.run_accession, SCREEN_STEP, record.reason)
+
+
+def screen_planned(
+    plan: list[_Outcome],
+    gate: ScreenGate,
+    assemblies: Path,
+    threads: int,
+    logger: logging.Logger,
+) -> None:
+    """Screen, before any fetch, the runs whose reads sketch is already here.
+
+    Finished runs are screened from their reads sketch, or keep a decision
+    made with the same settings; their duplicate check runs in ``reads.tsv``
+    order among them, and those accepted are the first runs the pending ones
+    are compared with. A finished run without a reads sketch is not screened.
+    A pending run with a kept sketch (screened out by an earlier call) keeps
+    a decision made with the same settings; with other settings it is
+    screened again from the sketch, so it is fetched only when it now passes
+    the taxon and fraction checks (the duplicate check follows in the worker).
+    """
+    settings = gate.settings
+    finished: list[tuple[_Outcome, ScreenRecord | None]] = []
+    kept: list[tuple[_Outcome, ScreenRecord | None]] = []
+    unscreened = 0
+    for o in plan:
+        if o.excused is not None:
+            continue
+        run_dir = assemblies / o.row.run_accession
+        record = read_screen_json(run_dir)
+        has_sketch = (run_dir / READS_SKETCH_NAME).is_file()
+        reusable = (
+            record is not None
+            and record.made_with(settings)
+            and not record.reason.startswith(SCREEN_FAILED)
+        )
+        if o.stats is not None:
+            # A pass is reused once its duplicate check was made; an excuse as it is.
+            if (
+                reusable
+                and record is not None
+                and (not record.passed or (has_sketch and record.duplicates_checked))
+            ):
+                finished.append((o, record))
+            elif o.reads_sketch and has_sketch:
+                finished.append((o, None))
+            else:
+                o.screen = None
+                unscreened += 1
+        elif has_sketch and record is not None:
+            kept.append((o, record if reusable else None))
+    todo = [o for o, rec in [*finished, *kept] if rec is None]
+    if todo:
+        logger.info("Screening the kept reads sketches of %d run(s)", len(todo))
+
+    def classify(o: _Outcome) -> tuple[str, ScreenRecord]:
+        run_dir = assemblies / o.row.run_accession
+        return o.row.run_accession, gate.classify(
+            o.row, run_dir / READS_SKETCH_NAME, run_dir / SCREEN_DIR
+        )
+
+    workers = max(1, min(threads, len(todo)))
+    fresh = dict(parallel_map(classify, todo, workers, logger=logger))
+    for o, record in finished:
+        run_dir = assemblies / o.row.run_accession
+        if record is not None:
+            if record.passed:
+                gate.accept(o.row, run_dir / READS_SKETCH_NAME)
+        else:
+            record = gate.check_duplicate(
+                o.row, fresh[o.row.run_accession], run_dir / READS_SKETCH_NAME
+            )
+            write_screen_json(run_dir, record)
+            done = _read_marker(run_dir / _DONE_MARKER)
+            if done is not None and record.passed:
+                done["screen"] = record.to_json()
+                _write_marker(run_dir / _DONE_MARKER, done)
+        if not record.passed:
+            logger.warning(
+                "%s: finished run excused by the screen (%s)", o.row.run_accession, record.reason
+            )
+        _apply_screen(o, record)
+    for o, record in kept:
+        run_dir = assemblies / o.row.run_accession
+        if record is None:
+            record = fresh[o.row.run_accession]
+            write_screen_json(run_dir, record)
+        if record.passed:
+            o.screen = record  # the worker adds the duplicate check
+        else:
+            _apply_screen(o, record)
+    if unscreened:
+        logger.info(
+            "%d finished run(s) have no reads sketch and are not screened; --force with "
+            "--keep-reads, or assembling them again, screens them.",
+            unscreened,
+        )
+
+
 def _clear_scratch(row: ReadRow, run_scratch: Path) -> None:
     """Empty a run's scratch from an earlier attempt, except its FASTQ files.
 
@@ -1317,6 +1566,7 @@ def precheck(ctx: WorkdirContext, params: AssembleParams) -> None:
     _check_outgroup_file(params.outgroup)
     require_sourmash_if_requested(params.sketch)
     require_sourmash_if_requested(params.reads_sketch)
+    screen_settings(params)
     check_quality_inputs(
         checkm2_db=params.checkm2_db or checkm2_db_from_env(),
         classifier=classifier_for(params.classifier, params.gtdb_sketch),
@@ -1490,7 +1740,6 @@ def apply_quality(
             logger.warning("%s: excused, %s", o.row.run_accession, o.excused.reason)
 
 
-GENUS_RENAMED = "genus_renamed"
 CLASSIFIER_DISAGREES = "classifier_disagrees"
 
 
@@ -1522,10 +1771,11 @@ def apply_classification(
         gtdb_tokens = _gtdb_tokens(o.gtdb.taxonomy)
         assert o.label is not None
         gtdb_genus = next((c for c in o.gtdb.taxonomy.split(";") if c.startswith("g__")), "g__?")
-        if gtdb_tokens[1] and gtdb_tokens[1] == o.label[1]:
+        agreement = genus_agreement(o.label, gtdb_tokens)
+        if agreement == AGREE:
             o.label = gtdb_tokens
             o.label_source = "classifier"
-        elif _same_taxon(o.label[0], gtdb_tokens[0]) and _same_epithet(o.label[2], gtdb_tokens[2]):
+        elif agreement == GENUS_RENAMED:
             o.taxonomy_flag = GENUS_RENAMED
             logger.warning(
                 "%s: submitted as %s %s; GTDB places the species in %s of the same family "
@@ -1551,34 +1801,6 @@ def apply_classification(
                 CLASSIFIER_DISAGREES,
             )
     return n_disagree
-
-
-# A GTDB placeholder suffix on a species epithet (coli_A, sanitised to coli-A).
-_GTDB_SUFFIX = re.compile(r"-[A-Z]+$")
-
-
-def _same_taxon(submitted: str, gtdb: str) -> bool:
-    """Whether two family (or genus) tokens agree, ignoring a GTDB suffix."""
-    if not submitted or submitted == "unknown" or not gtdb:
-        return False
-    return _GTDB_SUFFIX.sub("", submitted) == _GTDB_SUFFIX.sub("", gtdb)
-
-
-def _same_epithet(submitted: str, gtdb: str) -> bool:
-    """Whether two species tokens name the same epithet, ignoring a GTDB suffix."""
-    if not submitted or submitted == "unknown" or not gtdb:
-        return False
-    return _GTDB_SUFFIX.sub("", submitted) == _GTDB_SUFFIX.sub("", gtdb)
-
-
-def _gtdb_tokens(lineage: str) -> tuple[str, str, str]:
-    """Family, genus and species tokens from a GTDB lineage string."""
-    ranks = {}
-    for chunk in lineage.split(";"):
-        chunk = chunk.strip()
-        if len(chunk) > 3 and chunk[1:3] == "__":
-            ranks[chunk[0]] = chunk[3:]
-    return sanitise_taxon_tokens(ranks.get("f", ""), ranks.get("g", ""), ranks.get("s", ""))
 
 
 def _name(o: _Outcome) -> str:
@@ -1623,6 +1845,7 @@ def _stats_row(o: _Outcome) -> AssemblyStatsRow:
         taxonomy_flag=o.taxonomy_flag,
         polisher=o.polisher or "",
         reads_sketch=o.reads_sketch,
+        screen="pass" if o.screen is not None and o.screen.passed else "",
     )
 
 
@@ -1650,10 +1873,17 @@ def _append_rows(
 
 
 # Excuses that say nothing about the run's data: it was never fetched, no
-# assembler could be run on this host, or --max-runs deferred it. A stage in
-# which only these occurred has not judged any run, so it does not discard an
-# existing genome set.
-_UNJUDGED_REASONS = ("download_failed", "no_fastq_mirror", ASSEMBLER_NOT_INSTALLED, DEFERRED)
+# assembler could be run on this host, --max-runs deferred it, or a tool of the
+# reads screen failed. A stage in which only these occurred has not judged any
+# run, so it does not discard an existing genome set. A run the screen excused
+# for its reads (taxon_mismatch, host_dominated, duplicate_isolate) was judged.
+_UNJUDGED_REASONS = (
+    "download_failed",
+    "no_fastq_mirror",
+    ASSEMBLER_NOT_INSTALLED,
+    DEFERRED,
+    SCREEN_FAILED,
+)
 
 
 def _total_failure(

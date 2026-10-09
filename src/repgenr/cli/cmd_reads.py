@@ -9,6 +9,8 @@ import typer
 from .base import (
     DEFAULT_THREADS,
     HELP_READS_SKETCH,
+    HELP_SCREEN_MIN_FRACTION,
+    HELP_SCREEN_READS,
     HELP_SKETCH,
     HELP_THREADS,
     HELP_WORKDIR,
@@ -187,6 +189,18 @@ def assemble(
         "--reads-sketch/--no-reads-sketch",
         help=HELP_READS_SKETCH,
     ),
+    screen_reads: bool = typer.Option(False, "--screen-reads", help=HELP_SCREEN_READS),
+    screen_min_fraction: float = typer.Option(
+        0.5, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
+    ),
+    screen_dup_ani: float = typer.Option(
+        0.999,
+        "--screen-dup-ani",
+        min=0.0,
+        max=1.0,
+        help="With --screen-reads: ANI estimate from which a run contained in an earlier "
+        "accepted run of the same taxid or biosample is excused as a duplicate.",
+    ),
 ) -> None:
     """Fetch and assemble the selected runs; write genomes/ and selection.tsv."""
     from .param_builders import assemble_params
@@ -214,6 +228,9 @@ def assemble(
             reads_sketch=reads_sketch,
             extra=_parse_key_values(tool_arg, "--tool-arg"),
             max_runs=max_runs,
+            screen_reads=screen_reads,
+            screen_min_fraction=screen_min_fraction,
+            screen_dup_ani=screen_dup_ani,
         )
 
     _run("assemble", workdir, build)

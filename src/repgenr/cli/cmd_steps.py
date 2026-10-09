@@ -35,6 +35,8 @@ from .base import (
     HELP_REMOVE_OUTGROUP,
     HELP_ROOT,
     HELP_ROOT_NAME,
+    HELP_SCREEN_MIN_FRACTION,
+    HELP_SCREEN_READS,
     HELP_SECONDARY_ANI,
     HELP_SKETCHES_DIR,
     HELP_THREADS,
@@ -459,6 +461,25 @@ def assemble_run_cmd(
         "--reads-sketch/--no-reads-sketch",
         help=HELP_READS_SKETCH,
     ),
+    screen_reads: bool = typer.Option(
+        False,
+        "--screen-reads",
+        help=HELP_SCREEN_READS + " The duplicate check needs the other runs and is not made "
+        "by this step.",
+    ),
+    screen_min_fraction: float = typer.Option(
+        0.5, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
+    ),
+    gtdb_sketch: Path | None = typer.Option(
+        None,
+        "--gtdb-sketch",
+        help="GTDB sourmash sketch database for --screen-reads (or set REPGENR_GTDB_SKETCH).",
+    ),
+    gtdb_lineages: Path | None = typer.Option(
+        None,
+        "--gtdb-lineages",
+        help="The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES).",
+    ),
     versions_out: Path | None = typer.Option(None, "--versions-out", help=HELP_VERSIONS_OUT),
 ) -> None:
     """Fetch and assemble one run of a reads.tsv (stateless data-channel step)."""
@@ -485,6 +506,10 @@ def assemble_run_cmd(
                 keep_files=keep_files,
                 extra=_parse_key_values(tool_arg, "--tool-arg"),
                 reads_sketch=reads_sketch,
+                screen_reads=screen_reads,
+                screen_min_fraction=screen_min_fraction,
+                gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),
+                gtdb_lineages=None if gtdb_lineages is None else str(gtdb_lineages),
                 versions_out=versions_out,
             ),
             logger,

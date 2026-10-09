@@ -38,6 +38,52 @@ nextflow_process {
         }
     }
 
+    test("assemble_args with --screen-reads adds the GTDB sketch and lineages") {
+        when {
+            params {
+                assemble_args = '--screen-reads --screen-min-fraction 0.4'
+                gtdb_sketch = '/db/gtdb.k31.sig.zip'
+                gtdb_lineages = '/db/gtdb.lineages.csv'
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.SRR000001', mode: 'reads', run: [id: 'test', mode: 'reads'],
+                     accession: 'SRR000001', platform: 'ILLUMINA'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.stdout.any { line -> line.contains('ext.args: --gtdb-sketch /db/gtdb.k31.sig.zip --gtdb-lineages /db/gtdb.lineages.csv --screen-reads --screen-min-fraction 0.4') }
+        }
+    }
+
+    test("without --screen-reads the GTDB paths stay with genome-qc") {
+        when {
+            params {
+                assemble_args = '--min-contig-length 1000'
+                gtdb_sketch = '/db/gtdb.k31.sig.zip'
+                gtdb_lineages = '/db/gtdb.lineages.csv'
+            }
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test.SRR000001', mode: 'reads', run: [id: 'test', mode: 'reads'],
+                     accession: 'SRR000001', platform: 'ILLUMINA'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv")
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert process.stdout.any { line -> line.trim() == 'ext.args: --min-contig-length 1000' }
+        }
+    }
+
     test("an unsupported platform yields an excuse file instead of contigs") {
         when {
             process {

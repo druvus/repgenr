@@ -85,6 +85,16 @@ HELP_READS_SKETCH = (
     "into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. "
     "Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it."
 )
+HELP_SCREEN_READS = (
+    "Screen each run's reads sketch before assembling it: a run is excused when its GTDB "
+    "genus differs from the submitted genus (taxon_mismatch), when the top species holds "
+    "less than --screen-min-fraction of the reads (host_dominated), or when an accepted "
+    "run of the same taxid or biosample contains it (duplicate_isolate). Needs sourmash, "
+    "--gtdb-sketch and --gtdb-lineages."
+)
+HELP_SCREEN_MIN_FRACTION = (
+    "With --screen-reads: minimum abundance-weighted fraction of the reads in the top GTDB species."
+)
 HELP_WORKDIR = "Working directory."
 HELP_WORKDIR_CREATED = "Working directory (created)."
 HELP_GTDB_RELEASE = "GTDB release (tsv source)."
