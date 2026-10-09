@@ -75,7 +75,9 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
         logger.info(
             "Resolved %r to %s (%s, taxid %s)", target, hit.scientific_name, hit.rank, taxid
         )
-        records += ena.search_runs(ena.taxon_query(taxid))
+        query = ena.taxon_query(taxid)
+        ena.announce_search(query, hit.scientific_name, logger)
+        records += ena.search_runs(query)
     if accessions:
         records += _whole_genome(ena.search_runs(ena.accession_query(accessions)), logger)
     rows = _dedupe(ena.to_read_rows(records))

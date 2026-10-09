@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
 
 from repgenr.core import ena, http
-from repgenr.core.errors import UserInputError
+from repgenr.core.errors import UserInputError, WorkdirError
 
 DATA = Path(__file__).parent / "data"
 
@@ -75,15 +76,105 @@ def test_search_runs_asks_for_every_record_in_one_request(monkeypatch) -> None:
     returns every match, beyond the 10000 records a page held."""
     calls = []
 
-    def fake_get_json(url, params=None):
+    def fake_iter_lines(url, params=None):
         calls.append(dict(params))
-        return [{"run_accession": f"R{i}"} for i in range(4)]
+        yield "run_accession\ttax_id"
+        yield from (f"R{i}\t{i}" for i in range(4))
 
-    monkeypatch.setattr(http, "get_json", fake_get_json)
+    monkeypatch.setattr(http, "iter_lines", fake_iter_lines)
     rows = ena.search_runs("tax_tree(1)")
     assert [r["run_accession"] for r in rows] == ["R0", "R1", "R2", "R3"]
     assert len(calls) == 1 and calls[0]["limit"] == 0 and "offset" not in calls[0]
-    assert calls[0]["result"] == "read_run" and calls[0]["format"] == "json"
+    assert calls[0]["result"] == "read_run" and calls[0]["format"] == "tsv"
+    assert calls[0]["fields"] == ",".join(ena.RUN_FIELDS)
+
+
+def test_search_runs_requests_the_named_fields(monkeypatch) -> None:
+    calls = []
+
+    def fake_iter_lines(url, params=None):
+        calls.append(params["fields"])
+        return iter(["run_accession\ttax_id", "R1\t9"])
+
+    monkeypatch.setattr(http, "iter_lines", fake_iter_lines)
+    assert ena.search_runs("q", fields=("run_accession", "tax_id")) == [
+        {"run_accession": "R1", "tax_id": "9"}
+    ]
+    assert calls == ["run_accession,tax_id"]
+
+
+def test_tsv_records_have_the_shape_of_the_json_records() -> None:
+    """The TSV reader returns the dicts the JSON format did: every value a
+    string, an empty string where the portal has none, so to_read_rows and
+    the census read them unchanged."""
+    json_records = _load("ena_read_run_mixed.json")
+    fields = list(json_records[0].keys())
+    lines = ["\t".join(fields)]
+    lines += ["\t".join(str(r.get(f, "")) for f in fields) for r in json_records]
+    tsv_records = ena.read_tsv_records(iter(["", *lines, ""]))
+    assert tsv_records == [{f: str(r.get(f, "")) for f in fields} for r in json_records]
+    assert ena.to_read_rows(tsv_records) == ena.to_read_rows(json_records)
+
+
+def test_tsv_reader_rejects_a_record_cut_short() -> None:
+    assert ena.read_tsv_records(iter([])) == []
+    assert ena.read_tsv_records(iter(["run_accession\ttax_id"])) == []
+    with pytest.raises(WorkdirError, match="1 columns where the header has 2"):
+        ena.read_tsv_records(iter(["run_accession\ttax_id", "R1\t9", "R2"]))
+
+
+def test_count_runs_reads_the_count_endpoint(monkeypatch) -> None:
+    calls = []
+
+    def fake_get_json(url, params=None):
+        calls.append((url, dict(params)))
+        return {"count": "217249"}
+
+    monkeypatch.setattr(http, "get_json", fake_get_json)
+    assert ena.count_runs("tax_tree(1279)") == 217249
+    url, params = calls[0]
+    assert url == ena.COUNT_URL and url.endswith("/portal/api/count")
+    assert params == {"result": "read_run", "query": "tax_tree(1279)", "format": "json"}
+    monkeypatch.setattr(http, "get_json", lambda url, params=None: {"message": "no"})
+    with pytest.raises(WorkdirError, match="Unexpected answer"):
+        ena.count_runs("q")
+
+
+def _warnings(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
+
+def test_announce_search_warns_only_above_the_threshold(monkeypatch, caplog) -> None:
+    log = logging.getLogger("repgenr.test")
+    monkeypatch.setattr(ena, "count_runs", lambda query: ena.LARGE_SEARCH)
+    with caplog.at_level(logging.INFO):
+        assert ena.announce_search("q", "Staphylococcus", log) == ena.LARGE_SEARCH
+    assert _warnings(caplog) == []
+    assert any(f"ENA counts {ena.LARGE_SEARCH} " in r.getMessage() for r in caplog.records)
+
+    caplog.clear()
+    monkeypatch.setattr(ena, "count_runs", lambda query: 878821)
+    with caplog.at_level(logging.INFO):
+        assert ena.announce_search("q", "Salmonella", log) == 878821
+    (warning,) = _warnings(caplog)
+    assert "Salmonella has 878821 ENA runs (more than 100000)" in warning
+    assert "GB of memory" in warning
+    # Fewer fields, a smaller expected size.
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        ena.announce_search("q", "Salmonella", log, fields=("run_accession",))
+    (small,) = _warnings(caplog)
+    assert small != warning
+
+
+def test_announce_search_continues_when_the_count_fails(monkeypatch, caplog) -> None:
+    def down(query):
+        raise WorkdirError("HTTP request failed: count")
+
+    monkeypatch.setattr(ena, "count_runs", down)
+    with caplog.at_level(logging.INFO):
+        assert ena.announce_search("q", "Staphylococcus", logging.getLogger("t")) is None
+    assert "Could not count" in _warnings(caplog)[0]
 
 
 def test_to_read_rows_normalises_the_portal_records() -> None:

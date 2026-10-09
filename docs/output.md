@@ -163,7 +163,9 @@ mode and appear in this order:
 `selection.tsv`), `rank` (family or genus), `row_rank` (genus or species),
 `totals` (genera, species, and the counts of the header line; in the selection
 mode also `sources` and `outgroup`), `rows` (objects with the TSV columns, an
-empty BV-BRC field as `null`) and `notes`.
+empty BV-BRC field as `null`), `notes` and `runs_taxon` (with `--runs`, the
+taxon the runs were counted under when it differs from `taxon`, such as
+`NCBI genus Bacillus` for the GTDB genus `Bacillus_A`; otherwise empty).
 
 ## Machine-readable status
 

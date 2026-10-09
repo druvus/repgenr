@@ -1,21 +1,24 @@
 """ENA Portal client: sequencing-run discovery and taxon resolution.
 
-ENA mirrors SRA, needs no key, and answers one JSON query with the run
-metadata and the FASTQ locations and checksums, which is why the reads stage
-reads from it. Network access only; the JSON is easy to freeze as a fixture.
+ENA mirrors SRA, needs no key, and answers one query with the run metadata
+and the FASTQ locations and checksums, which is why the reads stage reads
+from it. Network access only; the records are easy to freeze as a fixture.
 """
 
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from urllib.parse import quote
 
 from . import http
 from .contracts import ReadRow
-from .errors import UserInputError
+from .errors import UserInputError, WorkdirError
 
 PORTAL_URL = "https://www.ebi.ac.uk/ena/portal/api/search"
+COUNT_URL = "https://www.ebi.ac.uk/ena/portal/api/count"
 TAXONOMY_URL = "https://www.ebi.ac.uk/ena/taxonomy/rest"
 
 RUN_FIELDS = (
@@ -37,6 +40,17 @@ RUN_FIELDS = (
     "fastq_bytes",
     "first_public",
 )
+
+# A search above this many runs is reported before it starts: genera such as
+# Salmonella (878821 runs on 2026-10-09) take minutes and gigabytes.
+LARGE_SEARCH = 100_000
+# Approximate memory of one run record: a fixed part and one per field
+# (measured with tracemalloc on Bacillus, 19772 runs, on 2026-10-09: about
+# 1500 bytes per run with the 17 RUN_FIELDS and 400 with four fields). The
+# normalised rows exist beside the records, so the estimate doubles it. Used
+# only to state an expected size in the warning.
+_BYTES_PER_RUN = 100
+_BYTES_PER_FIELD = 90
 
 # Whole-genome sequencing of the organism itself; excludes amplicons,
 # transcriptomes and metagenomes.
@@ -112,25 +126,99 @@ def resolve_taxon(name: str, *, division: str | None = None) -> TaxonHit:
     return TaxonHit(str(hit["taxId"]), str(hit["scientificName"]), str(hit.get("rank", "")))
 
 
-def search_runs(query: str) -> list[dict]:
+def count_runs(query: str) -> int:
+    """How many read_run records match ``query`` (the portal count endpoint)."""
+    answer = http.get_json(
+        COUNT_URL, params={"result": "read_run", "query": query, "format": "json"}
+    )
+    try:
+        return int(answer["count"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise WorkdirError(f"Unexpected answer from {COUNT_URL}: {answer!r}") from exc
+
+
+def announce_search(
+    query: str, taxon: str, logger: logging.Logger, *, fields: Sequence[str] = RUN_FIELDS
+) -> int | None:
+    """Count the runs a search will return and log the count before it starts.
+
+    Above :data:`LARGE_SEARCH` runs a warning names the count, the taxon and
+    the expected memory; the search proceeds either way. A failed count is
+    logged and returns None, since the search itself reports a network fault.
+    """
+    try:
+        n = count_runs(query)
+    except WorkdirError as exc:
+        logger.warning("Could not count the ENA runs under %s before the search (%s)", taxon, exc)
+        return None
+    logger.info(
+        "ENA counts %d whole-genome sequencing runs under %s; fetching their records", n, taxon
+    )
+    if n > LARGE_SEARCH:
+        size = 2 * n * (_BYTES_PER_RUN + _BYTES_PER_FIELD * len(fields))
+        logger.warning(
+            "%s has %d ENA runs (more than %d): fetching their records may take "
+            "minutes and about %.1f GB of memory. A species or a narrower genus is "
+            "a smaller query.",
+            taxon,
+            n,
+            LARGE_SEARCH,
+            size / 1e9,
+        )
+    return n
+
+
+def search_runs(query: str, *, fields: Sequence[str] = RUN_FIELDS) -> list[dict]:
     """All read_run records matching ``query``, in one request.
 
     The portal search takes no ``offset`` (it answers 400 'Unsupported param
     offset'), so paging stopped at the first 10000 records; ``limit=0``
     returns every match (19772 runs for tax_tree(1386), Bacillus, in about
-    6 s on 2026-10-09).
+    6 s on 2026-10-09). The answer is read as TSV line by line: it carries
+    the same string values as the JSON format without repeating the field
+    names, and the body is never held whole. Each record is a dict of the
+    requested ``fields`` (an empty string where the portal has no value).
     """
-    records = http.get_json(
+    lines = http.iter_lines(
         PORTAL_URL,
         params={
             "result": "read_run",
             "query": query,
-            "fields": ",".join(RUN_FIELDS),
-            "format": "json",
+            "fields": ",".join(fields),
+            "format": "tsv",
             "limit": 0,
         },
     )
-    return list(records)
+    return read_tsv_records(lines, url=PORTAL_URL)
+
+
+def read_tsv_records(lines: Iterable[str], *, url: str = PORTAL_URL) -> list[dict]:
+    """Records from the portal's TSV answer: a header line, then one run per line.
+
+    A line with another number of columns than the header (a body cut short)
+    raises :class:`WorkdirError` instead of returning a partial record.
+    """
+    it = iter(lines)
+    header: list[str] | None = None
+    for line in it:
+        if line:
+            header = line.split("\t")
+            break
+    if header is None:
+        return []
+    width = len(header)
+    records = []
+    for line in it:
+        if not line:
+            continue
+        values = line.split("\t")
+        if len(values) != width:
+            raise WorkdirError(
+                f"Malformed record from {url}: {len(values)} columns where the header "
+                f"has {width} ({line[:80]!r}); the answer may have been cut short."
+            )
+        records.append(dict(zip(header, values, strict=True)))
+    return records
 
 
 def _split(value: str | None) -> tuple[str, ...]:

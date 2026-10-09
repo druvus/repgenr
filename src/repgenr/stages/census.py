@@ -112,6 +112,9 @@ class Census:
     rows: list[dict[str, Any]]
     totals: dict[str, Any]
     notes: list[str] = field(default_factory=list)
+    # The taxon the runs were counted under when it differs from ``taxon``
+    # ('NCBI genus Bacillus' for the GTDB genus Bacillus_A); empty otherwise.
+    runs_taxon: str = ""
 
     @property
     def row_rank(self) -> str:
@@ -136,6 +139,8 @@ class Census:
         for key in ("candidates", "runs", "biosamples", "clusters"):
             if t.get(key) is not None:
                 head += f", {_n(t[key], key[:-1])}"
+                if key == "runs" and self.runs_taxon:
+                    head += f" of {self.runs_taxon}"
         sources = t.get("sources") or {}
         if len(sources) > 1:
             head += "; " + ", ".join(f"{n} {s}" for s, n in sources.items())
@@ -157,6 +162,7 @@ class Census:
             "totals": self.totals,
             "rows": self.rows,
             "notes": self.notes,
+            "runs_taxon": self.runs_taxon,
         }
 
 
@@ -330,6 +336,7 @@ def genome_census(
     source: str,
     runs: list[Run] | None = None,
     notes: list[str] | None = None,
+    runs_taxon: str = "",
 ) -> Census:
     """Genomes per genus or species, with the ENA runs beside them when given."""
     rows = _Rows(rank)
@@ -379,6 +386,7 @@ def genome_census(
         rows=rows.finish(columns, defaults, "genomes", last=ncbi_only),
         totals=totals,
         notes=notes or [],
+        runs_taxon=runs_taxon,
     )
 
 
@@ -695,6 +703,11 @@ def obtain_table(params: CensusParams, logger: logging.Logger) -> Path:
     return obtain_metadata_table(cache_dir(), mp, logger)
 
 
+# The portal fields a census reads from each run (of the 17 in ena.RUN_FIELDS);
+# the search is already restricted to whole-genome sequencing runs.
+CENSUS_RUN_FIELDS = ("run_accession", "sample_accession", "tax_id", "instrument_platform")
+
+
 def ena_runs(name: str, logger: logging.Logger) -> list[Run]:
     """The ENA whole-genome sequencing runs under a taxon, each labelled with
     the genus and species of its taxid (one lineage lookup per distinct taxid)."""
@@ -705,7 +718,9 @@ def ena_runs(name: str, logger: logging.Logger) -> list[Run]:
     # prokaryote (division PRO), not, say, the stick-insect genus Bacillus.
     hit = ena.resolve_taxon(name, division="PRO")
     logger.info("Resolved %r to %s (%s, taxid %s)", name, hit.scientific_name, hit.rank, hit.taxid)
-    rows = ena.to_read_rows(ena.search_runs(ena.taxon_query(hit.taxid)))
+    query = ena.taxon_query(hit.taxid)
+    ena.announce_search(query, hit.scientific_name, logger, fields=CENSUS_RUN_FIELDS)
+    rows = ena.to_read_rows(ena.search_runs(query, fields=CENSUS_RUN_FIELDS))
     seen: set[str] = set()
     unique = []
     for row in rows:
@@ -847,6 +862,7 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
     taxon = _gtdb_spelling(items, rank, name)
     notes = []
     runs = None
+    runs_taxon = ""
     if params.runs:
         ncbi_name = ncbi_spelling(taxon)
         if ncbi_name != taxon:
@@ -856,6 +872,8 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
                 f"epithet. The NCBI {rank} may hold more than the GTDB {rank}."
             )
         runs = ena_runs(ncbi_name, logger)
+        if ncbi_name != taxon:
+            runs_taxon = f"NCBI {rank} {ncbi_name}"
         if rank == GENUS and ncbi_name != taxon and items:
             # The genus census counts one GTDB genus: NCBI runs of the
             # unsuffixed genus join its species rows by epithet
@@ -873,7 +891,14 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
             "listed last and are not part of the GTDB totals."
         )
     return genome_census(
-        items, taxon=taxon, rank=rank, mode=MODE_TAXON, source=label, runs=runs, notes=notes
+        items,
+        taxon=taxon,
+        rank=rank,
+        mode=MODE_TAXON,
+        source=label,
+        runs=runs,
+        notes=notes,
+        runs_taxon=runs_taxon,
     )
 
 

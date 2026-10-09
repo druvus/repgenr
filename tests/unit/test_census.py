@@ -161,6 +161,7 @@ def fake_ena(monkeypatch) -> dict[str, int]:
 
     monkeypatch.setattr(ena, "resolve_taxon", resolve)
     monkeypatch.setattr(ena, "search_runs", search)
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
     return seen
 
@@ -760,6 +761,7 @@ def test_json_prints_only_the_object(fake_api) -> None:
         "totals",
         "rows",
         "notes",
+        "runs_taxon",
     }
     assert payload["schema"] == census.SCHEMA
 
@@ -870,6 +872,7 @@ def test_runs_join_gtdb_rows_and_ncbi_only_rows_are_marked(monkeypatch, fake_api
         ena, "resolve_taxon", lambda name, **kw: ena.TaxonHit("1000", name, "family")
     )
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in runs])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
     payload = _json(["-tf", "Testaceae", "--runs"])
     names = [r["name"] for r in payload["rows"]]
@@ -953,12 +956,26 @@ def test_runs_of_a_suffixed_gtdb_genus_use_the_ncbi_genus(monkeypatch) -> None:
         }
         return data, set(), {}
 
+    searched: list[dict] = []
+
+    def search(query, **kw):
+        searched.append(kw)
+        return [dict(r) for r in runs]
+
     monkeypatch.setattr(ena, "resolve_taxon", resolve)
-    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in runs])
+    monkeypatch.setattr(ena, "search_runs", search)
+    monkeypatch.setattr(ena, "count_runs", lambda query: 3)
     monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
     payload = _json(["-tg", "Bacillus_A", "--runs"])
     assert asked == ["Bacillus"]
     assert any("NCBI genus Bacillus" in n for n in payload["notes"])
+    # The census asks the portal for the four fields it reads, not RUN_FIELDS.
+    assert searched == [{"fields": census.CENSUS_RUN_FIELDS}]
+    # The runs are those of the NCBI genus, which the header names.
+    assert payload["runs_taxon"] == "NCBI genus Bacillus"
+    head = runner.invoke(app, ["census", "-tg", "Bacillus_A", "--runs"])
+    assert head.exit_code == 0, head.output
+    assert "3 runs of NCBI genus Bacillus, 3 biosamples" in head.stdout
     rows = _rows(payload)
     # A Bacillus cereus run joins the GTDB row Bacillus_A cereus by epithet.
     assert rows["Bacillus_A cereus"]["runs"] == 1 and rows["Bacillus_A cereus"]["genomes"] == 1
@@ -985,3 +1002,39 @@ def test_resolve_taxon_prefers_the_named_division(monkeypatch) -> None:
     assert ena.resolve_taxon("Bacillus", division="PRO").taxid == "1386"
     with pytest.raises(UserInputError, match="matches 2 taxa"):
         ena.resolve_taxon("Bacillus")
+
+
+def test_census_fields_are_those_the_census_reads() -> None:
+    """Each census field is one of RUN_FIELDS, and ena_runs reads no other."""
+    assert set(census.CENSUS_RUN_FIELDS) <= set(ena.RUN_FIELDS)
+    record = dict.fromkeys(census.CENSUS_RUN_FIELDS, "x")
+    record["run_accession"] = "ERR1"
+    (row,) = ena.to_read_rows([record])
+    assert (row.run_accession, row.biosample, row.taxid, row.platform) == ("ERR1", "x", "x", "x")
+
+
+def test_census_header_without_a_runs_taxon_is_unchanged() -> None:
+    c = census.Census(
+        taxon="Staphylococcus",
+        mode="taxon",
+        source="api",
+        rank="genus",
+        columns=[],
+        rows=[],
+        totals={"genera": 1, "species": 2, "genomes": 3, "representatives": 2,
+                "runs": 5, "biosamples": 4},
+    )  # fmt: skip
+    assert c.header().endswith("3 genomes (2 representatives), 5 runs, 4 biosamples")
+    assert c.to_json()["runs_taxon"] == ""
+
+
+def test_a_large_census_search_is_announced_and_proceeds(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(ena, "count_runs", lambda query: 878821)
+    monkeypatch.setattr(ena, "resolve_taxon", lambda name, **kw: ena.TaxonHit("590", name, "genus"))
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    monkeypatch.setattr(reads, "ncbi_taxon_names", lambda taxids, logger: {})
+    with caplog.at_level(logging.INFO):
+        assert census.ena_runs("Salmonella", logging.getLogger("repgenr.test")) == []
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "Salmonella has 878821 ENA runs" in warnings[0] and "GB of memory" in warnings[0]
