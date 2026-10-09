@@ -78,8 +78,8 @@ whether any run was judged:
   exit 3 (no genome files) rather than run on the earlier set; the outputs of
   an earlier `dereplicate` and `phylo` stay until those stages run again.
 - **Written by an earlier `assemble` call, but no run judged.** When every
-  excuse is `download_failed`, `no_fastq_mirror`, `assembler_not_installed`
-  or `deferred` (ENA unreachable, say), the set is kept and the error says so; rerun with
+  excuse is `download_failed` (ENA unreachable, say), `no_fastq_mirror`,
+  `assembler_not_installed` or `deferred`, the set is kept and the error says so; rerun with
   `--force` once the cause is resolved.
 - **Written by another stage** (`genome`, `ingest`, `vgenome`; any manifest
   row whose source is not `sra`) or not recorded in the manifest. The set and

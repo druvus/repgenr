@@ -401,7 +401,9 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if n_deferred:
         logger.info(
             "%d run(s) deferred by --max-runs %d are listed in %s; a later call with a "
-            "larger --max-runs, or without it, assembles them.",
+            "larger --max-runs, or without it, assembles them. Finished runs keep their "
+            "places, including ones the quality gate excused, so --force with the same "
+            "--max-runs does not.",
             n_deferred,
             params.max_runs,
             EXCUSED_RUNS_TSV,
@@ -780,6 +782,13 @@ def defer_beyond(plan: list[_Outcome], max_runs: int, logger: logging.Logger) ->
         o.assembler = None
         o.polisher = None
         o.excused = ExcusedRun(o.row.run_accession, "assemble", DEFERRED)
+    if n_finished > max_runs:
+        logger.info(
+            "--max-runs %d: %d finished run(s) are kept beyond N%s",
+            max_runs,
+            n_finished,
+            "; nothing is pending" if not pending else "",
+        )
     if deferred:
         logger.info(
             "--max-runs %d: %d run(s) already assembled, %d to assemble, %d deferred",

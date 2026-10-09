@@ -107,10 +107,15 @@ def test_the_same_n_again_assembles_nothing_new(workdir, tmp_path, fake_assemble
     assert _selected(workdir) == ["SRR1", "SRR2"]
 
 
-def test_finished_runs_beyond_n_are_kept_not_deferred(workdir, tmp_path, fake_assembler) -> None:
+def test_finished_runs_beyond_n_are_kept_not_deferred(
+    workdir, tmp_path, fake_assembler, caplog
+) -> None:
     ctx = _prepare(workdir, tmp_path)
     run(ctx, AssembleParams(assembler="fakeasm", max_runs=3))
-    run(ctx, AssembleParams(assembler="fakeasm", max_runs=1))
+    ctx.logger.addHandler(caplog.handler)
+    with caplog.at_level(logging.INFO):
+        run(ctx, AssembleParams(assembler="fakeasm", max_runs=1))
+    assert "3 finished run(s) are kept beyond N" in caplog.text
     assert sorted(_FakeAssembler.calls) == ["SRR1", "SRR2", "SRR3"]
     assert _selected(workdir) == ["SRR1", "SRR2", "SRR3"]
     assert _excused(workdir) == {"SRR4": ("assemble", "deferred")}
