@@ -262,6 +262,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
 | `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. With --append only the new genomes are sketched. |
+| `--reads-sketch`, `--no-reads-sketch` | auto | Sketch each run's reads with sourmash (k=21,31,51, scaled=1000, with abundances) into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it. |
 
 ## Core stages
 
@@ -600,6 +601,7 @@ Fetch and assemble one run of a reads.tsv (stateless data-channel step).
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
 | `--keep-files` | off | Keep the assembler scratch directory. |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
+| `--reads-sketch`, `--no-reads-sketch` | auto | Sketch each run's reads with sourmash (k=21,31,51, scaled=1000, with abundances) into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it. |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |
 
 ### genome-qc

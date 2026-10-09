@@ -1913,6 +1913,18 @@ commands:
         nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
         live: 'n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py)'
         observable: sketches/ holds one .sig.zip per genome
+      --reads-sketch:
+        secondary:
+        - --no-reads-sketch
+        param: AssembleParams.reads_sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: workdir command; the Nextflow layer uses the stateless steps'
+        live: 'n/a: offline stage tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py'
+        observable: assemblies/<run>/reads.sig.zip and the reads_sketch fields of assembly.ok
 
   reads:
     dispatch: stage
@@ -3583,6 +3595,17 @@ commands:
         - docs/audit/cli-matrix.md
         nextflow: params.assemble_args
         live: 'n/a: offline step tests in tests/integration/test_assemble_steps.py'
+      --reads-sketch:
+        secondary:
+        - --no-reads-sketch
+        param: AssembleRunParams.reads_sketch
+        validated: none
+        docs:
+        - docs/cli-reference.md
+        - docs/usage.md
+        - docs/audit/cli-matrix.md
+        nextflow: params.assemble_args
+        live: 'n/a: offline step tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py'
       --versions-out:
         param: AssembleRunParams.versions_out
         value: '{alt_file}'

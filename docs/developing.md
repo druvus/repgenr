@@ -138,7 +138,8 @@ file times. The writers call `sketch_stage_genomes` after the manifest is
 updated and before the stage record is written; sketches are not in
 `STAGE_DELIVERABLES` of the writers, and `sketch` is excluded from the resume
 fingerprint. Every sourmash caller (the dereplicator, the tree builder, the
-classifier and the sketch step) derives its `ToolCapabilities` from the one
+classifier, the sketch step and the reads sketch of `assemble`,
+`core.sketches.sketch_reads`) derives its `ToolCapabilities` from the one
 specification in `core/sourmash.py` (`SOURMASH_TOOL`,
 `sourmash_capabilities(...)`), so the container image, conda spec and binary
 check live in one place; the Nextflow `SKETCH` module

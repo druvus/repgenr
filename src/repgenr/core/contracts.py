@@ -698,6 +698,8 @@ class AssemblyStatsRow:
     taxonomy_flag: str = ""
     # The polisher that corrected the assembly, empty when none ran.
     polisher: str = ""
+    # Whether assemblies/<run>/reads.sig.zip holds a sketch of the run's reads.
+    reads_sketch: bool = False
 
 
 _ASSEMBLY_STATS_COLUMNS = [
@@ -716,6 +718,7 @@ _ASSEMBLY_STATS_COLUMNS = [
     "label_source",
     "taxonomy_flag",
     "polisher",
+    "reads_sketch",
 ]
 
 
@@ -741,6 +744,7 @@ def write_assembly_stats(path: Path, rows: list[AssemblyStatsRow]) -> None:
                     r.label_source,
                     r.taxonomy_flag,
                     r.polisher,
+                    1 if r.reads_sketch else 0,
                 ]
             )
 
@@ -766,6 +770,8 @@ def read_assembly_stats(path: Path) -> list[AssemblyStatsRow]:
                     label_source=rec["label_source"],
                     taxonomy_flag=rec["taxonomy_flag"],
                     polisher=rec.get("polisher", "") or "",
+                    # Absent from tables written before the column existed.
+                    reads_sketch=(rec.get("reads_sketch") or "0").strip() == "1",
                 )
             )
     return rows

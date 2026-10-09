@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-29 commands, 320 flags (320 with a live test or an n/a reason, 0 pending).
+29 commands, 322 flags (322 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -284,6 +284,7 @@ dispatch: `stage`
 | `--gtdb-lineages` |  | AssembleParams.gtdb_lineages | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: needs a reference database; covered offline with fakes in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--append` |  | AssembleParams.append | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests in tests/integration/test_assemble_stage.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--sketch` |  | AssembleParams.sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: the shared sketch step is exercised live through ingest (tests/live/test_sketches_live.py) | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
+| `--reads-sketch` |  | AssembleParams.reads_sketch | none | n/a: workdir command; the Nextflow layer uses the stateless steps | n/a: offline stage tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 
 ## reads
 
@@ -501,6 +502,7 @@ dispatch: `step:repgenr.stages.assemble_steps.assemble_run`
 | `--keep-reads` |  | AssembleRunParams.keep_reads | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--keep-files` |  | AssembleRunParams.keep_files | none | n/a: not exposed by the READS_ASSEMBLE module | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
 | `--tool-arg` |  | AssembleRunParams.extra | none | params.assemble_args | n/a: offline step tests in tests/integration/test_assemble_steps.py | docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--reads-sketch` |  | AssembleRunParams.reads_sketch | none | params.assemble_args | n/a: offline step tests with a fake sourmash in tests/integration/test_assemble_reads_sketch.py | docs/cli-reference.md, docs/usage.md, docs/audit/cli-matrix.md |
 | `--versions-out` |  | AssembleRunParams.versions_out | none | module: fixed by the process script | tests/live/test_reads.py::test_reads_steps_assemble_a_public_run | docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## genome-qc

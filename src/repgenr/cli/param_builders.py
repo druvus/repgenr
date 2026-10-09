@@ -211,6 +211,7 @@ def assemble_params(
     gtdb_sketch: Any = _UNSET,
     gtdb_lineages: Any = _UNSET,
     sketch: Any = _UNSET,
+    reads_sketch: Any = _UNSET,
     extra: Any = _UNSET,
 ) -> AssembleParams:
     from ..assemblers.base import registry as _asm_registry
@@ -244,6 +245,7 @@ def assemble_params(
         gtdb_sketch=gtdb_sketch,
         gtdb_lineages=gtdb_lineages,
         sketch=sketch,
+        reads_sketch=reads_sketch,
         extra=extra,
     )
 

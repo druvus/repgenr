@@ -8,6 +8,7 @@ import typer
 
 from .base import (
     DEFAULT_THREADS,
+    HELP_READS_SKETCH,
     HELP_SKETCH,
     HELP_THREADS,
     HELP_WORKDIR,
@@ -173,6 +174,11 @@ def assemble(
         "--sketch/--no-sketch",
         help=HELP_SKETCH + " With --append only the new genomes are sketched.",
     ),
+    reads_sketch: bool | None = typer.Option(
+        None,
+        "--reads-sketch/--no-reads-sketch",
+        help=HELP_READS_SKETCH,
+    ),
 ) -> None:
     """Fetch and assemble the selected runs; write genomes/ and selection.tsv."""
     from .param_builders import assemble_params
@@ -197,6 +203,7 @@ def assemble(
             gtdb_sketch=None if gtdb_sketch is None else str(gtdb_sketch),
             gtdb_lineages=None if gtdb_lineages is None else str(gtdb_lineages),
             sketch=sketch,
+            reads_sketch=reads_sketch,
             extra=_parse_key_values(tool_arg, "--tool-arg"),
         )
 

@@ -62,6 +62,12 @@ SCALED = 1000
 SKETCH_PARAMS = ",".join(f"k={k}" for k in KSIZES) + f",scaled={SCALED}"
 SKETCHES_DIR = "sketches"
 SKETCH_SUFFIX = ".sig.zip"
+# The reads sketch of a sequencing run (assemble): the k-mer sizes and scale
+# of the genome sketches with abundance tracking, since read k-mers carry
+# coverage. It is kept beside the run's assembly and never in sketches/, which
+# holds one genome sketch per genome.
+READS_SKETCH_PARAMS = SKETCH_PARAMS + ",abund"
+READS_SKETCH_NAME = "reads" + SKETCH_SUFFIX
 # Sketch records of outgroup genomes that have no manifest row.
 OUTGROUP_JSON = "outgroup.json"
 # FASTA digests by (size, mtime_ns), so a consumer does not hash an unchanged
@@ -297,6 +303,79 @@ def _clear_partials(directory: Path) -> None:
 def sketch_command(genome: Path, name: str, out: Path) -> list[str | os.PathLike[str]]:
     """The one sourmash call that sketches a genome (three k-mer sizes, one file)."""
     return ["sourmash", "sketch", "dna", "-p", SKETCH_PARAMS, "--name", name, "-o", out, genome]
+
+
+def reads_sketch_command(
+    files: Sequence[Path], name: str, out: Path
+) -> list[str | os.PathLike[str]]:
+    """The one sourmash call that sketches a run's reads: all its FASTQ files,
+    one signature per k-mer size, with abundances."""
+    return [
+        "sourmash",
+        "sketch",
+        "dna",
+        "-p",
+        READS_SKETCH_PARAMS,
+        "--name",
+        name,
+        "-o",
+        out,
+        *files,
+    ]
+
+
+def sketch_reads(files: Sequence[Path], name: str, out: Path, logger: logging.Logger) -> None:
+    """Sketch the FASTQ ``files`` of one run into ``out``, atomically.
+
+    The files go to one sourmash call, so the reads of a pair give one
+    signature per k-mer size. Gzipped files are read by sourmash itself.
+    The temporary file is created beside ``out`` and renamed into place;
+    a failure leaves no ``out``.
+    """
+    if not files:
+        raise WorkdirError(f"{name}: no FASTQ files to sketch")
+    tmp = _partial(out)
+    try:
+        run_tool(
+            SOURMASH_TOOL,
+            reads_sketch_command(files, name, tmp),
+            logger=logger,
+            log_prefix=f"sourmash {name}",
+            # The reads may sit in a scratch directory outside the workdir.
+            extra_mounts=sorted({str(Path(f).resolve().parent) for f in files}),
+        )
+        if not tmp.is_file():
+            raise WorkdirError(f"sourmash wrote no reads sketch for {name}")
+        os.replace(tmp, out)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def sourmash_for_reads_sketch(
+    flag: bool | None, stage: str, logger: logging.Logger
+) -> dict[str, str]:
+    """Resolve --reads-sketch/--no-reads-sketch to sourmash's versions, or {}.
+
+    ``flag`` None (the default) sketches when sourmash can run and otherwise
+    logs one INFO line for the stage; True requires sourmash
+    (MissingBinaryError otherwise); False never sketches.
+    """
+    if flag is False:
+        return {}
+    if flag is None and not tool_available(SOURMASH_TOOL):
+        logger.info(
+            "%s: sourmash not found; reads sketches not written (--reads-sketch requires them).",
+            stage,
+        )
+        return {}
+    try:
+        return preflight(SOURMASH_TOOL)
+    except MissingBinaryError as exc:
+        if flag:
+            raise
+        logger.info("%s: reads sketches not written: %s", stage, exc)
+        return {}
 
 
 def sketch_file(genome: Path, name: str, out: Path, logger: logging.Logger) -> None:

@@ -37,6 +37,7 @@ from ..core.contracts import (
 )
 from ..core.errors import UserInputError, WorkdirError
 from ..core.process import link_or_copy, remove_tree
+from ..core.sketches import require_sourmash_if_requested, sourmash_for_reads_sketch
 from ..core.versions import write_versions_fragment
 from . import assemble as stage
 from .assemble import AssembleParams
@@ -66,6 +67,8 @@ class AssembleRunParams:
     keep_reads: bool = False
     keep_files: bool = False
     extra: dict[str, str] = field(default_factory=dict)
+    # As AssembleParams.reads_sketch: None sketches when sourmash can run.
+    reads_sketch: bool | None = None
     versions_out: Path | None = None
 
 
@@ -77,6 +80,7 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     """
     if not params.reads_tsv.exists():
         raise WorkdirError(f"assemble-run: reads file not found: {params.reads_tsv}")
+    require_sourmash_if_requested(params.reads_sketch)
     # A Nextflow task names its inputs relative to the task directory, while a
     # containerised assembler runs with another working directory: every path
     # that reaches a tool must be absolute.
@@ -93,6 +97,7 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         keep_reads=params.keep_reads,
         keep_files=params.keep_files,
         extra=dict(params.extra),
+        reads_sketch=params.reads_sketch,
     )
     out_dir = params.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -106,9 +111,18 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
     versions = dict(outcome.versions)
     versions.update(stage._preflight([outcome], logger))
     if outcome.excused is None and outcome.stats is None:
+        reads_versions = sourmash_for_reads_sketch(params.reads_sketch, "assemble-run", logger)
+        versions.update(reads_versions)
         scratch = out_dir.parent / f"{out_dir.name}.scratch"
         outcome = stage._fetch_and_assemble(
-            outcome, stage_params, params.threads, out_dir, scratch, versions, logger
+            outcome,
+            stage_params,
+            params.threads,
+            out_dir,
+            scratch,
+            versions,
+            logger,
+            reads_sketch=reads_versions.get("sourmash", "") if reads_versions else None,
         )
         if scratch.exists() and not (params.keep_files or params.keep_reads):
             remove_tree(scratch)
@@ -119,6 +133,7 @@ def assemble_run(params: AssembleRunParams, logger: logging.Logger) -> bool:
         # stage's later reuse, but here the marker would make genome-qc and
         # reads-gather take it as finished.
         (out_dir / _MARKER).unlink(missing_ok=True)
+        stage.drop_reads_sketch(outcome, out_dir)
         write_excused_runs(out_dir / EXCUSED_RUNS_TSV, [outcome.excused])
         logger.info("assemble-run: %s excused (%s)", params.run, outcome.excused.reason)
         return False
