@@ -3,7 +3,7 @@
 Generated from `tests/audit/cli_matrix.yaml` by `scripts/render_cli_matrix.py`;
 `tests/unit/test_cli_matrix.py` keeps both in step with the command tree.
 
-29 commands, 322 flags (322 with a live test or an n/a reason, 0 pending).
+30 commands, 337 flags (337 with a live test or an n/a reason, 0 pending).
 
 ## Global flags
 
@@ -37,6 +37,28 @@ dispatch: `stage`
 | flag | aliases | param | validated | nextflow | live | docs |
 |---|---|---|---|---|---|---|
 | `--workdir` | -wd | workdir | stage | n/a: workdir command; the dereplicate-chunk and dereplicate-merge steps write the summary themselves | tests/live/test_aux_commands.py::test_cluster_summary_regenerates | docs/cli-reference.md, docs/output.md, docs/audit/cli-matrix.md |
+
+## census
+
+dispatch: `query`
+
+| flag | aliases | param | validated | nextflow | live | docs |
+|---|---|---|---|---|---|---|
+| `--workdir` | -wd | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: read-only workdir query; tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-family` | -tf | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target-genus` | -tg | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--viral` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--target` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--source` |  | n/a: query command, no stage parameters | callback | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--release` | -r | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--gtdb-version` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--metadata-path` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--runs` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--host` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--complete-only` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--released-after` |  | n/a: query command, no stage parameters | callback | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: network query, faked in tests/unit/test_census.py | docs/usage.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--tsv` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: read-only workdir query; tests/unit/test_census.py | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
+| `--json` |  | n/a: query command, no stage parameters | none | n/a: query command; the Nextflow layer starts from a workdir or a samplesheet | n/a: read-only workdir query; tests/unit/test_census.py | docs/usage.md, docs/output.md, docs/cli-reference.md, docs/audit/cli-matrix.md |
 
 ## derep-unpack
 

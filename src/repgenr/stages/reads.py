@@ -243,20 +243,34 @@ def _best_run(runs: list[ReadRow]) -> ReadRow:
     return max(runs, key=rank)
 
 
-def _label(rows: list[ReadRow], logger: logging.Logger) -> list[ReadRow]:
-    """Fill the family/genus/species tokens from each run's NCBI taxid."""
-    taxids = sorted({r.taxid for r in rows if r.taxid})
-    data, missing, _alts = get_taxon_data_from_entrez(taxids, logger)
+def ncbi_taxon_tokens(taxids: list[str], logger: logging.Logger) -> dict[str, tuple[str, str, str]]:
+    """The family, genus and species tokens of each NCBI taxid.
+
+    One Entrez lineage lookup per distinct taxid; a taxid without a lineage
+    maps to empty tokens. Shared by the reads stage and ``repgenr census
+    --runs``.
+    """
+    unique = sorted({t for t in taxids if t})
+    data, missing, _alts = get_taxon_data_from_entrez(unique, logger)
     if missing:
         logger.warning("No NCBI lineage for %d taxid(s); their tokens are 'unknown'", len(missing))
-    labelled = []
-    for row in rows:
-        entry = data.get(row.taxid) or {}
+    out: dict[str, tuple[str, str, str]] = {}
+    for taxid in unique:
+        entry = data.get(taxid) or {}
         taxdata = entry.get("taxdata") or {}
         names = [
             (taxdata.get(level) or {}).get("name") or "" for level in ("family", "genus", "species")
         ]
-        family, genus, species = sanitise_taxon_tokens(*names)
+        out[taxid] = sanitise_taxon_tokens(*names)
+    return out
+
+
+def _label(rows: list[ReadRow], logger: logging.Logger) -> list[ReadRow]:
+    """Fill the family/genus/species tokens from each run's NCBI taxid."""
+    tokens = ncbi_taxon_tokens([r.taxid for r in rows], logger)
+    labelled = []
+    for row in rows:
+        family, genus, species = tokens.get(row.taxid, ("", "", ""))
         labelled.append(
             ReadRow(
                 **{

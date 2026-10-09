@@ -29,6 +29,21 @@ All notable changes to RepGenR are documented here. The format follows
   `assemble` fetch passes ENA's checksum and no longer reads each FASTQ file a
   second time after a fresh download; a file kept from an earlier attempt and
   a local copy are still hashed with `verify_md5`.
+- `repgenr census` counts the genera, species and samples under a taxon,
+  read-only. Without a working directory it counts the GTDB genomes and
+  species representatives of a family (`-tf`, one row per genus) or genus
+  (`-tg`, one row per species) through the GTDB API or a cached GTDB metadata
+  table (`--source table -r 232.0`), with the ENA whole-genome sequencing runs
+  under the taxon on request (`--runs`: runs, biosamples, runs per platform),
+  or the NCBI Virus records of a viral taxon (`--viral --target`, metadata
+  report only): sequences, complete sequences, isolates after segment grouping
+  and whether the virus is segmented. With `-wd` after metadata or vmetadata
+  it counts the candidates the entry stage found (GTDB table or API answer,
+  NCBI Virus records, BV-BRC taxonomy sets); after genome, vgenome, ingest or
+  assemble it counts the selected genomes per manifest source, with the
+  candidates and the dereplication clusters beside them. `--tsv` writes the
+  rows and `--json` prints one `repgenr.census/1` object. `metadata --source
+  api` now keeps the API answer for the target in `gtdb_api_genomes.tsv`.
 - Genome sketches, step 2: the sourmash tools read `sketches/` instead of
   sketching each genome again. `dereplicate --tool sourmash` (branchwater
   `pairwise` over a path list of the `.sig.zip` files, or `sourmash compare`),
