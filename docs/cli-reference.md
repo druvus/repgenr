@@ -252,6 +252,7 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--polisher` | `auto` | Polisher for long-read assemblies: none, auto, medaka, racon. |
 | `--polish-rounds` | `1` | Polishing rounds (racon; medaka runs one). |
 | `--outgroup` |  | A FASTA file to set aside as the outgroup for rooting. |
+| `--max-runs` |  | Keep at most N runs with a finished assembly, in reads.tsv order (largest first); finished runs count toward N and are kept. The other runs are listed as deferred in excused_runs.tsv; a later call with a larger N assembles them. |
 | `--append` | off | Add the assemblies to a working directory that already holds a selection (metadata and genome, or ingest) instead of replacing it. |
 | `--keep-reads` | off | Keep the downloaded FASTQ files after assembling. |
 | `--keep-files` | off | Keep each run's assembler scratch directory. |

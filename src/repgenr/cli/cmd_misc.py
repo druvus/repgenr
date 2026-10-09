@@ -116,6 +116,13 @@ def _ingest_note(params: dict) -> str:
     return note
 
 
+def _assemble_note(params: dict) -> str:
+    """'n assembled, n deferred' for an assemble call limited by --max-runs."""
+    if params.get("max_runs") is None and not params.get("n_deferred"):
+        return ""
+    return f"{params.get('n_assembled', 0)} assembled, {params.get('n_deferred', 0)} deferred"
+
+
 STATUS_SCHEMA = "repgenr.status/1"
 DOCTOR_SCHEMA = "repgenr.doctor/1"
 ENTRY_HINT = (
@@ -285,6 +292,8 @@ def _status_report(workdir: Path, cfg: Any) -> dict[str, Any]:
             detail = _gtdb_note(rec.params) or None
         elif stage == "ingest" and not rec.interrupted:
             detail = _ingest_note(rec.params) or None
+        elif stage == "assemble" and not rec.interrupted:
+            detail = _assemble_note(rec.params) or None
         if stage in _SKETCH_STAGES and not rec.interrupted:
             sketches = _sketch_note(workdir)
             if sketches:
