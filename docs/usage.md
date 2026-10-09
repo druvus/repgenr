@@ -564,10 +564,14 @@ reasons:
   (`genus_renamed`) passes. A run with no GTDB match above the gather
   threshold (50 kbp) is also excused with this reason. A run whose submitted
   genus is unknown is not tested for it.
-- `host_dominated`: the abundance-weighted fraction of the reads assigned to
+- `low_match_fraction`: the abundance-weighted fraction of the reads assigned to
   the top species (`f_weighted_at_rank` of `tax genome` at species rank) is
-  below `--screen-min-fraction` (default 0.3). Host, contaminant and
-  sequencing-error k-mers all lower it. `tax genome` is run with a
+  below `--screen-min-fraction` (default 0.3); the excuse reads `top
+  species fraction X below --screen-min-fraction Y`. The fraction mostly
+  measures the distance between the run's strain and the GTDB
+  representative of its species; host, contaminant and repeated
+  sequencing-error k-mers lower it as well, so a low value does not by
+  itself show contamination. `tax genome` is run with a
   containment threshold of 0 here, since most distinct k-mers of a reads
   sketch are sequencing errors and the unweighted fraction of a pure isolate
   stays far below sourmash's default threshold of 0.1. The fraction of a
@@ -590,9 +594,13 @@ reasons:
   signature: k-mers seen at least a tenth of the abundance-weighted median
   (and at least twice) are taken as genomic, their containment C in the
   k-mers the other run saw at least twice gives the estimate C^(1/31), as
-  sourmash's containment ANI does. At scaled=1000 a genome of 1 Mb gives
-  about 1000 such k-mers, so 0.999 corresponds to about 30 of them missing,
-  roughly 0.1 percent divergence. Runs of different biosamples are never
+  sourmash's containment ANI does. When the two sketches have different
+  scaled values, both are first reduced to the larger one. At k=31,
+  `--screen-dup-ani` 0.999 corresponds to a containment of about 0.97
+  (0.999^31), roughly 0.1 percent divergence. At scaled=1000 a genome of
+  1 Mb gives about 1000 such k-mers, so one missing k-mer already moves the
+  estimate from 1.0 to about 0.99997: the estimate cannot separate 0.9999
+  from 1.0 for a genome of that size. Runs of different biosamples are never
   compared: clonal isolates of different samples are distinct samples (two
   Mycoplasma mycoides runs of different biosamples gave an estimate of
   1.0000 and are both kept). A run that passes the

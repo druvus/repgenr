@@ -7,7 +7,7 @@ reads sketch, after the fetch and before an assembler is chosen.
     (the commands of the post-assembly classifier). The run is excused when
     the GTDB genus differs from the submitted genus, with the classifier's
     ``genus_renamed`` tolerance (family and species epithet agree).
-``host_dominated``
+``low_match_fraction``
     The abundance-weighted fraction of the reads assigned to the top species
     (``f_weighted_at_rank`` of ``tax genome`` at species rank, or the top
     match's ``f_unique_weighted`` when the column is absent) is below the
@@ -59,7 +59,7 @@ from .taxon_match import DISAGREE, GENUS_RENAMED, genus_agreement, gtdb_tokens
 
 SCREEN_STEP = "screen"
 TAXON_MISMATCH = "taxon_mismatch"
-HOST_DOMINATED = "host_dominated"
+LOW_MATCH_FRACTION = "low_match_fraction"
 DUPLICATE_ISOLATE = "duplicate_isolate"
 SCREEN_FAILED = "screen_failed"
 PASS = "pass"
@@ -208,6 +208,8 @@ class ReadsHashes:
 
     solid: np.ndarray
     seen: np.ndarray
+    # The sketch's largest kept hash (2**64 / scaled); 0 when not recorded.
+    max_hash: int = 0
 
 
 def solid_cutoff(abundances: np.ndarray) -> int:
@@ -250,13 +252,19 @@ def load_reads_hashes(path: Path, ksize: int = GATHER_KSIZE) -> ReadsHashes | No
         if int(sketch.get("ksize", 0)) != ksize or sketch.get("molecule", "dna").lower() != "dna":
             continue
         mins = np.asarray(sketch.get("mins") or [], dtype=np.uint64)
+        max_hash = int(sketch.get("max_hash") or 0)
         abund = sketch.get("abundances")
         if abund is None:  # without abundances every hash counts
-            return ReadsHashes(np.sort(mins), np.sort(mins))
+            return ReadsHashes(np.sort(mins), np.sort(mins), max_hash)
         counts = np.asarray(abund, dtype=np.int64)
         cutoff = solid_cutoff(counts)
-        return ReadsHashes(np.sort(mins[counts >= cutoff]), np.sort(mins[counts >= 2]))
+        return ReadsHashes(np.sort(mins[counts >= cutoff]), np.sort(mins[counts >= 2]), max_hash)
     return None
+
+
+def _downsampled(hashes: np.ndarray, max_hash: int) -> np.ndarray:
+    """The hashes a sketch with this ``max_hash`` (a larger scaled) would keep."""
+    return hashes[hashes <= np.uint64(max_hash)]
 
 
 def containment_ani(
@@ -264,11 +272,18 @@ def containment_ani(
 ) -> float | None:
     """ANI estimate from the containment of ``query``'s genomic hashes in the
     hashes ``reference`` saw at least twice: C ** (1 / k), as sourmash's
-    containment ANI. None when the query has no genomic hashes."""
-    if query.solid.size == 0:
+    containment ANI. Sketches of different scaled values are first reduced to
+    the larger scaled (the smaller max_hash). None when the query has no
+    genomic hashes."""
+    solid, seen = query.solid, reference.seen
+    bounds = [m for m in (query.max_hash, reference.max_hash) if m > 0]
+    if len(bounds) == 2 and bounds[0] != bounds[1]:
+        bound = min(bounds)
+        solid, seen = _downsampled(solid, bound), _downsampled(seen, bound)
+    if solid.size == 0:
         return None
-    shared = np.isin(query.solid, reference.seen, assume_unique=True).sum()
-    containment = float(shared) / float(query.solid.size)
+    shared = np.isin(solid, seen, assume_unique=True).sum()
+    containment = float(shared) / float(solid.size)
     return containment ** (1.0 / ksize) if containment > 0 else 0.0
 
 
@@ -378,8 +393,8 @@ class ScreenGate:
             record.decision = EXCUSED
             shown = "unknown" if fraction is None else f"{fraction:.3f}"
             record.reason = (
-                f"{HOST_DOMINATED}: weighted fraction of the top species {shown} "
-                f"(min {self.settings.min_fraction:g})"
+                f"{LOW_MATCH_FRACTION}: top species fraction {shown} below "
+                f"--screen-min-fraction {self.settings.min_fraction:g}"
             )
         return record
 

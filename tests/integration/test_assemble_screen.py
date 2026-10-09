@@ -326,13 +326,15 @@ def test_no_gtdb_match_is_a_taxon_mismatch(workdir, setup) -> None:
     assert _excused(workdir)["SRR2"][1].startswith("taxon_mismatch: no GTDB match")
 
 
-def test_a_low_top_species_fraction_is_excused_as_host_dominated(workdir, setup) -> None:
+def test_a_low_top_species_fraction_is_excused_as_low_match_fraction(workdir, setup) -> None:
     setup.gather.hits.update({"SRR1": (FT, 0.9), "SRR2": (FT, 0.21)})
     ctx = setup.prepare([setup.row("SRR1"), setup.row("SRR2")])
     run(ctx, setup.params())
     step, reason = _excused(workdir)["SRR2"]
     assert step == "screen"
-    assert reason == "host_dominated: weighted fraction of the top species 0.210 (min 0.3)"
+    assert (
+        reason == "low_match_fraction: top species fraction 0.210 below --screen-min-fraction 0.3"
+    )
     # The threshold is a flag.
     assert run(ctx, setup.params(screen_min_fraction=0.2)) == 2
 
@@ -457,7 +459,7 @@ def test_a_changed_threshold_rescreens_from_the_kept_sketch(workdir, setup) -> N
     with pytest.raises(WorkdirError):
         run(ctx, setup.params(screen_min_fraction=0.95))
     assert sorted(setup.events) == [("gather", "SRR1"), ("gather", "SRR2")]
-    assert _excused(workdir)["SRR1"][1].startswith("host_dominated")
+    assert _excused(workdir)["SRR1"][1].startswith("low_match_fraction")
     assert (workdir / "assemblies" / "SRR1" / "contigs.fasta").is_file()
     # The same stricter fraction again: both excuses are reused, nothing gathered.
     setup.events.clear()
@@ -499,6 +501,20 @@ def test_a_finished_run_without_a_reads_sketch_is_not_screened(workdir, setup, c
         assert run(ctx, setup.params()) == 1
     assert "1 finished run(s) have no reads sketch and are not screened" in caplog.text
     assert setup.gather.gathers == []
+
+
+def test_a_finished_run_with_kept_reads_is_sketched_and_screened_in_one_call(
+    workdir, setup
+) -> None:
+    setup.gather.hits.update({"SRR1": (EC, 0.9), "SRR2": (FT, 0.9)})
+    ctx = setup.prepare([setup.row("SRR1"), setup.row("SRR2")])
+    run(ctx, setup.params(screen_reads=False, reads_sketch=False, keep_reads=True))
+    setup.events.clear()
+    assert run(ctx, setup.params(keep_reads=True)) == 1  # SRR2 only
+    # The kept reads are sketched first, then screened in the same call.
+    assert setup.events.index(("sketch", "SRR1")) < setup.events.index(("gather", "SRR1"))
+    assert ("fetch", "SRR1") not in setup.events and ("assemble", "SRR1") not in setup.events
+    assert _excused(workdir)["SRR1"][1].startswith("taxon_mismatch")
 
 
 # --- --max-runs ------------------------------------------------------------------------------
@@ -616,7 +632,9 @@ def test_assemble_run_screens_without_the_duplicate_check(tmp_path, setup, gtdb)
 # --- the sketch comparison ---------------------------------------------------------------------
 
 
-def _write_sig_zip(path: Path, mins: list[int], abund: list[int], ksize: int = 31) -> None:
+def _write_sig_zip(
+    path: Path, mins: list[int], abund: list[int], ksize: int = 31, scaled: int = 1000
+) -> None:
     import gzip
     import zipfile
 
@@ -625,7 +643,13 @@ def _write_sig_zip(path: Path, mins: list[int], abund: list[int], ksize: int = 3
             "name": path.stem,
             "signatures": [
                 {"ksize": 21, "molecule": "DNA", "mins": [1], "abundances": [5]},
-                {"ksize": ksize, "molecule": "DNA", "mins": mins, "abundances": abund},
+                {
+                    "ksize": ksize,
+                    "molecule": "DNA",
+                    "mins": mins,
+                    "abundances": abund,
+                    "max_hash": 2**64 // scaled,
+                },
             ],
         }
     ]
@@ -656,3 +680,23 @@ def test_containment_ani_of_real_format_sketches(tmp_path) -> None:
     assert screen.containment_ani(hc, ha) == pytest.approx(0.9 ** (1 / 31))
     assert screen.containment_ani(hc, ha) < 0.999
     assert screen.load_reads_hashes(a, ksize=51) is None
+
+
+def test_sketches_of_different_scaled_values_are_compared_at_the_larger(tmp_path) -> None:
+    """A scaled=1000 sketch holds hashes a scaled=10000 sketch never keeps;
+    without reducing it, they would count as missing from the coarser one."""
+    fine_max, coarse_max = 2**64 // 1000, 2**64 // 10000
+    low = [coarse_max - 1000 * i for i in range(1, 101)]  # kept by both scales
+    high = [coarse_max + 1000 * i for i in range(1, 901)]  # kept at scaled=1000 only
+    assert max(high) < fine_max
+    fine, coarse = tmp_path / "fine.sig.zip", tmp_path / "coarse.sig.zip"
+    _write_sig_zip(fine, low + high, [50] * 1000, scaled=1000)
+    _write_sig_zip(coarse, low, [50] * 100, scaled=10000)
+    hf, hc = screen.load_reads_hashes(fine), screen.load_reads_hashes(coarse)
+    assert hf is not None and hc is not None
+    assert hf.max_hash == fine_max and hc.max_hash == coarse_max
+    assert screen.containment_ani(hf, hc) == pytest.approx(1.0)
+    assert screen.containment_ani(hc, hf) == pytest.approx(1.0)
+    # Unreduced, only a tenth of the fine sketch would be found in the coarse one.
+    plain = screen.ReadsHashes(hf.solid, hf.seen)
+    assert screen.containment_ani(plain, screen.ReadsHashes(hc.solid, hc.seen)) < 0.95

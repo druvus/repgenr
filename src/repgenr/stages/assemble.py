@@ -217,6 +217,15 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
     if params.assembler == "auto":
         _excuse_missing_assemblers(plan, logger)
         _require_something_to_assemble(plan)
+    reads_versions = sourmash_for_reads_sketch(
+        True if screen is not None else params.reads_sketch, "assemble", logger
+    )
+    reads_sketch_version = reads_versions.get("sourmash", "") if reads_versions else None
+    if reads_sketch_version is not None:
+        # Before the screen: a finished run sketched here is screened in this call.
+        refill_reads_sketches(
+            plan, assemblies, scratch, reads_sketch_version, params.threads, logger
+        )
     gate = None
     if screen is not None:
         gate = ScreenGate(
@@ -245,10 +254,6 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             gtdb_lineages=gtdb_lineages,
         )
     )
-    reads_versions = sourmash_for_reads_sketch(
-        True if gate is not None else params.reads_sketch, "assemble", logger
-    )
-    reads_sketch_version = reads_versions.get("sourmash", "") if reads_versions else None
     versions.update(reads_versions)
     pending = [o for o in plan if o.excused is None and o.stats is None]
     if gate is not None:
@@ -293,10 +298,6 @@ def run(ctx: WorkdirContext, params: AssembleParams) -> int:
             if gate is not None:
                 gate.release(outcome.row.run_accession)
 
-    if reads_sketch_version is not None:
-        refill_reads_sketches(
-            plan, assemblies, scratch, reads_sketch_version, params.threads, logger
-        )
     done = parallel_map(work, pending, jobs, logger=logger)
     by_run = {o.row.run_accession: o for o in [*plan, *done]}
     outcomes = [by_run[r.run_accession] for r in rows]
@@ -1405,8 +1406,9 @@ def screen_planned(
             _apply_screen(o, record)
     if unscreened:
         logger.info(
-            "%d finished run(s) have no reads sketch and are not screened; --force with "
-            "--keep-reads, or assembling them again, screens them.",
+            "%d finished run(s) have no reads sketch and are not screened: their FASTQ "
+            "files were not kept (--keep-reads), so they cannot be sketched without "
+            "assembling them again.",
             unscreened,
         )
 
@@ -1876,7 +1878,7 @@ def _append_rows(
 # assembler could be run on this host, --max-runs deferred it, or a tool of the
 # reads screen failed. A stage in which only these occurred has not judged any
 # run, so it does not discard an existing genome set. A run the screen excused
-# for its reads (taxon_mismatch, host_dominated, duplicate_isolate) was judged.
+# for its reads (taxon_mismatch, low_match_fraction, duplicate_isolate) was judged.
 _UNJUDGED_REASONS = (
     "download_failed",
     "no_fastq_mirror",

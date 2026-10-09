@@ -57,7 +57,7 @@ process READS_GATHER {
     echo "ext.args: ${args}"
     mkdir -p out/genomes
     printf 'accession\\tfamily\\tgenus\\tspecies\\tis_outgroup\\tfilename\\tcompleteness\\tcontamination\\n' > out/selection.tsv
-    printf 'run_accession\\tfilename\\tassembler\\tn_contigs\\ttotal_length\\tn50\\tlargest_contig\\test_coverage\\tcompleteness\\tcontamination\\tncbi_taxonomy\\tgtdb_taxonomy\\tlabel_source\\ttaxonomy_flag\\n' > out/assembly_stats.tsv
+    printf 'run_accession\\tfilename\\tassembler\\tn_contigs\\ttotal_length\\tn50\\tlargest_contig\\test_coverage\\tcompleteness\\tcontamination\\tncbi_taxonomy\\tgtdb_taxonomy\\tlabel_source\\ttaxonomy_flag\\tpolisher\\treads_sketch\\tscreen\\n' > out/assembly_stats.tsv
     : > excused.tmp
     tail -n +2 ${reads_tsv} | while IFS=\$'\\t' read -r run rest; do
         fam=\$(echo "\$rest" | cut -f10); gen=\$(echo "\$rest" | cut -f11); sp=\$(echo "\$rest" | cut -f12)
@@ -65,7 +65,7 @@ process READS_GATHER {
             name="\${fam}_\${gen}_\${sp}_\${run}.fasta"
             cp assemblies/\$run/contigs.fasta out/genomes/\$name
             printf '%s\\t%s\\t%s\\t%s\\t0\\t%s\\t\\t\\n' "\$run" "\$fam" "\$gen" "\$sp" "\$name" >> out/selection.tsv
-            printf '%s\\t%s\\tstub\\t1\\t12\\t12\\t12\\t\\t\\t\\t%s;%s;%s\\t\\tmetadata\\t\\n' "\$run" "\$name" "\$fam" "\$gen" "\$sp" >> out/assembly_stats.tsv
+            printf '%s\\t%s\\tstub\\t1\\t12\\t12\\t12\\t\\t\\t\\t%s;%s;%s\\t\\tmetadata\\t\\t\\t0\\t\\n' "\$run" "\$name" "\$fam" "\$gen" "\$sp" >> out/assembly_stats.tsv
         elif [ -e "assemblies/\$run/excused_runs.tsv" ]; then
             tail -n +2 assemblies/\$run/excused_runs.tsv >> excused.tmp
         fi

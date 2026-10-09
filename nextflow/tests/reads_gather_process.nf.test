@@ -34,6 +34,9 @@ nextflow_process {
             def selection = path(process.out.selection.get(0).get(1)).text.split('\n')
             assert selection.size() == 3 && selection[1].startsWith('SRR000001\tFrancisellaceae')
             assert path(process.out.assembly_stats.get(0).get(1)).text.contains('SRR000002')
+            def stats = path(process.out.assembly_stats.get(0).get(1)).text.split('\n')
+            assert stats[0].endsWith('\tpolisher\treads_sketch\tscreen')
+            assert stats[1].split('\t', -1).size() == stats[0].split('\t', -1).size()
             assert path(process.out.excused.get(0).get(1)).text.contains('SRR000003\tassemble\tunsupported_platform')
             assert path(process.out.outgroup_accession.get(0).get(1)).text == ''
         }

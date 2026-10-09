@@ -13,7 +13,7 @@ All notable changes to RepGenR are documented here. The format follows
   (`taxon_mismatch`; `sourmash gather` and `tax genome` as the classifier
   runs them, with its `genus_renamed` tolerance), when the top species holds
   less than `--screen-min-fraction` (0.3) of the abundance-weighted reads
-  (`host_dominated`), or when an accepted run of the same biosample
+  (`low_match_fraction`), or when an accepted run of the same biosample
   earlier in `reads.tsv` contains it at an ANI estimate of `--screen-dup-ani`
   (0.999) or more (`duplicate_isolate`). A tool failure is `screen_failed`,
   which is not counted as judged. Screened-out runs keep their reads sketch
