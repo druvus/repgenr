@@ -441,3 +441,34 @@ def test_phylo_cli_refuses_an_unknown_root(tmp_path: Path) -> None:
     result = _runner.invoke(app, ["phylo", "-wd", str(tmp_path / "wd"), "--root", "tip"])
     assert result.exit_code != 0
     assert "--root" in result.output + str(result.exception or "")
+
+
+def test_collapse_support_judges_the_supports_of_the_rerooted_splits(tmp_path: Path) -> None:
+    """Before supports followed their splits through the reroot, the clade of
+    A, B, D and E (support 0.60) was kept and the split of A, D and E (0.90)
+    collapsed, because the outgroup O is not a child of the written root."""
+    tree = tmp_path / "tree.nwk"
+    tree.write_text("(A:0.1,(B:0.2,(O:0.5,C:0.1)0.60:0.03)0.90:0.05,(D:0.1,E:0.3)0.70:0.04);\n")
+    og = tmp_path / "outgroup"
+    og.mkdir()
+    (og / "O.fasta").write_text(">o\nACGT\n")
+    acc = tmp_path / "outgroup_accession.txt"
+    acc.write_text("O\n")
+    t2t, _ = tree2tax_relations(
+        Tree2taxStepParams(
+            tree=tree,
+            out_dir=tmp_path / "out",
+            outgroup_dir=og,
+            outgroup_accession=acc,
+            collapse_support=0.8,
+            include_dereplicated=False,
+        ),
+        _LOG,
+    )
+    parent = dict(line.split("\t") for line in t2t.read_text(encoding="utf-8").splitlines()[1:])
+    ingroup = parent["B"]
+    assert parent[ingroup] == "root" and parent["O"] == "root"
+    # {O,C} (0.60) and {D,E} (0.70) collapse; {A,D,E} (0.90) stays.
+    assert parent["C"] == ingroup
+    assert parent["A"] == parent["D"] == parent["E"] != ingroup
+    assert parent[parent["A"]] == ingroup

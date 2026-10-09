@@ -839,7 +839,9 @@ outgroup (`iqtree -o`, `raxmlng --outgroup`) place it at a root with three
 children; such a tree is rerooted like any other, with one INFO line. A tree
 whose root already has the outgroup as one of two children is left as
 written. Branch lengths and support values are kept: each support value stays
-with the split it was computed for. When the tree is rerooted, the builder's
+with the split it was computed for. A midpoint that falls on an internal
+branch splits that branch in two, and its support value is written on both
+new root branches, since both describe the same split. When the tree is rerooted, the builder's
 own output is kept as `tree/tree.unrooted.nwk`. The stage record holds the
 rooting applied (`root`) and the outgroup leaf (`outgroup`).
 

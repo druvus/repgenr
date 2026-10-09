@@ -119,6 +119,9 @@ def _split_key(mask: int, full: int) -> int:
 
 
 def _labels_by_split(tree: dendropy.Tree) -> dict[int, str]:
+    # A bifurcating input rooted away from the outgroup has two root branches
+    # for one split, and so possibly two labels for it; the last node visited
+    # wins. No current tree builder writes such a tree with differing labels.
     bits = _leaf_bits(tree)
     full = bits[tree.seed_node]
     out: dict[int, str] = {}

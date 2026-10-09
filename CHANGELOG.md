@@ -376,8 +376,8 @@ All notable changes to RepGenR are documented here. The format follows
 ### Changed
 - `tree/tree.nwk` is rooted on the outgroup by `phylo` when an outgroup is
   staged; it was the builder's output, unrooted for `fasttree`, `mashtree`
-  and `sourmash`, and rooted only in `tree2tax`. The `tree2tax` relations are
-  unchanged. The new `root` parameter enters the phylo resume fingerprint, so
+  and `sourmash`, and rooted only in `tree2tax`. Without collapsing, the
+  `tree2tax` relations are unchanged. The new `root` parameter enters the phylo resume fingerprint, so
   a completed phylo stage runs once more on the next `phylo` or `run`.
 - ENA run searches (`reads` by taxon and `census --runs`) count the runs
   with the portal count endpoint first and log the number; above 100000 runs
@@ -823,6 +823,16 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `tree2tax --collapse-support` (and `tree2tax-relations`) judged the wrong
+  nodes when the outgroup was not a child of the root of the tree as written.
+  Rooting on the outgroup reverses the branches between the old and the new
+  root, and dendropy left each support label on its node, so those labels
+  described other branches: on
+  `(A:0.1,(B:0.2,(O:0.5,C:0.1)0.60:0.03)0.90:0.05,(D:0.1,E:0.3)0.70:0.04);`
+  with outgroup `O` and `--collapse-support 0.8`, the clade of A, B, D and E
+  (support 0.60) was kept and the split of A, D and E (0.90) was collapsed.
+  Supports now follow their splits through the reroot, in `tree2tax` and in
+  `phylo --root`.
 - `reads --max-runs` kept an arbitrary subset of runs of equal size, which
   depended on the order of the ENA answer; ties are now broken by run accession.
 - `census -tg Bacillus_A --runs` printed a header counting the runs of the
