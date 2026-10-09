@@ -570,7 +570,15 @@ reasons:
   sequencing-error k-mers all lower it. `tax genome` is run with a
   containment threshold of 0 here, since most distinct k-mers of a reads
   sketch are sequencing errors and the unweighted fraction of a pure isolate
-  stays far below sourmash's default threshold of 0.1.
+  stays far below sourmash's default threshold of 0.1. The fraction of a
+  pure isolate depends on how close its strain is to the GTDB representative
+  and on how many error k-mers are seen more than once. Against the GTDB
+  rs226 representatives sketch (k=31, scaled=10000), four Illumina MiSeq
+  isolates gave 0.58 (Mycoplasmopsis arginini), 0.42 and 0.43 (two
+  Mycoplasma mycoides runs) and 0.39 (Escherichia coli), so the default of
+  0.5 excuses some pure isolates with this database; a lower value such as
+  0.3 may suit it better. Check `screen_reads.tsv` before relying on the
+  default.
 - `duplicate_isolate`: the run's reads are contained in those of a run
   accepted before it, of the same taxid or the same biosample, at an ANI
   estimate of `--screen-dup-ani` (default 0.999) or more. Runs are compared
@@ -582,8 +590,13 @@ reasons:
   signature: k-mers seen at least a tenth of the abundance-weighted median
   (and at least twice) are taken as genomic, their containment C in the
   k-mers the other run saw at least twice gives the estimate C^(1/31), as
-  sourmash's containment ANI does. Two runs of different strains with an ANI
-  above the threshold are also treated as duplicates.
+  sourmash's containment ANI does. At scaled=1000 a genome of 1 Mb gives
+  about 1000 such k-mers, so 0.999 corresponds to about 30 of them missing,
+  roughly 0.1 percent divergence. Clonal isolates of different biosamples
+  can therefore be treated as duplicates: two Mycoplasma mycoides runs of
+  different biosamples gave an estimate of 1.0000. A run that passes the
+  taxon and fraction checks from a kept sketch is fetched before its
+  duplicate check, which runs in the worker.
 
 A tool failure while screening (a failed reads sketch or gather) excuses the
 run with `screen_failed`, which, like a failed download, does not count as a
@@ -598,8 +611,9 @@ classifier setting does not matter: the screen runs with `--classifier
 none` as well. The post-assembly classifier runs unchanged on the accepted
 assemblies.
 
-The cost is one gather per run, about 30 s against the GTDB rs226
-representatives sketch, plus the time the sketch would otherwise have
+The cost is one gather and one `tax genome` call per run, 30 to 40 s
+against the GTDB rs226 representatives sketch (measured with two to four at
+once), plus the time the sketch would otherwise have
 overlapped with the assembler. Gathers of concurrent runs are bounded by the
 classifier's memory budget (`--memory-gb` / 0.6 GB). An excused run keeps its
 reads sketch, its decision in `assemblies/<run>/screen.json` and the gather
