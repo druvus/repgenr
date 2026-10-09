@@ -23,10 +23,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Container, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -62,7 +63,8 @@ SOURCE_CHOICES = (*BACTERIAL_SOURCES, "tsv", *VIRAL_SOURCES)
 MANIFEST_SOURCES = ("gtdb", "sra", "ncbi_virus", "bvbrc", "local")
 # ENA instrument platforms counted in their own column.
 _PLATFORM_COLUMNS = {"ILLUMINA": "illumina", "OXFORD_NANOPORE": "ont", "PACBIO_SMRT": "pacbio"}
-RUN_COLUMNS = ("runs", "biosamples", "illumina", "ont", "pacbio")
+# Runs on any other platform (BGISEQ, ION_TORRENT, ...) are counted as 'other'.
+RUN_COLUMNS = ("runs", "biosamples", "illumina", "ont", "pacbio", "other")
 
 CACHE_ENV = "REPGENR_CACHE_DIR"
 _CANDIDATE_LABELS = {
@@ -350,9 +352,7 @@ def genome_census(
     if runs is not None:
         for r in runs:
             counts = {"runs": 1}
-            platform = _PLATFORM_COLUMNS.get(r.platform.upper())
-            if platform:
-                counts[platform] = 1
+            counts[_PLATFORM_COLUMNS.get(r.platform.upper(), "other")] = 1
             # The species column counts GTDB species; runs carry NCBI names.
             rows.add(
                 r.genus,
@@ -391,13 +391,15 @@ def virus_census(records: list[Any], *, taxon: str, rank: str, mode: str, source
     the row holds a segmented virus (two or more distinct segment labels)."""
     from ..viral.selection import _isolate_segment_sets, _segment_labels
 
-    quiet = logging.getLogger("repgenr.census.segments")
-    quiet.setLevel(logging.WARNING)
+    # A standalone logger: the grouping's info lines about repeated segments
+    # concern vgenome, not a count, and no shared logger is reconfigured.
+    quiet = logging.Logger("repgenr.census.segments", logging.WARNING)
     rows = _Rows(rank, binomial=False)
     members: dict[tuple[str, str], list[Any]] = {}
     for r in records:
         complete = int(r.completeness == "COMPLETE")
-        rows.add(r.genus, r.species, {"sequences": 1, "complete": complete})
+        label = getattr(r, "species_name", "") if rank == GENUS else ""
+        rows.add(r.genus, r.species, {"sequences": 1, "complete": complete}, label=label)
         members.setdefault(_row_key(rank, r.genus, r.species), []).append(r)
     isolates_total = 0
     for key, recs in members.items():
@@ -699,7 +701,9 @@ def ena_runs(name: str, logger: logging.Logger) -> list[Run]:
     from ..core import ena
     from .reads import ncbi_taxon_names
 
-    hit = ena.resolve_taxon(name)
+    # GTDB taxa are prokaryotes: of two taxa that share the name, take the
+    # prokaryote (division PRO), not, say, the stick-insect genus Bacillus.
+    hit = ena.resolve_taxon(name, division="PRO")
     logger.info("Resolved %r to %s (%s, taxid %s)", name, hit.scientific_name, hit.rank, hit.taxid)
     rows = ena.to_read_rows(ena.search_runs(ena.taxon_query(hit.taxid)))
     seen: set[str] = set()
@@ -836,9 +840,31 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
         label = "gtdb-table"
     if rank == GENUS and params.target_family:
         items = [g for g in items if _norm(g.family) == _norm(params.target_family)]
-    runs = ena_runs(name, logger) if params.runs else None
+        if not items:
+            raise UserInputError(
+                f"No genomes of the genus {name} in the family {params.target_family}."
+            )
     taxon = _gtdb_spelling(items, rank, name)
     notes = []
+    runs = None
+    if params.runs:
+        ncbi_name = ncbi_spelling(taxon)
+        if ncbi_name != taxon:
+            notes.append(
+                f"Runs are counted for the NCBI {rank} {ncbi_name}, the GTDB name {taxon} "
+                "without its suffix; in a genus census they join its species rows by "
+                f"epithet. The NCBI {rank} may hold more than the GTDB {rank}."
+            )
+        runs = ena_runs(ncbi_name, logger)
+        if rank == GENUS and ncbi_name != taxon and items:
+            # The genus census counts one GTDB genus: NCBI runs of the
+            # unsuffixed genus join its species rows by epithet
+            # (Bacillus cereus runs under Bacillus_A cereus).
+            genus_token = items[0].genus
+            runs = [
+                replace(r, genus=genus_token) if _norm(r.genus) == _norm(ncbi_name) else r
+                for r in runs
+            ]
     if runs is not None:
         notes.append(
             "Runs are grouped by the NCBI taxonomy of their taxid and genomes by GTDB. "
@@ -849,6 +875,15 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
     return genome_census(
         items, taxon=taxon, rank=rank, mode=MODE_TAXON, source=label, runs=runs, notes=notes
     )
+
+
+_GTDB_SUFFIX = re.compile(r"_[A-Z]+$")
+
+
+def ncbi_spelling(name: str) -> str:
+    """A GTDB name without its suffix ('Bacillus_A' -> 'Bacillus'), which is
+    how the NCBI and ENA taxonomies know the taxon."""
+    return _GTDB_SUFFIX.sub("", name)
 
 
 def _gtdb_spelling(items: list[Item], rank: str, name: str) -> str:
@@ -1177,7 +1212,10 @@ def selection_candidates(
     elif "vmetadata" in stages:
         source, records, _medians = viral_candidates(wd, cfg)
         if source == "ncbi_virus":
-            records = [Item(r.accession, r.family, r.genus, r.species) for r in records]
+            records = [
+                Item(r.accession, r.family, r.genus, r.species, species_name=r.species_name)
+                for r in records
+            ]
         found = (records, source)
     elif (wd / READS_TSV).is_file():
         runs = read_reads(wd / READS_TSV)

@@ -663,12 +663,18 @@ the metadata stage; the table is downloaded once into
 `$REPGENR_CACHE_DIR/gtdb` (default `~/.cache/repgenr/gtdb`) and reused, or
 `--metadata-path` names a local copy. `--runs` adds the ENA whole-genome
 sequencing runs under the taxon, as the reads stage finds them: runs,
-distinct biosamples, and runs per platform. The runs are grouped by the NCBI
+distinct biosamples, and runs per platform (Illumina, ONT, PacBio, and
+`other` for BGISEQ, Ion Torrent and the rest). The runs are grouped by the NCBI
 lineage of their taxid (one lookup per distinct taxid) and join the GTDB row
 of the same name. A row that holds runs only is marked `(NCBI)` (or `(no
 genus, NCBI)` for taxids without a genus), listed last and left out of the
-GTDB totals; such a taxon may be a GTDB taxon under another name. Names are
-shown as GTDB writes them (`Bacillus_A`, `Bacillus_A thuringiensis_S`).
+GTDB totals; such a taxon may be a GTDB taxon under another name. For a GTDB
+name with a suffix (`Bacillus_A`), the runs are those of the NCBI taxon
+without it (`Bacillus`, the prokaryote genus); in a genus census they join its
+species rows by epithet, and a note says so. Names are shown as GTDB and NCBI
+write them (`Bacillus_A thuringiensis_S`, `Francisella sp. LA112445`). A
+table census parses the whole GTDB table, which takes about 20 s for release
+232.
 
 ```bash
 repgenr census -tg Francisella
@@ -678,13 +684,13 @@ repgenr census -tf Francisellaceae --source table -r 232.0 --gtdb-version bac120
 
 ```text
 Francisellaceae: 9 genera, 48 species, 1205 genomes (48 representatives), 1681 runs, 1473 biosamples
-name             species  genomes  representatives  runs  biosamples  illumina  ont  pacbio
-Francisella           26     1157               26  1667        1462      1413   41      56
-Caedibacter            9       28                9     0           0         0    0       0
-M0027                  4        8                4     0           0         0    0       0
+name                    species  genomes  representatives  runs  biosamples  illumina  ont  pacbio  other
+Francisella                  26     1157               26  1667        1462      1413   41      56    157
+Caedibacter                   9       28                9     0           0         0    0       0      0
+M0027                         4        8                4     0           0         0    0       0      0
 ...
-Allofrancisella (NCBI)   0        0                0    11           8         7    3       1
-(no genus, NCBI)         0        0                0     3           3         3    0       0
+(no genus, NCBI)              0        0                0     3           3         3    0       0      0
+Allofrancisella (NCBI)        0        0                0    11           8         7    3       1      0
 ```
 
 `--viral --target TAXON` counts the NCBI Virus sequence records of a viral
@@ -693,7 +699,8 @@ sequences); `--host`, `--complete-only` and `--released-after` filter it as in
 vmetadata. The columns are sequences, complete sequences, isolates (the
 genomes `vgenome --group-segments` would form, which equals the number of
 sequences for an unsegmented virus) and whether the row holds a segmented
-virus. A genus target is counted per species and a family target per genus;
+virus. Isolates are counted before vgenome's length filter, so they are an
+upper bound on what vgenome selects. A genus target is counted per species and a family target per genus;
 `-tf` and `-tg` narrow the report. BV-BRC offers no metadata-only report, so
 `--viral --source bvbrc` without `-wd` exits 2; run `vmetadata --source bvbrc`
 and count its working directory instead. `--runs` is not offered for viral
@@ -703,8 +710,8 @@ taxa.
 $ repgenr census --viral --target hepatovirus
 Hepatovirus: 1 genus, 31 species, 12807 sequences (369 complete, 12807 isolates)
 name                                   sequences  complete  isolates  segmented
-Hepatovirus-ahepa                          12485       346     12485         no
-Rodent-hepatovirus                            65         1        65         no
+Hepatovirus ahepa                          12485       346     12485         no
+Rodent hepatovirus                            65         1        65         no
 ...
 ```
 

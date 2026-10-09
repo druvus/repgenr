@@ -135,7 +135,8 @@ ENA_RECORDS = [
 def fake_ena(monkeypatch) -> dict[str, int]:
     seen = {"entrez": 0}
 
-    def resolve(name: str) -> ena.TaxonHit:
+    def resolve(name: str, **kw) -> ena.TaxonHit:
+        assert kw == {"division": "PRO"}
         return ena.TaxonHit("1000", name, "family")
 
     def search(query: str, **kw) -> list[dict]:
@@ -373,8 +374,9 @@ def test_viral_genus_target_counts_species(fake_datasets) -> None:
     payload = _json(["--viral", "--target", "segvirus"])
     assert payload["rank"] == "genus" and payload["taxon"] == "Segvirus"
     rows = _rows(payload)
-    assert set(rows) == {"Segvirus-alpha", "Segvirus-beta"}
-    assert rows["Segvirus-alpha"]["isolates"] == 3 and rows["Segvirus-beta"]["isolates"] == 1
+    # Species are shown as NCBI writes them, not as filename tokens.
+    assert set(rows) == {"Segvirus alpha", "Segvirus beta"}
+    assert rows["Segvirus alpha"]["isolates"] == 3 and rows["Segvirus beta"]["isolates"] == 1
 
 
 def test_viral_tg_narrows_a_family_report(fake_datasets) -> None:
@@ -864,7 +866,9 @@ def test_runs_join_gtdb_rows_and_ncbi_only_rows_are_marked(monkeypatch, fake_api
         }
         return data, set(), {}
 
-    monkeypatch.setattr(ena, "resolve_taxon", lambda name: ena.TaxonHit("1000", name, "family"))
+    monkeypatch.setattr(
+        ena, "resolve_taxon", lambda name, **kw: ena.TaxonHit("1000", name, "family")
+    )
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in runs])
     monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
     payload = _json(["-tf", "Testaceae", "--runs"])
@@ -908,3 +912,76 @@ def test_selection_with_outdated_virus_records_counts_without_candidates(tmp_pat
     assert "candidates" not in payload["totals"]
     assert "candidates" not in payload["rows"][0]
     assert any(n.startswith("No candidates column") for n in payload["notes"])
+
+
+# --- review nits ---------------------------------------------------------------
+
+
+def test_a_genus_outside_the_named_family_exits_2(fake_api) -> None:
+    code, text = _plain_error(["-tg", "Alpha", "-tf", "Otheraceae"])
+    assert code == 2 and "Otheraceae" in text
+
+
+def test_runs_of_a_suffixed_gtdb_genus_use_the_ncbi_genus(monkeypatch) -> None:
+    _suffix_api(monkeypatch)
+    asked: list[str] = []
+
+    def resolve(name: str, **kw) -> ena.TaxonHit:
+        asked.append(name)
+        return ena.TaxonHit("1386", name, "genus")
+
+    runs = [
+        {"run_accession": "ERR1", "sample_accession": "S1", "tax_id": "1",
+         "instrument_platform": "ILLUMINA"},
+        {"run_accession": "ERR2", "sample_accession": "S2", "tax_id": "2",
+         "instrument_platform": "BGISEQ"},
+        {"run_accession": "ERR3", "sample_accession": "S3", "tax_id": "2",
+         "instrument_platform": "ION_TORRENT"},
+    ]  # fmt: skip
+    species = {"1": "Bacillus cereus", "2": "Bacillus sp. LA11-2445"}
+
+    def entrez(taxids, logger, **kw):
+        data = {
+            t: {
+                "taxdata": {
+                    "family": {"name": "Bacillaceae"},
+                    "genus": {"name": "Bacillus"},
+                    "species": {"name": species[t]},
+                }
+            }
+            for t in taxids
+        }
+        return data, set(), {}
+
+    monkeypatch.setattr(ena, "resolve_taxon", resolve)
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in runs])
+    monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
+    payload = _json(["-tg", "Bacillus_A", "--runs"])
+    assert asked == ["Bacillus"]
+    assert any("NCBI genus Bacillus" in n for n in payload["notes"])
+    rows = _rows(payload)
+    # A Bacillus cereus run joins the GTDB row Bacillus_A cereus by epithet.
+    assert rows["Bacillus_A cereus"]["runs"] == 1 and rows["Bacillus_A cereus"]["genomes"] == 1
+    # NCBI species keep their spaces; runs on other platforms count as 'other'.
+    odd = rows["Bacillus sp. LA11-2445 (NCBI)"]
+    assert (odd["runs"], odd["illumina"], odd["other"]) == (2, 0, 2)
+    for row in payload["rows"]:
+        platforms = row["illumina"] + row["ont"] + row["pacbio"] + row["other"]
+        assert platforms == row["runs"]
+
+
+def test_isolate_grouping_logs_nothing_on_the_shared_loggers(fake_datasets, caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        _json(["--viral", "--target", "segvirus"])
+    assert logging.getLogger("repgenr.census.segments").level == logging.NOTSET
+
+
+def test_resolve_taxon_prefers_the_named_division(monkeypatch) -> None:
+    hits = [
+        {"taxId": "55087", "scientificName": "Bacillus", "rank": "genus", "division": "INV"},
+        {"taxId": "1386", "scientificName": "Bacillus", "rank": "genus", "division": "PRO"},
+    ]
+    monkeypatch.setattr(ena.http, "get_json", lambda url, **kw: hits)
+    assert ena.resolve_taxon("Bacillus", division="PRO").taxid == "1386"
+    with pytest.raises(UserInputError, match="matches 2 taxa"):
+        ena.resolve_taxon("Bacillus")

@@ -55,6 +55,9 @@ class VirusRecord:
     # classification of the taxid), 'lineage' (ICTV binomial in the report
     # lineage) or 'organism' (no binomial; the organism name).
     species_source: str = ""
+    # The species as NCBI writes it ('Hepatovirus ahepa'), for display; the
+    # species field above is its filename token. Empty in older records.
+    species_name: str = ""
 
 
 def _sanitize(name: str) -> str:
@@ -359,6 +362,7 @@ def parse_report(
                 isolate=((row.get("isolate") or {}).get("name", "") or ""),
                 lineage=lineage_names,
                 species_source=source,
+                species_name=species,
             )
         )
     if conflicts and logger is not None:

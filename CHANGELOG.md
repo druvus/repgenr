@@ -771,6 +771,10 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- ENA run searches returned at most 10000 runs: the portal rejects the
+  `offset` parameter the client paged with (HTTP 400), so `reads` failed on
+  a taxon with more runs. The search now asks for every run in one request
+  (`limit=0`).
 - Console output (#253): a shortened tool command line now fits 120 columns
   with its timestamp, level and run-log pointer; it was up to about 225. A
   path directly after an option (`--reference /r/ref.fasta`) is kept as that
