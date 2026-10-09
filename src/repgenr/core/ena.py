@@ -89,11 +89,18 @@ def accession_query(accessions: list[str]) -> str:
     return " OR ".join(terms)
 
 
-def resolve_taxon(name: str) -> TaxonHit:
-    """Resolve a taxon name (synonyms included) to one taxid, or explain why not."""
-    hits = http.get_json(f"{TAXONOMY_URL}/any-name/{quote(name)}")
+def resolve_taxon(name: str, *, division: str | None = None) -> TaxonHit:
+    """Resolve a taxon name (synonyms included) to one taxid, or explain why not.
+
+    ``division`` (an ENA taxonomy division such as 'PRO' for prokaryotes)
+    chooses among several taxa of the same name, such as the bacterial genus
+    Bacillus and the stick-insect genus Bacillus.
+    """
+    hits: list[dict] = list(http.get_json(f"{TAXONOMY_URL}/any-name/{quote(name)}"))
     if not hits:
         raise UserInputError(f"Nothing in the ENA taxonomy matches {name!r}.")
+    if division is not None and len(hits) > 1:
+        hits = [h for h in hits if h.get("division") == division] or hits
     if len(hits) > 1:
         listing = "; ".join(
             f"{h.get('scientificName')} ({h.get('rank')}, taxid {h.get('taxId')})" for h in hits
@@ -105,26 +112,25 @@ def resolve_taxon(name: str) -> TaxonHit:
     return TaxonHit(str(hit["taxId"]), str(hit["scientificName"]), str(hit.get("rank", "")))
 
 
-def search_runs(query: str, *, page: int = 10000) -> list[dict]:
-    """All read_run records matching ``query``, paged through the portal."""
-    records: list[dict] = []
-    offset = 0
-    while True:
-        batch = http.get_json(
-            PORTAL_URL,
-            params={
-                "result": "read_run",
-                "query": query,
-                "fields": ",".join(RUN_FIELDS),
-                "format": "json",
-                "limit": page,
-                "offset": offset,
-            },
-        )
-        records.extend(batch)
-        if len(batch) < page:
-            return records
-        offset += page
+def search_runs(query: str) -> list[dict]:
+    """All read_run records matching ``query``, in one request.
+
+    The portal search takes no ``offset`` (it answers 400 'Unsupported param
+    offset'), so paging stopped at the first 10000 records; ``limit=0``
+    returns every match (19772 runs for tax_tree(1386), Bacillus, in about
+    6 s on 2026-10-09).
+    """
+    records = http.get_json(
+        PORTAL_URL,
+        params={
+            "result": "read_run",
+            "query": query,
+            "fields": ",".join(RUN_FIELDS),
+            "format": "json",
+            "limit": 0,
+        },
+    )
+    return list(records)
 
 
 def _split(value: str | None) -> tuple[str, ...]:

@@ -45,6 +45,19 @@ TAXONOMY = ("domain", "phylum", "class", "family", "genus", "species")
 GTDB_API_BASE = "https://gtdb-api.ecogenomic.org"
 # Single-letter GTDB rank prefixes used by the API and taxon strings.
 _RANK_PREFIX = {"family": "f", "genus": "g", "species": "s"}
+# The genomes the GTDB API returned for the target, before --limit: what
+# `repgenr census -wd` counts as the candidates of an API-source selection.
+GTDB_API_GENOMES = "gtdb_api_genomes.tsv"
+_API_GENOMES_COLUMNS = (
+    "accession",
+    "family",
+    "genus",
+    "species",
+    "gtdb_representative",
+    "family_name",
+    "genus_name",
+    "species_name",
+)
 
 
 @dataclass
@@ -92,8 +105,10 @@ def run(ctx: WorkdirContext, params: MetadataParams) -> int:
                 "Use --source tsv to pin a release or to read a local table.",
                 ", ".join(ignored),
             )
-        selected, outgroup = _select_via_api(params, logger)
+        selected, outgroup = _select_via_api(params, logger, ctx.workdir)
     else:
+        # A table run leaves no API answer behind for census to read.
+        (ctx.workdir / GTDB_API_GENOMES).unlink(missing_ok=True)
         selected, outgroup = _select_via_tsv(ctx, params, logger)
 
     logger.info("Selected %d genomes; outgroup: %s", len(selected), outgroup.accession)
@@ -250,8 +265,8 @@ def release_marker(workdir: Path, release: str, version: str) -> Path:
     return workdir / f"{version}_metadata_r{major}.release"
 
 
-def _check_reused_release(ctx: WorkdirContext, params: MetadataParams, table: Path, logger) -> None:
-    marker = release_marker(ctx.workdir, str(params.release), str(params.version))
+def _check_reused_release(workdir: Path, params: MetadataParams, table: Path, logger) -> None:
+    marker = release_marker(workdir, str(params.release), str(params.version))
     try:
         recorded = marker.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
@@ -271,11 +286,22 @@ def _check_reused_release(ctx: WorkdirContext, params: MetadataParams, table: Pa
 
 
 def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Path:
+    return obtain_metadata_table(ctx.workdir, params, logger)
+
+
+def obtain_metadata_table(workdir: Path, params: MetadataParams, logger) -> Path:
+    """The GTDB metadata table for ``params``: ``--metadata-path``, a table
+    reused from ``workdir`` under ``--nodownload``, or a fresh download into
+    ``workdir`` (checked against the release's MD5SUM.txt).
+
+    The metadata stage passes its working directory; ``repgenr census``
+    passes a cache directory, so both share one download and reuse rule.
+    """
     if params.metadata_path:
         logger.info("Using provided metadata: %s", params.metadata_path)
         return Path(params.metadata_path)
 
-    ctx.workdir.mkdir(parents=True, exist_ok=True)
+    workdir.mkdir(parents=True, exist_ok=True)
     if params.release is None:
         raise UserInputError("tsv source needs --release like '232.0' (major.minor).")
     major = int(float(params.release))
@@ -283,11 +309,11 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
         f"https://data.gtdb.ecogenomic.org/releases/release{major}/"
         f"{params.release}/{params.version}_metadata_r{major}"
     )
-    tables = workdir_tables(ctx.workdir, params.release, str(params.version))
+    tables = workdir_tables(workdir, params.release, str(params.version))
     if params.nodownload:
         for dest in tables:
             if dest.exists():
-                _check_reused_release(ctx, params, dest, logger)
+                _check_reused_release(workdir, params, dest, logger)
                 logger.info("Using previously downloaded %s", dest.name)
                 return dest
     # Try the modern layout first, then fall back, so current releases
@@ -311,7 +337,7 @@ def _obtain_metadata(ctx: WorkdirContext, params: MetadataParams, logger) -> Pat
             # corrupt transfer: remove it so a re-run downloads afresh
             dest.unlink(missing_ok=True)
             raise
-        release_marker(ctx.workdir, params.release, str(params.version)).write_text(
+        release_marker(workdir, params.release, str(params.version)).write_text(
             params.release + "\n", encoding="utf-8"
         )
         return dest
@@ -404,6 +430,13 @@ def _parse_taxonomy(raw: str) -> dict[str, str]:
             key = level[0] + "__"
             if chunk.startswith(key):
                 tax[level] = chunk[len(key) :]
+    # The names as GTDB writes them ('Bacillus_A', 'Bacillus_A cereus_S'),
+    # for display; the levels below become filename tokens.
+    tax["family_name"], tax["genus_name"], tax["species_name"] = (
+        tax["family"],
+        tax["genus"],
+        tax["species"],
+    )
     tax["family"], tax["genus"], tax["species"] = sanitise_taxon_tokens(
         tax["family"], tax["genus"], tax["species"]
     )
@@ -753,13 +786,58 @@ def _normalize_api_tax(row: dict) -> dict:
     }
 
 
-def _select_via_api(params: MetadataParams, logger) -> tuple[list[GenomeRecord], GenomeRecord]:
+def write_api_genomes(path: Path, rows: list[dict]) -> None:
+    """Keep the API answer (accession, taxonomy tokens, representative flag)."""
+    with atomic_path(path) as tmp, open(tmp, "w", encoding="utf-8", newline="") as fo:
+        writer = csv.writer(fo, delimiter="\t", lineterminator="\n")
+        writer.writerow(_API_GENOMES_COLUMNS)
+        for row in rows:
+            tax = _normalize_api_tax(row)
+            writer.writerow(
+                [
+                    row["gid"],
+                    tax["family"],
+                    tax["genus"],
+                    tax["species"],
+                    1 if row.get("gtdbIsRep") else 0,
+                    tax["gtdbFamily"].split("__", 1)[-1],
+                    tax["gtdbGenus"].split("__", 1)[-1],
+                    row.get("gtdbSpecies", "").split("__", 1)[-1],
+                ]
+            )
+
+
+def read_api_genomes(path: Path) -> list[dict]:
+    """Rows of :func:`write_api_genomes` as dicts with a boolean ``is_rep``."""
+    with open(path, encoding="utf-8", newline="") as fo:
+        return [
+            {
+                "accession": row["accession"],
+                "tax": {
+                    "family": row.get("family") or "",
+                    "genus": row.get("genus") or "",
+                    "species": row.get("species") or "",
+                    "family_name": row.get("family_name") or "",
+                    "genus_name": row.get("genus_name") or "",
+                    "species_name": row.get("species_name") or "",
+                },
+                "is_rep": (row.get("gtdb_representative") or "0").strip() in ("1", "true"),
+            }
+            for row in csv.DictReader(fo, delimiter="\t")
+        ]
+
+
+def _select_via_api(
+    params: MetadataParams, logger, workdir: Path | None = None
+) -> tuple[list[GenomeRecord], GenomeRecord]:
     taxon = _target_taxon(params)
     logger.info("Querying GTDB API for genomes in %s", taxon)
     sp_reps = params.dataset == "rep"
     rows = _api_genomes_detail(taxon, sp_reps, logger)
     if not rows:
         raise UserInputError(f"GTDB API returned no genomes for {taxon}. Check the target name.")
+    if workdir is not None:
+        write_api_genomes(workdir / GTDB_API_GENOMES, rows)
 
     # Quality for every candidate first: the cut below ranks on it.
     quality = _api_quality_by_accession([row["gid"] for row in rows], logger)

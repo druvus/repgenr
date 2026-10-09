@@ -74,8 +74,11 @@ def _read_selection(workdir: Path) -> list[dict]:
 
 def test_tsv_species_selection_end_to_end(tmp_path, gtdb_tsv) -> None:
     ctx = WorkdirContext(tmp_path / "wd", create=True)
+    # An API answer left by an earlier --source api run does not outlive a table run.
+    (ctx.workdir / metadata.GTDB_API_GENOMES).write_text("accession\n", encoding="utf-8")
     count = metadata.run(ctx, _params(gtdb_tsv))
     assert count == 3
+    assert not (ctx.workdir / metadata.GTDB_API_GENOMES).exists()
 
     rows = _read_selection(ctx.workdir)
     by_acc = {r["accession"]: r for r in rows}
@@ -222,6 +225,10 @@ def test_api_species_selection_end_to_end(tmp_path, monkeypatch) -> None:
     queried = datetime.fromisoformat(record["api_query_date"])
     assert queried.utcoffset() == timedelta(0)
     assert abs(datetime.now(UTC) - queried) < timedelta(minutes=5)
+    # The API answer for the target is kept for `repgenr census -wd`.
+    kept = metadata.read_api_genomes(ctx.workdir / metadata.GTDB_API_GENOMES)
+    assert [g["accession"] for g in kept] == ["GCF_000001.1", "GCF_000002.1"]
+    assert [g["is_rep"] for g in kept] == [True, False]
 
 
 def _card(completeness=None, contamination=None, *, checkm2: bool = True) -> dict:

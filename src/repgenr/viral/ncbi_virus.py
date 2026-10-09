@@ -55,6 +55,9 @@ class VirusRecord:
     # classification of the taxid), 'lineage' (ICTV binomial in the report
     # lineage) or 'organism' (no binomial; the organism name).
     species_source: str = ""
+    # The species as NCBI writes it ('Hepatovirus ahepa'), for display; the
+    # species field above is its filename token. Empty in older records.
+    species_name: str = ""
 
 
 def _sanitize(name: str) -> str:
@@ -359,6 +362,7 @@ def parse_report(
                 isolate=((row.get("isolate") or {}).get("name", "") or ""),
                 lineage=lineage_names,
                 species_source=source,
+                species_name=species,
             )
         )
     if conflicts and logger is not None:
@@ -453,6 +457,58 @@ def fetch(
     zip_path.unlink(missing_ok=True)
     shutil.rmtree(extract, ignore_errors=True)
     logger.info("NCBI Virus: %d sequences for taxon '%s'", len(records), target)
+    return records
+
+
+SUMMARY_TIMEOUT = 1800.0
+
+
+def summary(
+    target: str,
+    *,
+    complete_only: bool = False,
+    host: str | None = None,
+    released_after: str | None = None,
+    logger: logging.Logger,
+    runner: Callable[..., int] | None = None,
+    taxonomy_runner: Callable[..., int] | None = None,
+) -> list[VirusRecord]:
+    """The NCBI Virus records of ``target`` without their sequences.
+
+    ``datasets summary virus genome taxon`` returns the same per-sequence
+    report as the package :func:`fetch` downloads, with the same filters, so
+    the records (species resolved through NCBI Taxonomy as in :func:`fetch`)
+    are those vmetadata would select. Nothing is written outside a temporary
+    directory. ``runner`` and ``taxonomy_runner`` are injectable for tests.
+    """
+    import tempfile
+
+    if runner is None:
+        runner = run_tool
+    cmd = ["datasets", "summary", "virus", "genome", "taxon", target, "--as-json-lines"]
+    if complete_only:
+        cmd.append("--complete-only")
+    if host:
+        cmd += ["--host", host]
+    if released_after:
+        cmd += ["--released-after", released_after]
+    require_reachable(NCBI_DATASETS_URL, what="NCBI datasets")
+    with tempfile.TemporaryDirectory(prefix="repgenr-virus-summary-") as tmp:
+        report = Path(tmp) / "summary.jsonl"
+        runner(
+            DATASETS_CAPS,
+            cmd,
+            logger=logger,
+            log_prefix="datasets",
+            stdout_path=report,
+            timeout=SUMMARY_TIMEOUT,
+        )
+        lines = report.read_text(encoding="utf-8").splitlines() if report.exists() else []
+        taxonomy = lookup_taxonomy(
+            report_taxids(lines), Path(tmp), logger=logger, runner=taxonomy_runner
+        )
+    records = parse_report(lines, logger, taxonomy)
+    logger.info("NCBI Virus: %d sequence records for taxon '%s'", len(records), target)
     return records
 
 

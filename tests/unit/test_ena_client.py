@@ -70,20 +70,19 @@ def test_resolve_taxon_reports_ambiguity_and_absence(monkeypatch) -> None:
         ena.resolve_taxon("Nonexistentus")
 
 
-def test_search_runs_pages_until_a_short_page(monkeypatch) -> None:
+def test_search_runs_asks_for_every_record_in_one_request(monkeypatch) -> None:
+    """The portal rejects offset (400 'Unsupported param offset'); limit=0
+    returns every match, beyond the 10000 records a page held."""
     calls = []
 
     def fake_get_json(url, params=None):
         calls.append(dict(params))
-        offset = int(params["offset"])
-        if offset == 0:
-            return [{"run_accession": f"R{i}"} for i in range(3)]
-        return [{"run_accession": "R3"}]
+        return [{"run_accession": f"R{i}"} for i in range(4)]
 
     monkeypatch.setattr(http, "get_json", fake_get_json)
-    rows = ena.search_runs("tax_tree(1)", page=3)
+    rows = ena.search_runs("tax_tree(1)")
     assert [r["run_accession"] for r in rows] == ["R0", "R1", "R2", "R3"]
-    assert [c["offset"] for c in calls] == [0, 3]
+    assert len(calls) == 1 and calls[0]["limit"] == 0 and "offset" not in calls[0]
     assert calls[0]["result"] == "read_run" and calls[0]["format"] == "json"
 
 

@@ -343,6 +343,37 @@ Emit FlexTaxD-compatible taxonomy relations from the tree.
 
 ## Inspect a dereplication
 
+### census
+
+Count the genera, species and samples under a taxon (read-only).
+
+Without -wd, queries a GTDB family (-tf) or genus (-tg) through the GTDB
+API or a GTDB metadata table, optionally with the ENA sequencing runs
+(--runs), or a viral taxon through NCBI Virus (--viral --target; metadata
+only, no sequences). With -wd, counts the candidates the entry stage found
+or the genomes it selected, by source; -tf and -tg narrow the count. A
+family is counted per genus and a genus per species. No stage is recorded
+and nothing is written to a working directory. Exits 2 for a missing taxon
+or an unsupported combination, 3 when a request fails or -wd does not exist.
+
+| option | default | description |
+|---|---|---|
+| `-wd`, `--workdir` |  | Count the candidates (after metadata or vmetadata) or the selection (after genome, vgenome, ingest or assemble) of this working directory; nothing is written to it. |
+| `-tf`, `--target-family` |  | Count this family: one row per genus. |
+| `-tg`, `--target-genus` |  | Count this genus: one row per species. |
+| `--viral` | off | Count a viral taxon (NCBI Virus) instead of a GTDB taxon. |
+| `--target` |  | With --viral: the virus taxon, as vmetadata takes it (e.g. picornaviridae). |
+| `--source` |  | api (GTDB API, default) or table (GTDB metadata table, also 'tsv'); with --viral, ncbi_virus (default). bvbrc is counted only from a vmetadata workdir. |
+| `-r`, `--release` |  | GTDB release of the table source, e.g. 232.0. |
+| `--gtdb-version` |  | GTDB table of the table source: bac120 (default) or ar53. |
+| `--metadata-path` |  | Read this GTDB metadata table (.tsv.gz) instead of downloading the release table; with -wd, the table to count the candidates from. |
+| `--runs` | off | Also count the ENA whole-genome sequencing runs under the taxon: runs, biosamples and runs per platform (bacterial taxa only). |
+| `--host` |  | With --viral: only records from this host species. |
+| `--complete-only` | off | With --viral: only sequences marked complete. |
+| `--released-after` |  | With --viral: only records released after this date (MM/DD/YYYY). |
+| `--tsv` |  | Also write the rows to this TSV file (format in docs/output.md). |
+| `--json` | off | Print one JSON object (taxon, mode, totals, rows) on stdout instead of the table. |
+
 ### glance
 
 Quick all-vs-all ANI overview (dendrogram + similarity plots).

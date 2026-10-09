@@ -1,4 +1,5 @@
-"""Auxiliary commands: status, doctor, glance, derep-unpack, derep-stock, sketch, list-tools."""
+"""Auxiliary commands: status, doctor, census, glance, derep-unpack, derep-stock, sketch,
+list-tools."""
 
 from __future__ import annotations
 
@@ -440,6 +441,134 @@ def doctor(
         typer.echo(f"\n{counts['fail']} failure(s), {counts['warn']} warning(s).")
     if exit_code:
         raise typer.Exit(code=exit_code)
+
+
+def _census_source(value: str | None) -> str | None:
+    """Reject an unknown --source before any request is sent."""
+    from ..stages.census import SOURCE_CHOICES
+
+    if value is not None and value not in SOURCE_CHOICES:
+        raise typer.BadParameter(f"choose from {', '.join(SOURCE_CHOICES)}; got '{value}'.")
+    return value
+
+
+def _census_released_after(value: str | None) -> str | None:
+    from .cmd_viral import _validate_released_after
+
+    return _validate_released_after(value)
+
+
+@app.command(name="census", rich_help_panel=PANEL_INSPECT)
+def census(
+    workdir: Path | None = typer.Option(
+        None,
+        "-wd",
+        "--workdir",
+        help="Count the candidates (after metadata or vmetadata) or the selection (after "
+        "genome, vgenome, ingest or assemble) of this working directory; nothing is "
+        "written to it.",
+    ),
+    target_family: str | None = typer.Option(
+        None, "-tf", "--target-family", help="Count this family: one row per genus."
+    ),
+    target_genus: str | None = typer.Option(
+        None, "-tg", "--target-genus", help="Count this genus: one row per species."
+    ),
+    viral: bool = typer.Option(
+        False, "--viral", help="Count a viral taxon (NCBI Virus) instead of a GTDB taxon."
+    ),
+    target: str | None = typer.Option(
+        None,
+        "--target",
+        help="With --viral: the virus taxon, as vmetadata takes it (e.g. picornaviridae).",
+    ),
+    source: str | None = typer.Option(
+        None,
+        "--source",
+        callback=_census_source,
+        help="api (GTDB API, default) or table (GTDB metadata table, also 'tsv'); with "
+        "--viral, ncbi_virus (default). bvbrc is counted only from a vmetadata workdir.",
+    ),
+    release: str | None = typer.Option(
+        None, "-r", "--release", help="GTDB release of the table source, e.g. 232.0."
+    ),
+    gtdb_version: str | None = typer.Option(
+        None, "--gtdb-version", help="GTDB table of the table source: bac120 (default) or ar53."
+    ),
+    metadata_path: str | None = typer.Option(
+        None,
+        "--metadata-path",
+        help="Read this GTDB metadata table (.tsv.gz) instead of downloading the release "
+        "table; with -wd, the table to count the candidates from.",
+    ),
+    runs: bool = typer.Option(
+        False,
+        "--runs",
+        help="Also count the ENA whole-genome sequencing runs under the taxon: runs, "
+        "biosamples and runs per platform (bacterial taxa only).",
+    ),
+    host: str | None = typer.Option(
+        None, "--host", help="With --viral: only records from this host species."
+    ),
+    complete_only: bool = typer.Option(
+        False, "--complete-only", help="With --viral: only sequences marked complete."
+    ),
+    released_after: str | None = typer.Option(
+        None,
+        "--released-after",
+        callback=_census_released_after,
+        help="With --viral: only records released after this date (MM/DD/YYYY).",
+    ),
+    tsv: Path | None = typer.Option(
+        None, "--tsv", help="Also write the rows to this TSV file (format in docs/output.md)."
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print one JSON object (taxon, mode, totals, rows) on stdout instead of the table.",
+    ),
+) -> None:
+    """Count the genera, species and samples under a taxon (read-only).
+
+    Without -wd, queries a GTDB family (-tf) or genus (-tg) through the GTDB
+    API or a GTDB metadata table, optionally with the ENA sequencing runs
+    (--runs), or a viral taxon through NCBI Virus (--viral --target; metadata
+    only, no sequences). With -wd, counts the candidates the entry stage found
+    or the genomes it selected, by source; -tf and -tg narrow the count. A
+    family is counted per genus and a genus per species. No stage is recorded
+    and nothing is written to a working directory. Exits 2 for a missing taxon
+    or an unsupported combination, 3 when a request fails or -wd does not exist.
+    """
+    from ..core.logging import configure_logging
+    from ..stages.census import CensusParams, render, run_census, write_tsv
+    from .base import stage_errors
+
+    logger = configure_logging(None, level=_RUN_STATE["log_level"])
+    if workdir is not None:
+        require_existing_workdir(workdir)
+    params = CensusParams(
+        workdir=workdir,
+        target_family=target_family,
+        target_genus=target_genus,
+        viral=viral,
+        target=target,
+        source=source,
+        release=release,
+        gtdb_version=gtdb_version,
+        metadata_path=metadata_path,
+        runs=runs,
+        host=host,
+        complete_only=complete_only,
+        released_after=released_after,
+    )
+    with stage_errors(logger):
+        result = run_census(params, logger)
+        if tsv is not None:
+            write_tsv(tsv, result)
+    if as_json:
+        _echo_json(result.to_json())
+    else:
+        render(result)
 
 
 def _glance_tool_help() -> str:

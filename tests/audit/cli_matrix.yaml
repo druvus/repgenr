@@ -210,6 +210,172 @@ commands:
         nextflow: 'n/a: workdir command; the dereplicate-chunk and dereplicate-merge steps write the summary themselves'
         live: tests/live/test_aux_commands.py::test_cluster_summary_regenerates
         observable: the workdir is populated
+  census:
+    dispatch: query
+    base_args: []
+    flags:
+      --workdir:
+        aliases:
+        - -wd
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: read-only workdir query; tests/unit/test_census.py'
+        observable: mode candidates after metadata or vmetadata, selection after genome, vgenome, ingest or assemble; the workdir is unchanged
+      --target-family:
+        aliases:
+        - -tf
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: one row per genus
+      --target-genus:
+        aliases:
+        - -tg
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: one row per species
+      --viral:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: rows count NCBI Virus sequences, complete sequences and isolates
+      --target:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: the datasets summary request names the target
+      --source:
+        param: 'n/a: query command, no stage parameters'
+        validated: callback
+        invalid: '__bogus__'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: source gtdb-api or gtdb-table in the JSON; bvbrc without -wd exits 2
+      --release:
+        aliases:
+        - -r
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: the release table is downloaded to, or reused from, the cache directory
+      --gtdb-version:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: bac120 or ar53 table of the release
+      --metadata-path:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: the named table is counted
+      --runs:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: runs, biosamples, illumina, ont and pacbio columns
+      --host:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: --host reaches the datasets summary request
+      --complete-only:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: --complete-only reaches the datasets summary request
+      --released-after:
+        param: 'n/a: query command, no stage parameters'
+        validated: callback
+        invalid: '2024-01-31'
+        docs:
+        - docs/usage.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: network query, faked in tests/unit/test_census.py'
+        observable: --released-after reaches the datasets summary request
+      --tsv:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/output.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: read-only workdir query; tests/unit/test_census.py'
+        observable: the rows as a TSV with the console columns
+      --json:
+        param: 'n/a: query command, no stage parameters'
+        validated: none
+        docs:
+        - docs/usage.md
+        - docs/output.md
+        - docs/cli-reference.md
+        - docs/audit/cli-matrix.md
+        nextflow: 'n/a: query command; the Nextflow layer starts from a workdir or a samplesheet'
+        live: 'n/a: read-only workdir query; tests/unit/test_census.py'
+        observable: one repgenr.census/1 JSON object on stdout
   derep-unpack:
     dispatch: stage
     base_args:

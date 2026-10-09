@@ -177,7 +177,7 @@ COMMAND_PANELS: dict[str, tuple[str, ...]] = {
     PANEL_PIPELINE: ("run", "status"),
     PANEL_ENTRY: ("metadata", "genome", "vmetadata", "vgenome", "ingest", "reads", "assemble"),
     PANEL_CORE: ("dereplicate", "snptype", "phylo", "tree2tax"),
-    PANEL_INSPECT: ("glance", "cluster-summary", "derep-unpack", "derep-stock", "sketch"),
+    PANEL_INSPECT: ("census", "glance", "cluster-summary", "derep-unpack", "derep-stock", "sketch"),
     PANEL_ENV: ("list-tools", "doctor", "versions"),
     PANEL_STEPS: (
         "genome-fetch",
