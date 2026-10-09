@@ -336,6 +336,15 @@ All notable changes to RepGenR are documented here. The format follows
   working directory without rerunning the dereplicator.
 
 ### Changed
+- ENA run searches (`reads` by taxon and `census --runs`) count the runs
+  with the portal count endpoint first and log the number; above 100000 runs
+  a warning names the count, the taxon and the expected memory, and the
+  search proceeds. `core.ena.search_runs` reads the portal's TSV format line
+  by line instead of one JSON document (the same string values without the
+  field names repeated per record, and the body is never held whole), and
+  takes a `fields` argument: the census requests the four fields it reads
+  (run, sample, taxid and platform) instead of all 17. A TSV line with the
+  wrong number of columns, as from a body cut short, is an error.
 - The dense sourmash path of `dereplicate` and `glance` orders the
   `sourmash compare` matrix by genome file name before the greedy pick, and
   the sourmash tree builder joins in name order. `sourmash compare` does not
@@ -771,6 +780,13 @@ All notable changes to RepGenR are documented here. The format follows
   dropped without a message.
 
 ### Fixed
+- `reads --max-runs` kept an arbitrary subset of runs of equal size, which
+  depended on the order of the ENA answer; ties are now broken by run accession.
+- `census -tg Bacillus_A --runs` printed a header counting the runs of the
+  whole NCBI genus Bacillus as if they belonged to the GTDB genus. The header
+  now names the taxon of the runs (`19772 runs of NCBI genus Bacillus`), and
+  `census --json` gains the key `runs_taxon` (empty when the runs were
+  counted under the census taxon itself).
 - ENA run searches returned at most 10000 runs: the portal rejects the
   `offset` parameter the client paged with (HTTP 400), so `reads` failed on
   a taxon with more runs. The search now asks for every run in one request

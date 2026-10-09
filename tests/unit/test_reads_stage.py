@@ -57,6 +57,7 @@ def ena_fake(monkeypatch):
         return _records("ena_read_run_accessions.json")
 
     monkeypatch.setattr(ena, "search_runs", search_runs)
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     monkeypatch.setattr(
         ena,
         "resolve_taxon",
@@ -133,6 +134,7 @@ def test_selection_is_required(workdir: Path, ena_fake) -> None:
 
 def test_no_matching_runs_is_an_input_error(workdir: Path, monkeypatch, ena_fake) -> None:
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="No sequencing runs"):
         run(ctx, ReadsParams(target_genus="Nothing"))
@@ -201,6 +203,7 @@ def test_amplified_libraries_are_dropped_by_default(workdir: Path, ena_fake, cap
 
 def test_no_match_message_names_every_active_filter(workdir: Path, monkeypatch, ena_fake) -> None:
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     ctx = WorkdirContext(workdir, create=True)
     params = ReadsParams(
         target_genus="Nothing", platform="ont", min_bases=5, max_bases=100, drop_selection=["MDA"]
@@ -214,6 +217,7 @@ def test_no_match_message_names_every_active_filter(workdir: Path, monkeypatch, 
 
 def test_no_match_message_omits_inactive_filters(workdir: Path, monkeypatch, ena_fake) -> None:
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     ctx = WorkdirContext(workdir, create=True)
     params = ReadsParams(target_genus="Nothing", drop_selection=[], one_per_sample=False)
     with pytest.raises(UserInputError) as exc:
@@ -239,6 +243,7 @@ def test_accessions_keep_only_whole_genome_runs(workdir: Path, ena_fake, monkeyp
     records[0] = {**records[0], "library_strategy": "RNA-Seq", "library_source": "TRANSCRIPTOMIC"}
     records[1] = {**records[1], "library_source": "METAGENOMIC"}
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: records)
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     ctx = WorkdirContext(workdir, create=True)
     ctx.logger.addHandler(caplog.handler)
     with caplog.at_level(logging.WARNING):
@@ -256,6 +261,24 @@ def test_an_accession_with_no_whole_genome_run_is_refused(workdir: Path, ena_fak
         {**r, "library_strategy": "AMPLICON"} for r in _records("ena_read_run_accessions.json")
     ]
     monkeypatch.setattr(ena, "search_runs", lambda query, **kw: records)
+    monkeypatch.setattr(ena, "count_runs", lambda query: 2)
     ctx = WorkdirContext(workdir, create=True)
     with pytest.raises(UserInputError, match="No sequencing runs selected"):
         run(ctx, ReadsParams(accessions=["PRJNA954307"]))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_max_runs_ties_are_broken_by_accession(workdir: Path, ena_fake, monkeypatch, reverse):
+    """Runs of equal size are kept in accession order, whatever order ENA returns."""
+    base = _records("ena_read_run_accessions.json")[0]
+    records = [{**base, "run_accession": acc} for acc in ("SRR9", "SRR1", "SRR5")]
+    if reverse:
+        records.reverse()
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in records])
+    monkeypatch.setattr(ena, "count_runs", lambda query: 3)
+    ctx = WorkdirContext(workdir, create=True)
+    params = ReadsParams(
+        accessions=["PRJNA954307"], one_per_sample=False, drop_selection=[], max_runs=2
+    )
+    run(ctx, params)
+    assert [r.run_accession for r in read_reads(workdir / READS_TSV)] == ["SRR1", "SRR5"]

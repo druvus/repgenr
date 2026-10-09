@@ -311,7 +311,10 @@ into `genomes/` with the same `selection.tsv` and manifest the other entry
 paths write, so the chain is `reads -> assemble -> dereplicate -> phylo ->
 tree2tax`. Runs are chosen by taxon
 (`--target-family`/`-tf`, `--target-genus`/`-tg` or `--target-species`/`-ts`,
-resolved through the ENA taxonomy, synonyms included) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
+resolved through the ENA taxonomy, synonyms included; the number of runs
+under the taxon is logged before the search, with a warning above 100000
+runs, such as Salmonella with about 880000, whose records take about 3 GB of
+memory) or by accession: `--accession` takes a run (SRR/ERR/DRR), a sample
 (SAMN.., SRS..) or a study (PRJNA.., SRP..) and repeats; `--accession-file`
 lists them one per line (text from a `#` to the end of the line is a
 comment). `--platform illumina|ont|pacbio` keeps one platform, `--min-bases` drops small runs, `--max-bases` drops runs above a
@@ -662,7 +665,10 @@ the GTDB genomes of the taxon and its GTDB species representatives.
 the metadata stage; the table is downloaded once into
 `$REPGENR_CACHE_DIR/gtdb` (default `~/.cache/repgenr/gtdb`) and reused, or
 `--metadata-path` names a local copy. `--runs` adds the ENA whole-genome
-sequencing runs under the taxon, as the reads stage finds them: runs,
+sequencing runs under the taxon, as the reads stage finds them (the count is
+logged first, with a warning above 100000 runs; the census requests only the
+four run fields it reads, so its search is smaller than that of the reads
+stage): runs,
 distinct biosamples, and runs per platform (Illumina, ONT, PacBio, and
 `other` for BGISEQ, Ion Torrent and the rest). The runs are grouped by the NCBI
 lineage of their taxid (one lookup per distinct taxid) and join the GTDB row
@@ -671,7 +677,8 @@ genus, NCBI)` for taxids without a genus), listed last and left out of the
 GTDB totals; such a taxon may be a GTDB taxon under another name. For a GTDB
 name with a suffix (`Bacillus_A`), the runs are those of the NCBI taxon
 without it (`Bacillus`, the prokaryote genus); in a genus census they join its
-species rows by epithet, and a note says so. Names are shown as GTDB and NCBI
+species rows by epithet, a note says so, and the header names the taxon of
+the runs (`19772 runs of NCBI genus Bacillus`). Names are shown as GTDB and NCBI
 write them (`Bacillus_A thuringiensis_S`, `Francisella sp. LA112445`). A
 table census parses the whole GTDB table, which takes about 20 s for release
 232.

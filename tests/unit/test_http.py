@@ -386,3 +386,68 @@ def test_probe_session_reads_the_proxy_environment(monkeypatch) -> None:
     finally:
         s.close()
     assert settings["proxies"]["https"] == "http://proxy.example:3128"
+
+
+def _streamed(body: bytes, *, status: int = 200, chunks: int = 7) -> requests.Response:
+    """A real requests.Response whose body arrives in small chunks."""
+    import io
+
+    resp = requests.Response()
+    resp.status_code = status
+    resp.url = "https://x/y"
+    resp.raw = io.BufferedReader(io.BytesIO(body), buffer_size=chunks)  # type: ignore[assignment]
+    return resp
+
+
+def test_iter_lines_yields_the_body_line_by_line(monkeypatch) -> None:
+    seen: dict = {}
+
+    class _Session:
+        def get(self, url, **kw):
+            seen.update(kw)
+            return _streamed("a\tb\nÅ1\t2\n3\t\n".encode())
+
+    monkeypatch.setattr(http, "session", lambda: _Session())
+    # A trailing newline ends in an empty line, which the TSV reader skips.
+    assert list(http.iter_lines("https://x/y", params={"q": 1})) == ["a\tb", "Å1\t2", "3\t", ""]
+    assert seen["stream"] is True and seen["params"] == {"q": 1}
+
+
+def test_iter_lines_status_and_connection_errors_are_workdir_errors(monkeypatch) -> None:
+    _patch(monkeypatch, _streamed(b"", status=400))
+    with pytest.raises(http.HTTPStatusError, match="HTTP request failed"):
+        list(http.iter_lines("https://x/y"))
+
+    class _Cut:
+        status_code = 200
+        encoding = "utf-8"
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self, **kw):
+            yield "a\tb"
+            raise requests.exceptions.ChunkedEncodingError("connection broken")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    _patch(monkeypatch, _Cut())
+    with pytest.raises(WorkdirError, match="connection broken"):
+        list(http.iter_lines("https://x/y"))
+
+
+def test_iter_lines_splits_on_newline_only(monkeypatch) -> None:
+    """Characters str.splitlines treats as line ends stay inside a value."""
+    name = "Bacillus\x85a b\vc\fd\x1ce\x1df\x1eg"
+    body = f"run_accession\tscientific_name\r\nR1\t{name}\r\nR2\tplain\n".encode()
+    _patch(monkeypatch, _streamed(body))
+    assert list(http.iter_lines("https://x/y")) == [
+        "run_accession\tscientific_name",
+        f"R1\t{name}",
+        "R2\tplain",
+        "",
+    ]

@@ -17,6 +17,7 @@ import hashlib
 import logging
 import os
 import re
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -156,6 +157,29 @@ def get_json(url: str, *, params: dict | None = None, timeout: Timeout = _DEFAUL
 def get_text(url: str, *, params: dict | None = None, timeout: Timeout = _DEFAULT_TIMEOUT) -> str:
     """GET ``url`` and return the response body as text (status-checked)."""
     return _get(url, params=params, timeout=timeout).text
+
+
+def iter_lines(
+    url: str, *, params: dict | None = None, timeout: Timeout = _DEFAULT_TIMEOUT
+) -> Iterator[str]:
+    """GET ``url`` and yield the body line by line as it arrives (status-checked).
+
+    Lines end at newline only (a trailing carriage return is removed). The
+    body is never held whole, so a large tabular answer costs the memory
+    of what the caller keeps. A connection lost mid-body raises
+    :class:`WorkdirError`, as a failed request does.
+    """
+    try:
+        with session().get(url, params=params, timeout=timeout, stream=True) as resp:
+            resp.raise_for_status()
+            if resp.encoding is None:
+                resp.encoding = "utf-8"
+            # Split on newline only: str.splitlines would also split on
+            # U+0085, U+2028, \v, \f and \x1c-\x1e, which may occur in a value.
+            for line in resp.iter_lines(chunk_size=_CHUNK, decode_unicode=True, delimiter="\n"):
+                yield line.rstrip("\r")
+    except requests.RequestException as exc:
+        raise _request_error("HTTP request failed", url, exc) from exc
 
 
 def download(

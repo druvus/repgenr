@@ -75,7 +75,9 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
         logger.info(
             "Resolved %r to %s (%s, taxid %s)", target, hit.scientific_name, hit.rank, taxid
         )
-        records += ena.search_runs(ena.taxon_query(taxid))
+        query = ena.taxon_query(taxid)
+        ena.announce_search(query, hit.scientific_name, logger)
+        records += ena.search_runs(query)
     if accessions:
         records += _whole_genome(ena.search_runs(ena.accession_query(accessions)), logger)
     rows = _dedupe(ena.to_read_rows(records))
@@ -85,7 +87,9 @@ def run(ctx: WorkdirContext, params: ReadsParams) -> int:
     rows = _filter(rows, params, logger)
     if params.one_per_sample:
         rows = _best_per_sample(rows)
-    rows.sort(key=lambda r: -r.bases)
+    # Ties broken by accession, so --max-runs keeps the same runs whatever
+    # order the portal returns them in.
+    rows.sort(key=lambda r: (-r.bases, r.run_accession))
     if params.max_runs is not None:
         rows = rows[: params.max_runs]
     if not rows:
