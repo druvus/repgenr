@@ -164,15 +164,22 @@ def test_orphans_are_removed_with_the_genome_set(tmp_path, fake_sourmash) -> Non
 
 def test_a_failed_sketch_leaves_no_file_and_the_others_are_recorded(tmp_path, fake_sourmash):
     ctx = _workdir(tmp_path / "wd")
+    import threading
+
     fake_sourmash.fail = {"Fam_Gen_sp_GCA_000001.1"}
+    # Four parties for four genomes: no call returns, so none can fail, before
+    # all four have started. A started genome cannot be cancelled, so the other
+    # three are certain to finish and be recorded.
+    fake_sourmash.barrier = threading.Barrier(4)
     with pytest.raises(ToolExecutionError):
-        _sketch_all(ctx, threads=4)  # all four run; the other three finish
+        _sketch_all(ctx, threads=4)
     directory = ctx.workdir / "sketches"
     assert not (directory / "Fam_Gen_sp_GCA_000001.1.sig.zip").exists()
     assert not [p for p in directory.iterdir() if "partial" in p.name]
     assert set(ctx.manifest.sketch_records()) == {"GCA_000000.1", "GCA_000002.1", "GCF_000009.1"}
     # The rerun sketches only the one that failed.
     fake_sourmash.fail = set()
+    fake_sourmash.barrier = None
     fake_sourmash.calls.clear()
     summary = _sketch_all(ctx)
     assert fake_sourmash.calls == ["Fam_Gen_sp_GCA_000001.1"]
