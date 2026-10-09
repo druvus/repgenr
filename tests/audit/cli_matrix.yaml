@@ -2152,7 +2152,7 @@ commands:
         observable: screen_reads.tsv, the screen column of assembly_stats.tsv and excused_runs.tsv rows with step screen
       --screen-min-fraction:
         param: AssembleParams.screen_min_fraction
-        value: '0.3'
+        value: '0.5'
         validated: unit_interval
         docs:
         - docs/usage.md
@@ -3887,7 +3887,7 @@ commands:
         observable: assemblies/<run>/screen.json; a screened-out run writes excused_runs.tsv with step screen
       --screen-min-fraction:
         param: AssembleRunParams.screen_min_fraction
-        value: '0.3'
+        value: '0.5'
         validated: unit_interval
         docs:
         - docs/cli-reference.md

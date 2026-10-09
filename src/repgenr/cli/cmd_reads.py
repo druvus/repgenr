@@ -191,7 +191,7 @@ def assemble(
     ),
     screen_reads: bool = typer.Option(False, "--screen-reads", help=HELP_SCREEN_READS),
     screen_min_fraction: float = typer.Option(
-        0.5, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
+        0.3, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
     ),
     screen_dup_ani: float = typer.Option(
         0.999,
@@ -199,7 +199,7 @@ def assemble(
         min=0.0,
         max=1.0,
         help="With --screen-reads: ANI estimate from which a run contained in an earlier "
-        "accepted run of the same taxid or biosample is excused as a duplicate.",
+        "accepted run of the same biosample is excused as a duplicate.",
     ),
 ) -> None:
     """Fetch and assemble the selected runs; write genomes/ and selection.tsv."""

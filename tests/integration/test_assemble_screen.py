@@ -275,7 +275,7 @@ def test_a_matching_run_passes_in_the_order_fetch_sketch_screen_assemble(
     assert header.split("\t")[-1] == "screen"
     marker = json.loads((workdir / "assemblies" / "SRR1" / "assembly.ok").read_text("utf-8"))
     assert marker["screen"]["decision"] == "pass"
-    assert marker["screen"]["settings"]["min_fraction"] == 0.5
+    assert marker["screen"]["settings"]["min_fraction"] == 0.3
     assert marker["screen"]["settings"]["dup_ani"] == 0.999
     assert (workdir / "assemblies" / "SRR1" / "screen.json").is_file()
     assert "SRR1: screen passed" in caplog.text
@@ -332,7 +332,7 @@ def test_a_low_top_species_fraction_is_excused_as_host_dominated(workdir, setup)
     run(ctx, setup.params())
     step, reason = _excused(workdir)["SRR2"]
     assert step == "screen"
-    assert reason == "host_dominated: weighted fraction of the top species 0.210 (min 0.5)"
+    assert reason == "host_dominated: weighted fraction of the top species 0.210 (min 0.3)"
     # The threshold is a flag.
     assert run(ctx, setup.params(screen_min_fraction=0.2)) == 2
 
@@ -341,10 +341,11 @@ def test_a_duplicate_of_an_earlier_run_of_the_same_biosample_is_excused(workdir,
     for r in ("SRR1", "SRR2", "SRR3"):
         setup.gather.hits[r] = (FT, 0.9)
     setup.ani[("SRR2", "SRR1")] = 0.9996
+    setup.ani[("SRR3", "SRR1")] = 1.0  # clonal, but another sample
     rows = [
         setup.row("SRR1", biosample="SAMX", taxid="1"),
         setup.row("SRR2", biosample="SAMX", taxid="2"),  # another taxid, the same sample
-        setup.row("SRR3", biosample="SAMY", taxid="3"),  # neither: never compared
+        setup.row("SRR3", biosample="SAMY", taxid="1"),  # the same taxid, another sample
     ]
     ctx = setup.prepare(rows)
     assert run(ctx, setup.params()) == 2
@@ -357,17 +358,19 @@ def test_a_duplicate_of_an_earlier_run_of_the_same_biosample_is_excused(workdir,
     assert _FakeAssembler.calls == ["SRR1", "SRR3"]
 
 
-def test_duplicates_are_compared_within_a_taxid_and_kept_below_the_threshold(
+def test_clonal_runs_of_other_biosamples_are_kept_and_the_threshold_is_a_flag(
     workdir, setup
 ) -> None:
+    """Only runs of the same biosample are compared: a clonal isolate of another
+    sample (ANI 1.0, same taxid) is a distinct sample and is kept."""
     for r in ("SRR1", "SRR2", "SRR3"):
         setup.gather.hits[r] = (FT, 0.9)
-    setup.ani[("SRR2", "SRR1")] = 0.9995  # same taxid
-    setup.ani[("SRR3", "SRR1")] = 0.9999  # another taxid and sample: not compared
+    setup.ani[("SRR2", "SRR1")] = 0.9995  # same biosample
+    setup.ani[("SRR3", "SRR1")] = 1.0  # same taxid, another biosample: not compared
     rows = [
-        setup.row("SRR1", taxid="263"),
-        setup.row("SRR2", taxid="263"),
-        setup.row("SRR3", taxid="119857"),
+        setup.row("SRR1", biosample="SAMA", taxid="263"),
+        setup.row("SRR2", biosample="SAMA", taxid="263"),
+        setup.row("SRR3", biosample="SAMB", taxid="263"),
     ]
     ctx = setup.prepare(rows)
     assert run(ctx, setup.params()) == 2
@@ -377,6 +380,7 @@ def test_duplicates_are_compared_within_a_taxid_and_kept_below_the_threshold(
     # A lower ANI threshold is a flag; at 0.99995 SRR2 is kept.
     stage_dir = workdir / "assemblies"
     assert (stage_dir / "SRR2" / "reads.sig.zip").is_file()
+    assert not any("SRR3" in pair for pair in setup.ani.compared)
     assert run(ctx, setup.params(screen_dup_ani=0.99995)) == 3
 
 
@@ -394,7 +398,8 @@ def test_the_duplicate_check_follows_reads_order_whatever_finishes_first(workdir
             time.sleep(0.5)
 
     setup.sourmash.reads_hook = slow
-    ctx = setup.prepare([setup.row("SRR1"), setup.row("SRR2")])
+    rows = [setup.row("SRR1", biosample="SAMA"), setup.row("SRR2", biosample="SAMA")]
+    ctx = setup.prepare(rows)
     assert run(ctx, setup.params(jobs=2, threads=4)) == 1
     assert _selected(workdir) == ["SRR1"]
     assert _excused(workdir)["SRR2"][1].startswith("duplicate_isolate: contained in SRR1")
@@ -443,7 +448,7 @@ def test_a_repeat_with_the_same_settings_screens_nothing_again(workdir, setup) -
 
 
 def test_a_changed_threshold_rescreens_from_the_kept_sketch(workdir, setup) -> None:
-    setup.gather.hits.update({"SRR1": (FT, 0.9), "SRR2": (FT, 0.3)})
+    setup.gather.hits.update({"SRR1": (FT, 0.9), "SRR2": (FT, 0.25)})
     ctx = setup.prepare([setup.row("SRR1"), setup.row("SRR2")])
     assert run(ctx, setup.params()) == 1
     # A stricter fraction: both are screened again from their sketches, no fetch;

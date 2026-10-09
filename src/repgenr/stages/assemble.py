@@ -167,7 +167,7 @@ class AssembleParams:
     # sketch, before an assembler runs; needs the GTDB sketch and lineages.
     screen_reads: bool = False
     # Minimum abundance-weighted fraction of the reads in the top species.
-    screen_min_fraction: float = 0.5
+    screen_min_fraction: float = 0.3
     # ANI estimate from which a run contained in an earlier run is a duplicate.
     screen_dup_ani: float = 0.999
 

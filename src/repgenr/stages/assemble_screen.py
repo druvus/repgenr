@@ -14,9 +14,11 @@ reads sketch, after the fetch and before an assembler is chosen.
     minimum fraction.
 ``duplicate_isolate``
     The reads sketch is contained in the reads sketch of a run accepted
-    earlier, of the same taxid or the same biosample, at an ANI estimate at or
-    above the duplicate threshold. Runs are compared in ``reads.tsv`` order
-    (the largest first), so the larger run is kept.
+    earlier, of the same biosample, at an ANI estimate at or above the
+    duplicate threshold. Runs of different biosamples are never compared:
+    clonal isolates of different samples are distinct samples. Runs are
+    compared in ``reads.tsv`` order (the largest first), so the larger run is
+    kept.
 
 A tool failure while screening excuses the run as ``screen_failed``, which
 says nothing about the data. Each decision is written to
@@ -279,9 +281,9 @@ class ScreenGate:
     The taxon and fraction checks of a run need only its own sketch. The
     duplicate check compares a run with the runs accepted before it: runs
     accepted while planning (finished runs, in ``reads.tsv`` order) and the
-    pending runs earlier in ``reads.tsv`` order, of the same taxid or
-    biosample, which a worker waits for (see :meth:`set_pending`). The result
-    therefore does not depend on which worker finishes first.
+    pending runs earlier in ``reads.tsv`` order, of the same biosample, which
+    a worker waits for (see :meth:`set_pending`). The result therefore does
+    not depend on which worker finishes first.
     """
 
     def __init__(
@@ -382,7 +384,7 @@ class ScreenGate:
         return record
 
     def check_duplicate(self, row: ReadRow, record: ScreenRecord, sketch: Path) -> ScreenRecord:
-        """Excuse ``record`` when an accepted run of the same taxid or biosample holds it.
+        """Excuse ``record`` when an accepted run of the same biosample holds it.
 
         A passed record is registered as accepted, for the runs after it.
         """
@@ -474,8 +476,8 @@ class ScreenGate:
 
 
 def _related(a: ReadRow, b: ReadRow) -> bool:
-    """Runs compared by the duplicate check: the same taxid or the same biosample."""
-    return bool((a.taxid and a.taxid == b.taxid) or (a.biosample and a.biosample == b.biosample))
+    """Runs compared by the duplicate check: those of the same biosample."""
+    return bool(a.biosample and a.biosample == b.biosample)
 
 
 def _gather(

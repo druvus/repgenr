@@ -266,9 +266,9 @@ Fetch and assemble the selected runs; write genomes/ and selection.tsv.
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
 | `--sketch`, `--no-sketch` | auto | Write a sourmash sketch of each genome to sketches/ (k=21,31,51, scaled=1000). Default: when sourmash can run; --sketch requires it, --no-sketch skips it. With --append only the new genomes are sketched. |
 | `--reads-sketch`, `--no-reads-sketch` | auto | Sketch each run's reads with sourmash (k=21,31,51, scaled=1000, with abundances) into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it. |
-| `--screen-reads` | off | Screen each run's reads sketch before assembling it: a run is excused when its GTDB genus differs from the submitted genus (taxon_mismatch), when the top species holds less than --screen-min-fraction of the reads (host_dominated), or when an accepted run of the same taxid or biosample contains it (duplicate_isolate). Needs sourmash, --gtdb-sketch and --gtdb-lineages. |
-| `--screen-min-fraction` | `0.5` | With --screen-reads: minimum abundance-weighted fraction of the reads in the top GTDB species. |
-| `--screen-dup-ani` | `0.999` | With --screen-reads: ANI estimate from which a run contained in an earlier accepted run of the same taxid or biosample is excused as a duplicate. |
+| `--screen-reads` | off | Screen each run's reads sketch before assembling it: a run is excused when its GTDB genus differs from the submitted genus (taxon_mismatch), when the top species holds less than --screen-min-fraction of the reads (host_dominated), or when an accepted run of the same biosample contains it (duplicate_isolate). Needs sourmash, --gtdb-sketch and --gtdb-lineages. |
+| `--screen-min-fraction` | `0.3` | With --screen-reads: minimum abundance-weighted fraction of the reads in the top GTDB species. |
+| `--screen-dup-ani` | `0.999` | With --screen-reads: ANI estimate from which a run contained in an earlier accepted run of the same biosample is excused as a duplicate. |
 
 ## Core stages
 
@@ -642,8 +642,8 @@ Fetch and assemble one run of a reads.tsv (stateless data-channel step).
 | `--keep-files` | off | Keep the assembler scratch directory. |
 | `--tool-arg` |  | Assembler tuning as key=value (repeatable), e.g. mode=nano-raw. |
 | `--reads-sketch`, `--no-reads-sketch` | auto | Sketch each run's reads with sourmash (k=21,31,51, scaled=1000, with abundances) into assemblies/<run>/reads.sig.zip while the run is assembled; never in sketches/. Default: when sourmash can run; --reads-sketch requires it, --no-reads-sketch skips it. |
-| `--screen-reads` | off | Screen each run's reads sketch before assembling it: a run is excused when its GTDB genus differs from the submitted genus (taxon_mismatch), when the top species holds less than --screen-min-fraction of the reads (host_dominated), or when an accepted run of the same taxid or biosample contains it (duplicate_isolate). Needs sourmash, --gtdb-sketch and --gtdb-lineages. The duplicate check needs the other runs and is not made by this step. |
-| `--screen-min-fraction` | `0.5` | With --screen-reads: minimum abundance-weighted fraction of the reads in the top GTDB species. |
+| `--screen-reads` | off | Screen each run's reads sketch before assembling it: a run is excused when its GTDB genus differs from the submitted genus (taxon_mismatch), when the top species holds less than --screen-min-fraction of the reads (host_dominated), or when an accepted run of the same biosample contains it (duplicate_isolate). Needs sourmash, --gtdb-sketch and --gtdb-lineages. The duplicate check needs the other runs and is not made by this step. |
+| `--screen-min-fraction` | `0.3` | With --screen-reads: minimum abundance-weighted fraction of the reads in the top GTDB species. |
 | `--gtdb-sketch` |  | GTDB sourmash sketch database for --screen-reads (or set REPGENR_GTDB_SKETCH). |
 | `--gtdb-lineages` |  | The lineages CSV published with the sketch (or set REPGENR_GTDB_LINEAGES). |
 | `--versions-out` |  | Write resolved tool versions (YAML fragment) here. |

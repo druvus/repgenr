@@ -89,7 +89,7 @@ HELP_SCREEN_READS = (
     "Screen each run's reads sketch before assembling it: a run is excused when its GTDB "
     "genus differs from the submitted genus (taxon_mismatch), when the top species holds "
     "less than --screen-min-fraction of the reads (host_dominated), or when an accepted "
-    "run of the same taxid or biosample contains it (duplicate_isolate). Needs sourmash, "
+    "run of the same biosample contains it (duplicate_isolate). Needs sourmash, "
     "--gtdb-sketch and --gtdb-lineages."
 )
 HELP_SCREEN_MIN_FRACTION = (

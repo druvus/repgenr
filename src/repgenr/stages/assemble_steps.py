@@ -74,7 +74,7 @@ class AssembleRunParams:
     reads_sketch: bool | None = None
     # The reads screen without its duplicate check, which needs the other runs.
     screen_reads: bool = False
-    screen_min_fraction: float = 0.5
+    screen_min_fraction: float = 0.3
     gtdb_sketch: str | None = None
     gtdb_lineages: str | None = None
     versions_out: Path | None = None

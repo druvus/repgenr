@@ -566,25 +566,25 @@ reasons:
   genus is unknown is not tested for it.
 - `host_dominated`: the abundance-weighted fraction of the reads assigned to
   the top species (`f_weighted_at_rank` of `tax genome` at species rank) is
-  below `--screen-min-fraction` (default 0.5). Host, contaminant and
+  below `--screen-min-fraction` (default 0.3). Host, contaminant and
   sequencing-error k-mers all lower it. `tax genome` is run with a
   containment threshold of 0 here, since most distinct k-mers of a reads
   sketch are sequencing errors and the unweighted fraction of a pure isolate
   stays far below sourmash's default threshold of 0.1. The fraction of a
-  pure isolate depends on how close its strain is to the GTDB representative
-  and on how many error k-mers are seen more than once. Against the GTDB
-  rs226 representatives sketch (k=31, scaled=10000), four Illumina MiSeq
-  isolates gave 0.58 (Mycoplasmopsis arginini), 0.42 and 0.43 (two
-  Mycoplasma mycoides runs) and 0.39 (Escherichia coli), so the default of
-  0.5 excuses some pure isolates with this database; a lower value such as
-  0.3 may suit it better. Check `screen_reads.tsv` before relying on the
-  default.
+  pure isolate depends on how close the run's strain is to the GTDB
+  representative of its species, since the reference sketch holds one
+  genome per species, and on how many error k-mers are seen more than once.
+  Against the GTDB rs226 representatives sketch (k=31, scaled=10000), four
+  Illumina MiSeq isolates gave 0.58 (Mycoplasmopsis arginini), 0.42 and 0.43
+  (two Mycoplasma mycoides runs) and 0.39 (Escherichia coli); the default of
+  0.3 lies below that range. A species far from its representative can fall
+  lower, so check `screen_reads.tsv` before relying on the default.
 - `duplicate_isolate`: the run's reads are contained in those of a run
-  accepted before it, of the same taxid or the same biosample, at an ANI
+  accepted before it, of the same biosample, at an ANI
   estimate of `--screen-dup-ani` (default 0.999) or more. Runs are compared
   in `reads.tsv` order, which the reads stage writes largest first, so of
   two duplicates the larger run is kept; a run waits for the decisions on
-  the earlier runs of its taxid and biosample, so the result does not depend
+  the earlier runs of its biosample, so the result does not depend
   on which worker finishes first. The comparison is limited to runs accepted
   in the same call and finished runs with a reads sketch. It uses the k=31
   signature: k-mers seen at least a tenth of the abundance-weighted median
@@ -592,9 +592,10 @@ reasons:
   k-mers the other run saw at least twice gives the estimate C^(1/31), as
   sourmash's containment ANI does. At scaled=1000 a genome of 1 Mb gives
   about 1000 such k-mers, so 0.999 corresponds to about 30 of them missing,
-  roughly 0.1 percent divergence. Clonal isolates of different biosamples
-  can therefore be treated as duplicates: two Mycoplasma mycoides runs of
-  different biosamples gave an estimate of 1.0000. A run that passes the
+  roughly 0.1 percent divergence. Runs of different biosamples are never
+  compared: clonal isolates of different samples are distinct samples (two
+  Mycoplasma mycoides runs of different biosamples gave an estimate of
+  1.0000 and are both kept). A run that passes the
   taxon and fraction checks from a kept sketch is fetched before its
   duplicate check, which runs in the worker.
 

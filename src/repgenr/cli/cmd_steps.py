@@ -468,7 +468,7 @@ def assemble_run_cmd(
         "by this step.",
     ),
     screen_min_fraction: float = typer.Option(
-        0.5, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
+        0.3, "--screen-min-fraction", min=0.0, max=1.0, help=HELP_SCREEN_MIN_FRACTION
     ),
     gtdb_sketch: Path | None = typer.Option(
         None,
