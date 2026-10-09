@@ -48,7 +48,16 @@ _RANK_PREFIX = {"family": "f", "genus": "g", "species": "s"}
 # The genomes the GTDB API returned for the target, before --limit: what
 # `repgenr census -wd` counts as the candidates of an API-source selection.
 GTDB_API_GENOMES = "gtdb_api_genomes.tsv"
-_API_GENOMES_COLUMNS = ("accession", "family", "genus", "species", "gtdb_representative")
+_API_GENOMES_COLUMNS = (
+    "accession",
+    "family",
+    "genus",
+    "species",
+    "gtdb_representative",
+    "family_name",
+    "genus_name",
+    "species_name",
+)
 
 
 @dataclass
@@ -421,6 +430,13 @@ def _parse_taxonomy(raw: str) -> dict[str, str]:
             key = level[0] + "__"
             if chunk.startswith(key):
                 tax[level] = chunk[len(key) :]
+    # The names as GTDB writes them ('Bacillus_A', 'Bacillus_A cereus_S'),
+    # for display; the levels below become filename tokens.
+    tax["family_name"], tax["genus_name"], tax["species_name"] = (
+        tax["family"],
+        tax["genus"],
+        tax["species"],
+    )
     tax["family"], tax["genus"], tax["species"] = sanitise_taxon_tokens(
         tax["family"], tax["genus"], tax["species"]
     )
@@ -784,6 +800,9 @@ def write_api_genomes(path: Path, rows: list[dict]) -> None:
                     tax["genus"],
                     tax["species"],
                     1 if row.get("gtdbIsRep") else 0,
+                    tax["gtdbFamily"].split("__", 1)[-1],
+                    tax["gtdbGenus"].split("__", 1)[-1],
+                    row.get("gtdbSpecies", "").split("__", 1)[-1],
                 ]
             )
 
@@ -798,6 +817,9 @@ def read_api_genomes(path: Path) -> list[dict]:
                     "family": row.get("family") or "",
                     "genus": row.get("genus") or "",
                     "species": row.get("species") or "",
+                    "family_name": row.get("family_name") or "",
+                    "genus_name": row.get("genus_name") or "",
+                    "species_name": row.get("species_name") or "",
                 },
                 "is_rep": (row.get("gtdb_representative") or "0").strip() in ("1", "true"),
             }

@@ -25,7 +25,7 @@ import logging
 import os
 import shutil
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Container, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import median
@@ -42,6 +42,7 @@ from ..core.contracts import (
     read_reads,
     read_selection,
     record_name,
+    sanitise_taxon_tokens,
 )
 from ..core.errors import UserInputError, WorkdirError
 
@@ -202,6 +203,8 @@ class _Rows:
         self._rows: dict[tuple[str, str], dict[str, Any]] = {}
         self._species: dict[tuple[str, str], set[str]] = {}
         self._sets: dict[tuple[str, str], dict[str, set[str]]] = {}
+        # Rows whose name is a display name rather than built from tokens.
+        self._displayed: set[tuple[str, str]] = set()
 
     def add(
         self,
@@ -211,7 +214,14 @@ class _Rows:
         distinct: dict[str, str] | None = None,
         *,
         count_species: bool = True,
+        label: str = "",
     ) -> dict[str, Any]:
+        """Count into the row of (genus, species) tokens.
+
+        Rows are keyed by the tokens, so GTDB genomes, NCBI-labelled runs and
+        candidates join; ``label`` is the name to show for the row (the GTDB
+        spelling, e.g. 'Bacillus_A'), and the first label given is kept.
+        """
         key = _row_key(self.rank, genus, species)
         row = self._rows.get(key)
         if row is None:
@@ -219,6 +229,9 @@ class _Rows:
             self._rows[key] = row
             self._species[key] = set()
             self._sets[key] = {}
+        if label and key not in self._displayed:
+            row["name"] = label
+            self._displayed.add(key)
         if species and count_species:
             self._species[key].add(_norm(species))
         for column, n in (counts or {}).items():
@@ -230,19 +243,38 @@ class _Rows:
     def keys(self) -> list[tuple[str, str]]:
         return list(self._rows)
 
+    def row(self, key: tuple[str, str]) -> dict[str, Any]:
+        return self._rows[key]
+
     def set(self, key: tuple[str, str], column: str, value: Any) -> None:
         self._rows[key][column] = value
 
-    def finish(self, columns: list[str], defaults: dict[str, Any], sort_by: str) -> list[dict]:
-        out = []
+    def finish(
+        self,
+        columns: list[str],
+        defaults: dict[str, Any],
+        sort_by: str,
+        last: Container[tuple[str, str]] = (),
+    ) -> list[dict]:
+        """The rows, largest ``sort_by`` first, then by name; ``last`` rows go
+        to the end in the same order."""
+        ordered = []
         for key, row in self._rows.items():
             if self.rank == FAMILY:
                 row["species"] = len(self._species[key])
             for column, values in self._sets[key].items():
                 row[column] = len(values)
-            out.append({c: row.get(c, defaults.get(c)) for c in columns})
-        out.sort(key=lambda r: (-(r.get(sort_by) or 0), str(r["name"]).lower()))
-        return out
+            out = {c: row.get(c, defaults.get(c)) for c in columns}
+            ordered.append((key in last, -(out.get(sort_by) or 0), out))
+        ordered.sort(key=lambda t: (t[0], t[1], str(t[2]["name"]).lower()))
+        return [out for _last, _count, out in ordered]
+
+
+def _ncbi_label(name: str) -> str:
+    """Mark a row that holds only runs, named by the NCBI taxonomy."""
+    if name.endswith(")") and "(" in name:
+        return name[:-1] + ", NCBI)"
+    return f"{name} (NCBI)"
 
 
 def _distinct_taxa(items: Iterable[tuple[str, str]]) -> tuple[int, int]:
@@ -262,6 +294,11 @@ class Item:
     genus: str
     species: str
     representative: bool = False
+    # Names as the source writes them (GTDB 'Bacillus_A', 'Bacillus_A
+    # thuringiensis_S'), for display; empty where only tokens are known.
+    genus_name: str = ""
+    species_name: str = ""
+    family_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -273,6 +310,13 @@ class Run:
     platform: str
     genus: str
     species: str
+    genus_name: str = ""
+    species_name: str = ""
+
+
+def _display(rank: str, genus_name: str, species_name: str) -> str:
+    """The display name of a row: the genus, or the species binomial."""
+    return genus_name if rank == FAMILY else species_name
 
 
 def genome_census(
@@ -288,7 +332,13 @@ def genome_census(
     """Genomes per genus or species, with the ENA runs beside them when given."""
     rows = _Rows(rank)
     for g in items:
-        rows.add(g.genus, g.species, {"genomes": 1, "representatives": int(g.representative)})
+        rows.add(
+            g.genus,
+            g.species,
+            {"genomes": 1, "representatives": int(g.representative)},
+            label=_display(rank, g.genus_name, g.species_name),
+        )
+    with_genomes = set(rows.keys())
     columns = ["name", *(["species"] if rank == FAMILY else []), "genomes", "representatives"]
     genera, species = _distinct_taxa((g.genus, g.species) for g in items)
     totals: dict[str, Any] = {
@@ -310,10 +360,15 @@ def genome_census(
                 counts,
                 {"biosamples": r.biosample or r.accession},
                 count_species=False,
+                label=_display(rank, r.genus_name, r.species_name),
             )
         columns += list(RUN_COLUMNS)
         totals["runs"] = len(runs)
         totals["biosamples"] = len({r.biosample or r.accession for r in runs})
+    # Rows of runs alone carry an NCBI name with no GTDB genome under it.
+    ncbi_only = set(rows.keys()) - with_genomes
+    for key in ncbi_only:
+        rows.row(key)["name"] = _ncbi_label(rows.row(key)["name"])
     defaults = dict.fromkeys(columns[1:], 0)
     return Census(
         taxon=taxon,
@@ -321,7 +376,7 @@ def genome_census(
         source=source,
         rank=rank,
         columns=columns,
-        rows=rows.finish(columns, defaults, "genomes"),
+        rows=rows.finish(columns, defaults, "genomes", last=ncbi_only),
         totals=totals,
         notes=notes or [],
     )
@@ -529,9 +584,17 @@ def _items_from_parsed(parsed: Iterable[dict]) -> list[Item]:
             d["tax"]["genus"],
             d["tax"]["species"],
             bool(d.get("is_rep")),
+            genus_name=d["tax"].get("genus_name", ""),
+            species_name=d["tax"].get("species_name", ""),
+            family_name=d["tax"].get("family_name", ""),
         )
         for d in parsed
     ]
+
+
+def _strip_rank(value: str) -> str:
+    """'g__Bacillus_A' -> 'Bacillus_A'."""
+    return value.split("__", 1)[1] if "__" in value else value
 
 
 def _matches_target(
@@ -568,7 +631,14 @@ def gtdb_api_items(rank: str, name: str, logger: logging.Logger) -> list[Item]:
         tax = _normalize_api_tax(row)
         items.append(
             Item(
-                row["gid"], tax["family"], tax["genus"], tax["species"], bool(row.get("gtdbIsRep"))
+                row["gid"],
+                tax["family"],
+                tax["genus"],
+                tax["species"],
+                bool(row.get("gtdbIsRep")),
+                genus_name=_strip_rank(row.get("gtdbGenus", "")),
+                species_name=_strip_rank(row.get("gtdbSpecies", "")),
+                family_name=_strip_rank(row.get("gtdbFamily", "")),
             )
         )
     return items
@@ -627,7 +697,7 @@ def ena_runs(name: str, logger: logging.Logger) -> list[Run]:
     """The ENA whole-genome sequencing runs under a taxon, each labelled with
     the genus and species of its taxid (one lineage lookup per distinct taxid)."""
     from ..core import ena
-    from .reads import ncbi_taxon_tokens
+    from .reads import ncbi_taxon_names
 
     hit = ena.resolve_taxon(name)
     logger.info("Resolved %r to %s (%s, taxid %s)", name, hit.scientific_name, hit.rank, hit.taxid)
@@ -639,11 +709,22 @@ def ena_runs(name: str, logger: logging.Logger) -> list[Run]:
             seen.add(row.run_accession)
             unique.append(row)
     logger.info("ENA lists %d whole-genome sequencing runs under %s", len(unique), name)
-    tokens = ncbi_taxon_tokens([r.taxid for r in unique], logger)
+    names = ncbi_taxon_names([r.taxid for r in unique], logger)
     out = []
     for row in unique:
-        _family, genus, species = tokens.get(row.taxid, ("", "", ""))
-        out.append(Run(row.run_accession, row.biosample, row.platform, genus, species))
+        family, genus_name, species_name = names.get(row.taxid, ("", "", ""))
+        _family, genus, species = sanitise_taxon_tokens(family, genus_name, species_name)
+        out.append(
+            Run(
+                row.run_accession,
+                row.biosample,
+                row.platform,
+                genus,
+                species,
+                genus_name=genus_name,
+                species_name=species_name,
+            )
+        )
     return out
 
 
@@ -760,8 +841,10 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
     notes = []
     if runs is not None:
         notes.append(
-            "Runs are grouped by the NCBI taxonomy of their taxid and genomes by GTDB; "
-            "a name that differs between the two appears as two rows."
+            "Runs are grouped by the NCBI taxonomy of their taxid and genomes by GTDB. "
+            "A row marked NCBI holds runs only: no GTDB genome carries that name, "
+            "and the taxon may be a GTDB taxon under another name. Such rows are "
+            "listed last and are not part of the GTDB totals."
         )
     return genome_census(
         items, taxon=taxon, rank=rank, mode=MODE_TAXON, source=label, runs=runs, notes=notes
@@ -769,8 +852,12 @@ def taxon_census(params: CensusParams, source: str, logger: logging.Logger) -> C
 
 
 def _gtdb_spelling(items: list[Item], rank: str, name: str) -> str:
+    """The taxon as GTDB writes it ('Bacillus_A'), else as its token, else ``name``."""
     attr = "genus" if rank == GENUS else "family"
-    return next((getattr(g, attr) for g in items if _norm(getattr(g, attr)) == _norm(name)), name)
+    for g in items:
+        if _norm(getattr(g, attr)) == _norm(name):
+            return getattr(g, f"{attr}_name") or getattr(g, attr)
+    return name
 
 
 # --- workdir modes ------------------------------------------------------------
@@ -990,11 +1077,22 @@ def selection_census(wd: Path, cfg: Any, params: CensusParams, logger: logging.L
 
     columns = ["name", *(["species"] if rank == FAMILY else [])]
     totals: dict[str, Any] = {}
-    candidates = selection_candidates(wd, cfg, params, rank, name, rows, logger)
+    try:
+        candidates = selection_candidates(wd, cfg, params, rank, name, rows, logger)
+    except (UserInputError, WorkdirError) as exc:
+        # Unreadable or outdated entry-stage data: count the selection alone.
+        candidates = None
+        notes.append(f"No candidates column: the entry-stage data could not be read ({exc})")
     if candidates is not None:
         cand_items, cand_label = candidates
         for c in cand_items:
-            table.add(c.genus, c.species, {"candidates": 1}, count_species=False)
+            table.add(
+                c.genus,
+                c.species,
+                {"candidates": 1},
+                count_species=False,
+                label=_display(rank, c.genus_name, c.species_name),
+            )
         columns.append("candidates")
         totals["candidates"] = len(cand_items)
         notes.append(f"Candidates are {_CANDIDATE_LABELS.get(cand_label, cand_label)}.")
@@ -1077,10 +1175,7 @@ def selection_candidates(
     if "metadata" in stages:
         found = gtdb_candidates(wd, cfg, params.metadata_path, logger)
     elif "vmetadata" in stages:
-        try:
-            source, records, _medians = viral_candidates(wd, cfg)
-        except UserInputError:
-            return None
+        source, records, _medians = viral_candidates(wd, cfg)
         if source == "ncbi_virus":
             records = [Item(r.accession, r.family, r.genus, r.species) for r in records]
         found = (records, source)

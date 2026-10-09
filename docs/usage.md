@@ -664,8 +664,11 @@ the metadata stage; the table is downloaded once into
 `--metadata-path` names a local copy. `--runs` adds the ENA whole-genome
 sequencing runs under the taxon, as the reads stage finds them: runs,
 distinct biosamples, and runs per platform. The runs are grouped by the NCBI
-lineage of their taxid (one lookup per distinct taxid), so a genus or species
-that NCBI and GTDB name differently appears as two rows.
+lineage of their taxid (one lookup per distinct taxid) and join the GTDB row
+of the same name. A row that holds runs only is marked `(NCBI)` (or `(no
+genus, NCBI)` for taxids without a genus), listed last and left out of the
+GTDB totals; such a taxon may be a GTDB taxon under another name. Names are
+shown as GTDB writes them (`Bacillus_A`, `Bacillus_A thuringiensis_S`).
 
 ```bash
 repgenr census -tg Francisella
@@ -680,7 +683,8 @@ Francisella           26     1157               26  1667        1462      1413  
 Caedibacter            9       28                9     0           0         0    0       0
 M0027                  4        8                4     0           0         0    0       0
 ...
-Allofrancisella        0        0                0    11           8         7    3       1
+Allofrancisella (NCBI)   0        0                0    11           8         7    3       1
+(no genus, NCBI)         0        0                0     3           3         3    0       0
 ```
 
 `--viral --target TAXON` counts the NCBI Virus sequence records of a viral
@@ -724,7 +728,9 @@ falls in the row when `derep/clusters.tsv` exists. The outgroup is not
 counted and is named on the first line. When the candidates of the entry
 stage are also present, a `candidates` column shows how many each row had
 before selection; a species with candidates and no selected genome appears
-with 0 genomes.
+with 0 genomes. When the entry-stage data cannot be read (for example a
+`virus_records.json` written by an earlier RepGenR), the census counts the
+selection without the `candidates` column and says why in a note.
 
 ```text
 $ repgenr census -wd hisp

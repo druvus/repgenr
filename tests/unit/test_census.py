@@ -324,8 +324,11 @@ def test_runs_per_species_in_a_genus(fake_api, fake_ena, monkeypatch) -> None:
     payload = _json(["-tg", "Beta", "--runs"])
     row = _rows(payload)["Beta three"]
     assert (row["genomes"], row["runs"], row["biosamples"], row["pacbio"]) == (2, 2, 1, 1)
-    # Alpha runs sit under the same ENA taxid fake; they form their own row.
-    assert _rows(payload)["Alpha one"]["genomes"] == 0
+    # Alpha runs sit under the same ENA taxid fake: a row of runs alone,
+    # marked NCBI and listed last.
+    assert payload["rows"][-1]["name"] == "Alpha one (NCBI)"
+    assert payload["rows"][-1]["genomes"] == 0 and payload["rows"][-1]["runs"] == 2
+    assert payload["totals"]["genomes"] == 2 and payload["totals"]["species"] == 1
 
 
 def test_network_failure_exits_3(monkeypatch) -> None:
@@ -483,7 +486,14 @@ def test_api_answer_round_trips() -> None:
         back = metadata.read_api_genomes(path)
     assert back[0] == {
         "accession": "GCF_000001.1",
-        "tax": {"family": "Testaceae", "genus": "Alpha", "species": "one"},
+        "tax": {
+            "family": "Testaceae",
+            "genus": "Alpha",
+            "species": "one",
+            "family_name": "Testaceae",
+            "genus_name": "Alpha",
+            "species_name": "Alpha one",
+        },
         "is_rep": True,
     }
     assert sum(r["is_rep"] for r in back) == 4
@@ -763,3 +773,138 @@ def test_summary_writes_nothing_outside_a_temporary_directory(fake_datasets, tmp
         os.chdir(cwd)
     assert len(records) == 10 and list(tmp_path.iterdir()) == []
     assert fake_datasets[0][-2:] == ["--released-after", "01/31/2024"]
+
+
+# --- review fixes: GTDB spellings, NCBI-only rows, stale candidates ----------
+
+_SUFFIX_ROWS = [
+    ("GCF_100001.1", "GCF_100001.1", _tax("Bacillaceae", "Bacillus_A", "thuringiensis_S")),
+    ("GCF_100002.1", "GCF_100001.1", _tax("Bacillaceae", "Bacillus_A", "thuringiensis_S")),
+    ("GCF_100003.1", "GCF_100003.1", _tax("Bacillaceae", "Bacillus_A", "cereus")),
+    ("GCF_100004.1", "GCF_100004.1", _tax("Bacillaceae", "Bacillus", "subtilis")),
+]
+
+
+def _suffix_api(monkeypatch) -> None:
+    rows = []
+    for acc, rep, tax in _SUFFIX_ROWS:
+        parts = dict(p.split("__", 1) for p in tax.split(";"))
+        rows.append(
+            {
+                "gid": acc,
+                "gtdbFamily": f"f__{parts['f']}",
+                "gtdbGenus": f"g__{parts['g']}",
+                "gtdbSpecies": f"s__{parts['s']}",
+                "gtdbIsRep": acc == rep,
+            }
+        )
+
+    def api_get(path: str, params: dict | None = None) -> dict:
+        taxon = path.split("/")[2].replace("%20", " ")
+        rank, name = taxon.split("__", 1)
+        key = {"f": "gtdbFamily", "g": "gtdbGenus"}[rank]
+        return {"rows": [r for r in rows if r[key] == f"{rank}__{name}"]}
+
+    monkeypatch.setattr(metadata, "_api_get", api_get)
+
+
+def test_gtdb_names_keep_their_suffixes_from_the_api(monkeypatch) -> None:
+    _suffix_api(monkeypatch)
+    genus = _json(["-tg", "Bacillus_A"])
+    assert genus["taxon"] == "Bacillus_A"
+    assert [r["name"] for r in genus["rows"]] == [
+        "Bacillus_A thuringiensis_S",
+        "Bacillus_A cereus",
+    ]
+    family = _json(["-tf", "bacillaceae"])
+    assert family["taxon"] == "Bacillaceae"
+    assert {r["name"] for r in family["rows"]} == {"Bacillus_A", "Bacillus"}
+    # Two genera that differ only by the suffix stay two rows.
+    assert family["totals"]["genera"] == 2
+
+
+def test_gtdb_names_keep_their_suffixes_from_the_table(tmp_path) -> None:
+    table = tmp_path / "suffix.tsv.gz"
+    header = "accession\tgtdb_genome_representative\tgtdb_taxonomy\tncbi_genbank_assembly_accession"
+    lines = [header] + [f"RS_{a}\tRS_{r}\t{t}\t{a}" for a, r, t in _SUFFIX_ROWS]
+    with gzip.open(table, "wt", encoding="utf-8") as fo:
+        fo.write("\n".join(lines) + "\n")
+    payload = _json(["-tg", "Bacillus_A", "--source", "table", "--metadata-path", str(table)])
+    assert _rows(payload)["Bacillus_A thuringiensis_S"]["genomes"] == 2
+
+
+def test_runs_join_gtdb_rows_and_ncbi_only_rows_are_marked(monkeypatch, fake_api) -> None:
+    """A run of a GTDB genus joins its row; runs of a genus GTDB lacks and of
+    a taxid without a genus are marked NCBI, listed last and left out of the
+    GTDB totals."""
+    runs = [
+        {"run_accession": "ERR1", "sample_accession": "S1", "tax_id": "101",
+         "instrument_platform": "ILLUMINA"},
+        {"run_accession": "ERR2", "sample_accession": "S2", "tax_id": "201",
+         "instrument_platform": "ILLUMINA"},
+        {"run_accession": "ERR3", "sample_accession": "S3", "tax_id": "301",
+         "instrument_platform": "OXFORD_NANOPORE"},
+    ]  # fmt: skip
+    lineages = {
+        "101": ("Alpha", "Alpha one"),
+        "201": ("Allotest", "Allotest five"),
+        "301": ("", "Testaceae bacterium"),
+    }
+
+    def entrez(taxids, logger, **kw):
+        data = {
+            t: {
+                "taxdata": {
+                    "family": {"name": "Testaceae"},
+                    "genus": {"name": lineages[t][0] or None},
+                    "species": {"name": lineages[t][1]},
+                }
+            }
+            for t in taxids
+        }
+        return data, set(), {}
+
+    monkeypatch.setattr(ena, "resolve_taxon", lambda name: ena.TaxonHit("1000", name, "family"))
+    monkeypatch.setattr(ena, "search_runs", lambda query, **kw: [dict(r) for r in runs])
+    monkeypatch.setattr(reads, "get_taxon_data_from_entrez", entrez)
+    payload = _json(["-tf", "Testaceae", "--runs"])
+    names = [r["name"] for r in payload["rows"]]
+    assert names[:2] == ["Alpha", "Beta"]
+    assert set(names[2:]) == {"Allotest (NCBI)", "(no genus, NCBI)"}
+    assert _rows(payload)["Alpha"]["runs"] == 1
+    assert payload["totals"]["genera"] == 2 and payload["totals"]["genomes"] == 5
+    assert payload["totals"]["runs"] == 3
+    assert any("may be a GTDB taxon under another name" in n for n in payload["notes"])
+
+
+def test_selection_with_outdated_virus_records_counts_without_candidates(tmp_path) -> None:
+    """A virus_records.json from before the taxonomy lookup is refused by
+    read_records (WorkdirError); the census still counts the selection."""
+    wd = tmp_path / "vg"
+    download_wd = wd / "virus_download_wd"
+    download_wd.mkdir(parents=True)
+    _record(
+        wd,
+        ("vmetadata", {"source": "ncbi_virus", "target": "testviridae"}),
+        ("vgenome", {}),
+    )
+    old = [{"accession": "MG1", "taxid": "1", "organism": "o", "family": "Testviridae",
+            "genus": "Monovirus", "species": "gamma-virus", "length": 1, "completeness": "",
+            "segment": "", "isolate": ""}]  # fmt: skip
+    (download_wd / "virus_records.json").write_text(json.dumps(old), encoding="utf-8")
+    row = SelectionRow(
+        "MG1",
+        "Testviridae",
+        "Monovirus",
+        "Monovirus-gamma",
+        False,
+        genome_filename("Testviridae", "Monovirus", "Monovirus-gamma", "MG1"),
+    )
+    write_selection(wd / SELECTION_TSV, [row])
+    (wd / "genomes").mkdir()
+    (wd / "genomes" / row.filename).write_text(">MG1\nAC\n", encoding="utf-8")
+    payload = _json(["-wd", str(wd)])
+    assert payload["mode"] == "selection" and payload["totals"]["genomes"] == 1
+    assert "candidates" not in payload["totals"]
+    assert "candidates" not in payload["rows"][0]
+    assert any(n.startswith("No candidates column") for n in payload["notes"])

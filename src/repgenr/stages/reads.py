@@ -243,11 +243,11 @@ def _best_run(runs: list[ReadRow]) -> ReadRow:
     return max(runs, key=rank)
 
 
-def ncbi_taxon_tokens(taxids: list[str], logger: logging.Logger) -> dict[str, tuple[str, str, str]]:
-    """The family, genus and species tokens of each NCBI taxid.
+def ncbi_taxon_names(taxids: list[str], logger: logging.Logger) -> dict[str, tuple[str, str, str]]:
+    """The family, genus and species names of each NCBI taxid, as NCBI writes them.
 
     One Entrez lineage lookup per distinct taxid; a taxid without a lineage
-    maps to empty tokens. Shared by the reads stage and ``repgenr census
+    maps to empty names. Shared by the reads stage and ``repgenr census
     --runs``.
     """
     unique = sorted({t for t in taxids if t})
@@ -258,11 +258,18 @@ def ncbi_taxon_tokens(taxids: list[str], logger: logging.Logger) -> dict[str, tu
     for taxid in unique:
         entry = data.get(taxid) or {}
         taxdata = entry.get("taxdata") or {}
-        names = [
+        family, genus, species = (
             (taxdata.get(level) or {}).get("name") or "" for level in ("family", "genus", "species")
-        ]
-        out[taxid] = sanitise_taxon_tokens(*names)
+        )
+        out[taxid] = (family, genus, species)
     return out
+
+
+def ncbi_taxon_tokens(taxids: list[str], logger: logging.Logger) -> dict[str, tuple[str, str, str]]:
+    """:func:`ncbi_taxon_names` as filename tokens (``sanitise_taxon_tokens``)."""
+    return {
+        t: sanitise_taxon_tokens(*names) for t, names in ncbi_taxon_names(taxids, logger).items()
+    }
 
 
 def _label(rows: list[ReadRow], logger: logging.Logger) -> list[ReadRow]:
