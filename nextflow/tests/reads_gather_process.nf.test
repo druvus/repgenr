@@ -56,6 +56,31 @@ nextflow_process {
             assert process.success
             assert [process.out.genomes.get(0).get(1)].flatten().size() == 1
             assert process.out.excused.size() == 0
+            assert process.out.screen.size() == 0
+        }
+    }
+
+    test("screen.json files of screened runs reach screen_reads.tsv") {
+        when {
+            process {
+                """
+                input[0] = tuple(
+                    [id: 'test', mode: 'reads'],
+                    file("${projectDir}/nextflow/tests/data/reads.tsv"),
+                    [ file("${projectDir}/nextflow/tests/data/screened/SRR000001"),
+                      file("${projectDir}/nextflow/tests/data/screened/SRR000002") ],
+                    []
+                )
+                """
+            }
+        }
+        then {
+            assert process.success
+            def screen = path(process.out.screen.get(0).get(1)).text.split('\n')
+            assert screen[0].startsWith('run_accession\ttop_match')
+            assert screen.findAll { line -> line.startsWith('SRR000001\t') && line.contains('\tpass\t') }.size() == 1
+            assert screen.findAll { line -> line.startsWith('SRR000002\t') && line.contains('\texcused\t') }.size() == 1
+            assert path(process.out.excused.get(0).get(1)).text.contains('SRR000002\tscreen\ttaxon_mismatch')
         }
     }
 }

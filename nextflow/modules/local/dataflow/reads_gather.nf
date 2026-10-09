@@ -3,7 +3,9 @@
 // `repgenr reads-gather` reads reads.tsv, the assemble-run directories and the
 // optional genome-qc directory, applies the quality gate and the naming
 // policy (GTDB tokens where the classifier agrees at genus), and writes
-// genomes/, selection.tsv, assembly_stats.tsv and excused_runs.tsv. The
+// genomes/, selection.tsv, assembly_stats.tsv and excused_runs.tsv, and
+// screen_reads.tsv when assemble-run screened the runs (--screen-reads in
+// params.assemble_args; one screen.json per run directory). The
 // outputs mirror the ACQUIRE subworkflow's: the genome FASTAs feed the
 // dereplication scatter, selection.tsv the quality-aware keeper, and the
 // (empty) outgroup accession file the phylogeny and tree2tax steps.
@@ -20,6 +22,7 @@ process READS_GATHER {
     tuple val(meta), path("out/selection.tsv")         , emit: selection
     tuple val(meta), path("out/assembly_stats.tsv")    , emit: assembly_stats
     tuple val(meta), path("out/excused_runs.tsv")      , emit: excused, optional: true
+    tuple val(meta), path("out/screen_reads.tsv")      , emit: screen, optional: true
     tuple val(meta), path("out/outgroup_accession.txt"), emit: outgroup_accession
     path "versions.yml"                                , emit: versions
 
@@ -71,6 +74,13 @@ process READS_GATHER {
         printf 'run_accession\\tstep\\treason\\n' > out/excused_runs.tsv
         cat excused.tmp >> out/excused_runs.tsv
     fi
+    for f in assemblies/*/screen.json; do
+        [ -e "\$f" ] || continue
+        [ -e out/screen_reads.tsv ] || printf 'run_accession\\ttop_match\\ttop_genus\\tfraction\\tduplicate_of\\tdecision\\treason\\n' > out/screen_reads.tsv
+        run=\$(basename \$(dirname "\$f"))
+        decision=\$(sed -n 's/.*"decision": *"\\([^"]*\\)".*/\\1/p' "\$f")
+        printf '%s\\t\\t\\t\\t\\t%s\\t\\n' "\$run" "\$decision" >> out/screen_reads.tsv
+    done
     : > out/outgroup_accession.txt
 
     cat <<-END_VERSIONS > versions.yml
