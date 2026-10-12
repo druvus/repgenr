@@ -1056,6 +1056,44 @@ invalidate previous results (switching the container backend or platform does).
 Workdirs created by older RepGenR versions re-run each stage once (the
 fingerprint format changed).
 
+### Chunked dereplication
+
+`dereplicate -s N` (`--process-size`) splits the genomes into chunks of at
+most N, dereplicates each chunk (in parallel, `--num-processes`) with the
+stage-1 thresholds (`--pre-primary-ani`, `--pre-secondary-ani`, which default
+to the final ones), and then dereplicates the union of the chunk
+representatives with the final thresholds. Every genome is then assigned to
+the final representative of its chunk representative.
+
+The chunk size bounds the leaf chunks, not the final pass. A chunk can only
+remove genomes that have a close relative in the same chunk, so for a diverse
+set at a strict threshold the union is most of the input, and the final pass
+compares nearly all genomes with each other. When the union is larger than one
+chunk, it is chunked again (a further level) only while a level removes at
+least max(N, a tenth of its input) genomes; the next level takes the
+representatives in turn from each chunk of the previous one, so that genomes
+from different chunks are compared. Otherwise the union goes to one final
+pass, whatever its size. The log names the size of that pass:
+
+```text
+Final pass over 3807 representatives (chunk size 500 bounds the leaf chunks, not the merge)
+```
+
+and a warning follows when the final pass is more than four times the chunk
+size. To make the final pass smaller:
+
+- **Raise `-s`** so that each chunk holds more close relatives. Chunking pays
+  when the set has many near-identical genomes; for a set where most genomes
+  are their own representative, one pass without `-s` costs about the same.
+- **Set `--pre-secondary-ani` below `--secondary-ani`** (for example 0.999
+  against 0.9995) so the chunks remove more. The chunk representatives are
+  then compared at the final threshold, so clusters can be coarser than in a
+  single pass at the final threshold.
+
+The Nextflow scatter (`--derep_process_size`) runs one chunk round and one
+merge task over the whole union, with the same semantics as the first level
+and the final pass here.
+
 ### Representative selection
 
 `repgenr dereplicate` and `repgenr run` accept `--keeper quality|tool` (default
