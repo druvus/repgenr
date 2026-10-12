@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import pytest
+
 from repgenr.dereplicators.skder import _parse_skder_output
 
 _LOG = logging.getLogger("test")
@@ -110,7 +112,9 @@ def test_skder_receives_one_staged_directory_for_10000_genomes(tmp_path, monkeyp
     result = SkderDereplicator().dereplicate(genomes, tmp_path / "out", params, _LOG)
 
     args = argv_log.read_text().split("\n")
-    assert len(args) == 12  # -g DIR -o OUT -i -f -c -d with their values
+    # -g DIR -o OUT -i -f -c -d -p with their values; the cutoff 99.9 sets a screen
+    assert len(args) == 14
+    assert args[args.index("-p") + 1] == "-s 98.9"
     staged = Path(args[args.index("-g") + 1])
     assert args.count("-g") == 1 and not staged.name.endswith(".fasta")
     names = listed.read_text().split("\n")
@@ -237,3 +241,56 @@ def test_many_placements_are_one_line_capped_on_the_console(tmp_path: Path) -> N
     assert all(f"mem{i:02d}.fasta" in warnings[0].getMessage() for i in range(12))
     console = warnings[0].repgenr_console  # type: ignore[attr-defined]
     assert "and 7 more" in console and "mem11.fasta" not in console
+
+
+def _skder_argv(tmp_path, monkeypatch, secondary_ani: float, extra: dict) -> list[str]:
+    from repgenr.dereplicators.base import DerepParams
+    from repgenr.dereplicators.skder import SkderDereplicator
+
+    argv_log, _listed = _install_fake_skder(tmp_path, monkeypatch)
+    src = tmp_path / "genomes"
+    src.mkdir(exist_ok=True)
+    genomes = [src / "Fam_Gen_sp_GCA_000000001.1.fasta", src / "Fam_Gen_sp_GCA_000000002.1.fasta"]
+    for g in genomes:
+        g.touch()
+    params = DerepParams(primary_ani=0.9, secondary_ani=secondary_ani, threads=1, extra=extra)
+    SkderDereplicator().dereplicate(genomes, tmp_path / "out", params, _LOG)
+    return argv_log.read_text().split("\n")
+
+
+def test_screen_defaults_to_one_below_a_high_cutoff(tmp_path, monkeypatch) -> None:
+    """At 99.95 the screen is 98.95, so pairs below that skip the alignment."""
+    args = _skder_argv(tmp_path, monkeypatch, 0.9995, {})
+    assert args[args.index("-p") + 1] == "-s 98.95"
+
+
+def test_screen_is_left_to_skder_below_99(tmp_path, monkeypatch) -> None:
+    """Below a 99 percent cutoff the adapter keeps skDER's own screen (cutoff - 10)."""
+    args = _skder_argv(tmp_path, monkeypatch, 0.95, {})
+    assert "-p" not in args
+
+
+def test_screen_tool_arg_overrides_the_default(tmp_path, monkeypatch) -> None:
+    args = _skder_argv(tmp_path, monkeypatch, 0.9995, {"screen": "90"})
+    assert args[args.index("-p") + 1] == "-s 90"
+
+
+@pytest.mark.parametrize(
+    ("screen", "fragment"),
+    [("99.96", "above the ANI cutoff"), ("abc", "ANI percentage"), ("100", "between 0 and 100")],
+)
+def test_screen_tool_arg_is_validated(screen: str, fragment: str) -> None:
+    from repgenr.core.errors import UserInputError
+    from repgenr.dereplicators.skder import resolve_screen
+
+    with pytest.raises(UserInputError, match=fragment):
+        resolve_screen(screen, 99.95)
+
+
+def test_resolve_screen_values() -> None:
+    from repgenr.dereplicators.skder import resolve_screen
+
+    assert resolve_screen(None, 99.95) == 98.95
+    assert resolve_screen(None, 99.0) == 98.0
+    assert resolve_screen(None, 98.9) is None
+    assert resolve_screen("95", 99.95) == 95.0

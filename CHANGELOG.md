@@ -6,6 +6,25 @@ All notable changes to RepGenR are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `dereplicate --process-size`: a union of chunk representatives of at most
+  ten chunks' worth goes straight to the final pass. A further level costs
+  the tool's per-genome work for every representative and removes few once
+  the leaf chunks have run (5, 1.4 and 0.5 percent at the next levels of a
+  reported 6888-genome run, each level as long as a level-0 wave), so on such
+  sets the levels were a net loss. Larger unions are chunked again under the
+  existing rule. The log now times each level, says why the final pass runs
+  directly, states the final pass's pairwise work as a multiple of the level
+  just timed, that the tool prints no progress while it runs, and its
+  duration afterwards.
+- skDER: at an ANI cutoff of 99 percent or more the adapter passes skani a
+  screen of the cutoff minus one (`-p "-s <percent>"`), so pairs whose k-mer
+  estimate is below it are not aligned. skDER's own default is the cutoff
+  minus ten, which at 99.95 aligned every pair above about 90 percent, most
+  same-species pairs in a genus-level set. `--tool-arg screen=PERCENT` sets
+  another value; a value above the cutoff is refused. Below a 99 percent
+  cutoff skDER's default is kept.
+
 ### Added
 - `assemble --screen-reads` (off by default) screens each run's reads sketch
   after the fetch and before an assembler starts, and excuses a run with step

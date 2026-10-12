@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
+import time
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -295,6 +296,9 @@ def _list_genomes(genomes_dir: Path) -> list[Path]:
 
 
 _MAX_REDUCE_DEPTH = 50  # termination backstop; the shrink-guard stops much sooner
+# A union of at most this many chunks' worth goes straight to the final pass;
+# see _dereplicate_chunked for the cost argument.
+_DIRECT_FINAL_PASS_FACTOR = 10
 # Warn when the final pass of a chunked run compares more than this many chunks' worth.
 _FINAL_PASS_WARN_FACTOR = 4
 _MAX_TARGET_ITERS = 12  # binary-search steps for --target-reps
@@ -464,6 +468,22 @@ def _recurse_min_shrink(n_input: int, process_size: int) -> int:
     return max(process_size, math.ceil(n_input / 10))
 
 
+def _final_pass_work_factor(n_union: int, n_level_input: int, process_size: int) -> float:
+    """Pairwise work of the final pass over ``n_union`` relative to the level just run.
+
+    A level over n genomes in chunks of S compares about n * S / 2 pairs; one
+    pass over the union compares U * U / 2. The ratio U * U / (n * S) says how
+    many times the level's pairwise work the final pass is.
+    """
+    return n_union * n_union / (n_level_input * process_size)
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds < 90:
+        return f"{seconds:.0f} s"
+    return f"{seconds / 60:.1f} min"
+
+
 def _interleave_by_origin(stage1: list[DerepResult]) -> list[Path]:
     """The union of stage-1 representatives, taken round-robin over the chunks.
 
@@ -495,15 +515,27 @@ def _dereplicate_chunked(
     parallel, with the stage-1 ANI thresholds). The union of their
     representatives is then reduced:
 
-    * when it fits in one chunk, or when this level removed fewer genomes than
-      ``_recurse_min_shrink`` requires, one final pass dereplicates the whole
-      union with the final thresholds, whatever its size. The chunk size bounds
-      the leaf chunks, not this merge: for a diverse set the union can be most
-      of the input.
+    * when it is at most ``_DIRECT_FINAL_PASS_FACTOR`` chunks' worth, or when
+      this level removed fewer genomes than ``_recurse_min_shrink`` requires,
+      one final pass dereplicates the whole union with the final thresholds,
+      whatever its size. The chunk size bounds the leaf chunks, not this
+      merge: for a diverse set the union can be most of the input.
     * otherwise the union, interleaved by chunk of origin, is chunked again at
       the next level, so representatives from different chunks are compared.
       Only the leaf chunks of level 0 use the stage-1 (``--pre-*``) thresholds;
       every later level and the final pass use the final thresholds.
+
+    Why a union of up to ``_DIRECT_FINAL_PASS_FACTOR`` chunks goes straight to
+    the final pass: a level over a union of U representatives in chunks of S
+    costs the per-genome work of the tool (sketching, N50) for all U plus
+    about S / U of the final pass's pairwise work, and removes only the close
+    pairs that one chunk happens to hold. The removal fraction of such a level
+    is small once the leaf chunks have run (a reported 6888-genome run removed
+    45 percent at level 0 and 5, 1.4 and 0.5 percent at the next levels, each
+    level costing as much as a level-0 wave). The level pays only when its
+    removal fraction exceeds about S / U, which it does not at U / S of ten
+    or less in practice, so the final pass runs directly there; above it, the
+    levels continue while each removes a chunk's worth.
 
     ``_MAX_REDUCE_DEPTH`` is a termination backstop only. Membership is
     composed level by level so every original genome maps to one final
@@ -550,7 +582,9 @@ def _dereplicate_chunked(
         logger.info("Level %d chunk %d/%d (%d genomes)", depth, idx + 1, len(chunks), len(chunk))
         return adapter.dereplicate(chunk, chunk_dir, chunk_params, logger)
 
+    level_started = time.monotonic()
     stage1_results = parallel_map(run_chunk, list(enumerate(chunks)), workers, logger=logger)
+    level_seconds = time.monotonic() - level_started
     # Chunk order for the final pass (as the Nextflow merge step), interleaved
     # only when the union is chunked again.
     union = [rep for r in stage1_results for rep in r.representatives]
@@ -558,20 +592,26 @@ def _dereplicate_chunked(
     removed = len(genomes) - len(union)
     min_shrink = _recurse_min_shrink(len(genomes), process_size)
     logger.info(
-        "Level %d: %d genomes -> union of %d representatives (%d removed)",
+        "Level %d: %d genomes -> union of %d representatives (%d removed) in %s",
         depth,
         len(genomes),
         len(union),
         removed,
+        _format_duration(level_seconds),
     )
 
-    if len(union) > process_size and removed >= min_shrink and depth < _MAX_REDUCE_DEPTH:
+    if (
+        len(union) > _DIRECT_FINAL_PASS_FACTOR * process_size
+        and removed >= min_shrink
+        and depth < _MAX_REDUCE_DEPTH
+    ):
         logger.info(
-            "Level %d: union of %d > chunk size %d and %d removed (>= %d); "
+            "Level %d: union of %d > %d chunks' worth (%d) and %d removed (>= %d); "
             "chunking the union again, interleaved by chunk of origin",
             depth,
             len(union),
-            process_size,
+            _DIRECT_FINAL_PASS_FACTOR,
+            _DIRECT_FINAL_PASS_FACTOR * process_size,
             removed,
             min_shrink,
         )
@@ -590,7 +630,7 @@ def _dereplicate_chunked(
             depth + 1,
         )
     else:
-        if len(union) > process_size:
+        if len(union) > _DIRECT_FINAL_PASS_FACTOR * process_size:
             logger.info(
                 "Level %d removed %d genomes (another level needs >= %d%s)",
                 depth,
@@ -598,12 +638,37 @@ def _dereplicate_chunked(
                 min_shrink,
                 f"; depth limit {_MAX_REDUCE_DEPTH} reached" if depth >= _MAX_REDUCE_DEPTH else "",
             )
+        elif len(union) > process_size:
+            logger.info(
+                "Level %d: union of %d is at most %d chunks' worth (%d); one pass over "
+                "it costs less than further levels",
+                depth,
+                len(union),
+                _DIRECT_FINAL_PASS_FACTOR,
+                _DIRECT_FINAL_PASS_FACTOR * process_size,
+            )
         logger.info(
             "Final pass over %d representatives (chunk size %d bounds the leaf "
             "chunks, not the merge)",
             len(union),
             process_size,
         )
+        if len(union) > process_size:
+            # The tool prints no progress that reaches the console; say what to
+            # expect from the level just measured. Pairwise work grows with the
+            # square of the union; the per-genome work (sketches, N50) is paid
+            # once more for every genome of the union.
+            logger.info(
+                "One call over %d genomes with %d threads: about %.1f times the pairwise "
+                "work of level %d, which took %s with %d worker(s); no progress is "
+                "printed while it runs",
+                len(union),
+                params.threads,
+                _final_pass_work_factor(len(union), len(genomes), process_size),
+                depth,
+                _format_duration(level_seconds),
+                workers,
+            )
         if len(union) > _FINAL_PASS_WARN_FACTOR * process_size:
             logger.warning(
                 "The final dereplication pass compares %d representatives, more than "
@@ -615,7 +680,14 @@ def _dereplicate_chunked(
                 _FINAL_PASS_WARN_FACTOR,
                 process_size,
             )
+        final_started = time.monotonic()
         stage2 = adapter.dereplicate(union, merge_dir, params, logger)
+        logger.info(
+            "Final pass: %d representatives -> %d in %s",
+            len(union),
+            len(stage2.representatives),
+            _format_duration(time.monotonic() - final_started),
+        )
 
     return _compose_two_stage(stage1_results, stage2, logger)
 

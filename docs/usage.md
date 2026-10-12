@@ -1068,25 +1068,43 @@ the final representative of its chunk representative.
 The chunk size bounds the leaf chunks, not the final pass. A chunk can only
 remove genomes that have a close relative in the same chunk, so for a diverse
 set at a strict threshold the union is most of the input, and the final pass
-compares nearly all genomes with each other. When the union is larger than one
-chunk, it is chunked again (a further level). Levels continue while each level
-removes at least a tenth of its input or a chunk's worth (N), whichever is
-larger. Levels after the first compare representatives at the final
+compares nearly all genomes with each other. A union of at most ten chunks'
+worth (10 N) goes straight to the final pass. A level over the union costs the
+tool's per-genome work (sketching, N50) for every representative plus a share
+of the final pass's pairwise work, and removes only the close pairs that one
+chunk happens to hold, which after the leaf chunks is a small fraction; one
+pass over the union costs less than such a level and its reduced final pass.
+A larger union is chunked again (a further level), and levels continue while
+each removes at least a tenth of its input or a chunk's worth (N), whichever
+is larger. Levels after the first compare representatives at the final
 thresholds, not the `--pre-*` ones. The next level takes the representatives
 in turn from each chunk of the previous one, so that genomes from different
 chunks are compared. When a level removes less, the union goes to one final
-pass, whatever its size. The log names the size of that pass:
+pass, whatever its size. The log names the size of that pass and what to
+expect of it, from the level just timed:
 
 ```text
-Final pass over 3577 representatives (chunk size 500 bounds the leaf chunks, not the merge)
+Level 0: 6888 genomes -> union of 3807 representatives (3081 removed) in 8.0 min
+Level 0: union of 3807 is at most 10 chunks' worth (5000); one pass over it costs less than further levels
+Final pass over 3807 representatives (chunk size 500 bounds the leaf chunks, not the merge)
+One call over 3807 genomes with 48 threads: about 4.2 times the pairwise work of level 0, which took 8.0 min with 12 worker(s); no progress is printed while it runs
 ```
 
 and a warning follows when the final pass is more than four times the chunk
-size. For example, 6888 Bacillaceae genomes with `skder --secondary-ani 0.9995
--s 500` keep 3807 representatives after level 0. That removes 3081 genomes,
-more than the 689 required, so one further level runs on the interleaved
-union. It removes fewer than 500, so the remaining representatives (the figure
-above is illustrative) go to the final pass. size. To make the final pass smaller:
+size. The pairwise factor is the union squared over the level's input times
+the chunk size; the per-genome work is paid once more for every genome of the
+union, and the tool's threads are shared by one call rather than by parallel
+chunks, so the pass can take longer than the factor alone suggests. The
+example is 6888 Bacillaceae genomes with `skder --secondary-ani 0.9995 -s 500`:
+3807 representatives after level 0, within ten chunks' worth, so the final
+pass runs directly. To make the final pass smaller or faster:
+
+- **Keep the default skani screen with skDER.** For a cutoff at or above 99
+  percent the adapter passes skani a screen of the cutoff minus one, so pairs
+  whose k-mer estimate is below that are not aligned; skDER's own default is
+  the cutoff minus ten, which at 99.95 aligns every pair above about 90
+  percent. `--tool-arg screen=PERCENT` sets another value; a value above the
+  cutoff is refused.
 
 - **Raise `-s`** so that each chunk holds more close relatives. Chunking pays
   when the set has many near-identical genomes; for a set where most genomes

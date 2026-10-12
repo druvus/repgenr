@@ -6,7 +6,17 @@ estimates pairwise ANI/AF with skani and picks representatives in one round.
 CLI used::
 
     skder -g <staged_dir> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
-          -d dynamic|greedy|low_mem_greedy
+          -d dynamic|greedy|low_mem_greedy [-p "-s <screen%>"]
+
+skani's screen (``-s``) skips the alignment of pairs whose k-mer sketches put
+them below the given identity. skDER's own default is the ANI cutoff minus 10,
+so at a cutoff of 99.95 every pair above about 90 percent is aligned, which in
+a genus-level set is most same-species pairs. The adapter sets the screen to
+the cutoff minus 1 when the cutoff is at or above 99 (``_SCREEN_MARGIN_PCT``,
+``_SCREEN_MIN_CUTOFF_PCT``), and leaves skDER's default below that, where the
+sketch estimate is less exact. ``--tool-arg screen=<percent>`` overrides it; a
+screen above the cutoff is refused, because pairs at the cutoff would be
+skipped.
 
 Three robustness notes:
 
@@ -59,6 +69,12 @@ from .base import (
 _MAX_PLACED_LINES = 5
 # skDER asks for confirmation below this ANI (percent); skani is unreliable there.
 _MIN_ANI_PCT = 80.0
+# Default skani screen: cutoff minus this margin, once the cutoff is at or above
+# the minimum. skani's screen is a k-mer estimate; near 99 percent and above its
+# error is well under one point for bacterial genomes, below that it is looser
+# and skDER's own default (cutoff minus 10) is kept.
+_SCREEN_MARGIN_PCT = 1.0
+_SCREEN_MIN_CUTOFF_PCT = 99.0
 
 
 class SkderDereplicator(Dereplicator):
@@ -68,7 +84,7 @@ class SkderDereplicator(Dereplicator):
             BinarySpec("skder", version_args=("-v",), min_version="1.0"),
             BinarySpec("skani", version_args=("-V",), min_version="0.2"),
         ),
-        default_params={"mode": "greedy"},
+        default_params={"mode": "greedy", "screen": None},
         recommended_max_genomes=None,  # scales natively
         supports_native_scaling=True,
         # No pinned BioContainer: the skder images (1.3.2 through 1.3.8) are
@@ -77,7 +93,7 @@ class SkderDereplicator(Dereplicator):
         # there (dynamic mode, which uses skDERcore, is unaffected). A Wave
         # image minted from the conda spec carries GNU coreutils and works.
         conda=("bioconda::skder",),
-        accepted_extras=frozenset({"mode"}),
+        accepted_extras=frozenset({"mode", "screen"}),
         # skDER clusters at one ANI cutoff; there is no primary pre-clustering.
         ignored_params=frozenset({"primary_ani"}),
     )
@@ -99,6 +115,7 @@ class SkderDereplicator(Dereplicator):
         result_dir = local_tmp / "skder_out"
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
         af_pct = _as_percent(params.aligned_fraction)
+        screen = resolve_screen(params.extra.get("screen"), float(ani_pct))
         try:
             genome_dir = stage_genome_dir(genomes, local_tmp / "genomes")
         except BaseException:
@@ -122,6 +139,9 @@ class SkderDereplicator(Dereplicator):
             "-d",
             mode,
         ]
+        if screen is not None:
+            # One token: skDER takes the skani triangle options as a string.
+            cmd += ["-p", f"-s {screen:g}"]
         try:
             run_tool(
                 self.capabilities,
@@ -141,6 +161,33 @@ class SkderDereplicator(Dereplicator):
             shutil.rmtree(local_tmp, ignore_errors=True)
 
         return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
+
+
+def resolve_screen(requested: str | float | None, ani_pct: float) -> float | None:
+    """The skani screen (percent) to pass, or None for skDER's own default.
+
+    ``requested`` is the ``--tool-arg screen=`` value when given. Without it the
+    screen is the cutoff minus ``_SCREEN_MARGIN_PCT`` when the cutoff is at or
+    above ``_SCREEN_MIN_CUTOFF_PCT``, else None.
+    """
+    if requested is None:
+        if ani_pct >= _SCREEN_MIN_CUTOFF_PCT:
+            return round(ani_pct - _SCREEN_MARGIN_PCT, 4)
+        return None
+    try:
+        screen = float(requested)
+    except (TypeError, ValueError):
+        raise UserInputError(
+            f"--tool-arg screen= must be an ANI percentage, got {requested!r}."
+        ) from None
+    if not 0 <= screen < 100:
+        raise UserInputError(f"--tool-arg screen= must be between 0 and 100, got {screen:g}.")
+    if screen > ani_pct:
+        raise UserInputError(
+            f"--tool-arg screen={screen:g} is above the ANI cutoff {ani_pct:g} percent; "
+            "pairs at the cutoff would be skipped before alignment."
+        )
+    return screen
 
 
 def stage_genome_dir(genomes: Sequence[Path], dest: Path) -> Path:
