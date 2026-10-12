@@ -120,16 +120,21 @@ def precheck(ctx: WorkdirContext, params: DereplicateParams) -> None:
         if params.pre_secondary_ani is not None:
             check_secondary_ani(params.pre_secondary_ani, "--pre-secondary-ani")
         screen = (params.extra or {}).get("screen")
-        if screen is not None and not params.target_reps:
-            from ..dereplicators.skder import resolve_screen
+        if screen is not None:
+            from ..dereplicators.skder import _as_percent, resolve_screen
 
             # Against the final cutoff; a chunk or search step below it falls
-            # back to the default rule in the adapter.
-            resolve_screen(screen, params.secondary_ani * 100)
+            # back to the default rule in the adapter. --target-reps searches
+            # the cutoff itself, so only the value's form is checked there.
+            cutoff = 100.0 if params.target_reps else float(_as_percent(params.secondary_ani))
+            resolve_screen(screen, cutoff)
 
 
 def run(ctx: WorkdirContext, params: DereplicateParams) -> DerepResult:
     logger = ctx.logger
+    from ..dereplicators.skder import reset_screen_log
+
+    reset_screen_log()
     check_genome_completeness(
         ctx.genomes_dir,
         ctx.workdir,
@@ -537,8 +542,8 @@ def _dereplicate_chunked(
     parallel, with the stage-1 ANI thresholds). The union of their
     representatives is then reduced:
 
-    * when it fits in one chunk, or when this level removed fewer genomes than
-      ``_recurse_min_shrink`` requires, one final pass dereplicates the whole
+    * when it is at most two chunks' worth, or when this level removed fewer
+      genomes than ``_recurse_min_shrink`` requires, one final pass dereplicates the whole
       union with the final thresholds, whatever its size. The chunk size bounds
       the leaf chunks, not this merge: for a diverse set the union can be most
       of the input.
@@ -635,9 +640,10 @@ def _dereplicate_chunked(
     )
 
     probe: DerepResult | None = None
-    # A union of process_size + 1 would be one chunk at the next level (the
-    # trailing genome merges into the first chunk), which is the final pass.
-    if len(union) > process_size + 1 and removed >= min_shrink and depth < _MAX_REDUCE_DEPTH:
+    # A union of at most two chunks' worth goes to the final pass without a
+    # probe: the level could pay only above S / U, one half or more, and a
+    # failed probe would cost nearly as much as that final pass.
+    if len(union) > 2 * process_size and removed >= min_shrink and depth < _MAX_REDUCE_DEPTH:
         interleaved = _interleave_by_origin(stage1_results)
         probe_chunk = interleaved[:process_size]
         pays_above = _level_pays_above(len(union), process_size)
@@ -658,7 +664,8 @@ def _dereplicate_chunked(
         probe_removed = len(probe_chunk) - len(probe.representatives)
         probe_fraction = probe_removed / len(probe_chunk)
         logger.info(
-            "Probe: %d of %d removed (%.1f%%) in %s; a level over %d pays above %.1f%%",
+            "Probe: %d of %d removed (%.1f%%) in %s; a level over %d is expected to pay "
+            "above %.1f%%",
             probe_removed,
             len(probe_chunk),
             100 * probe_fraction,
@@ -694,9 +701,9 @@ def _dereplicate_chunked(
             first_chunk=probe,
         )
     else:
-        if len(union) > process_size + 1 and depth >= _MAX_REDUCE_DEPTH:
+        if len(union) > 2 * process_size and depth >= _MAX_REDUCE_DEPTH:
             logger.info("Level %d: depth limit %d reached", depth, _MAX_REDUCE_DEPTH)
-        elif len(union) > process_size + 1 and removed < min_shrink:
+        elif len(union) > 2 * process_size and removed < min_shrink:
             logger.info(
                 "Level %d removed %d genomes (another level needs >= %d)",
                 depth,

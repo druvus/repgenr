@@ -1069,7 +1069,7 @@ The chunk size bounds the leaf chunks, not the final pass. A chunk can only
 remove genomes that have a close relative in the same chunk, so for a diverse
 set at a strict threshold the union is most of the input, and the final pass
 compares nearly all genomes with each other. When the union is larger than
-one chunk and the level removed at least a tenth of its input or a chunk's
+two chunks and the level removed at least a tenth of its input or a chunk's
 worth (N), whichever is larger, one chunk of the next level is run first as a
 probe: the first N representatives taken in turn from each chunk of the
 previous level, so that genomes from different chunks meet. A level over the
@@ -1088,7 +1088,7 @@ expect of it, from the level just timed:
 ```text
 Level 0: 6888 genomes -> union of 3807 representatives (3081 removed) in 8.0 min
 Level 0 removed 3081 (>= 689); probing level 1 with one chunk of 500 of the 3807 representatives, interleaved by chunk of origin
-Probe: 24 of 500 removed (4.8%) in 1.2 min; a level over 3807 pays above 13.1%
+Probe: 24 of 500 removed (4.8%) in 1.2 min; a level over 3807 is expected to pay above 13.1%
 Level 0: a further level is expected to cost more than it saves; the probe's result is dropped
 Final pass over 3807 representatives (chunk size 500 bounds the leaf chunks, not the merge)
 One call over 3807 genomes with 48 threads: about 4.2 times the pairwise work of level 0, which took 8.0 min with 12 worker(s); no progress is printed while it runs

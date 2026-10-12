@@ -328,3 +328,48 @@ def test_stage_precheck_refuses_a_screen_above_the_final_cutoff(tmp_path) -> Non
     )
     with pytest.raises(UserInputError, match="above the ANI cutoff"):
         precheck(ctx, params)
+
+
+def test_screen_argument_survives_a_parser_like_skders(tmp_path, monkeypatch) -> None:
+    """skDER declares -p/--skani-triangle-parameters and a store-true -s; the one-token
+    equals form must reach -p as its value (a separate "-s 98.95" token did not)."""
+    import argparse
+
+    args = _skder_argv(tmp_path, monkeypatch, 0.9995, {})
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-g", nargs="+")
+    parser.add_argument("-o")
+    parser.add_argument("-i")
+    parser.add_argument("-f")
+    parser.add_argument("-c")
+    parser.add_argument("-d")
+    parser.add_argument("-p", "--skani-triangle-parameters", default="-s X")
+    parser.add_argument("-s", "--sanity-check", action="store_true")
+    parsed = parser.parse_args(args)
+    assert parsed.skani_triangle_parameters == "-s 98.95"
+    assert parsed.sanity_check is False
+
+
+def test_stage_precheck_checks_the_form_under_target_reps(tmp_path) -> None:
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.errors import UserInputError
+    from repgenr.stages.dereplicate import DereplicateParams, precheck
+
+    wd = tmp_path / "wd"
+    (wd / "genomes").mkdir(parents=True)
+    (wd / "genomes" / "Fam_Gen_sp_GCA_000000001.1.fasta").write_text(">x\nACGT\n")
+    ctx = WorkdirContext(wd, create=True)
+    with pytest.raises(UserInputError, match="ANI percentage"):
+        precheck(
+            ctx,
+            DereplicateParams(
+                tool="skder", target_reps=5, extra={"screen": "abc"}, allow_incomplete=True
+            ),
+        )
+    # A value above the final cutoff is allowed there: the search sets the cutoff.
+    precheck(
+        ctx,
+        DereplicateParams(
+            tool="skder", target_reps=5, extra={"screen": "99.96"}, allow_incomplete=True
+        ),
+    )

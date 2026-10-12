@@ -186,6 +186,12 @@ class SkderDereplicator(Dereplicator):
         return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
 
 
+def reset_screen_log() -> None:
+    """Forget the screens and fallbacks reported, so the next run logs them again."""
+    _screen_fallbacks_logged.clear()
+    _screens_logged.clear()
+
+
 def default_screen(ani_pct: float) -> float | None:
     """Cutoff minus the margin at or above the minimum cutoff, else None (skDER's own)."""
     if ani_pct >= _SCREEN_MIN_CUTOFF_PCT:
