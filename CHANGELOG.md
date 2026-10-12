@@ -31,7 +31,8 @@ All notable changes to RepGenR are documented here. The format follows
   another value; a value above the final cutoff is refused before any work,
   and a call below the final cutoff (a `--pre-secondary-ani` chunk, a
   `--target-reps` step) keeps the default rule for that call with a warning.
-  Below a 99 percent cutoff skDER's default is kept.
+  `screen=skder` restores skDER's own default, which is also kept below a 99
+  percent cutoff. The log names the screen and its source once per run.
 
 ### Added
 - `assemble --screen-reads` (off by default) screens each run's reads sketch

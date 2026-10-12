@@ -14,11 +14,14 @@ so at a cutoff of 99.95 every pair above about 90 percent is aligned, which in
 a genus-level set is most same-species pairs. The adapter sets the screen to
 the cutoff minus 1 when the cutoff is at or above 99 (``_SCREEN_MARGIN_PCT``,
 ``_SCREEN_MIN_CUTOFF_PCT``), and leaves skDER's default below that, where the
-sketch estimate is less exact. ``--tool-arg screen=<percent>`` overrides it; a
-screen above the cutoff is refused, because pairs at the cutoff would be
-skipped. The dereplicate stage checks the override against the final cutoff
-before any work; a call at a lower cutoff (a ``--pre-*`` chunk, a
-``--target-reps`` step) falls back to the default rule for that call.
+sketch estimate is less exact. ``--tool-arg screen=<percent>`` overrides it
+and ``screen=skder`` restores skDER's own default; a screen above the cutoff
+is refused, because pairs at the cutoff would be skipped. The dereplicate
+stage checks the override against the final cutoff before any work; a call
+at a lower cutoff (a ``--pre-*`` chunk, a ``--target-reps`` step) falls back
+to the default rule for that call. The screen is a ``skani triangle`` option,
+so it applies to the greedy and dynamic modes; ``low_mem_greedy`` runs
+``skani search`` instead and does not read it.
 
 Three robustness notes:
 
@@ -82,6 +85,8 @@ _SCREEN_MARGIN_PCT = 1.0
 _SCREEN_MIN_CUTOFF_PCT = 99.0
 # Override-above-cutoff fallbacks already reported, so the log says it once.
 _screen_fallbacks_logged: set[tuple[float, float]] = set()
+# Screens already reported, so the log names the value and its source once per run.
+_screens_logged: set[tuple[float | None, str]] = set()
 
 
 class SkderDereplicator(Dereplicator):
@@ -122,7 +127,16 @@ class SkderDereplicator(Dereplicator):
         result_dir = local_tmp / "skder_out"
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
         af_pct = _as_percent(params.aligned_fraction)
-        screen = resolve_screen(params.extra.get("screen"), float(ani_pct), logger)
+        requested = params.extra.get("screen")
+        screen = resolve_screen(requested, float(ani_pct), logger)
+        source = "--tool-arg screen" if requested is not None else "default rule"
+        if (screen, source) not in _screens_logged:
+            _screens_logged.add((screen, source))
+            logger.info(
+                "skani screen %s (%s)",
+                f"{screen:g} percent" if screen is not None else "left to skDER",
+                source,
+            )
         try:
             genome_dir = stage_genome_dir(genomes, local_tmp / "genomes")
         except BaseException:
@@ -195,11 +209,13 @@ def resolve_screen(
     """
     if requested is None:
         return default_screen(ani_pct)
+    if isinstance(requested, str) and requested.strip().lower() == "skder":
+        return None
     try:
         screen = float(requested)
     except (TypeError, ValueError):
         raise UserInputError(
-            f"--tool-arg screen= must be an ANI percentage, got {requested!r}."
+            f"--tool-arg screen= must be an ANI percentage or 'skder', got {requested!r}."
         ) from None
     if not 0 <= screen < 100:
         raise UserInputError(f"--tool-arg screen= must be between 0 and 100, got {screen:g}.")

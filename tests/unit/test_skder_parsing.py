@@ -294,6 +294,7 @@ def test_resolve_screen_values() -> None:
     assert resolve_screen(None, 99.0) == 98.0
     assert resolve_screen(None, 98.9) is None
     assert resolve_screen("95", 99.95) == 95.0
+    assert resolve_screen("skder", 99.95) is None
 
 
 def test_screen_above_a_lower_call_cutoff_falls_back_and_warns_once(caplog) -> None:

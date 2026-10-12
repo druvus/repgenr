@@ -1109,8 +1109,10 @@ smaller or faster:
   percent the adapter passes skani a screen of the cutoff minus one, so pairs
   whose k-mer estimate is below that are not aligned; skDER's own default is
   the cutoff minus ten, which at 99.95 aligns every pair above about 90
-  percent. `--tool-arg screen=PERCENT` sets another value; a value above the
-  cutoff is refused.
+  percent. `--tool-arg screen=PERCENT` sets another value and `screen=skder`
+  restores skDER's own; a value above the cutoff is refused. The screen is
+  an option of `skani triangle`, which the greedy and dynamic modes run;
+  `low_mem_greedy` does not read it.
 
 - **Raise `-s`** so that each chunk holds more close relatives. Chunking pays
   when the set has many near-identical genomes; for a set where most genomes

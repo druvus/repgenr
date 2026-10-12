@@ -222,7 +222,7 @@ def test_interleave_by_origin_round_robin() -> None:
     assert order == [a[0], b[0], c[0], a[1], b[1], a[2], b[2]]
 
 
-def test_composition_with_qc_failures_over_three_levels(tmp_path: Path) -> None:
+def test_composition_with_qc_failures_over_several_levels(tmp_path: Path) -> None:
     """QC failures keep their status and every genome maps to one representative.
 
     64 genomes in 4 labels of 16 consecutive genomes, chunk size 2: each level
@@ -436,3 +436,4 @@ def test_final_pass_work_factor() -> None:
     assert derep_stage._final_pass_work_factor(3627, 3807, 500) == pytest.approx(6.91, abs=0.01)
     assert derep_stage._format_duration(45) == "45 s"
     assert derep_stage._format_duration(276) == "4.6 min"
+    assert derep_stage._format_duration(3 * 3600) == "3.0 h"

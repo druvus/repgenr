@@ -497,7 +497,9 @@ def _final_pass_work_factor(n_union: int, n_level_input: int, process_size: int)
 def _format_duration(seconds: float) -> str:
     if seconds < 90:
         return f"{seconds:.0f} s"
-    return f"{seconds / 60:.1f} min"
+    if seconds < 120 * 60:
+        return f"{seconds / 60:.1f} min"
+    return f"{seconds / 3600:.1f} h"
 
 
 def _interleave_by_origin(stage1: list[DerepResult]) -> list[Path]:
@@ -541,7 +543,8 @@ def _dereplicate_chunked(
       the leaf chunks, not this merge: for a diverse set the union can be most
       of the input.
     * otherwise one chunk of the next level is run first as a probe: the
-      first chunk of the union interleaved by chunk of origin. When the probe
+      first chunk of the union interleaved by chunk of origin, one sample of
+      that level (the first representatives of every chunk). When the probe
       removes more than ``_level_pays_above`` of its genomes, the rest of that
       level runs (the probe's result is its first chunk) and the level's union
       is reduced the same way; when it removes less, the union goes to the
@@ -572,9 +575,9 @@ def _dereplicate_chunked(
     if len(chunks) == 1:
         # Fits in a single pass: dereplicate directly with the final thresholds.
         if depth > 0:
-            # A union of representatives that collapsed into one chunk (for
-            # example process_size + 1, the last genome merged into the first
-            # chunk): this call is the final pass.
+            # Not reached from the probe path (a union of process_size + 1 goes
+            # to the final pass without a level), kept as a guard: a union that
+            # collapsed into one chunk makes this call the final pass.
             logger.info(
                 "Final pass over %d representatives (chunk size %d bounds the leaf "
                 "chunks, not the merge)",
@@ -712,7 +715,7 @@ def _dereplicate_chunked(
             # square of the union; the per-genome work (sketches, N50) is paid
             # once more for every genome of the union.
             logger.info(
-                "One call over %d genomes with %d threads: about %.1f times the pairwise "
+                "One call over %d genomes with %d threads: about %.2g times the pairwise "
                 "work of level %d, which took %s with %d worker(s); no progress is "
                 "printed while it runs",
                 len(union),
