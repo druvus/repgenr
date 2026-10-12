@@ -501,6 +501,8 @@ def _dereplicate_chunked(
       of the input.
     * otherwise the union, interleaved by chunk of origin, is chunked again at
       the next level, so representatives from different chunks are compared.
+      Only the leaf chunks of level 0 use the stage-1 (``--pre-*``) thresholds;
+      every later level and the final pass use the final thresholds.
 
     ``_MAX_REDUCE_DEPTH`` is a termination backstop only. Membership is
     composed level by level so every original genome maps to one final
@@ -513,6 +515,16 @@ def _dereplicate_chunked(
 
     if len(chunks) == 1:
         # Fits in a single pass: dereplicate directly with the final thresholds.
+        if depth > 0:
+            # A union of representatives that collapsed into one chunk (for
+            # example process_size + 1, the last genome merged into the first
+            # chunk): this call is the final pass.
+            logger.info(
+                "Final pass over %d representatives (chunk size %d bounds the leaf "
+                "chunks, not the merge)",
+                len(chunks[0]),
+                process_size,
+            )
         return adapter.dereplicate(chunks[0], scratch / f"level{depth}", params, logger)
 
     workers = max(1, min(num_processes, len(chunks)))
@@ -569,8 +581,10 @@ def _dereplicate_chunked(
             params,
             process_size,
             num_processes,
-            pre_primary_ani,
-            pre_secondary_ani,
+            # Levels over representatives compare them at the final thresholds;
+            # only the leaf chunks of the original genomes use --pre-*.
+            params.primary_ani,
+            params.secondary_ani,
             logger,
             depth + 1,
         )

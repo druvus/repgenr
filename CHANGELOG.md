@@ -853,7 +853,8 @@ All notable changes to RepGenR are documented here. The format follows
   of about five minutes each (3807, 3627, 3577, 3558, ... representatives).
   A further level now runs only when the previous one removed at least
   max(N, a tenth of its input) genomes; it takes the representatives in turn
-  from each previous chunk, so genomes from different chunks meet.
+  from each previous chunk, so genomes from different chunks meet, and
+  compares them at the final thresholds (only the leaf chunks use `--pre-*`).
   Otherwise the union goes to one final pass at the final thresholds,
   logged as "Final pass over M representatives (chunk size N bounds the leaf
   chunks, not the merge)", with a warning above four times N that suggests a

@@ -99,10 +99,12 @@ def _membership(result: DerepResult, labels: dict[str, str]) -> set[frozenset[st
 
 
 def test_singletons_one_level_then_final_pass(tmp_path: Path, caplog) -> None:
-    """The reported case: no genome contains another at the final threshold.
+    """A diverse set: no genome contains another at the final threshold.
 
     The union equals the input, so recursion would only re-chunk the same set.
-    One level of chunks and one final pass, nothing more.
+    One level of chunks and one final pass, nothing more. This is the size of
+    the reported set (6888 genomes, -s 500); the reported run itself removed
+    3081 genomes at level 0 and is expected to run one further level.
     """
     genomes = _genomes(6888)
     labels = {g.name: g.name for g in genomes}
@@ -299,3 +301,59 @@ def test_stage_run_logs_final_pass(workdir: Path, labelled_tool, caplog) -> None
         r.getMessage().startswith("Final pass over") and "bounds the leaf chunks" in r.getMessage()
         for r in caplog.records
     )
+
+
+class _Recording(_Labelled):
+    """Records (genome count, primary ANI, secondary ANI) for every call."""
+
+    def __init__(self, labels: dict[str, str]):
+        super().__init__(labels)
+        self.thresholds: list[tuple[int, float, float]] = []
+
+    def dereplicate(self, genomes, out_dir, params, logger) -> DerepResult:  # noqa: ANN001
+        self.thresholds.append((len(list(genomes)), params.primary_ani, params.secondary_ani))
+        return super().dereplicate(genomes, out_dir, params, logger)
+
+
+def test_levels_over_representatives_use_final_thresholds(tmp_path: Path) -> None:
+    """Only the level-0 leaf chunks use --pre-*; later levels and the final pass use final."""
+    genomes = _genomes(2000)
+    labels = {g.name: str(i % 50) for i, g in enumerate(genomes)}
+    adapter = _Recording(labels)
+    final = _params()
+    _dereplicate_chunked(
+        adapter,
+        genomes,
+        tmp_path,
+        final,
+        100,
+        2,
+        0.85,
+        0.95,
+        logging.getLogger("test_chunk_recursion"),
+    )
+    level0, later = adapter.thresholds[:20], adapter.thresholds[20:]
+    assert len(later) == 10 + 1  # one further level of 10 chunks, then the final pass
+    assert all((p, s) == (0.85, 0.95) for _n, p, s in level0)
+    assert all((p, s) == (final.primary_ani, final.secondary_ani) for _n, p, s in later)
+
+
+def test_union_collapsing_into_one_chunk_logs_final_pass(tmp_path: Path, caplog) -> None:
+    """A union of process_size + 1 becomes one chunk at the next level: still logged.
+
+    110 genomes, chunk size 10, one label per leaf chunk: level 0 leaves 11
+    representatives (99 removed), level 1 cuts 10 + 1 and merges the single
+    genome into the first chunk, so that one call is the final pass.
+    """
+    genomes = _genomes(110)
+    labels = {g.name: str(i // 10) for i, g in enumerate(genomes)}
+    adapter = _Labelled(labels)
+    with caplog.at_level(logging.INFO, logger="test_chunk_recursion"):
+        res = _chunked(adapter, genomes, 10, tmp_path)
+    assert adapter.calls == [10] * 11 + [11]
+    finals = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Final pass")]
+    assert finals == [
+        "Final pass over 11 representatives (chunk size 10 bounds the leaf chunks, not the merge)"
+    ]
+    assert len(res.representatives) == 11
+    check_result_complete(res, labels)
