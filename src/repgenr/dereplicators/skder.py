@@ -6,7 +6,7 @@ estimates pairwise ANI/AF with skani and picks representatives in one round.
 CLI used::
 
     skder -g <staged_dir> -o <out_dir> -i <ANI%> -f <AF%> -c <threads> \
-          -d dynamic|greedy|low_mem_greedy [-p "-s <screen%>"]
+          -d dynamic|greedy|low_mem_greedy [--skani-triangle-parameters="-s <screen%>"]
 
 skani's screen (``-s``) skips the alignment of pairs whose k-mer sketches put
 them below the given identity. skDER's own default is the ANI cutoff minus 10,
@@ -140,8 +140,10 @@ class SkderDereplicator(Dereplicator):
             mode,
         ]
         if screen is not None:
-            # One token: skDER takes the skani triangle options as a string.
-            cmd += ["-p", f"-s {screen:g}"]
+            # skDER takes the skani triangle options as one string. Its parser
+            # reads a separate "-s ..." value as its own -s flag, so the value
+            # is attached with "=", which argparse resolves before that.
+            cmd.append(f"--skani-triangle-parameters=-s {screen:g}")
         try:
             run_tool(
                 self.capabilities,

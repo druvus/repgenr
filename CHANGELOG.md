@@ -18,8 +18,9 @@ All notable changes to RepGenR are documented here. The format follows
   just timed, that the tool prints no progress while it runs, and its
   duration afterwards.
 - skDER: at an ANI cutoff of 99 percent or more the adapter passes skani a
-  screen of the cutoff minus one (`-p "-s <percent>"`), so pairs whose k-mer
-  estimate is below it are not aligned. skDER's own default is the cutoff
+  screen of the cutoff minus one (`--skani-triangle-parameters="-s PERCENT"`
+  to skDER), so pairs whose k-mer estimate is below it are not aligned.
+  skDER's own default is the cutoff
   minus ten, which at 99.95 aligned every pair above about 90 percent, most
   same-species pairs in a genus-level set. `--tool-arg screen=PERCENT` sets
   another value; a value above the cutoff is refused. Below a 99 percent

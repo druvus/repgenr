@@ -112,9 +112,9 @@ def test_skder_receives_one_staged_directory_for_10000_genomes(tmp_path, monkeyp
     result = SkderDereplicator().dereplicate(genomes, tmp_path / "out", params, _LOG)
 
     args = argv_log.read_text().split("\n")
-    # -g DIR -o OUT -i -f -c -d -p with their values; the cutoff 99.9 sets a screen
-    assert len(args) == 14
-    assert args[args.index("-p") + 1] == "-s 98.9"
+    # -g DIR -o OUT -i -f -c -d with their values, plus the screen the cutoff 99.9 sets
+    assert len(args) == 13
+    assert args[-1] == "--skani-triangle-parameters=-s 98.9"
     staged = Path(args[args.index("-g") + 1])
     assert args.count("-g") == 1 and not staged.name.endswith(".fasta")
     names = listed.read_text().split("\n")
@@ -261,18 +261,18 @@ def _skder_argv(tmp_path, monkeypatch, secondary_ani: float, extra: dict) -> lis
 def test_screen_defaults_to_one_below_a_high_cutoff(tmp_path, monkeypatch) -> None:
     """At 99.95 the screen is 98.95, so pairs below that skip the alignment."""
     args = _skder_argv(tmp_path, monkeypatch, 0.9995, {})
-    assert args[args.index("-p") + 1] == "-s 98.95"
+    assert args[-1] == "--skani-triangle-parameters=-s 98.95"
 
 
 def test_screen_is_left_to_skder_below_99(tmp_path, monkeypatch) -> None:
     """Below a 99 percent cutoff the adapter keeps skDER's own screen (cutoff - 10)."""
     args = _skder_argv(tmp_path, monkeypatch, 0.95, {})
-    assert "-p" not in args
+    assert not any(a.startswith("--skani-triangle-parameters") for a in args)
 
 
 def test_screen_tool_arg_overrides_the_default(tmp_path, monkeypatch) -> None:
     args = _skder_argv(tmp_path, monkeypatch, 0.9995, {"screen": "90"})
-    assert args[args.index("-p") + 1] == "-s 90"
+    assert args[-1] == "--skani-triangle-parameters=-s 90"
 
 
 @pytest.mark.parametrize(
