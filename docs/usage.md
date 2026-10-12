@@ -1069,25 +1069,24 @@ The chunk size bounds the leaf chunks, not the final pass. A chunk can only
 remove genomes that have a close relative in the same chunk, so for a diverse
 set at a strict threshold the union is most of the input, and the final pass
 compares nearly all genomes with each other. When the union is larger than one
-chunk, it is chunked again (a further level) only while a level removes at
-least max(N, a tenth of its input) genomes. Levels after the first compare
-representatives at the final thresholds, not the `--pre-*` ones. The next level takes the
-representatives in turn from each chunk of the previous one, so that genomes
-from different chunks are compared. Otherwise the union goes to one final
+chunk, it is chunked again (a further level). Levels continue while each level
+removes at least a tenth of its input or a chunk's worth (N), whichever is
+larger. Levels after the first compare representatives at the final
+thresholds, not the `--pre-*` ones. The next level takes the representatives
+in turn from each chunk of the previous one, so that genomes from different
+chunks are compared. When a level removes less, the union goes to one final
 pass, whatever its size. The log names the size of that pass:
 
 ```text
 Final pass over 3577 representatives (chunk size 500 bounds the leaf chunks, not the merge)
 ```
 
-For example, 6888 Bacillaceae genomes with `skder --secondary-ani 0.9995 -s
-500` keep 3807 representatives after level 0. That removes 3081 genomes, more
-than the 689 required, so one further level runs on the interleaved union. It
-removes fewer than 500, so the remaining representatives (the figure above is
-illustrative) go to the final pass.
-
 and a warning follows when the final pass is more than four times the chunk
-size. To make the final pass smaller:
+size. For example, 6888 Bacillaceae genomes with `skder --secondary-ani 0.9995
+-s 500` keep 3807 representatives after level 0. That removes 3081 genomes,
+more than the 689 required, so one further level runs on the interleaved
+union. It removes fewer than 500, so the remaining representatives (the figure
+above is illustrative) go to the final pass. size. To make the final pass smaller:
 
 - **Raise `-s`** so that each chunk holds more close relatives. Chunking pays
   when the set has many near-identical genomes; for a set where most genomes

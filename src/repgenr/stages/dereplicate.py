@@ -9,6 +9,7 @@ manifest derep status is updated.
 
 from __future__ import annotations
 
+import logging
 import math
 import sqlite3
 from collections.abc import Collection, Mapping
@@ -616,10 +617,12 @@ def _dereplicate_chunked(
             )
         stage2 = adapter.dereplicate(union, merge_dir, params, logger)
 
-    return _compose_two_stage(stage1_results, stage2)
+    return _compose_two_stage(stage1_results, stage2, logger)
 
 
-def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepResult:
+def _compose_two_stage(
+    stage1: list[DerepResult], stage2: DerepResult, logger: logging.Logger | None = None
+) -> DerepResult:
     from ..dereplicators.base import STATUS_CONTAINED, STATUS_FAIL_QC, STATUS_REPRESENTATIVE
 
     # Each stage-1 representative -> every original genome in its cluster (the rep
@@ -662,11 +665,25 @@ def _compose_two_stage(stage1: list[DerepResult], stage2: DerepResult) -> DerepR
     # rejected there takes its stage-1 members with it: their cluster has no
     # representative left. QC is a per-genome check, so in practice this only
     # forwards failures from deeper levels; it keeps every genome accounted for.
+    rejected_reps: list[str] = []
     for genome, state in stage2.genome_status.items():
         if state != STATUS_FAIL_QC or genome in status:
             continue
-        for member in s1rep_to_members.get(genome, [genome]):
+        members = s1rep_to_members.get(genome, [genome])
+        if genome in s1rep_to_members:
+            rejected_reps.append(genome)
+        for member in members:
             status.setdefault(member, STATUS_FAIL_QC)
+    if rejected_reps:
+        n_members = sum(len(s1rep_to_members[r]) - 1 for r in rejected_reps)
+        (logger or logging.getLogger(__name__)).warning(
+            "%d representative(s) accepted by an earlier dereplication pass failed QC "
+            "in a later pass (e.g. %s); they and their %d cluster member(s) are marked "
+            "fail_qc. The QC result differs between calls for the same genome.",
+            len(rejected_reps),
+            ", ".join(sorted(rejected_reps)[:3]),
+            n_members,
+        )
 
     return DerepResult(
         representatives=stage2.representatives,

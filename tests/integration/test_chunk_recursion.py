@@ -246,7 +246,7 @@ def test_composition_with_qc_failures_over_three_levels(tmp_path: Path) -> None:
     }
 
 
-def test_composition_forwards_qc_failure_from_a_deeper_level(tmp_path: Path) -> None:
+def test_composition_forwards_qc_failure_from_a_deeper_level(tmp_path: Path, caplog) -> None:
     """A stage-1 representative rejected by a later pass is not lost."""
     s1 = [
         DerepResult(
@@ -264,7 +264,12 @@ def test_composition_forwards_qc_failure_from_a_deeper_level(tmp_path: Path) -> 
         clusters={"c": []},
         genome_status={"c": STATUS_REPRESENTATIVE, "a": STATUS_FAIL_QC},
     )
-    out = derep_stage._compose_two_stage(s1, s2)
+    log = logging.getLogger("test_chunk_recursion")
+    with caplog.at_level(logging.WARNING, logger="test_chunk_recursion"):
+        out = derep_stage._compose_two_stage(s1, s2, log)
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "1 representative(s)" in warnings[0] and "1 cluster member(s)" in warnings[0]
     assert out.genome_status == {"a": STATUS_FAIL_QC, "b": STATUS_FAIL_QC, "c": "representative"}
     check_result_complete(out, ["a", "b", "c"])
 

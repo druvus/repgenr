@@ -859,8 +859,12 @@ All notable changes to RepGenR are documented here. The format follows
   logged as "Final pass over M representatives (chunk size N bounds the leaf
   chunks, not the merge)", with a warning above four times N that suggests a
   larger `-s` or a lower `--pre-secondary-ani`. Membership composition also
-  keeps QC failures reported by a deeper level. The Nextflow scatter already
-  merged in one call and is unchanged.
+  keeps QC failures reported by a deeper level, with a warning when a later
+  pass rejects a representative that an earlier pass accepted. The Nextflow scatter already
+  merged in one call and is unchanged. The reported run removes 3081 genomes
+  at level 0, so it now runs one further interleaved level and then the final
+  pass, instead of fifty levels. A set where few genomes are removed at level 0
+  goes straight to the final pass.
 - skDER receives the genome set as a staged directory; the genome count no
   longer limits a single call. The adapter links each genome by its basename
   into a scratch directory and passes that one path to `-g` (it passed one

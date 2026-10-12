@@ -329,7 +329,7 @@ def dereplicate_merge(params: MergeParams, logger: logging.Logger) -> DerepResul
         )
     else:
         stage2 = adapter.dereplicate(union, scratch, derep_params, logger)
-    final = _compose_two_stage(stage1, stage2)
+    final = _compose_two_stage(stage1, stage2, logger)
     rep_dirs = [d / _REPRESENTATIVES_DIR for d in params.chunk_dirs]
     n50 = N50Lookup(rep_dirs, known=_read_n50(params.chunk_dirs))
 
