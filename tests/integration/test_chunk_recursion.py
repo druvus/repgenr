@@ -388,7 +388,9 @@ def test_probe_removing_little_sends_the_union_to_the_final_pass(tmp_path: Path,
     with caplog.at_level(logging.INFO, logger="test_chunk_recursion"):
         res = _chunked(adapter, genomes, 500, tmp_path)
 
-    assert adapter.calls == [500] * 13 + [388] + [500] + [3807]  # leaves, probe, final
+    # leaves (parallel workers, so in any order), probe, final
+    assert sorted(adapter.calls[:14]) == [388] + [500] * 13
+    assert adapter.calls[14:] == [500, 3807]
     assert len(res.representatives) == 3807
     messages = [r.getMessage() for r in caplog.records]
     assert not any(m.startswith("Level 1") for m in messages)
