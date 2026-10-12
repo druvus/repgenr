@@ -294,3 +294,36 @@ def test_resolve_screen_values() -> None:
     assert resolve_screen(None, 99.0) == 98.0
     assert resolve_screen(None, 98.9) is None
     assert resolve_screen("95", 99.95) == 95.0
+
+
+def test_screen_above_a_lower_call_cutoff_falls_back_and_warns_once(caplog) -> None:
+    """A --pre-* chunk or a --target-reps step runs below the final cutoff by design."""
+    from repgenr.dereplicators import skder as skder_mod
+    from repgenr.dereplicators.skder import resolve_screen
+
+    skder_mod._screen_fallbacks_logged.clear()
+    log = logging.getLogger("test_screen_fallback")
+    with caplog.at_level(logging.WARNING, logger="test_screen_fallback"):
+        assert resolve_screen("99.9", 99.0, log) == 98.0
+        assert resolve_screen("99.9", 99.0, log) == 98.0
+        assert resolve_screen("99.9", 90.0, log) is None
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    assert "using a screen of 98" in warnings[0]
+    assert "using skDER's own screen" in warnings[1]
+
+
+def test_stage_precheck_refuses_a_screen_above_the_final_cutoff(tmp_path) -> None:
+    from repgenr.core.context import WorkdirContext
+    from repgenr.core.errors import UserInputError
+    from repgenr.stages.dereplicate import DereplicateParams, precheck
+
+    wd = tmp_path / "wd"
+    (wd / "genomes").mkdir(parents=True)
+    (wd / "genomes" / "Fam_Gen_sp_GCA_000000001.1.fasta").write_text(">x\nACGT\n")
+    ctx = WorkdirContext(wd, create=True)
+    params = DereplicateParams(
+        tool="skder", secondary_ani=0.9995, extra={"screen": "99.96"}, allow_incomplete=True
+    )
+    with pytest.raises(UserInputError, match="above the ANI cutoff"):
+        precheck(ctx, params)

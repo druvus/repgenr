@@ -16,7 +16,9 @@ the cutoff minus 1 when the cutoff is at or above 99 (``_SCREEN_MARGIN_PCT``,
 ``_SCREEN_MIN_CUTOFF_PCT``), and leaves skDER's default below that, where the
 sketch estimate is less exact. ``--tool-arg screen=<percent>`` overrides it; a
 screen above the cutoff is refused, because pairs at the cutoff would be
-skipped.
+skipped. The dereplicate stage checks the override against the final cutoff
+before any work; a call at a lower cutoff (a ``--pre-*`` chunk, a
+``--target-reps`` step) falls back to the default rule for that call.
 
 Three robustness notes:
 
@@ -70,11 +72,16 @@ _MAX_PLACED_LINES = 5
 # skDER asks for confirmation below this ANI (percent); skani is unreliable there.
 _MIN_ANI_PCT = 80.0
 # Default skani screen: cutoff minus this margin, once the cutoff is at or above
-# the minimum. skani's screen is a k-mer estimate; near 99 percent and above its
-# error is well under one point for bacterial genomes, below that it is looser
-# and skDER's own default (cutoff minus 10) is kept.
+# the minimum. skani's screen is a k-mer estimate of identity made before any
+# alignment; its own help calls it approximate. The margin of one point at
+# cutoffs of 99 and above is a judgment, not a measured bound: at that identity
+# bacterial genomes share nearly all sketch k-mers, so the estimate sits close
+# to the aligned value, while at lower identities it is looser and skDER's own
+# default (cutoff minus 10) is kept.
 _SCREEN_MARGIN_PCT = 1.0
 _SCREEN_MIN_CUTOFF_PCT = 99.0
+# Override-above-cutoff fallbacks already reported, so the log says it once.
+_screen_fallbacks_logged: set[tuple[float, float]] = set()
 
 
 class SkderDereplicator(Dereplicator):
@@ -115,7 +122,7 @@ class SkderDereplicator(Dereplicator):
         result_dir = local_tmp / "skder_out"
         mode = params.extra.get("mode", self.capabilities.default_params["mode"])
         af_pct = _as_percent(params.aligned_fraction)
-        screen = resolve_screen(params.extra.get("screen"), float(ani_pct))
+        screen = resolve_screen(params.extra.get("screen"), float(ani_pct), logger)
         try:
             genome_dir = stage_genome_dir(genomes, local_tmp / "genomes")
         except BaseException:
@@ -165,17 +172,29 @@ class SkderDereplicator(Dereplicator):
         return _parse_skder_output(staged, genomes, float(ani_pct), float(af_pct), logger)
 
 
-def resolve_screen(requested: str | float | None, ani_pct: float) -> float | None:
+def default_screen(ani_pct: float) -> float | None:
+    """Cutoff minus the margin at or above the minimum cutoff, else None (skDER's own)."""
+    if ani_pct >= _SCREEN_MIN_CUTOFF_PCT:
+        return round(ani_pct - _SCREEN_MARGIN_PCT, 4)
+    return None
+
+
+def resolve_screen(
+    requested: str | float | None,
+    ani_pct: float,
+    logger: logging.Logger | None = None,
+) -> float | None:
     """The skani screen (percent) to pass, or None for skDER's own default.
 
     ``requested`` is the ``--tool-arg screen=`` value when given. Without it the
-    screen is the cutoff minus ``_SCREEN_MARGIN_PCT`` when the cutoff is at or
-    above ``_SCREEN_MIN_CUTOFF_PCT``, else None.
+    screen is ``default_screen``. A requested screen above this call's cutoff
+    is refused when no logger is given (the stage precheck, against the final
+    cutoff); with a logger, the call keeps the default rule instead and says so
+    once, because a chunk at ``--pre-secondary-ani`` or a ``--target-reps`` step
+    runs below the final cutoff by design.
     """
     if requested is None:
-        if ani_pct >= _SCREEN_MIN_CUTOFF_PCT:
-            return round(ani_pct - _SCREEN_MARGIN_PCT, 4)
-        return None
+        return default_screen(ani_pct)
     try:
         screen = float(requested)
     except (TypeError, ValueError):
@@ -185,10 +204,22 @@ def resolve_screen(requested: str | float | None, ani_pct: float) -> float | Non
     if not 0 <= screen < 100:
         raise UserInputError(f"--tool-arg screen= must be between 0 and 100, got {screen:g}.")
     if screen > ani_pct:
-        raise UserInputError(
-            f"--tool-arg screen={screen:g} is above the ANI cutoff {ani_pct:g} percent; "
-            "pairs at the cutoff would be skipped before alignment."
-        )
+        if logger is None:
+            raise UserInputError(
+                f"--tool-arg screen={screen:g} is above the ANI cutoff {ani_pct:g} percent; "
+                "pairs at the cutoff would be skipped before alignment."
+            )
+        fallback = default_screen(ani_pct)
+        if (screen, ani_pct) not in _screen_fallbacks_logged:
+            _screen_fallbacks_logged.add((screen, ani_pct))
+            logger.warning(
+                "--tool-arg screen=%g is above this call's ANI cutoff %g percent; "
+                "using %s for calls at this cutoff.",
+                screen,
+                ani_pct,
+                f"a screen of {fallback:g}" if fallback is not None else "skDER's own screen",
+            )
+        return fallback
     return screen
 
 

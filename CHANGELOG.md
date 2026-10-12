@@ -7,24 +7,31 @@ All notable changes to RepGenR are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
-- `dereplicate --process-size`: a union of chunk representatives of at most
-  ten chunks' worth goes straight to the final pass. A further level costs
-  the tool's per-genome work for every representative and removes few once
-  the leaf chunks have run (5, 1.4 and 0.5 percent at the next levels of a
-  reported 6888-genome run, each level as long as a level-0 wave), so on such
-  sets the levels were a net loss. Larger unions are chunked again under the
-  existing rule. The log now times each level, says why the final pass runs
-  directly, states the final pass's pairwise work as a multiple of the level
-  just timed, that the tool prints no progress while it runs, and its
-  duration afterwards.
+- `dereplicate --process-size`: before a further level over the union of
+  chunk representatives, one chunk of that level is run as a probe. A level
+  costs the tool's per-genome work for every representative plus about N/U
+  of the final pass's pairwise work (N the chunk size, U the union) and is
+  expected to pay when it removes more than about N/U of its genomes; on a
+  reported 6888-genome run the levels after the first removed 5, 1.4 and 0.5
+  percent, each as long as a level-0 wave, while clusters spread over every
+  chunk collapse almost entirely at the next level. When the probe removes
+  less than that fraction the union goes to the final pass and the probe's
+  result is dropped; otherwise the level runs with the probe as its first
+  chunk. The shrink rule (a chunk's worth or a tenth removed) still decides
+  whether to probe at all. The log now times each level and the probe,
+  states the final pass's pairwise work as a multiple of the level just
+  timed, that the tool prints no progress while it runs, and its duration
+  afterwards.
 - skDER: at an ANI cutoff of 99 percent or more the adapter passes skani a
   screen of the cutoff minus one (`--skani-triangle-parameters="-s PERCENT"`
   to skDER), so pairs whose k-mer estimate is below it are not aligned.
   skDER's own default is the cutoff
   minus ten, which at 99.95 aligned every pair above about 90 percent, most
   same-species pairs in a genus-level set. `--tool-arg screen=PERCENT` sets
-  another value; a value above the cutoff is refused. Below a 99 percent
-  cutoff skDER's default is kept.
+  another value; a value above the final cutoff is refused before any work,
+  and a call below the final cutoff (a `--pre-secondary-ani` chunk, a
+  `--target-reps` step) keeps the default rule for that call with a warning.
+  Below a 99 percent cutoff skDER's default is kept.
 
 ### Added
 - `assemble --screen-reads` (off by default) screens each run's reads sketch

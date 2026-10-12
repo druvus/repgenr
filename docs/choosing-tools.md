@@ -74,12 +74,14 @@ Notes on the table:
   chunks only. The final pass compares the union of the chunk
   representatives, and for a diverse set at a strict threshold that union can
   be most of the input: 6888 Bacillaceae genomes at `--secondary-ani 0.9995`
-  kept 3807 after the chunks. A union of at most ten chunks' worth goes
-  straight to the final pass, since a further level would recompute the
-  per-genome work for every representative and remove few. Chunking then
-  saves a third of the pairwise work but pays the per-genome work twice, and
-  a larger `-s`, or `--pre-secondary-ani` below the final threshold, is the
-  better lever (see [Chunked dereplication](usage.md#chunked-dereplication)).
+  kept 3807 after the chunks. One chunk of the next level is probed before
+  that level runs, since a level recomputes the per-genome work for every
+  representative and may remove few; the union goes to the final pass when
+  the probe removes less than the level is expected to cost. The final pass
+  then still compares about a third of the single-pass pairs, and the
+  per-genome work is paid twice, so a larger `-s`, or `--pre-secondary-ani`
+  below the final threshold, is the better lever (see
+  [Chunked dereplication](usage.md#chunked-dereplication)).
   With skDER the adapter sets skani's screen to one point below a cutoff of
   99 or more (`--tool-arg screen=` overrides), so most same-species pairs
   are not aligned. The genome count does not limit a

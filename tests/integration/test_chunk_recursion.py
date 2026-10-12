@@ -133,11 +133,13 @@ def test_clonal_clusters_across_chunks_collapse_after_interleaving(tmp_path: Pat
     """Large clusters spread over every chunk: one interleaved level gathers them.
 
     5000 genomes in 50 labels (label = index mod 50), chunk size 100. Every leaf
-    chunk holds all 50 labels, so level 0 leaves 50 x 50 = 2500 representatives,
-    more than ten chunks' worth, so a further level runs. In the fixed order a
-    level-1 chunk would again pair only two chunks' worth; interleaved, element
-    j of every chunk carries the same label, so a level-1 chunk of 100 holds two
-    labels and collapses to them: level 1 ends at 50 and the final pass is small.
+    chunk holds all 50 labels, so level 0 leaves 50 x 50 = 2500 representatives.
+    In the fixed order a level-1 chunk would again pair only two chunks' worth;
+    interleaved, element j of every chunk carries the same label, so a level-1
+    chunk of 100 holds two labels and collapses to them. The probe (the first
+    such chunk) removes 98 percent, far above the 4 percent at which a level
+    over 2500 pays, so level 1 runs with the probe as its first chunk, ends at
+    50, and the final pass is small.
     """
     genomes = _genomes(5000)
     labels = {g.name: str(i % 50) for i, g in enumerate(genomes)}
@@ -145,8 +147,8 @@ def test_clonal_clusters_across_chunks_collapse_after_interleaving(tmp_path: Pat
     res = _chunked(adapter, genomes, 100, tmp_path)
 
     single = _Labelled(labels).dereplicate(genomes, tmp_path / "single", _params(), None)
-    # level 0: 50 chunks; level 1: 25 chunks of the interleaved 2500; final pass of 50
-    assert len(adapter.calls) == 50 + 25 + 1
+    # level 0: 50 chunks; probe; the other 24 chunks of level 1; final pass of 50
+    assert len(adapter.calls) == 50 + 1 + 24 + 1
     assert adapter.calls[-1] == 50
     assert sorted(p.name for p in res.representatives) == sorted(
         p.name for p in single.representatives
@@ -159,9 +161,8 @@ def test_small_shrink_stops_recursion(tmp_path: Path, caplog) -> None:
     """A level that removes less than a chunk's worth does not recurse.
 
     1000 genomes, chunk size 50, 40 adjacent pairs share a label: level 0
-    removes 40 genomes (fewer than max(50, 100)), so the 960 representatives,
-    although more than ten chunks' worth, go to one final pass instead of a
-    level-by-level descent.
+    removes 40 genomes (fewer than max(50, 100)), so the 960 representatives
+    go to one final pass without a probe.
     """
     genomes = _genomes(1000)
     labels = {g.name: g.name for g in genomes}
@@ -193,10 +194,11 @@ def test_depth_backstop_ends_in_final_pass(tmp_path: Path, monkeypatch, caplog) 
     with caplog.at_level(logging.INFO, logger="test_chunk_recursion"):
         res = _chunked(adapter, genomes, 100, tmp_path)
 
-    assert len(adapter.calls) == 40 + 1
+    assert len(adapter.calls) == 40 + 1  # no probe at the depth limit
     assert adapter.calls[-1] == 2000
     assert len(res.representatives) == 50
-    assert any("depth limit 0 reached" in r.getMessage() for r in caplog.records)
+    assert any(r.getMessage() == "Level 0: depth limit 0 reached" for r in caplog.records)
+    assert not any("Probe" in r.getMessage() for r in caplog.records)
     check_result_complete(res, labels)
 
 
@@ -224,8 +226,10 @@ def test_composition_with_qc_failures_over_three_levels(tmp_path: Path) -> None:
     """QC failures keep their status and every genome maps to one representative.
 
     64 genomes in 4 labels of 16 consecutive genomes, chunk size 2: each level
-    pairs genomes of one label, so levels 0 and 1 halve the set (64, 32, 16).
-    The union of 16 is at most ten chunks' worth, so the final pass receives it.
+    pairs genomes of one label, so levels 0 to 3 halve the set (64, 32, 16, 8,
+    4); each is preceded by a probe that removes half of its two genomes. The
+    probe after level 3 pairs two labels, removes none, and the four go to the
+    final pass.
     """
     genomes = _genomes(64)
     labels = {g.name: str(i // 16) for i, g in enumerate(genomes)}
@@ -233,7 +237,8 @@ def test_composition_with_qc_failures_over_three_levels(tmp_path: Path) -> None:
     adapter = _Labelled(labels, fail_names=fail)
     res = _chunked(adapter, genomes, 2, tmp_path)
 
-    assert adapter.calls == [2] * 32 + [2] * 16 + [16]
+    # 32 leaf chunks; probe + 15; probe + 7; probe + 3; probe (dropped); final 4
+    assert adapter.calls == [2] * 32 + [2] * 16 + [2] * 8 + [2] * 4 + [2] + [4]
     for name in fail:
         assert res.genome_status[name] == STATUS_FAIL_QC
         assert name not in {p.name for p in res.representatives}
@@ -338,17 +343,17 @@ def test_levels_over_representatives_use_final_thresholds(tmp_path: Path) -> Non
         logging.getLogger("test_chunk_recursion"),
     )
     level0, later = adapter.thresholds[:50], adapter.thresholds[50:]
-    assert len(later) == 25 + 1  # one further level of 25 chunks, then the final pass
+    assert len(later) == 1 + 24 + 1  # the probe, the rest of level 1, the final pass
     assert all((p, s) == (0.85, 0.95) for _n, p, s in level0)
     assert all((p, s) == (final.primary_ani, final.secondary_ani) for _n, p, s in later)
 
 
 def test_union_just_over_one_chunk_goes_to_the_final_pass(tmp_path: Path, caplog) -> None:
-    """A union of process_size + 1 is one final pass, logged once.
+    """A union of process_size + 1 is one final pass, logged once, without a probe.
 
     110 genomes, chunk size 10, one label per leaf chunk: level 0 leaves 11
-    representatives (99 removed), within ten chunks' worth, so the final pass
-    receives the 11.
+    representatives (99 removed). A next level would merge the eleventh into
+    the first chunk and be one call anyway, so the 11 go to the final pass.
     """
     genomes = _genomes(110)
     labels = {g.name: str(i // 10) for i, g in enumerate(genomes)}
@@ -366,14 +371,14 @@ def test_union_just_over_one_chunk_goes_to_the_final_pass(tmp_path: Path, caplog
     check_result_complete(res, labels)
 
 
-def test_union_within_ten_chunks_goes_straight_to_the_final_pass(tmp_path: Path, caplog) -> None:
-    """The reported shape: level 0 removes much, the union is 7.6 chunks' worth.
+def test_probe_removing_little_sends_the_union_to_the_final_pass(tmp_path: Path, caplog) -> None:
+    """The reported shape: level 0 removes much, a next level would remove little.
 
     6888 genomes, chunk size 500; the first 3081 genomes pair with a neighbour
-    in the same chunk, the rest are singletons. Level 0 leaves 3807, which is
-    at most ten chunks' worth, so no further level runs although level 0
-    removed far more than a chunk's worth: a level over 3807 would cost the
-    per-genome work for all of them and remove few, the final pass is cheaper.
+    in the same chunk, the rest are singletons. Level 0 leaves 3807 (3081
+    removed, more than a chunk's worth), so one chunk of level 1 is probed. It
+    removes nothing, below the 13 percent at which a level over 3807 pays, so
+    the 3807 go to the final pass and the probe's result is dropped.
     """
     genomes = _genomes(6888)
     labels = {g.name: g.name for g in genomes}
@@ -383,14 +388,15 @@ def test_union_within_ten_chunks_goes_straight_to_the_final_pass(tmp_path: Path,
     with caplog.at_level(logging.INFO, logger="test_chunk_recursion"):
         res = _chunked(adapter, genomes, 500, tmp_path)
 
-    assert len(adapter.calls) == 14 + 1
-    assert adapter.calls[-1] == 3807
+    assert adapter.calls == [500] * 13 + [388] + [500] + [3807]  # leaves, probe, final
     assert len(res.representatives) == 3807
     messages = [r.getMessage() for r in caplog.records]
-    assert not any("Level 1" in m for m in messages)
+    assert not any(m.startswith("Level 1") for m in messages)
     assert any(
-        m.startswith("Level 0: union of 3807 is at most 10 chunks' worth (5000)") for m in messages
+        m.startswith("Probe: 0 of 500 removed (0.0%)") and m.endswith("pays above 13.1%")
+        for m in messages
     )
+    assert any("expected to cost more than it saves" in m for m in messages)
     expectation = [m for m in messages if m.startswith("One call over 3807 genomes")]
     assert len(expectation) == 1
     # 3807^2 / (6888 * 500) = 4.2 times the pairwise work of level 0
@@ -402,6 +408,27 @@ def test_union_within_ten_chunks_goes_straight_to_the_final_pass(tmp_path: Path,
         for m in messages
     )
     check_result_complete(res, labels)
+
+
+def test_probe_result_is_the_first_chunk_of_the_level_it_starts(tmp_path: Path) -> None:
+    """When the probe says yes, its chunk is not run again and membership is complete."""
+    genomes = _genomes(400)
+    labels = {g.name: str(i % 10) for i, g in enumerate(genomes)}
+    adapter = _Labelled(labels)
+    res = _chunked(adapter, genomes, 20, tmp_path)
+    # 20 leaf chunks of 20 (10 labels each -> 200 reps); probe of 20 (one label
+    # per interleaved element, two labels) -> level 1 with 9 more chunks -> 10
+    # reps -> union fits one chunk -> final pass.
+    assert adapter.calls == [20] * 20 + [20] + [20] * 9 + [10]
+    assert len(res.representatives) == 10
+    single = _Labelled(labels).dereplicate(genomes, tmp_path / "single", _params(), None)
+    assert _membership(res, labels) == _membership(single, labels)
+    check_result_complete(res, labels)
+
+
+def test_level_pays_above() -> None:
+    assert derep_stage._level_pays_above(3807, 500) == pytest.approx(0.1313, abs=0.0001)
+    assert derep_stage._level_pays_above(2500, 100) == 0.04
 
 
 def test_final_pass_work_factor() -> None:
