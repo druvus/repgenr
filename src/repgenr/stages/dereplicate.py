@@ -499,6 +499,11 @@ def _final_pass_work_factor(n_union: int, n_level_input: int, process_size: int)
     return n_union * n_union / (n_level_input * process_size)
 
 
+def _format_factor(x: float) -> str:
+    """Two significant digits below 10, a whole number above (never scientific notation)."""
+    return f"{x:.2g}" if x < 10 else f"{x:.0f}"
+
+
 def _format_duration(seconds: float) -> str:
     if seconds < 90:
         return f"{seconds:.0f} s"
@@ -722,12 +727,12 @@ def _dereplicate_chunked(
             # square of the union; the per-genome work (sketches, N50) is paid
             # once more for every genome of the union.
             logger.info(
-                "One call over %d genomes with %d threads: about %.2g times the pairwise "
+                "One call over %d genomes with %d threads: about %s times the pairwise "
                 "work of level %d, which took %s with %d worker(s); no progress is "
                 "printed while it runs",
                 len(union),
                 params.threads,
-                _final_pass_work_factor(len(union), len(genomes), process_size),
+                _format_factor(_final_pass_work_factor(len(union), len(genomes), process_size)),
                 depth,
                 _format_duration(level_seconds),
                 workers,

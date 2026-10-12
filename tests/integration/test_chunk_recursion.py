@@ -437,6 +437,9 @@ def test_final_pass_work_factor() -> None:
     assert derep_stage._format_duration(45) == "45 s"
     assert derep_stage._format_duration(276) == "4.6 min"
     assert derep_stage._format_duration(3 * 3600) == "3.0 h"
+    assert derep_stage._format_factor(0.034) == "0.034"
+    assert derep_stage._format_factor(4.21) == "4.2"
+    assert derep_stage._format_factor(162.4) == "162"
 
 
 def test_probe_runs_only_above_two_chunks_worth(tmp_path: Path) -> None:
